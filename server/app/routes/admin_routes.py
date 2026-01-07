@@ -10,6 +10,15 @@ from app.services.audit2 import AuditService
 from flask_cors import cross_origin
 from sqlalchemy import func, and_, or_
 import bleach
+from marshmallow import ValidationError
+from app.services.job_service import JobService
+from app.schemas.job_schemas import (
+    job_create_schema, job_update_schema, job_response_schema,
+    job_list_schema, job_filter_schema, job_activity_log_schema
+)
+
+
+
 
 
 
@@ -244,84 +253,384 @@ def get_assessments_analysis():
             for title, avg_score in avg_scores_by_req
         ]
     })
-# ----------------- JOB CRUD -----------------
+"""
+Job Routes for admin/hiring manager
+"""
+
 @admin_bp.route("/jobs", methods=["POST"])
+@jwt_required()
 @role_required(["admin", "hiring_manager"])
 def create_job():
+    """Create a new job posting"""
     try:
         data = request.get_json()
-
-        # Mandatory fields
-        if not data.get("title") or not data.get("description"):
-            return jsonify({"error": "Title and description required"}), 400
-
-        # Optional fields with defaults
-        job = Requisition(
-            title=data["title"],
-            description=data["description"],
-            job_summary=data.get("job_summary", ""),
-            responsibilities=data.get("responsibilities", []),  # list of strings
-            company_details=data.get("company_details", ""),
-            qualifications=data.get("qualifications", []),  # list of strings
-            category=data.get("category", ""),  # new field
-            required_skills=data.get("required_skills", []),
-            min_experience=data.get("min_experience", 0),
-            knockout_rules=data.get("knockout_rules", []),
-            weightings=data.get("weightings", {"cv": 60, "assessment": 40}),
-            assessment_pack=data.get("assessment_pack", {"questions": []}),
-            created_by=get_jwt_identity()
-        )
-
-        db.session.add(job)
-        db.session.commit()
-
-        return jsonify({"message": "Job created", "job": job.to_dict()}), 201
-
+        
+        # Validate input using schema
+        try:
+            validated_data = job_create_schema.load(data)
+        except ValidationError as e:
+            return jsonify({
+                "error": "Validation failed",
+                "details": e.messages
+            }), 400
+        
+        current_user_id = get_jwt_identity()
+        
+        # Use service to create job
+        job, error = JobService.create_job(validated_data, current_user_id)
+        
+        if error:
+            return jsonify(error), error.get('status_code', 400)
+        
+        # Return response
+        return jsonify({
+            "message": "Job created successfully",
+            "job": job_response_schema.dump(job),
+            "job_id": job.id
+        }), 201
+        
     except Exception as e:
-        db.session.rollback()  # ensure session consistency
-        current_app.logger.error(f"Create job error: {e}", exc_info=True)
-        return jsonify({"error": "Internal server error"}), 500
+        current_app.logger.error(f"Create job route error: {str(e)}", exc_info=True)
+        return jsonify({
+            "error": "Internal server error",
+            "message": str(e)
+        }), 500
+
 
 @admin_bp.route("/jobs/<int:job_id>", methods=["PUT"])
+@jwt_required()
 @role_required(["admin", "hiring_manager"])
 def update_job(job_id):
-    job = Requisition.query.get_or_404(job_id)
-    data = request.get_json()
-    for field in ["title", "description", "required_skills", "min_experience", "knockout_rules", "weightings", "assessment_pack"]:
-        if field in data:
-            setattr(job, field, data[field])
-    db.session.commit()
-    return jsonify({"message": "Job updated", "job": job.to_dict()}), 200
+    """Update a job posting (partial updates allowed)"""
+    try:
+        data = request.get_json()
+        
+        # Validate update data
+        try:
+            validated_data = job_update_schema.load(data, partial=True)
+        except ValidationError as e:
+            return jsonify({
+                "error": "Validation failed",
+                "details": e.messages
+            }), 400
+        
+        current_user_id = get_jwt_identity()
+        
+        # Use service to update job
+        job, error = JobService.update_job(job_id, validated_data, current_user_id)
+        
+        if error:
+            return jsonify(error), error.get('status_code', 400)
+        
+        return jsonify({
+            "message": "Job updated successfully",
+            "job": job_response_schema.dump(job)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Update job route error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({
+            "error": "Internal server error",
+            "message": str(e)
+        }), 500
+
 
 @admin_bp.route("/jobs/<int:job_id>", methods=["DELETE"])
+@jwt_required()
 @role_required(["admin", "hiring_manager"])
 def delete_job(job_id):
-    job = Requisition.query.get_or_404(job_id)
-    db.session.delete(job)
-    db.session.commit()
-    return jsonify({"message": "Job deleted"}), 200
+    """Soft delete a job posting"""
+    try:
+        current_user_id = get_jwt_identity()
+        
+        # Use service to delete job
+        result, error = JobService.delete_job(job_id, current_user_id)
+        
+        if error:
+            return jsonify(error), error.get('status_code', 400)
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Delete job route error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({
+            "error": "Internal server error",
+            "message": str(e)
+        }), 500
+
 
 @admin_bp.route("/jobs/<int:job_id>", methods=["GET"])
+@jwt_required()
 @role_required(["admin", "hiring_manager"])
 def get_job(job_id):
-    job = Requisition.query.get_or_404(job_id)
-    return jsonify(job.to_dict())
+    """Get a specific job by ID"""
+    try:
+        job = Requisition.query.get(job_id)
+        if not job:
+            return jsonify({"error": "Job not found"}), 404
+        
+        # Log view activity
+        current_user_id = get_jwt_identity()
+        JobService._log_activity(
+            action="VIEW",
+            job_id=job.id,
+            user_id=current_user_id
+        )
+        
+        return jsonify(job_response_schema.dump(job)), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Get job route error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({
+            "error": "Internal server error",
+            "message": str(e)
+        }), 500
+
+
+@admin_bp.route("/jobs/<int:job_id>/detailed", methods=["GET"])
+@jwt_required()
+@role_required(["admin", "hiring_manager"])
+def get_job_detailed(job_id):
+    """Get detailed information about a job including statistics"""
+    try:
+        current_user_id = get_jwt_identity()
+        
+        # Use service to get job with statistics
+        job_data, error = JobService.get_job_with_stats(job_id, current_user_id)
+        
+        if error:
+            return jsonify(error), error.get('status_code', 400)
+        
+        return jsonify(job_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Get detailed job route error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({
+            "error": "Internal server error",
+            "message": str(e)
+        }), 500
+
 
 @admin_bp.route("/jobs", methods=["GET"])
+@jwt_required()
 @role_required(["admin", "hiring_manager"])
 def list_jobs():
-    jobs = Requisition.query.all()
-    return jsonify([job.to_dict() for job in jobs])
+    """List jobs with filtering, sorting, and pagination"""
+    try:
+        # Get query parameters
+        filters = {
+            'page': request.args.get('page', 1, type=int),
+            'per_page': request.args.get('per_page', 20, type=int),
+            'category': request.args.get('category'),
+            'status': request.args.get('status', 'active'),
+            'sort_by': request.args.get('sort_by', 'created_at'),
+            'sort_order': request.args.get('sort_order', 'desc'),
+            'search': request.args.get('search')
+        }
+        
+        # Use service to list jobs
+        jobs_data, error = JobService.list_jobs(filters)
+        
+        if error:
+            return jsonify(error), error.get('status_code', 400)
+        
+        return jsonify(jobs_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"List jobs route error: {str(e)}", exc_info=True)
+        return jsonify({
+            "error": "Internal server error",
+            "message": str(e)
+        }), 500
+
+
+@admin_bp.route("/jobs/<int:job_id>/restore", methods=["POST"])
+@jwt_required()
+@role_required(["admin", "hiring_manager"])
+def restore_job(job_id):
+    """Restore a soft-deleted job"""
+    try:
+        current_user_id = get_jwt_identity()
+        
+        # Use service to restore job
+        result, error = JobService.restore_job(job_id, current_user_id)
+        
+        if error:
+            return jsonify(error), error.get('status_code', 400)
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Restore job route error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({
+            "error": "Internal server error",
+            "message": str(e)
+        }), 500
+
+
+@admin_bp.route("/jobs/<int:job_id>/activity", methods=["GET"])
+@jwt_required()
+@role_required(["admin", "hiring_manager"])
+def get_job_activity(job_id):
+    """Get audit log for a specific job"""
+    try:
+        # Get pagination parameters
+        filters = {
+            'page': request.args.get('page', 1, type=int),
+            'per_page': request.args.get('per_page', 50, type=int)
+        }
+        
+        # Use service to get activity log
+        activity_data, error = JobService.get_job_activity(job_id, filters)
+        
+        if error:
+            return jsonify(error), error.get('status_code', 400)
+        
+        return jsonify(activity_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Get job activity route error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({
+            "error": "Internal server error",
+            "message": str(e)
+        }), 500
+
+
+@admin_bp.route("/jobs/<int:job_id>/applications", methods=["GET"])
+@jwt_required()
+@role_required(["admin", "hiring_manager", "hr"])
+def get_job_applications(job_id):
+    """Get applications for a specific job"""
+    try:
+        # Check if job exists
+        job = Requisition.query.get(job_id)
+        if not job:
+            return jsonify({"error": "Job not found"}), 404
+        
+        # Get pagination parameters
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        status = request.args.get('status')
+        
+        # Build query
+        query = Application.query.filter_by(requisition_id=job_id)
+        
+        # Apply status filter
+        if status:
+            query = query.filter_by(status=status)
+        
+        # Paginate
+        applications = query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+        
+        # Prepare response
+        response = {
+            "job_id": job_id,
+            "job_title": job.title,
+            "applications": [app.to_dict() for app in applications.items],
+            "pagination": {
+                "page": applications.page,
+                "per_page": applications.per_page,
+                "total_pages": applications.pages,
+                "total_items": applications.total,
+                "has_next": applications.has_next,
+                "has_prev": applications.has_prev
+            }
+        }
+        
+        return jsonify(response), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Get job applications error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({
+            "error": "Internal server error",
+            "message": str(e)
+        }), 500
+
+
+@admin_bp.route("/jobs/stats", methods=["GET"])
+@jwt_required()
+@role_required(["admin", "hiring_manager", "hr"])
+def get_job_statistics():
+    """Get overall job statistics"""
+    try:
+        # Get date range
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        # Base queries
+        total_jobs = Requisition.query.count()
+        active_jobs = Requisition.query.filter_by(is_active=True).count()
+        inactive_jobs = Requisition.query.filter_by(is_active=False).count()
+        
+        # Category distribution
+        categories = db.session.query(
+            Requisition.category,
+            func.count(Requisition.id).label('count')
+        ).filter_by(is_active=True).group_by(Requisition.category).all()
+        
+        # Applications per job (average) using a subquery
+        subquery = (
+            db.session.query(
+                func.count(Application.id).label('app_count')
+            )
+            .join(Requisition)
+            .filter(Requisition.is_active == True)
+            .group_by(Requisition.id)
+            .subquery()
+        )
+
+        avg_applications = db.session.query(
+            func.avg(subquery.c.app_count)
+        ).scalar() or 0
+        
+        # Recent activity (last 30 days)
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        recent_jobs = Requisition.query.filter(
+            Requisition.created_at >= thirty_days_ago
+        ).count()
+        
+        # Vacancy statistics
+        total_vacancies = db.session.query(
+            func.sum(Requisition.vacancy)
+        ).filter_by(is_active=True).scalar() or 0
+        
+        response = {
+            "overall": {
+                "total_jobs": total_jobs,
+                "active_jobs": active_jobs,
+                "inactive_jobs": inactive_jobs,
+                "total_vacancies": total_vacancies,
+                "average_applications_per_job": round(float(avg_applications), 2),
+                "recent_jobs_last_30_days": recent_jobs
+            },
+            "by_category": [
+                {"category": cat, "count": count}
+                for cat, count in categories
+            ]
+        }
+        
+        return jsonify(response), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Get job statistics error: {str(e)}", exc_info=True)
+        return jsonify({
+            "error": "Internal server error",
+            "message": str(e)
+        }), 500
 
 # ----------------- CANDIDATE MANAGEMENT -----------------
 @admin_bp.route("/candidates", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def list_candidates():
     candidates = Candidate.query.all()
     return jsonify([c.to_dict() for c in candidates])
 
 @admin_bp.route("/applications/<int:application_id>", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def get_application(application_id):
     application = Application.query.get_or_404(application_id)
     assessment = AssessmentResult.query.filter_by(application_id=application.id).first()
@@ -348,7 +657,7 @@ def get_application(application_id):
     })
 
 @admin_bp.route("/jobs/<int:job_id>/shortlist", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def shortlist_candidates(job_id):
     job = Requisition.query.get_or_404(job_id)
     applications = Application.query.filter_by(requisition_id=job.id).all()
@@ -409,7 +718,7 @@ def get_notifications(user_id):
 
 
 @admin_bp.route("/cv-reviews", methods=["GET", "OPTIONS"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 @cross_origin()
 def list_cv_reviews():
     if request.method == "OPTIONS":
@@ -592,7 +901,7 @@ def dashboard_counts():
 
 @admin_bp.route("/jobs/interviews", methods=["GET", "POST"])
 @admin_bp.route("/interviews", methods=["GET", "POST"])  # backward compatibility
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def manage_interviews():
     try:
         # ---------------- GET ----------------
@@ -756,7 +1065,7 @@ def manage_interviews():
 # ♻️ RESCHEDULE INTERVIEW (with Google Calendar)
 # =====================================================
 @admin_bp.route("/interviews/reschedule/<int:interview_id>", methods=["PATCH", "PUT"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def reschedule_interview(interview_id):
     try:
         # Fetch interview
@@ -878,7 +1187,7 @@ def reschedule_interview(interview_id):
 # ❌ CANCEL INTERVIEW (with Google Calendar)
 # =====================================================
 @admin_bp.route("/interviews/cancel/<int:interview_id>", methods=["DELETE", "OPTIONS"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def cancel_interview(interview_id):
     # Handle CORS preflight
     if request.method == "OPTIONS":
@@ -967,7 +1276,7 @@ def cancel_interview(interview_id):
 # =====================================================
 
 @admin_bp.route("/interviews/calendar/sync", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def sync_google_calendar():
     """Sync interviews with Google Calendar"""
     try:
@@ -1020,7 +1329,7 @@ def sync_google_calendar():
 
 
 @admin_bp.route("/interviews/<int:interview_id>/calendar/sync", methods=["POST"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def sync_single_interview(interview_id):
     """Sync a single interview with Google Calendar"""
     try:
@@ -1104,7 +1413,7 @@ def sync_single_interview(interview_id):
 # =====================================================
 
 @admin_bp.route("/interviews/calendar/bulk-sync", methods=["POST"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def bulk_sync_interviews():
     """Sync multiple interviews with Google Calendar"""
     try:
@@ -1225,7 +1534,7 @@ def bulk_sync_interviews():
 # =====================================================
 
 @admin_bp.route("/interviews/<int:interview_id>/calendar/status", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def get_interview_calendar_status(interview_id):
     """Get Google Calendar status for a specific interview"""
     try:
@@ -1270,7 +1579,7 @@ def get_interview_calendar_status(interview_id):
         return jsonify({"error": "Failed to get calendar status"}), 500
     
 @admin_bp.route("/applications", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def get_candidate_applications():
     try:
         candidate_id = request.args.get("candidate_id", type=int)
@@ -1309,7 +1618,7 @@ def get_candidate_applications():
 # 🔄 UPDATE INTERVIEW STATUS (Completed, No-show, etc.)
 # =====================================================
 @admin_bp.route("/interviews/<int:interview_id>/status", methods=["PATCH", "PUT"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def update_interview_status(interview_id):
     """
     Update interview status:
@@ -1462,7 +1771,7 @@ def update_interview_status(interview_id):
 # 📝 SUBMIT INTERVIEW FEEDBACK
 # =====================================================
 @admin_bp.route("/interviews/<int:interview_id>/feedback", methods=["POST"])
-@role_required(["admin", "hiring_manager", "interviewer"])
+@role_required(["admin", "hiring_manager", "hr"])
 def submit_interview_feedback(interview_id):
     """
     Submit structured interview feedback with ratings
@@ -1634,7 +1943,7 @@ def submit_interview_feedback(interview_id):
 # 📊 GET INTERVIEW FEEDBACK
 # =====================================================
 @admin_bp.route("/interviews/<int:interview_id>/feedback", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def get_interview_feedback(interview_id):
     """
     Get all feedback for an interview
@@ -1696,7 +2005,7 @@ def get_interview_feedback(interview_id):
 # 🔔 INTERVIEW REMINDERS SYSTEM
 # =====================================================
 @admin_bp.route("/interviews/reminders/schedule", methods=["POST"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def schedule_interview_reminders():
     """
     Schedule automated reminders for upcoming interviews
@@ -1931,7 +2240,7 @@ def send_1_hour_reminder(interview):
 # 📋 GET SCHEDULED REMINDERS
 # =====================================================
 @admin_bp.route("/interviews/<int:interview_id>/reminders", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def get_interview_reminders(interview_id):
     """Get all reminders for an interview"""
     try:
@@ -1961,7 +2270,7 @@ def get_interview_reminders(interview_id):
         return jsonify({"error": "Internal server error"}), 500
     
 @admin_bp.route("/applications/all", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def get_all_applications():
     applications = Application.query.all()
     result = []
@@ -1979,7 +2288,7 @@ def get_all_applications():
 
 
 @admin_bp.route("/interviews/all", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def get_all_interviews():
     """
     Fetch all interviews with pagination, search, and filters.
@@ -2222,7 +2531,7 @@ def powerbi_status():
 
 
 @admin_bp.route("/applications/<int:application_id>/download-cv", methods=["GET", "OPTIONS"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def download_application_cv(application_id):
     """
     Returns the CV URL for the given application.
@@ -2247,7 +2556,7 @@ def download_application_cv(application_id):
 
     
 @admin_bp.route("/candidates/all", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def get_all_candidates():
     """
     Fetch all candidates with their profile info.
@@ -2988,7 +3297,7 @@ def get_upcoming_meetings():
         return jsonify({"error": "Failed to fetch upcoming meetings"}), 500
 
 @admin_bp.route("/candidates/ready-for-offer", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def get_candidates_ready_for_offer():
     try:
         min_interviews = request.args.get('min_interviews', 2, type=int)
@@ -3132,7 +3441,7 @@ def get_candidates_ready_for_offer():
 
 #------------------------------------------------------------------------------------------------------------
 @admin_bp.route("/pipeline/stats", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def get_pipeline_stats():
     """
     Get statistics for the recruitment pipeline header
@@ -3185,7 +3494,7 @@ def get_pipeline_stats():
         return jsonify({"error": "Internal server error"}), 500
     
 @admin_bp.route("/applications/filtered", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def get_filtered_applications():
     """
     Get applications with advanced filtering and search
@@ -3303,7 +3612,7 @@ def get_filtered_applications():
         return jsonify({"error": "Internal server error"}), 500
     
 @admin_bp.route("/jobs/with-stats", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def get_jobs_with_stats():
     """
     Get all jobs with their statistics
@@ -3371,7 +3680,7 @@ def get_jobs_with_stats():
         return jsonify({"error": "Internal server error"}), 500
     
 @admin_bp.route("/interviews/dashboard/<string:timeframe>", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def get_interviews_by_timeframe(timeframe):
     """
     Get interviews by timeframe: today, upcoming, past, week, month
@@ -3469,7 +3778,7 @@ def get_interviews_by_timeframe(timeframe):
 from sqlalchemy import func
 
 @admin_bp.route("/pipeline/stages/count", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def get_pipeline_stages_count():
     """
     Get count of candidates in each pipeline stage
@@ -3532,7 +3841,7 @@ def get_pipeline_stages_count():
 
     
 @admin_bp.route("/pipeline/quick-stats", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def get_pipeline_quick_stats():
     """
     Get quick statistics for dashboard cards
@@ -3649,7 +3958,7 @@ def get_pipeline_quick_stats():
 
     
 @admin_bp.route("/applications/<int:application_id>/status", methods=["PATCH"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def update_application_status(application_id):
     """
     Update application pipeline status
@@ -3733,7 +4042,7 @@ def update_application_status(application_id):
         return jsonify({"error": "Internal server error"}), 500
     
 @admin_bp.route("/search", methods=["GET"])
-@role_required(["admin", "hiring_manager"])
+@role_required(["admin", "hiring_manager", "hr"])
 def search_all():
     """
     Global search across candidates, jobs, applications
