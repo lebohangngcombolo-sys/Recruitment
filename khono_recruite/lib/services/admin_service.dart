@@ -7,6 +7,211 @@ class AdminService {
   final Map<String, String> headers = {'Content-Type': 'application/json'};
 
   // ---------- JOBS ----------
+  // ========== ENHANCED JOB METHODS (ADD THESE) ==========
+
+  Future<Map<String, String>> _getAuthHeaders() async {
+    final token = await AuthService.getAccessToken();
+    return {
+      ...headers,
+      'Authorization': 'Bearer $token',
+    };
+  }
+
+  // Enhanced listJobs with filtering
+  // In AdminService class
+  Future<Map<String, dynamic>> listJobsEnhanced({
+    int page = 1,
+    int perPage = 20,
+    String? category,
+    String status = 'active',
+    String sortBy = 'created_at',
+    String sortOrder = 'desc',
+    String? search,
+  }) async {
+    final authHeaders = await _getAuthHeaders();
+
+    final queryParams = {
+      'page': page.toString(),
+      'per_page': perPage.toString(),
+      'status': status,
+      'sort_by': sortBy,
+      'sort_order': sortOrder,
+    };
+
+    if (category != null) queryParams['category'] = category;
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
+
+    final uri =
+        Uri.parse(ApiEndpoints.adminJobs).replace(queryParameters: queryParams);
+
+    final res = await http.get(uri, headers: authHeaders);
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body); // This should return Map<String, dynamic>
+    } else {
+      final error = json.decode(res.body);
+      throw Exception('Failed to load jobs: ${error['error'] ?? res.body}');
+    }
+  }
+
+  // Get job with detailed statistics
+  Future<Map<String, dynamic>> getJobDetailed(int jobId) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.get(
+      Uri.parse('${ApiEndpoints.adminJobs}/$jobId/detailed'),
+      headers: authHeaders,
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    } else {
+      final error = json.decode(res.body);
+      throw Exception(
+          'Failed to get job details: ${error['error'] ?? res.body}');
+    }
+  }
+
+  // Restore soft-deleted job
+  Future<void> restoreJob(int jobId) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.adminJobs}/$jobId/restore'),
+      headers: authHeaders,
+    );
+
+    if (res.statusCode != 200) {
+      final error = json.decode(res.body);
+      throw Exception('Failed to restore job: ${error['error'] ?? res.body}');
+    }
+  }
+
+  // Get job activity logs
+  Future<List<dynamic>> getJobActivity(int jobId,
+      {int page = 1, int perPage = 50}) async {
+    final authHeaders = await _getAuthHeaders();
+
+    final queryParams = {
+      'page': page.toString(),
+      'per_page': perPage.toString(),
+    };
+
+    final uri = Uri.parse('${ApiEndpoints.adminJobs}/$jobId/activity')
+        .replace(queryParameters: queryParams);
+
+    final res = await http.get(uri, headers: authHeaders);
+
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      return data['activities'] ?? [];
+    } else {
+      final error = json.decode(res.body);
+      throw Exception(
+          'Failed to get job activity: ${error['error'] ?? res.body}');
+    }
+  }
+
+  // Get job applications
+  Future<List<dynamic>> getJobApplications(
+    int jobId, {
+    int page = 1,
+    int perPage = 20,
+    String? status,
+  }) async {
+    final authHeaders = await _getAuthHeaders();
+
+    final queryParams = {
+      'page': page.toString(),
+      'per_page': perPage.toString(),
+    };
+
+    if (status != null) queryParams['status'] = status;
+
+    final uri = Uri.parse('${ApiEndpoints.adminJobs}/$jobId/applications')
+        .replace(queryParameters: queryParams);
+
+    final res = await http.get(uri, headers: authHeaders);
+
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      return data['applications'] ?? [];
+    } else {
+      final error = json.decode(res.body);
+      throw Exception(
+          'Failed to get job applications: ${error['error'] ?? res.body}');
+    }
+  }
+
+  // Get job statistics
+  Future<Map<String, dynamic>> getJobStatistics() async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.get(
+      Uri.parse('${ApiEndpoints.adminJobs}/stats'),
+      headers: authHeaders,
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    } else {
+      final error = json.decode(res.body);
+      throw Exception(
+          'Failed to get job statistics: ${error['error'] ?? res.body}');
+    }
+  }
+
+  // Update job status (activate/deactivate)
+  Future<void> updateJobStatus(int jobId, bool isActive) async {
+    final authHeaders = await _getAuthHeaders();
+    final data = {'is_active': isActive};
+
+    final res = await http.put(
+      Uri.parse('${ApiEndpoints.adminJobs}/$jobId'),
+      headers: authHeaders,
+      body: json.encode(data),
+    );
+
+    if (res.statusCode != 200) {
+      final error = json.decode(res.body);
+      throw Exception(
+          'Failed to update job status: ${error['error'] ?? res.body}');
+    }
+  }
+
+  // Create job with full data (enhanced version)
+  Future<Map<String, dynamic>> createJobEnhanced(
+      Map<String, dynamic> data) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse(ApiEndpoints.adminJobs),
+      headers: authHeaders,
+      body: json.encode(data),
+    );
+
+    if (res.statusCode == 201) {
+      return json.decode(res.body);
+    } else {
+      final error = json.decode(res.body);
+      throw Exception('Failed to create job: ${error['error'] ?? res.body}');
+    }
+  }
+
+  // Update job with full data (enhanced version)
+  Future<Map<String, dynamic>> updateJobEnhanced(
+      int jobId, Map<String, dynamic> data) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.put(
+      Uri.parse('${ApiEndpoints.adminJobs}/$jobId'),
+      headers: authHeaders,
+      body: json.encode(data),
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    } else {
+      final error = json.decode(res.body);
+      throw Exception('Failed to update job: ${error['error'] ?? res.body}');
+    }
+  }
+
   Future<List<dynamic>> listJobs() async {
     final token = await AuthService.getAccessToken();
     final res = await http.get(

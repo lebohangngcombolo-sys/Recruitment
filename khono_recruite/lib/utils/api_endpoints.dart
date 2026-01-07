@@ -106,6 +106,14 @@ class ApiEndpoints {
   static const createJob = "$adminBase/jobs";
   static String updateJob(int id) => "$adminBase/jobs/$id";
   static String deleteJob(int id) => "$adminBase/jobs/$id";
+
+  // Add these if not already present
+  static String getJobDetailed(int id) => "$adminBase/jobs/$id/detailed";
+  static String restoreJob(int id) => "$adminBase/jobs/$id/restore";
+  static String getJobActivity(int id) => "$adminBase/jobs/$id/activity";
+  static String getJobApplications(int id) =>
+      "$adminBase/jobs/$id/applications";
+  static String getJobStats = "$adminBase/jobs/stats";
   static const viewCandidates = "$adminBase/candidates";
   static String getApplicationById(int id) => "$adminBase/applications/$id";
   static String shortlistCandidates(int jobId) =>
