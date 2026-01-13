@@ -51,17 +51,7 @@ class LandingPage extends StatelessWidget {
                             height: 120,
                             fit: BoxFit.contain,
                           ),
-                          Row(
-                            children: [
-                              _navItem("Khonology"),
-                              _navItem("Interview Mock up"),
-                              _navItem("Resume Generator"),
-                              _navItem("IPQ"),
-                              _navItem("Join Us"),
-                              _navItem("About Us"),
-                              _navItem("Contact"),
-                            ],
-                          ),
+                          // Navigation links removed
                         ],
                       ),
                       const Spacer(),
@@ -406,18 +396,6 @@ class LandingPage extends StatelessWidget {
   }
 
   // -------------------- Helper Widgets --------------------
-  Widget _navItem(String label) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: Text(
-          label,
-          style: GoogleFonts.poppins(color: Colors.white70, fontSize: 14),
-        ),
-      ),
-    );
-  }
 
   Widget _textField(String hint, {int maxLines = 1}) {
     return TextField(

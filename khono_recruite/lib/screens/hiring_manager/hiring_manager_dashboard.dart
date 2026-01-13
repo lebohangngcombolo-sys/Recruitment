@@ -56,6 +56,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
   List<String> recentActivities = [];
 
+  // Display name for the logged-in user (shared with Team Collaboration semantics)
+  String userName = "Hiring Manager";
+
   bool sidebarCollapsed = false;
   late final AnimationController _sidebarAnimController;
   late final Animation<double> _sidebarWidthAnimation;
@@ -67,11 +70,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     "Alex: Uploaded new CVs to review.",
     "Lisa: Updated job descriptions.",
   ];
-
-  // Power BI status
-  bool powerBIConnected = false;
-  bool checkingPowerBI = true;
-  Timer? _statusTimer;
 
   // --- Audits ---
   List<Map<String, dynamic>> audits = [];
@@ -108,13 +106,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   void initState() {
     super.initState();
     fetchStats();
-    fetchPowerBIStatus();
     fetchAudits(page: 1);
     fetchProfileImage();
-
-    _statusTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      fetchPowerBIStatus();
-    });
+    _loadUserName();
 
     _sidebarAnimController = AnimationController(
       vsync: this,
@@ -128,9 +122,34 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   @override
   void dispose() {
     _sidebarAnimController.dispose();
-    _statusTimer?.cancel();
     auditSearchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadUserName() async {
+    try {
+      final info = await AuthService.getUserInfo();
+      if (info == null) return;
+
+      // Try a few common keys defensively
+      final profile = info['profile'] ?? {};
+      final candidate = info['candidate'] ?? {};
+
+      final name = info['full_name'] ??
+          info['name'] ??
+          profile['full_name'] ??
+          profile['name'] ??
+          candidate['full_name'] ??
+          candidate['name'];
+
+      if (name is String && name.trim().isNotEmpty) {
+        setState(() {
+          userName = name.trim();
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load user name: $e');
+    }
   }
 
   // ---------- Profile Image Methods ----------
@@ -213,7 +232,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     return const AssetImage("assets/images/profile_placeholder.png");
   }
 
-  // ---------- Dashboard Stats & PowerBI ----------
+  // ---------- Dashboard Stats ----------
   Future<void> fetchStats() async {
     setState(() => loadingStats = true);
     try {
@@ -243,30 +262,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     } catch (e) {
       setState(() => loadingStats = false);
       debugPrint("Error fetching dashboard stats: $e");
-    }
-  }
-
-  Future<void> fetchPowerBIStatus() async {
-    setState(() => checkingPowerBI = true);
-    try {
-      final token = await AuthService.getAccessToken();
-      final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/powerbi/status"),
-        headers: {"Authorization": "Bearer $token"},
-      );
-
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        setState(() {
-          powerBIConnected = data["connected"] ?? false;
-        });
-      } else {
-        setState(() => powerBIConnected = false);
-      }
-    } catch (e) {
-      setState(() => powerBIConnected = false);
-    } finally {
-      setState(() => checkingPowerBI = false);
     }
   }
 
@@ -491,7 +486,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Text(
-                                        "Admin User",
+                                        userName,
                                         style: TextStyle(
                                           fontFamily: 'Poppins',
                                           color: themeProvider.isDarkMode
@@ -616,6 +611,37 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     contentPadding: const EdgeInsets.symmetric(
                                         vertical: 14, horizontal: 10),
                                   ),
+                                  onSubmitted: (query) {
+                                    final q = query.toLowerCase();
+                                    setState(() {
+                                      if (q.contains('job')) {
+                                        currentScreen = "jobs";
+                                      } else if (q.contains('candidate')) {
+                                        currentScreen = "candidates";
+                                      } else if (q.contains('interview')) {
+                                        currentScreen = "interviews";
+                                      } else if (q.contains('pipeline')) {
+                                        // For now, treat pipeline as analytics view
+                                        currentScreen = "analytics";
+                                      } else if (q.contains('analytics') ||
+                                          q.contains('report')) {
+                                        currentScreen = "analytics";
+                                      } else if (q.contains('notification')) {
+                                        currentScreen = "notifications";
+                                      } else if (q.contains('home') ||
+                                          q.contains('dashboard')) {
+                                        currentScreen = "dashboard";
+                                      } else {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                                "No results found for '$query'"),
+                                          ),
+                                        );
+                                      }
+                                    });
+                                  },
                                   cursorColor: Colors.redAccent,
                                   style: TextStyle(
                                     fontFamily: 'Poppins',
@@ -676,41 +702,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                         const Color.fromARGB(255, 193, 13, 0),
                                   ),
                                   tooltip: "Analytics Dashboard",
-                                ),
-                                const SizedBox(width: 8),
-
-                                // ---------- Power BI Status Icon ----------
-                                Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: powerBIConnected
-                                        ? Colors.green
-                                        : Colors.red,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: powerBIConnected
-                                            ? Colors.green.withOpacity(0.6)
-                                            : Colors.red.withOpacity(0.6),
-                                        blurRadius: 12,
-                                        spreadRadius: 2,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Center(
-                                    child: checkingPowerBI
-                                        ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Icon(Icons.bar_chart,
-                                            color: Colors.white, size: 20),
-                                  ),
                                 ),
                                 const SizedBox(width: 8),
 
@@ -971,7 +962,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 8),
-            Text("Welcome Back, Admin",
+            Text("Welcome Back, $userName",
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 28,
@@ -1094,6 +1085,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1723,7 +1715,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    "Today's Date",
+                    "Calendar",
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
@@ -1758,49 +1750,64 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             ],
           ),
           const SizedBox(height: 16),
-          Container(
-            height: 140,
-            decoration: BoxDecoration(
-              color: (themeProvider.isDarkMode
-                      ? const Color(0xFF14131E)
-                      : Colors.white)
-                  .withOpacity(0.9),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    DateTime.now().day.toString(),
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 48,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.blueAccent,
-                      height: 1.0,
-                    ),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: (themeProvider.isDarkMode
+                        ? const Color(0xFF14131E)
+                        : Colors.white)
+                    .withOpacity(0.9),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    DateFormat('MMMM yyyy').format(DateTime.now()),
-                    style: TextStyle(
+                ],
+              ),
+              child: SfCalendar(
+                view: CalendarView.month,
+                monthViewSettings: MonthViewSettings(
+                  appointmentDisplayMode:
+                      MonthAppointmentDisplayMode.appointment,
+                  showAgenda: false,
+                  monthCellStyle: MonthCellStyle(
+                    textStyle: TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
                       color: themeProvider.isDarkMode
                           ? Colors.grey.shade300
                           : Colors.grey.shade700,
                     ),
+                    todayTextStyle: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: themeProvider.isDarkMode
+                          ? Colors.blueAccent.withOpacity(0.8)
+                          : Colors.blueAccent,
+                    ),
+                    trailingDatesTextStyle: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      color: Colors.grey.shade400,
+                    ),
+                    leadingDatesTextStyle: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      color: Colors.grey.shade400,
+                    ),
                   ),
-                ],
+                ),
+                dataSource: _MeetingDataSource([]),
+                todayHighlightColor: Colors.blueAccent,
+                selectionDecoration: BoxDecoration(
+                  color: Colors.blueAccent.withOpacity(0.1),
+                  border: Border.all(color: Colors.blueAccent, width: 1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                backgroundColor: Colors.transparent,
               ),
             ),
           ),
