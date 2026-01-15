@@ -124,12 +124,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           ),
                         ),
                         const SizedBox(height: 16),
-                        const Text(
+                        Text(
                           "FORGOT PASSWORD",
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
+                            fontFamily: 'Poppins',
                             shadows: [
                               Shadow(
                                   color: Colors.black26,
@@ -139,9 +140,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           ),
                         ),
                         const SizedBox(height: 16),
-                        const Text(
+                        Text(
                           "Enter your email to receive reset instructions",
-                          style: TextStyle(fontSize: 16, color: Colors.white70),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white70,
+                            fontFamily: 'Poppins',
+                          ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 24),
@@ -165,7 +170,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           child: ElevatedButton(
                             onPressed: loading ? null : submit,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
+                              backgroundColor: const Color(0xFFC10D00),
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius:
@@ -183,11 +188,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                                           Colors.white),
                                     ),
                                   )
-                                : const Text(
+                                : Text(
                                     "SUBMIT",
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
+                                      fontFamily: 'Poppins',
                                     ),
                                   ),
                           ),
