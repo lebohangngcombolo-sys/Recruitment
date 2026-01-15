@@ -10,7 +10,7 @@ class LandingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Size size = MediaQuery.of(context).size;
-    final accentRed = const Color(0xFFE50914);
+    final accentRed = const Color(0xFFC10D00);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D0D),
@@ -53,13 +53,7 @@ class LandingPage extends StatelessWidget {
                           ),
                           Row(
                             children: [
-                              _navItem("Khonology"),
-                              _navItem("Interview Mock up"),
-                              _navItem("Resume Generator"),
-                              _navItem("IPQ"),
-                              _navItem("Join Us"),
-                              _navItem("About Us"),
-                              _navItem("Contact"),
+                              // Navigation items removed as requested
                             ],
                           ),
                         ],
@@ -227,7 +221,7 @@ class LandingPage extends StatelessWidget {
                   context,
                   title: "ABOUT US",
                   description:
-                      "Established in 2013, Khonology is a B-BBEE Level 2 technology service provider that has the vision of becoming Africa's leading digital enabler.Khonology aspires to continue to rise into Africa’s leading data and digital enabler that empowers our continent’s businesses and people to unlock their full potential through technology.",
+                      "Established in 2013, Khonology is a B-BBEE Level 2 technology service provider that has the vision of becoming Africa's leading digital enabler.Khonology aspires to continue to rise into Africa's leading data and digital enabler that empowers our continent's businesses and people to unlock their full potential through technology.",
                   backgroundImage: 'assets/images/bg3.jpeg',
                 ),
 
@@ -406,26 +400,13 @@ class LandingPage extends StatelessWidget {
   }
 
   // -------------------- Helper Widgets --------------------
-  Widget _navItem(String label) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12.0),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: Text(
-          label,
-          style: GoogleFonts.poppins(color: Colors.white70, fontSize: 14),
-        ),
-      ),
-    );
-  }
-
   Widget _textField(String hint, {int maxLines = 1}) {
     return TextField(
       maxLines: maxLines,
-      style: const TextStyle(color: Colors.white),
+      style: GoogleFonts.poppins(color: Colors.white),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: const TextStyle(color: Colors.white54),
+        hintStyle: GoogleFonts.poppins(color: Colors.white54),
         filled: true,
         fillColor: Colors.white10,
         border: OutlineInputBorder(
