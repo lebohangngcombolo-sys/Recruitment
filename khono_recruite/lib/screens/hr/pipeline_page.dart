@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../services/recruitment_service.dart';
 
 class RecruitmentPipelinePage extends StatefulWidget {
   final String token;
@@ -12,139 +14,221 @@ class RecruitmentPipelinePage extends StatefulWidget {
 }
 
 class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
-  // Mock data based on your models
-  final List<Map<String, dynamic>> _mockRequisitions = [
-    {
-      'id': 1,
-      'title': 'Senior Flutter Developer',
-      'category': 'Engineering',
-      'vacancy': 2,
-      'created_at': '2024-01-15T10:30:00Z',
-      'applications_count': 15,
-      'status': 'active',
-      'progress': 65,
-    },
-    {
-      'id': 2,
-      'title': 'Product Manager',
-      'category': 'Product',
-      'vacancy': 1,
-      'created_at': '2024-01-20T14:45:00Z',
-      'applications_count': 8,
-      'status': 'active',
-      'progress': 30,
-    },
-    {
-      'id': 3,
-      'title': 'UX Designer',
-      'category': 'Design',
-      'vacancy': 1,
-      'created_at': '2024-01-10T09:15:00Z',
-      'applications_count': 12,
-      'status': 'completed',
-      'progress': 100,
-    },
-  ];
+  late RecruitmentService _recruitmentService;
+  List<Map<String, dynamic>> _requisitions = [];
+  List<Map<String, dynamic>> _applications = [];
+  List<Map<String, dynamic>> _interviews = [];
+  List<Map<String, dynamic>> _offers = [];
+  List<Map<String, dynamic>> _candidatesReadyForOffer = [];
+  Map<String, dynamic> _pipelineStats = {};
+  Map<String, dynamic> _quickStats = {};
+  List<Map<String, dynamic>> _pipelineStages = [];
+  Map<String, dynamic> _analytics = {};
 
-  final List<Map<String, dynamic>> _mockApplications = [
-    {
-      'id': 1,
-      'candidate_name': 'John Smith',
-      'requisition_title': 'Senior Flutter Developer',
-      'status': 'screening',
-      'cv_score': 85,
-      'assessment_score': 78,
-      'overall_score': 82,
-      'applied_date': '2024-01-16T11:20:00Z',
-      'recommendation': 'strong',
-      'next_interview': '2024-01-25T14:00:00Z',
-    },
-    {
-      'id': 2,
-      'candidate_name': 'Sarah Johnson',
-      'requisition_title': 'Senior Flutter Developer',
-      'status': 'interview',
-      'cv_score': 92,
-      'assessment_score': 88,
-      'overall_score': 90,
-      'applied_date': '2024-01-17T09:45:00Z',
-      'recommendation': 'hire',
-      'next_interview': '2024-01-24T10:30:00Z',
-    },
-    {
-      'id': 3,
-      'candidate_name': 'Michael Chen',
-      'requisition_title': 'Product Manager',
-      'status': 'assessment',
-      'cv_score': 78,
-      'assessment_score': 82,
-      'overall_score': 80,
-      'applied_date': '2024-01-21T16:10:00Z',
-      'recommendation': 'moderate',
-      'next_interview': null,
-    },
-    {
-      'id': 4,
-      'candidate_name': 'Emma Wilson',
-      'requisition_title': 'UX Designer',
-      'status': 'offer',
-      'cv_score': 95,
-      'assessment_score': 90,
-      'overall_score': 93,
-      'applied_date': '2024-01-12T13:25:00Z',
-      'recommendation': 'hire',
-      'next_interview': null,
-    },
-    {
-      'id': 5,
-      'candidate_name': 'David Kim',
-      'requisition_title': 'Senior Flutter Developer',
-      'status': 'rejected',
-      'cv_score': 62,
-      'assessment_score': 58,
-      'overall_score': 60,
-      'applied_date': '2024-01-18T15:40:00Z',
-      'recommendation': 'reject',
-      'next_interview': null,
-    },
-  ];
-
-  final List<Map<String, dynamic>> _mockInterviews = [
-    {
-      'id': 1,
-      'candidate_name': 'Sarah Johnson',
-      'interview_type': 'Technical',
-      'scheduled_time': '2024-01-24T10:30:00Z',
-      'status': 'scheduled',
-      'meeting_link': 'https://meet.google.com/abc-defg-hij',
-      'interviewer': 'Alex Turner',
-    },
-    {
-      'id': 2,
-      'candidate_name': 'John Smith',
-      'interview_type': 'Cultural Fit',
-      'scheduled_time': '2024-01-25T14:00:00Z',
-      'status': 'scheduled',
-      'meeting_link': 'https://meet.google.com/klm-nopq-rst',
-      'interviewer': 'Maria Garcia',
-    },
-  ];
-
-  final List<Map<String, dynamic>> _mockOffers = [
-    {
-      'id': 1,
-      'candidate_name': 'Emma Wilson',
-      'position': 'UX Designer',
-      'base_salary': '\$85,000',
-      'contract_type': 'Full-time',
-      'status': 'sent',
-      'sent_date': '2024-01-18T11:00:00Z',
-    },
-  ];
-
+  bool _isLoading = true;
+  bool _isRefreshing = false;
   String _selectedFilter = 'all';
   String _selectedView = 'pipeline';
   int _activeTab = 0;
+
+  int _totalApplications = 0;
+  int _activeJobs = 0;
+  int _offersSent = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _recruitmentService = RecruitmentService(widget.token);
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    try {
+      setState(() => _isLoading = true);
+
+      final pipelineData = await _recruitmentService.loadPipelineData(
+        filter: _selectedFilter == 'all' ? null : _selectedFilter,
+      );
+
+      final requisitionsData = await _recruitmentService.loadRequisitionsData();
+      final analyticsData = await _recruitmentService.loadAnalyticsData();
+
+      setState(() {
+        _pipelineStats = pipelineData['stats'] ?? {};
+        _quickStats = pipelineData['quickStats'] ?? {};
+        _pipelineStages =
+            List<Map<String, dynamic>>.from(pipelineData['stages'] ?? []);
+        _applications = List<Map<String, dynamic>>.from(
+            pipelineData['applications']?['applications'] ?? []);
+        _totalApplications =
+            pipelineData['applications']?['total'] ?? _applications.length;
+        _interviews =
+            List<Map<String, dynamic>>.from(pipelineData['interviews'] ?? []);
+        _offers = List<Map<String, dynamic>>.from(pipelineData['offers'] ?? []);
+        _candidatesReadyForOffer = List<Map<String, dynamic>>.from(
+            pipelineData['readyCandidates'] ?? []);
+
+        _requisitions =
+            List<Map<String, dynamic>>.from(requisitionsData['jobs'] ?? []);
+        _activeJobs =
+            _requisitions.where((r) => r['status'] == 'active').length;
+        _offersSent = _offers.length;
+
+        _analytics = analyticsData;
+
+        _isLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading initial data: $e');
+      _showErrorSnackbar('Failed to load data. Please try again.');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _refreshData() async {
+    try {
+      setState(() => _isRefreshing = true);
+
+      final refreshedData = await _recruitmentService.refreshAllData();
+
+      setState(() {
+        _pipelineStats = refreshedData['stats'] ?? {};
+        _applications = List<Map<String, dynamic>>.from(
+            refreshedData['applications'] ?? []);
+        _interviews =
+            List<Map<String, dynamic>>.from(refreshedData['interviews'] ?? []);
+        _offers =
+            List<Map<String, dynamic>>.from(refreshedData['offers'] ?? []);
+        _requisitions =
+            List<Map<String, dynamic>>.from(refreshedData['jobs'] ?? []);
+        _candidatesReadyForOffer = List<Map<String, dynamic>>.from(
+            refreshedData['readyCandidates'] ?? []);
+
+        _activeJobs =
+            _requisitions.where((r) => r['status'] == 'active').length;
+        _offersSent = _offers.length;
+        _totalApplications = _applications.length;
+
+        _isRefreshing = false;
+      });
+
+      _showSuccessSnackbar('Data refreshed successfully');
+    } catch (e) {
+      debugPrint('Error refreshing data: $e');
+      _showErrorSnackbar('Failed to refresh data');
+      setState(() => _isRefreshing = false);
+    }
+  }
+
+  Future<void> _loadTabData(int tabIndex) async {
+    try {
+      setState(() => _isLoading = true);
+
+      switch (tabIndex) {
+        case 0: // Pipeline
+          final pipelineData = await _recruitmentService.loadPipelineData(
+            filter: _selectedFilter == 'all' ? null : _selectedFilter,
+          );
+          setState(() {
+            _pipelineStats = pipelineData['stats'] ?? {};
+            _quickStats = pipelineData['quickStats'] ?? {};
+            _pipelineStages =
+                List<Map<String, dynamic>>.from(pipelineData['stages'] ?? []);
+            _applications = List<Map<String, dynamic>>.from(
+                pipelineData['applications']?['applications'] ?? []);
+            _interviews = List<Map<String, dynamic>>.from(
+                pipelineData['interviews'] ?? []);
+            _offers =
+                List<Map<String, dynamic>>.from(pipelineData['offers'] ?? []);
+            _candidatesReadyForOffer = List<Map<String, dynamic>>.from(
+                pipelineData['readyCandidates'] ?? []);
+          });
+          break;
+
+        case 1: // Requisitions
+          final requisitionsData =
+              await _recruitmentService.loadRequisitionsData();
+          setState(() {
+            _requisitions =
+                List<Map<String, dynamic>>.from(requisitionsData['jobs'] ?? []);
+            _activeJobs =
+                _requisitions.where((r) => r['status'] == 'active').length;
+          });
+          break;
+
+        case 2: // Calendar
+          final calendarData = await _recruitmentService.loadCalendarData();
+          setState(() {
+            _interviews = List<Map<String, dynamic>>.from(
+                calendarData['todayInterviews'] ?? []);
+            // Note: You might want to load upcoming and past interviews separately
+          });
+          break;
+
+        case 3: // Analytics
+          final analyticsData = await _recruitmentService.loadAnalyticsData();
+          setState(() {
+            _analytics = analyticsData;
+          });
+          break;
+      }
+
+      setState(() => _isLoading = false);
+    } catch (e) {
+      debugPrint('Error loading tab data: $e');
+      _showErrorSnackbar('Failed to load data');
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _updateApplicationStatus(
+      int applicationId, String status) async {
+    try {
+      final success = await _recruitmentService.updateApplicationStatus(
+          applicationId, status);
+      if (success) {
+        _showSuccessSnackbar('Status updated successfully');
+        // Refresh the applications list
+        final index =
+            _applications.indexWhere((app) => app['id'] == applicationId);
+        if (index != -1) {
+          setState(() {
+            _applications[index]['status'] = status;
+          });
+        }
+      } else {
+        _showErrorSnackbar('Failed to update status');
+      }
+    } catch (e) {
+      debugPrint('Error updating application status: $e');
+      _showErrorSnackbar('Failed to update status');
+    }
+  }
+
+  void _showErrorSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+
+  void _showSuccessSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _getFilteredApplications() {
+    if (_selectedFilter == 'all') return _applications;
+    return _applications
+        .where((app) => app['status'] == _selectedFilter)
+        .toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -165,19 +249,26 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             children: [
               _buildHeader(),
               _buildFilterBar(),
-              // Add padding after the navbar
               const SizedBox(height: 8),
+
+              // Loading Indicator
+              if (_isLoading && !_isRefreshing) const LinearProgressIndicator(),
 
               // Main Content
               Expanded(
-                child: IndexedStack(
-                  index: _activeTab,
-                  children: [
-                    _buildPipelineView(),
-                    _buildRequisitionsView(),
-                    _buildCalendarView(),
-                    _buildAnalyticsView(),
-                  ],
+                child: RefreshIndicator(
+                  onRefresh: _refreshData,
+                  child: IndexedStack(
+                    index: _activeTab,
+                    children: [
+                      _buildPipelineView(),
+                      _buildRequisitionsView(),
+                      _buildCalendarView(),
+                      _buildAnalyticsView(),
+                      _buildTeamView(), // Placeholder for Team tab
+                      _buildSettingsView(), // Placeholder for Settings tab
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -213,11 +304,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               // Back button and title section
               Row(
                 children: [
-                  // Back button
                   GestureDetector(
-                    onTap: () {
-                      Navigator.of(context).pop();
-                    },
+                    onTap: () => Navigator.of(context).pop(),
                     child: Container(
                       width: 40,
                       height: 40,
@@ -266,19 +354,19 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                 children: [
                   _buildStatCard(
                     'Active Jobs',
-                    '${_mockRequisitions.where((r) => r['status'] == 'active').length}',
+                    '$_activeJobs',
                     const Color.fromARGB(255, 135, 20, 20),
                   ),
                   const SizedBox(width: 12),
                   _buildStatCard(
                     'Total Candidates',
-                    '${_mockApplications.length}',
+                    '$_totalApplications',
                     Colors.blueAccent,
                   ),
                   const SizedBox(width: 12),
                   _buildStatCard(
                     'Offers Sent',
-                    '${_mockOffers.length}',
+                    '$_offersSent',
                     Colors.green,
                   ),
                 ],
@@ -309,7 +397,10 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   Widget _buildNavTab(String title, int index) {
     final isActive = _activeTab == index;
     return GestureDetector(
-      onTap: () => setState(() => _activeTab = index),
+      onTap: () {
+        setState(() => _activeTab = index);
+        _loadTabData(index);
+      },
       child: Container(
         margin: const EdgeInsets.only(right: 20),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -417,6 +508,12 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                       border: InputBorder.none,
                     ),
                     style: GoogleFonts.inter(fontSize: 14),
+                    onChanged: (query) {
+                      // Implement search functionality
+                      if (query.isEmpty) {
+                        _loadTabData(_activeTab);
+                      }
+                    },
                   ),
                 ),
               ],
@@ -426,12 +523,18 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
 
           // Filters
           PopupMenuButton<String>(
-            onSelected: (value) => setState(() => _selectedFilter = value),
+            onSelected: (value) {
+              setState(() => _selectedFilter = value);
+              _loadTabData(_activeTab);
+            },
             itemBuilder: (context) => [
               const PopupMenuItem(value: 'all', child: Text('All Candidates')),
               const PopupMenuItem(value: 'screening', child: Text('Screening')),
               const PopupMenuItem(value: 'interview', child: Text('Interview')),
+              const PopupMenuItem(
+                  value: 'assessment', child: Text('Assessment')),
               const PopupMenuItem(value: 'offer', child: Text('Offer Stage')),
+              const PopupMenuItem(value: 'hired', child: Text('Hired')),
               const PopupMenuItem(value: 'rejected', child: Text('Rejected')),
             ],
             child: Container(
@@ -465,7 +568,10 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
 
           // Add New Button
           ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: () {
+              // Navigate to create requisition page
+              // Navigator.push(...);
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color.fromARGB(255, 135, 20, 20),
               foregroundColor: Colors.white,
@@ -475,7 +581,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               ),
               elevation: 0,
             ),
-            icon: Icon(Icons.add, size: 18),
+            icon: const Icon(Icons.add, size: 18),
             label: Text(
               'New Requisition',
               style: GoogleFonts.inter(
@@ -535,50 +641,79 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildPipelineView() {
-    final filteredApplications = _selectedFilter == 'all'
-        ? _mockApplications
-        : _mockApplications
-            .where((app) => app['status'] == _selectedFilter)
-            .toList();
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final filteredApplications = _getFilteredApplications();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Pipeline Stages
-          SizedBox(
-            height: 220,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                _buildPipelineStage(
-                    'Screening', Icons.filter_list, 4, Colors.blue),
-                _buildPipelineStage(
-                    'Assessment', Icons.assessment, 3, Colors.orange),
-                _buildPipelineStage(
-                    'Interview', Icons.video_call, 2, Colors.purple),
-                _buildPipelineStage(
-                    'Offer', Icons.work_outline, 1, Colors.green),
-                _buildPipelineStage('Hired', Icons.check_circle, 0,
-                    const Color.fromARGB(255, 135, 20, 20)),
-              ],
+          // Pipeline Stages from API
+          if (_pipelineStages.isNotEmpty)
+            SizedBox(
+              height: 220,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: _pipelineStages.map((stage) {
+                  final stageName = stage['stage_name'] ?? '';
+                  final count = stage['count'] ?? 0;
+                  final color = _getStageColor(stageName);
+                  final icon = _getStageIcon(stageName);
+
+                  return _buildPipelineStage(stageName, icon, count, color);
+                }).toList(),
+              ),
+            )
+          else
+            SizedBox(
+              height: 220,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _buildPipelineStage(
+                      'Screening', Icons.filter_list, 0, Colors.blue),
+                  _buildPipelineStage(
+                      'Assessment', Icons.assessment, 0, Colors.orange),
+                  _buildPipelineStage(
+                      'Interview', Icons.video_call, 0, Colors.purple),
+                  _buildPipelineStage(
+                      'Offer', Icons.work_outline, 0, Colors.green),
+                  _buildPipelineStage('Hired', Icons.check_circle, 0,
+                      const Color.fromARGB(255, 135, 20, 20)),
+                ],
+              ),
             ),
-          ),
           const SizedBox(height: 32),
 
           // Recent Applications
-          Text(
-            'Recent Applications',
-            style: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: Colors.black,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Recent Applications',
+                style: GoogleFonts.poppins(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black,
+                ),
+              ),
+              Text(
+                'Total: $_totalApplications',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 
-          // Applications Grid/List
+          if (filteredApplications.isEmpty)
+            _buildEmptyState('No applications found'),
           if (_selectedView == 'pipeline')
             _buildApplicationsGrid(filteredApplications)
           else if (_selectedView == 'list')
@@ -620,7 +755,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           ),
           const SizedBox(height: 16),
           Text(
-            title,
+            _capitalize(title),
             style: GoogleFonts.inter(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -637,7 +772,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           ),
           const SizedBox(height: 16),
           LinearProgressIndicator(
-            value: count / 10,
+            value: count / (_totalApplications > 0 ? _totalApplications : 1),
             backgroundColor: Colors.grey.shade200,
             valueColor: AlwaysStoppedAnimation<Color>(color),
             borderRadius: BorderRadius.circular(4),
@@ -666,8 +801,20 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildApplicationCard(Map<String, dynamic> app) {
-    final statusColor = _getStatusColor(app['status']);
-    final recommendationColor = _getRecommendationColor(app['recommendation']);
+    final status = app['status'] ?? 'screening';
+    final statusColor = _getStatusColor(status);
+    final recommendation = app['recommendation'] ?? 'moderate';
+    final recommendationColor = _getRecommendationColor(recommendation);
+    final candidateName = app['candidate_name'] ??
+        app['candidate']?['name'] ??
+        'Unknown Candidate';
+    final jobTitle =
+        app['requisition_title'] ?? app['job']?['title'] ?? 'Unknown Position';
+    final cvScore = app['cv_score'] ?? app['score'] ?? 0;
+    final assessmentScore = app['assessment_score'] ?? 0;
+    final appliedDate = app['applied_date'] ??
+        app['created_at'] ??
+        DateTime.now().toIso8601String();
 
     return Container(
       decoration: BoxDecoration(
@@ -697,7 +844,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    _capitalize(app['status']),
+                    _capitalize(status),
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -713,7 +860,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    _capitalize(app['recommendation']),
+                    _capitalize(recommendation),
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -725,7 +872,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             ),
             const SizedBox(height: 16),
             Text(
-              app['candidate_name'],
+              candidateName,
               style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -736,7 +883,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             ),
             const SizedBox(height: 4),
             Text(
-              app['requisition_title'],
+              jobTitle,
               style: GoogleFonts.inter(
                 fontSize: 14,
                 color: Colors.grey.shade600,
@@ -747,9 +894,9 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             const SizedBox(height: 16),
             Row(
               children: [
-                _buildScoreIndicator('CV', app['cv_score']),
+                _buildScoreIndicator('CV', cvScore),
                 const SizedBox(width: 12),
-                _buildScoreIndicator('Assessment', app['assessment_score']),
+                _buildScoreIndicator('Assessment', assessmentScore),
               ],
             ),
             const SizedBox(height: 16),
@@ -757,16 +904,30 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  DateFormat('MMM dd')
-                      .format(DateTime.parse(app['applied_date'])),
+                  DateFormat('MMM dd').format(DateTime.parse(appliedDate)),
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: Colors.grey.shade500,
                   ),
                 ),
-                IconButton(
-                  onPressed: () {},
-                  icon: Icon(Icons.more_vert,
+                PopupMenuButton<String>(
+                  onSelected: (value) =>
+                      _updateApplicationStatus(app['id'], value),
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                        value: 'screening', child: Text('Move to Screening')),
+                    const PopupMenuItem(
+                        value: 'assessment', child: Text('Move to Assessment')),
+                    const PopupMenuItem(
+                        value: 'interview', child: Text('Move to Interview')),
+                    const PopupMenuItem(
+                        value: 'offer', child: Text('Move to Offer')),
+                    const PopupMenuItem(
+                        value: 'hired', child: Text('Mark as Hired')),
+                    const PopupMenuItem(
+                        value: 'rejected', child: Text('Reject')),
+                  ],
+                  child: Icon(Icons.more_vert,
                       color: Colors.grey.shade500, size: 20),
                 ),
               ],
@@ -774,58 +935,6 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildScoreIndicator(String label, int score) {
-    final color = score >= 80
-        ? Colors.green
-        : score >= 60
-            ? Colors.orange
-            : const Color.fromARGB(255, 135, 20, 20);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            Container(
-              width: 60,
-              height: 6,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(3),
-              ),
-              child: FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: score / 100,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              '$score%',
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: color,
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 
@@ -851,7 +960,14 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildApplicationListItem(Map<String, dynamic> app) {
-    final statusColor = _getStatusColor(app['status']);
+    final status = app['status'] ?? 'screening';
+    final statusColor = _getStatusColor(status);
+    final candidateName = app['candidate_name'] ??
+        app['candidate']?['name'] ??
+        'Unknown Candidate';
+    final jobTitle =
+        app['requisition_title'] ?? app['job']?['title'] ?? 'Unknown Position';
+    final overallScore = app['overall_score'] ?? app['score'] ?? 0;
 
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -869,7 +985,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                 ),
                 child: Center(
                   child: Text(
-                    app['candidate_name'].substring(0, 2).toUpperCase(),
+                    candidateName.substring(0, 2).toUpperCase(),
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -884,7 +1000,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      app['candidate_name'],
+                      candidateName,
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -893,7 +1009,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      app['requisition_title'],
+                      jobTitle,
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         color: Colors.grey.shade600,
@@ -910,7 +1026,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  _capitalize(app['status']),
+                  _capitalize(status),
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -920,7 +1036,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               ),
               const SizedBox(width: 16),
               Text(
-                '${app['overall_score']}%',
+                '$overallScore%',
                 style: GoogleFonts.poppins(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
@@ -928,9 +1044,23 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                 ),
               ),
               const SizedBox(width: 16),
-              IconButton(
-                onPressed: () {},
-                icon: Icon(Icons.more_vert, color: Colors.grey.shade500),
+              PopupMenuButton<String>(
+                onSelected: (value) =>
+                    _updateApplicationStatus(app['id'], value),
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                      value: 'screening', child: Text('Move to Screening')),
+                  const PopupMenuItem(
+                      value: 'assessment', child: Text('Move to Assessment')),
+                  const PopupMenuItem(
+                      value: 'interview', child: Text('Move to Interview')),
+                  const PopupMenuItem(
+                      value: 'offer', child: Text('Move to Offer')),
+                  const PopupMenuItem(
+                      value: 'hired', child: Text('Mark as Hired')),
+                  const PopupMenuItem(value: 'rejected', child: Text('Reject')),
+                ],
+                child: Icon(Icons.more_vert, color: Colors.grey.shade500),
               ),
             ],
           ),
@@ -942,7 +1072,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildApplicationsBoard(List<Map<String, dynamic>> applications) {
-    final columns = ['Screening', 'Assessment', 'Interview', 'Offer', 'Hired'];
+    final columns = ['screening', 'assessment', 'interview', 'offer', 'hired'];
 
     return SizedBox(
       height: 600,
@@ -951,9 +1081,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         itemCount: columns.length,
         itemBuilder: (context, columnIndex) {
           final columnName = columns[columnIndex];
-          final columnApps = applications
-              .where((app) => app['status'] == columnName.toLowerCase())
-              .toList();
+          final columnApps =
+              applications.where((app) => app['status'] == columnName).toList();
 
           return Container(
             width: 320,
@@ -971,7 +1100,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                 Row(
                   children: [
                     Text(
-                      columnName,
+                      _capitalize(columnName),
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -1023,6 +1152,15 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildBoardCard(Map<String, dynamic> app) {
+    final candidateName = app['candidate_name'] ??
+        app['candidate']?['name'] ??
+        'Unknown Candidate';
+    final jobTitle =
+        app['requisition_title'] ?? app['job']?['title'] ?? 'Unknown Position';
+    final overallScore = app['overall_score'] ?? app['score'] ?? 0;
+    final nextInterview =
+        app['next_interview'] ?? app['interview_scheduled_at'];
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -1045,7 +1183,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             children: [
               Expanded(
                 child: Text(
-                  app['candidate_name'],
+                  candidateName,
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -1060,7 +1198,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           ),
           const SizedBox(height: 8),
           Text(
-            app['requisition_title'],
+            jobTitle,
             style: GoogleFonts.inter(
               fontSize: 12,
               color: Colors.grey.shade600,
@@ -1079,7 +1217,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  '${app['overall_score']}%',
+                  '$overallScore%',
                   style: GoogleFonts.inter(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -1088,7 +1226,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                 ),
               ),
               const Spacer(),
-              if (app['next_interview'] != null)
+              if (nextInterview != null)
                 Row(
                   children: [
                     Icon(Icons.calendar_today,
@@ -1096,7 +1234,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                     const SizedBox(width: 4),
                     Text(
                       DateFormat('MMM dd')
-                          .format(DateTime.parse(app['next_interview'])),
+                          .format(DateTime.parse(nextInterview)),
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         color: Colors.grey.shade600,
@@ -1112,6 +1250,10 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildRequisitionsView() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -1123,7 +1265,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               Expanded(
                 child: _buildRequisitionStatCard(
                   'Open Positions',
-                  '${_mockRequisitions.where((r) => r['status'] == 'active').length}',
+                  '${_requisitions.where((r) => r['status'] == 'active').length}',
                   const Color.fromARGB(255, 135, 20, 20),
                   Icons.work_outline,
                 ),
@@ -1132,7 +1274,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               Expanded(
                 child: _buildRequisitionStatCard(
                   'Total Applicants',
-                  '${_mockApplications.length}',
+                  '$_totalApplications',
                   Colors.blueAccent,
                   Icons.people_outline,
                 ),
@@ -1140,8 +1282,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               const SizedBox(width: 16),
               Expanded(
                 child: _buildRequisitionStatCard(
-                  'Avg. Time to Hire',
-                  '28 days',
+                  'Applications Today',
+                  '${_quickStats['applications_today'] ?? 0}',
                   Colors.green,
                   Icons.timeline_outlined,
                 ),
@@ -1150,7 +1292,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               Expanded(
                 child: _buildRequisitionStatCard(
                   'Interview Rate',
-                  '42%',
+                  '${_quickStats['interview_rate'] ?? '0%'}',
                   Colors.purple,
                   Icons.video_call_outlined,
                 ),
@@ -1160,15 +1302,29 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           const SizedBox(height: 32),
 
           // Active Requisitions
-          Text(
-            'Active Requisitions',
-            style: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: Colors.black,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Active Requisitions',
+                style: GoogleFonts.poppins(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black,
+                ),
+              ),
+              Text(
+                'Total: ${_requisitions.length}',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
+
+          if (_requisitions.isEmpty) _buildEmptyState('No requisitions found'),
 
           GridView.builder(
             shrinkWrap: true,
@@ -1179,9 +1335,9 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               mainAxisSpacing: 16,
               childAspectRatio: 1.5,
             ),
-            itemCount: _mockRequisitions.length,
+            itemCount: _requisitions.length,
             itemBuilder: (context, index) {
-              final req = _mockRequisitions[index];
+              final req = _requisitions[index];
               return _buildRequisitionCard(req);
             },
           ),
@@ -1247,6 +1403,13 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
 
   Widget _buildRequisitionCard(Map<String, dynamic> req) {
     final isActive = req['status'] == 'active';
+    final title = req['title'] ?? 'Untitled Position';
+    final category = req['category'] ?? req['department'] ?? 'General';
+    final applicationsCount =
+        req['applications_count'] ?? req['application_count'] ?? 0;
+    final vacancy = req['vacancy'] ?? req['positions'] ?? 1;
+    final progress = req['progress'] ??
+        ((applicationsCount / (vacancy * 10)) * 100).clamp(0, 100).toDouble();
 
     return Container(
       decoration: BoxDecoration(
@@ -1279,7 +1442,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
-                    isActive ? 'Active' : 'Completed',
+                    isActive ? 'Active' : 'Closed',
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -1298,7 +1461,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             ),
             const SizedBox(height: 12),
             Text(
-              req['title'],
+              title,
               style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -1309,7 +1472,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             ),
             const SizedBox(height: 8),
             Text(
-              req['category'],
+              category,
               style: GoogleFonts.inter(
                 fontSize: 14,
                 color: Colors.grey.shade600,
@@ -1317,7 +1480,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             ),
             const SizedBox(height: 16),
             LinearProgressIndicator(
-              value: req['progress'] / 100,
+              value: progress / 100,
               backgroundColor: Colors.grey.shade200,
               valueColor: AlwaysStoppedAnimation<Color>(
                   const Color.fromARGB(255, 135, 20, 20)),
@@ -1333,7 +1496,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                         size: 16, color: Colors.grey.shade500),
                     const SizedBox(width: 6),
                     Text(
-                      '${req['applications_count']} applicants',
+                      '$applicationsCount applicants',
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         color: Colors.grey.shade600,
@@ -1347,7 +1510,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                         size: 16, color: Colors.grey.shade500),
                     const SizedBox(width: 6),
                     Text(
-                      '${req['vacancy']} vacancy',
+                      '$vacancy vacancy',
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         color: Colors.grey.shade600,
@@ -1364,6 +1527,10 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildCalendarView() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -1394,7 +1561,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                           Icon(Icons.chevron_left, color: Colors.grey.shade600),
                     ),
                     Text(
-                      'January 2024',
+                      DateFormat('MMMM yyyy').format(DateTime.now()),
                       style: GoogleFonts.poppins(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
@@ -1420,9 +1587,9 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           ),
           const SizedBox(height: 24),
 
-          // Upcoming Interviews
+          // Today's Interviews
           Text(
-            'Upcoming Interviews',
+            "Today's Interviews",
             style: GoogleFonts.poppins(
               fontSize: 20,
               fontWeight: FontWeight.w600,
@@ -1431,11 +1598,14 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           ),
           const SizedBox(height: 16),
 
-          ..._mockInterviews.map((interview) => _buildInterviewCard(interview)),
+          if (_interviews.isEmpty)
+            _buildEmptyState('No interviews scheduled for today'),
+
+          ..._interviews.map((interview) => _buildInterviewCard(interview)),
 
           const SizedBox(height: 32),
 
-          // Upcoming Offers
+          // Pending Offers
           Text(
             'Pending Offers',
             style: GoogleFonts.poppins(
@@ -1446,7 +1616,12 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           ),
           const SizedBox(height: 16),
 
-          ..._mockOffers.map((offer) => _buildOfferCard(offer)),
+          if (_offers.isEmpty) _buildEmptyState('No pending offers'),
+
+          ..._offers
+              .where((offer) =>
+                  offer['status'] == 'pending' || offer['status'] == 'sent')
+              .map((offer) => _buildOfferCard(offer)),
         ],
       ),
     );
@@ -1479,7 +1654,18 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildInterviewCard(Map<String, dynamic> interview) {
-    final scheduledTime = DateTime.parse(interview['scheduled_time']);
+    final candidateName = interview['candidate_name'] ??
+        interview['candidate']?['name'] ??
+        'Unknown Candidate';
+    final interviewType =
+        interview['interview_type'] ?? interview['type'] ?? 'Interview';
+    final scheduledTime = DateTime.parse(interview['scheduled_time'] ??
+        interview['interview_date'] ??
+        DateTime.now().toIso8601String());
+    final interviewer = interview['interviewer'] ??
+        interview['interviewer_name'] ??
+        'Unknown Interviewer';
+    final meetingLink = interview['meeting_link'] ?? interview['meeting_url'];
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1539,7 +1725,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  interview['candidate_name'],
+                  candidateName,
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -1548,7 +1734,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${interview['interview_type']} Interview',
+                  '$interviewType Interview',
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     color: Colors.grey.shade600,
@@ -1572,7 +1758,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                         size: 14, color: Colors.grey.shade500),
                     const SizedBox(width: 4),
                     Text(
-                      interview['interviewer'],
+                      interviewer,
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         color: Colors.grey.shade600,
@@ -1583,17 +1769,34 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               ],
             ),
           ),
-          IconButton(
-            onPressed: () {},
-            icon: Icon(Icons.video_call,
-                color: const Color.fromARGB(255, 135, 20, 20), size: 24),
-          ),
+          if (meetingLink != null && meetingLink.isNotEmpty)
+            IconButton(
+              onPressed: () {
+                // Launch meeting link
+              },
+              icon: Icon(Icons.video_call,
+                  color: const Color.fromARGB(255, 135, 20, 20), size: 24),
+            ),
         ],
       ),
     );
   }
 
   Widget _buildOfferCard(Map<String, dynamic> offer) {
+    final candidateName = offer['candidate_name'] ??
+        offer['candidate']?['name'] ??
+        'Unknown Candidate';
+    final position =
+        offer['position'] ?? offer['job_title'] ?? 'Unknown Position';
+    final baseSalary = offer['base_salary'] ?? offer['salary'] ?? 'Negotiable';
+    final contractType = offer['contract_type'] ?? 'Full-time';
+    final status = offer['status'] ?? 'pending';
+    final statusColor = status == 'accepted'
+        ? Colors.green
+        : status == 'rejected'
+            ? Colors.red
+            : Colors.orange;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(20),
@@ -1624,7 +1827,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  offer['candidate_name'],
+                  candidateName,
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -1633,7 +1836,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  offer['position'],
+                  position,
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     color: Colors.grey.shade600,
@@ -1646,7 +1849,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                         size: 14, color: Colors.grey.shade500),
                     const SizedBox(width: 4),
                     Text(
-                      offer['base_salary'],
+                      baseSalary,
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         color: Colors.grey.shade600,
@@ -1656,7 +1859,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                     Icon(Icons.business, size: 14, color: Colors.grey.shade500),
                     const SizedBox(width: 4),
                     Text(
-                      offer['contract_type'],
+                      contractType,
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         color: Colors.grey.shade600,
@@ -1670,15 +1873,15 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
+              color: statusColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
-              offer['status'],
+              _capitalize(status),
               style: GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: Colors.green,
+                color: statusColor,
               ),
             ),
           ),
@@ -1688,6 +1891,13 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildAnalyticsView() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final dashboardAnalytics = _analytics['dashboardAnalytics'] ?? {};
+    final offerAnalytics = _analytics['offerAnalytics'] ?? {};
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -1718,30 +1928,30 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               Expanded(
                 child: _buildAnalyticsCard(
                   'Time to Hire',
-                  '28 days',
+                  '${dashboardAnalytics['avg_time_to_hire'] ?? '28'} days',
                   Icons.timeline_outlined,
                   Colors.blue,
-                  '↓ 12% from last month',
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildAnalyticsCard(
-                  'Cost per Hire',
-                  '\$4,250',
-                  Icons.attach_money_outlined,
-                  Colors.green,
-                  '↓ 8% from last quarter',
+                  '↓ ${dashboardAnalytics['time_to_hire_change'] ?? '12'}% from last month',
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: _buildAnalyticsCard(
                   'Offer Acceptance',
-                  '78%',
+                  '${offerAnalytics['acceptance_rate'] ?? '78'}%',
                   Icons.check_circle_outline,
+                  Colors.green,
+                  '↑ ${offerAnalytics['acceptance_change'] ?? '15'}% from last quarter',
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildAnalyticsCard(
+                  'Interview to Offer',
+                  '${dashboardAnalytics['interview_to_offer_rate'] ?? '25'}%',
+                  Icons.video_call_outlined,
                   Colors.purple,
-                  '↑ 15% from last quarter',
+                  '↓ ${dashboardAnalytics['interview_to_offer_change'] ?? '5'}% from last month',
                 ),
               ),
             ],
@@ -1771,7 +1981,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Applications by Source',
+                        'Applications Trend',
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.w600,
@@ -1814,8 +2024,10 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      ..._mockApplications
-                          .where((app) => app['overall_score'] >= 80)
+                      ..._applications
+                          .where((app) =>
+                              (app['overall_score'] ?? app['score'] ?? 0) >= 80)
+                          .take(5)
                           .map((app) => _buildTopPerformerCard(app)),
                     ],
                   ),
@@ -1905,6 +2117,13 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildTopPerformerCard(Map<String, dynamic> app) {
+    final candidateName = app['candidate_name'] ??
+        app['candidate']?['name'] ??
+        'Unknown Candidate';
+    final jobTitle =
+        app['requisition_title'] ?? app['job']?['title'] ?? 'Unknown Position';
+    final overallScore = app['overall_score'] ?? app['score'] ?? 0;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
@@ -1923,7 +2142,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             ),
             child: Center(
               child: Text(
-                app['candidate_name'].substring(0, 2).toUpperCase(),
+                candidateName.substring(0, 2).toUpperCase(),
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -1938,7 +2157,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  app['candidate_name'],
+                  candidateName,
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -1946,7 +2165,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                   ),
                 ),
                 Text(
-                  app['requisition_title'],
+                  jobTitle,
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     color: Colors.grey.shade600,
@@ -1962,7 +2181,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
-              '${app['overall_score']}%',
+              '$overallScore%',
               style: GoogleFonts.inter(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -1972,6 +2191,110 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildTeamView() {
+    return const Center(
+      child: Text('Team View - Coming Soon'),
+    );
+  }
+
+  Widget _buildSettingsView() {
+    return const Center(
+      child: Text('Settings View - Coming Soon'),
+    );
+  }
+
+  Widget _buildEmptyState(String message) {
+    return Container(
+      padding: const EdgeInsets.all(40),
+      margin: const EdgeInsets.symmetric(vertical: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.inbox_outlined,
+            size: 64,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            message,
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScoreIndicator(String label, dynamic score) {
+    final numScore = score is int
+        ? score
+        : score is double
+            ? score.toInt()
+            : 0;
+    final color = numScore >= 80
+        ? Colors.green
+        : numScore >= 60
+            ? Colors.orange
+            : const Color.fromARGB(255, 135, 20, 20);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Container(
+              width: 60,
+              height: 6,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(3),
+              ),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: numScore / 100,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              '$numScore%',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -1995,8 +2318,42 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
     }
   }
 
+  Color _getStageColor(String stageName) {
+    switch (stageName.toLowerCase()) {
+      case 'screening':
+        return Colors.blue;
+      case 'assessment':
+        return Colors.orange;
+      case 'interview':
+        return Colors.purple;
+      case 'offer':
+        return Colors.green;
+      case 'hired':
+        return const Color.fromARGB(255, 135, 20, 20);
+      default:
+        return Colors.blue;
+    }
+  }
+
+  IconData _getStageIcon(String stageName) {
+    switch (stageName.toLowerCase()) {
+      case 'screening':
+        return Icons.filter_list;
+      case 'assessment':
+        return Icons.assessment;
+      case 'interview':
+        return Icons.video_call;
+      case 'offer':
+        return Icons.work_outline;
+      case 'hired':
+        return Icons.check_circle;
+      default:
+        return Icons.filter_list;
+    }
+  }
+
   Color _getRecommendationColor(String recommendation) {
-    switch (recommendation) {
+    switch (recommendation.toLowerCase()) {
       case 'strong':
       case 'hire':
         return Colors.green;

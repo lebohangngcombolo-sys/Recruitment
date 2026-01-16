@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import '../../services/auth_service.dart';
 import '../candidate/candidate_dashboard.dart';

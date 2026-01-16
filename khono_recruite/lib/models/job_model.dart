@@ -1,84 +1,104 @@
-import 'package:flutter/material.dart';
-import '../../widgets/custom_button.dart';
-import '../../widgets/custom_textfield.dart';
-import '../../services/admin_service.dart';
+class Job {
+  final int id;
+  final String title;
+  final String description;
+  final String? jobSummary;
+  final List<String> responsibilities;
+  final String? companyDetails;
+  final List<String> qualifications;
+  final String category;
+  final List<String> requiredSkills;
+  final double minExperience;
+  final List<String> knockoutRules;
+  final Map<String, dynamic> weightings;
+  final Map<String, dynamic> assessmentPack;
+  final int createdBy;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final DateTime publishedOn;
+  final int vacancy;
+  final bool isActive;
+  final DateTime? deletedAt;
+  final int? applicationCount;
 
-class JobModal extends StatefulWidget {
-  final String token;
-  final Map<String, dynamic>? job;
-  final VoidCallback onSaved;
+  const Job({
+    required this.id,
+    required this.title,
+    required this.description,
+    this.jobSummary,
+    this.responsibilities = const [],
+    this.companyDetails,
+    this.qualifications = const [],
+    this.category = '',
+    this.requiredSkills = const [],
+    this.minExperience = 0,
+    this.knockoutRules = const [],
+    this.weightings = const {'cv': 60, 'assessment': 40},
+    this.assessmentPack = const {'questions': []},
+    required this.createdBy,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.publishedOn,
+    this.vacancy = 1,
+    this.isActive = true,
+    this.deletedAt,
+    this.applicationCount = 0,
+  });
 
-  const JobModal(
-      {super.key, required this.token, this.job, required this.onSaved});
-
-  @override
-  State<JobModal> createState() => _JobModalState();
-}
-
-class _JobModalState extends State<JobModal> {
-  final _titleController = TextEditingController();
-  final _descController = TextEditingController();
-  final _skillsController = TextEditingController();
-  bool loading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.job != null) {
-      _titleController.text = widget.job!['title'] ?? '';
-      _descController.text = widget.job!['description'] ?? '';
-      _skillsController.text =
-          (widget.job!['required_skills'] ?? []).join(", ");
-    }
-  }
-
-  void saveJob() async {
-    setState(() => loading = true);
-    final service = AdminService();
-    final data = {
-      "title": _titleController.text,
-      "description": _descController.text,
-      "required_skills":
-          _skillsController.text.split(",").map((e) => e.trim()).toList(),
-    };
-
-    try {
-      if (widget.job == null) {
-        await service.createJob(data); // no token needed
-      } else {
-        await service.updateJob(widget.job!['id'], data); // no token needed
-      }
-      widget.onSaved();
-      Navigator.pop(context);
-    } catch (e) {
-      setState(() => loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.job == null ? "Create Job" : "Update Job"),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          CustomTextField(label: "Title", controller: _titleController),
-          const SizedBox(height: 8),
-          CustomTextField(label: "Description", controller: _descController),
-          const SizedBox(height: 8),
-          CustomTextField(
-              label: "Skills (comma-separated)", controller: _skillsController),
-        ],
-      ),
-      actions: [
-        CustomButton(
-          text: loading ? "Saving..." : "Save",
-          onPressed: loading ? null : saveJob,
-        ),
-      ],
+  factory Job.fromJson(Map<String, dynamic> json) {
+    return Job(
+      id: json['id'] as int,
+      title: json['title'] as String,
+      description: json['description'] as String,
+      jobSummary: json['job_summary'] as String?,
+      responsibilities: List<String>.from(json['responsibilities'] ?? []),
+      companyDetails: json['company_details'] as String?,
+      qualifications: List<String>.from(json['qualifications'] ?? []),
+      category: json['category'] as String? ?? '',
+      requiredSkills: List<String>.from(json['required_skills'] ?? []),
+      minExperience: (json['min_experience'] as num?)?.toDouble() ?? 0.0,
+      knockoutRules: List<String>.from(json['knockout_rules'] ?? []),
+      weightings: Map<String, dynamic>.from(json['weightings'] ?? {}),
+      assessmentPack: Map<String, dynamic>.from(json['assessment_pack'] ?? {}),
+      createdBy: json['created_by'] as int,
+      createdAt: DateTime.parse(json['created_at']),
+      updatedAt: DateTime.parse(json['updated_at']),
+      publishedOn: DateTime.parse(json['published_on']),
+      vacancy: json['vacancy'] as int? ?? 1,
+      isActive: json['is_active'] as bool? ?? true,
+      deletedAt: json['deleted_at'] != null
+          ? DateTime.parse(json['deleted_at'])
+          : null,
+      applicationCount: json['application_count'] as int? ?? 0,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'job_summary': jobSummary,
+      'responsibilities': responsibilities,
+      'company_details': companyDetails,
+      'qualifications': qualifications,
+      'category': category,
+      'required_skills': requiredSkills,
+      'min_experience': minExperience,
+      'knockout_rules': knockoutRules,
+      'weightings': weightings,
+      'assessment_pack': assessmentPack,
+      'created_by': createdBy,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+      'published_on': publishedOn.toIso8601String(),
+      'vacancy': vacancy,
+      'is_active': isActive,
+      'deleted_at': deletedAt?.toIso8601String(),
+    };
+  }
+
+  Map<String, dynamic> toMap() {
+    return toJson();
   }
 }

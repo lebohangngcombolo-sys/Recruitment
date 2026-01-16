@@ -51,12 +51,14 @@ class SsoEnterpriseScreen extends StatelessWidget {
                         style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
-                            fontWeight: FontWeight.bold)),
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Poppins')),
                     const SizedBox(height: 4),
                     Text(subtitle,
                         style: TextStyle(
                             color: Colors.white.withOpacity(0.7),
-                            fontSize: 12)),
+                            fontSize: 12,
+                            fontFamily: 'Poppins')),
                   ],
                 ),
               ),
@@ -94,12 +96,16 @@ class SsoEnterpriseScreen extends StatelessWidget {
                     style: TextStyle(
                         color: Colors.white,
                         fontSize: 28,
-                        fontWeight: FontWeight.bold),
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Poppins'),
                   ),
                   const SizedBox(height: 8),
                   const Text(
                     "Select your identity provider",
-                    style: TextStyle(color: Colors.white70, fontSize: 16),
+                    style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 16,
+                        fontFamily: 'Poppins'),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
