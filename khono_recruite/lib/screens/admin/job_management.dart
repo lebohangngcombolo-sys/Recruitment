@@ -1,7 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter/material.dart' hide SearchBar, FilterChip; // hide both
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
+import '../../widgets/search_bar.dart'; // your custom SearchBar
+import '../../widgets/filter_chip.dart'; // your custom FilterChip
 import '../../services/admin_service.dart';
 import '../../providers/theme_provider.dart';
 
@@ -19,6 +21,37 @@ class _JobManagementState extends State<JobManagement> {
   List<Map<String, dynamic>> jobs = [];
   bool loading = true;
 
+  // New state variables for enhanced features
+  String searchQuery = '';
+  String selectedCategory = 'all';
+  String selectedStatus = 'active';
+  String sortBy = 'created_at';
+  String sortOrder = 'desc';
+  int currentPage = 1;
+  int totalPages = 1;
+  bool showInactiveJobs = false;
+
+  // Filter options
+  final List<String> statusFilters = ['active', 'inactive', 'all'];
+  final List<String> sortOptions = [
+    'created_at',
+    'updated_at',
+    'title',
+    'category',
+    'vacancy',
+    'min_experience'
+  ];
+
+  final List<String> categories = [
+    'all',
+    'Engineering',
+    'Marketing',
+    'Sales',
+    'HR',
+    'Finance',
+    'Operations'
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -28,13 +61,55 @@ class _JobManagementState extends State<JobManagement> {
   Future<void> fetchJobs() async {
     setState(() => loading = true);
     try {
-      final data = await admin.listJobs();
-      jobs = List<Map<String, dynamic>>.from(data);
+      // Try enhanced method with filters
+      Map<String, dynamic> response;
+      try {
+        response = await _fetchJobsEnhanced();
+      } catch (e) {
+        // Fallback to original method
+        final data = await admin.listJobs();
+        jobs = List<Map<String, dynamic>>.from(data);
+        return;
+      }
+
+      jobs = List<Map<String, dynamic>>.from(response['jobs'] ?? []);
+      totalPages = response['pagination']?['total_pages'] ?? 1;
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error fetching jobs: $e")));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error fetching jobs: $e")),
+      );
     }
     setState(() => loading = false);
+  }
+
+  Future<Map<String, dynamic>> _fetchJobsEnhanced() async {
+    try {
+      // Use the enhanced listJobs method which returns Map<String, dynamic>
+      final response = await admin.listJobsEnhanced(
+        page: currentPage,
+        category: selectedCategory == 'all' ? null : selectedCategory,
+        status: selectedStatus,
+        sortBy: sortBy,
+        sortOrder: sortOrder,
+        search: searchQuery.isNotEmpty ? searchQuery : null,
+      );
+
+      return response;
+    } catch (e) {
+      // If enhanced method doesn't exist or fails, fallback to original
+      final data = await admin.listJobs();
+      return {
+        'jobs': data,
+        'pagination': {
+          'page': 1,
+          'per_page': 20,
+          'total': data.length,
+          'total_pages': 1,
+          'has_next': false,
+          'has_prev': false,
+        }
+      };
+    }
   }
 
   void openJobForm({Map<String, dynamic>? job}) {
@@ -44,12 +119,701 @@ class _JobManagementState extends State<JobManagement> {
     );
   }
 
+  // Enhanced job operations
+  Future<void> toggleJobStatus(Map<String, dynamic> job) async {
+    try {
+      await admin.updateJobStatus(job['id'], !(job['is_active'] ?? true));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text((job['is_active'] ?? true)
+              ? "Job deactivated successfully"
+              : "Job activated successfully"),
+          backgroundColor: Colors.green,
+        ),
+      );
+      fetchJobs();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error updating job status: $e")),
+      );
+    }
+  }
+
+  Future<void> restoreJob(Map<String, dynamic> job) async {
+    try {
+      await admin.restoreJob(job['id']);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Job restored successfully"),
+          backgroundColor: Colors.green,
+        ),
+      );
+      fetchJobs();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error restoring job: $e")),
+      );
+    }
+  }
+
+  void showJobDetails(Map<String, dynamic> job) async {
+    try {
+      final detailedJob = await admin.getJobDetailed(job['id']);
+      _showJobDetailsDialog(detailedJob);
+    } catch (e) {
+      // Fallback to basic details
+      _showBasicJobDetails(job);
+    }
+  }
+
+  void _showJobDetailsDialog(Map<String, dynamic> detailedJob) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        child: Container(
+          width: 600,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            color: Theme.of(context).cardColor,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      detailedJob['title'] ?? 'Job Details',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // Job Information
+                _buildDetailSection("Description", detailedJob['description']),
+                if (detailedJob['job_summary'] != null &&
+                    detailedJob['job_summary'].isNotEmpty)
+                  _buildDetailSection("Summary", detailedJob['job_summary']),
+
+                // Requirements
+                if (detailedJob['required_skills'] != null &&
+                    detailedJob['required_skills'].isNotEmpty)
+                  _buildListSection(
+                      "Required Skills", detailedJob['required_skills']),
+
+                if (detailedJob['responsibilities'] != null &&
+                    detailedJob['responsibilities'].isNotEmpty)
+                  _buildListSection(
+                      "Responsibilities", detailedJob['responsibilities']),
+
+                if (detailedJob['qualifications'] != null &&
+                    detailedJob['qualifications'].isNotEmpty)
+                  _buildListSection(
+                      "Qualifications", detailedJob['qualifications']),
+
+                // Job Stats
+                const SizedBox(height: 20),
+                const Text("Job Statistics",
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    _buildStatChip(
+                        "Category", detailedJob['category'] ?? 'Not specified'),
+                    _buildStatChip("Experience",
+                        "${detailedJob['min_experience'] ?? 0} yrs"),
+                    _buildStatChip(
+                        "Vacancies", "${detailedJob['vacancy'] ?? 1}"),
+                    _buildStatChip(
+                        "Status",
+                        (detailedJob['is_active'] ?? true)
+                            ? 'Active'
+                            : 'Inactive',
+                        color: (detailedJob['is_active'] ?? true)
+                            ? Colors.green
+                            : Colors.red),
+                  ],
+                ),
+
+                // Advanced stats if available
+                if (detailedJob['statistics'] != null)
+                  _buildAdvancedStatistics(detailedJob['statistics']),
+
+                const SizedBox(height: 30),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text("Close"),
+                    ),
+                    const SizedBox(width: 12),
+                    CustomButton(
+                      text: "Edit Job",
+                      onPressed: () {
+                        Navigator.pop(context);
+                        openJobForm(job: detailedJob);
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showBasicJobDetails(Map<String, dynamic> job) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text(job['title'] ?? 'Job Details'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(job['description'] ?? 'No description'),
+              const SizedBox(height: 16),
+              if (job['required_skills'] != null)
+                Text("Skills: ${(job['required_skills'] as List).join(", ")}"),
+              if (job['min_experience'] != null)
+                Text("Experience: ${job['min_experience']} years"),
+              if (job['category'] != null) Text("Category: ${job['category']}"),
+              Text(
+                "Status: ${(job['is_active'] ?? true) ? 'Active' : 'Inactive'}",
+                style: TextStyle(
+                  color: (job['is_active'] ?? true) ? Colors.green : Colors.red,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Close"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailSection(String title, String? content) {
+    if (content == null || content.isEmpty) return const SizedBox();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(content),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildListSection(String title, List<dynamic> items) {
+    if (items.isEmpty) return const SizedBox();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          ...items
+              .map((item) => Padding(
+                    padding: const EdgeInsets.only(left: 8, bottom: 2),
+                    child: Text("• $item"),
+                  ))
+              .toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatChip(String label, String value, {Color? color}) {
+    return Chip(
+      label: Text("$label: $value"),
+      backgroundColor: color?.withOpacity(0.1) ?? Colors.blue.withOpacity(0.1),
+      side: BorderSide(color: color ?? Colors.blue),
+    );
+  }
+
+  Widget _buildAdvancedStatistics(Map<String, dynamic> stats) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 20),
+        const Text("Advanced Statistics",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 2.5,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+          ),
+          itemCount: stats.keys.length,
+          itemBuilder: (context, index) {
+            final key = stats.keys.elementAt(index);
+            final value = stats[key];
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    key.toString().replaceAll('_', ' ').toUpperCase(),
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    value?.toString() ?? '0',
+                    style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  void showJobStatistics() async {
+    try {
+      final stats = await admin.getJobStatistics();
+      _showStatisticsDialog(stats);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error loading statistics: $e")),
+      );
+    }
+  }
+
+  void _showStatisticsDialog(Map<String, dynamic> stats) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        child: Container(
+          width: 500,
+          padding: const EdgeInsets.all(24),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Job Statistics",
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 20),
+
+                // Overall Statistics
+                if (stats['overall'] != null)
+                  _buildStatisticsSection("Overall", stats['overall']),
+
+                // By Category
+                if (stats['by_category'] != null &&
+                    (stats['by_category'] as List).isNotEmpty)
+                  _buildCategorySection(stats['by_category']),
+
+                const SizedBox(height: 30),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: CustomButton(
+                    text: "Close",
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatisticsSection(String title, Map<String, dynamic> data) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            childAspectRatio: 2.5,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
+          ),
+          itemCount: data.keys.length,
+          itemBuilder: (context, index) {
+            final key = data.keys.elementAt(index);
+            final value = data[key];
+            final colors = [
+              Colors.blue,
+              Colors.green,
+              Colors.orange,
+              Colors.purple,
+              Colors.red,
+              Colors.teal
+            ];
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: colors[index % colors.length].withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: colors[index % colors.length]),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    key.toString().replaceAll('_', ' ').toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: colors[index % colors.length],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    value?.toString() ?? '0',
+                    style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 20),
+      ],
+    );
+  }
+
+  Widget _buildCategorySection(List<dynamic> categories) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("By Category",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        ...categories.map((category) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(category['category'] ?? 'Unknown',
+                      style: const TextStyle(fontWeight: FontWeight.w500)),
+                ),
+                Text("${category['count'] ?? 0}",
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+          );
+        }).toList(),
+      ],
+    );
+  }
+
+  Widget _buildJobCard(Map<String, dynamic> job, ThemeProvider themeProvider) {
+    final bool isActive = job['is_active'] ?? true;
+
+    return Card(
+      color: (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
+          .withOpacity(0.9),
+      elevation: 3,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: themeProvider.isDarkMode ? Colors.grey.shade800 : Colors.grey,
+          width: 0.3,
+        ),
+      ),
+      child: InkWell(
+        onTap: () => showJobDetails(job),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      job['title'] ?? 'Untitled Job',
+                      style: TextStyle(
+                        color: themeProvider.isDarkMode
+                            ? Colors.white
+                            : Colors.black87,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 18,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? Colors.green.withOpacity(0.1)
+                          : Colors.red.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isActive ? Colors.green : Colors.red,
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      isActive ? 'Active' : 'Inactive',
+                      style: TextStyle(
+                        color: isActive ? Colors.green : Colors.red,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // Job info chips
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  if (job['category'] != null && job['category'].isNotEmpty)
+                    Chip(
+                      label: Text(job['category']),
+                      backgroundColor: Colors.blue.withOpacity(0.1),
+                      side: BorderSide(color: Colors.blue, width: 0.5),
+                    ),
+                  if (job['min_experience'] != null)
+                    Chip(
+                      label: Text("${job['min_experience']} yrs exp"),
+                      backgroundColor: Colors.orange.withOpacity(0.1),
+                      side: BorderSide(color: Colors.orange, width: 0.5),
+                    ),
+                  if (job['vacancy'] != null && job['vacancy'] > 1)
+                    Chip(
+                      label: Text("${job['vacancy']} vacancies"),
+                      backgroundColor: Colors.purple.withOpacity(0.1),
+                      side: BorderSide(color: Colors.purple, width: 0.5),
+                    ),
+                  if (job['application_count'] != null &&
+                      job['application_count'] > 0)
+                    Chip(
+                      label: Text("${job['application_count']} applications"),
+                      backgroundColor: Colors.teal.withOpacity(0.1),
+                      side: BorderSide(color: Colors.teal, width: 0.5),
+                    ),
+                ],
+              ),
+
+              const SizedBox(height: 12),
+
+              // Description
+              Text(
+                job['description'] ?? 'No description',
+                style: TextStyle(
+                  color: themeProvider.isDarkMode
+                      ? Colors.grey.shade400
+                      : Colors.black54,
+                  fontSize: 14,
+                ),
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+              ),
+
+              const SizedBox(height: 12),
+
+              // Skills preview
+              if (job['required_skills'] != null &&
+                  job['required_skills'].isNotEmpty)
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: (job['required_skills'] as List)
+                      .take(3)
+                      .map((skill) => Chip(
+                            label: Text(skill.toString(),
+                                style: const TextStyle(fontSize: 11)),
+                            backgroundColor: themeProvider.isDarkMode
+                                ? Colors.grey.shade800
+                                : Colors.grey.shade200,
+                            side: BorderSide.none,
+                          ))
+                      .toList(),
+                ),
+
+              const SizedBox(height: 16),
+
+              // Footer with actions and date
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    "Created: ${_formatDate(job['created_at'])}",
+                    style: TextStyle(
+                      color: themeProvider.isDarkMode
+                          ? Colors.grey.shade500
+                          : Colors.grey.shade600,
+                      fontSize: 12,
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.visibility, size: 20),
+                        color: Colors.blue,
+                        tooltip: "View Details",
+                        onPressed: () => showJobDetails(job),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.edit, size: 20),
+                        color: Colors.blueAccent,
+                        tooltip: "Edit",
+                        onPressed: () => openJobForm(job: job),
+                      ),
+                      if (isActive)
+                        IconButton(
+                          icon: const Icon(Icons.delete, size: 20),
+                          color: Colors.redAccent,
+                          tooltip: "Deactivate",
+                          onPressed: () => toggleJobStatus(job),
+                        )
+                      else
+                        IconButton(
+                          icon: const Icon(Icons.restore, size: 20),
+                          color: Colors.orange,
+                          tooltip: "Restore",
+                          onPressed: () => restoreJob(job),
+                        ),
+                      if (widget.onJobSelected != null)
+                        IconButton(
+                          icon: const Icon(Icons.check_circle, size: 20),
+                          color: Colors.green,
+                          tooltip: "Select Job",
+                          onPressed: () =>
+                              widget.onJobSelected!(job['id'] as int),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatDate(String? dateString) {
+    if (dateString == null) return 'Unknown';
+    try {
+      final date = DateTime.parse(dateString);
+      return '${date.day}/${date.month}/${date.year}';
+    } catch (e) {
+      return 'Invalid date';
+    }
+  }
+
+  Widget _buildPagination() {
+    if (totalPages <= 1) return const SizedBox();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: Colors.black.withOpacity(0.05),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            onPressed: currentPage > 1
+                ? () {
+                    setState(() => currentPage--);
+                    fetchJobs();
+                  }
+                : null,
+          ),
+          ...List.generate(
+            totalPages.clamp(1, 5),
+            (index) {
+              final pageNumber = index + 1;
+              return TextButton(
+                onPressed: () {
+                  setState(() => currentPage = pageNumber);
+                  fetchJobs();
+                },
+                style: TextButton.styleFrom(
+                  foregroundColor: currentPage == pageNumber
+                      ? Colors.redAccent
+                      : Colors.grey,
+                ),
+                child: Text(pageNumber.toString()),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right),
+            onPressed: currentPage < totalPages
+                ? () {
+                    setState(() => currentPage++);
+                    fetchJobs();
+                  }
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
-      // 🌆 Dynamic background implementation
       body: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
@@ -62,140 +826,319 @@ class _JobManagementState extends State<JobManagement> {
           body: loading
               ? const Center(
                   child: CircularProgressIndicator(color: Colors.redAccent))
-              : Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              : Column(
+                  children: [
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            "Job Management",
-                            style: TextStyle(
-                              fontSize: 26,
-                              fontWeight: FontWeight.bold,
-                              color: themeProvider.isDarkMode
-                                  ? Colors.white
-                                  : Colors.black87,
-                            ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                "Job Management",
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  color: themeProvider.isDarkMode
+                                      ? Colors.white
+                                      : Colors.black87,
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  CustomButton(
+                                    text: "Statistics",
+                                    onPressed: showJobStatistics,
+                                    outlined: true,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  CustomButton(
+                                    text: "Add Job",
+                                    onPressed: () => openJobForm(),
+                                    icon: Icons.add,
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                          CustomButton(
-                            text: "Add Job",
-                            onPressed: () => openJobForm(),
+                          const SizedBox(height: 20),
+
+                          // Search and Filters
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: themeProvider.isDarkMode
+                                  ? Colors.black.withOpacity(0.6)
+                                  : Colors.white.withOpacity(0.7),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              children: [
+                                // Search Bar
+                                SearchBar(
+                                  hintText:
+                                      "Search jobs by title, description, or skills...",
+                                  onSearch: (query) {
+                                    setState(() {
+                                      searchQuery = query;
+                                      currentPage = 1;
+                                    });
+                                    fetchJobs();
+                                  },
+                                  onClear: () {
+                                    setState(() => searchQuery = '');
+                                    fetchJobs();
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+
+                                // Filter Row
+                                SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: Row(
+                                    children: [
+                                      // Status Filter
+                                      ...statusFilters.map((status) {
+                                        return Padding(
+                                          padding:
+                                              const EdgeInsets.only(right: 8),
+                                          child: FilterChip(
+                                            label: status,
+                                            selected: selectedStatus == status,
+                                            onSelected: (selected) {
+                                              setState(() {
+                                                selectedStatus = status;
+                                                currentPage = 1;
+                                              });
+                                              fetchJobs();
+                                            },
+                                          ),
+                                        );
+                                      }).toList(),
+
+                                      const SizedBox(width: 16),
+
+                                      // Category Filter
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.grey.shade800
+                                              : Colors.grey.shade200,
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: DropdownButtonHideUnderline(
+                                          child: DropdownButton<String>(
+                                            value: selectedCategory,
+                                            items: categories.map((category) {
+                                              return DropdownMenuItem(
+                                                value: category,
+                                                child: Text(category),
+                                              );
+                                            }).toList(),
+                                            onChanged: (value) {
+                                              if (value != null) {
+                                                setState(() {
+                                                  selectedCategory = value;
+                                                  currentPage = 1;
+                                                });
+                                                fetchJobs();
+                                              }
+                                            },
+                                            style: TextStyle(
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                            ),
+                                            dropdownColor:
+                                                themeProvider.isDarkMode
+                                                    ? Colors.grey.shade900
+                                                    : Colors.white,
+                                          ),
+                                        ),
+                                      ),
+
+                                      const SizedBox(width: 16),
+
+                                      // Sort Options
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.grey.shade800
+                                              : Colors.grey.shade200,
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: DropdownButtonHideUnderline(
+                                          child: DropdownButton<String>(
+                                            value: sortBy,
+                                            items: sortOptions.map((option) {
+                                              return DropdownMenuItem(
+                                                value: option,
+                                                child: Text(option.replaceAll(
+                                                    '_', ' ')),
+                                              );
+                                            }).toList(),
+                                            onChanged: (value) {
+                                              if (value != null) {
+                                                setState(() {
+                                                  sortBy = value;
+                                                  currentPage = 1;
+                                                });
+                                                fetchJobs();
+                                              }
+                                            },
+                                            style: TextStyle(
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                            ),
+                                            dropdownColor:
+                                                themeProvider.isDarkMode
+                                                    ? Colors.grey.shade900
+                                                    : Colors.white,
+                                          ),
+                                        ),
+                                      ),
+
+                                      const SizedBox(width: 8),
+
+                                      // Sort Order Toggle
+                                      IconButton(
+                                        icon: Icon(
+                                          sortOrder == 'desc'
+                                              ? Icons.arrow_downward
+                                              : Icons.arrow_upward,
+                                          size: 20,
+                                        ),
+                                        onPressed: () {
+                                          setState(() {
+                                            sortOrder = sortOrder == 'desc'
+                                                ? 'asc'
+                                                : 'desc';
+                                            currentPage = 1;
+                                          });
+                                          fetchJobs();
+                                        },
+                                        tooltip: 'Toggle sort order',
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 20),
-                      Divider(
-                          color: themeProvider.isDarkMode
-                              ? Colors.grey.shade800
-                              : Colors.grey),
-                      const SizedBox(height: 20),
+                    ),
 
-                      // Job List
-                      Expanded(
-                        child: jobs.isEmpty
-                            ? Center(
-                                child: Text(
-                                  "No jobs available",
-                                  style: TextStyle(
+                    const SizedBox(height: 8),
+
+                    // Job Count
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            "Showing ${jobs.length} jobs",
+                            style: TextStyle(
+                              color: themeProvider.isDarkMode
+                                  ? Colors.grey.shade400
+                                  : Colors.grey.shade600,
+                            ),
+                          ),
+                          if (searchQuery.isNotEmpty ||
+                              selectedCategory != 'all' ||
+                              selectedStatus != 'active')
+                            TextButton(
+                              onPressed: () {
+                                setState(() {
+                                  searchQuery = '';
+                                  selectedCategory = 'all';
+                                  selectedStatus = 'active';
+                                  sortBy = 'created_at';
+                                  sortOrder = 'desc';
+                                  currentPage = 1;
+                                });
+                                fetchJobs();
+                              },
+                              child: const Text("Clear Filters"),
+                            ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Jobs List
+                    Expanded(
+                      child: jobs.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.work_outline,
+                                    size: 64,
                                     color: themeProvider.isDarkMode
                                         ? Colors.grey.shade400
-                                        : Colors.black54,
-                                    fontSize: 16,
+                                        : Colors.grey,
                                   ),
-                                ),
-                              )
-                            : ListView.builder(
-                                itemCount: jobs.length,
-                                itemBuilder: (_, index) {
-                                  final job = jobs[index];
-                                  return Card(
-                                    color: (themeProvider.isDarkMode
-                                            ? const Color(0xFF14131E)
-                                            : Colors.white)
-                                        .withOpacity(0.9),
-                                    elevation: 3,
-                                    margin:
-                                        const EdgeInsets.symmetric(vertical: 8),
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        side: BorderSide(
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.grey.shade800
-                                                : Colors.grey,
-                                            width: 0.3)),
-                                    child: ListTile(
-                                      title: Text(
-                                        job['title'] ?? '',
-                                        style: TextStyle(
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 18,
-                                        ),
-                                      ),
-                                      subtitle: Padding(
-                                        padding:
-                                            const EdgeInsets.only(top: 4.0),
-                                        child: Text(
-                                          job['description'] ?? '',
-                                          style: TextStyle(
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.grey.shade400
-                                                : Colors.black54,
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                      ),
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          IconButton(
-                                            icon: const Icon(Icons.edit,
-                                                color: Colors.blueAccent),
-                                            onPressed: () =>
-                                                openJobForm(job: job),
-                                          ),
-                                          IconButton(
-                                            icon: const Icon(Icons.delete,
-                                                color: Colors.redAccent),
-                                            onPressed: () async {
-                                              try {
-                                                await admin.deleteJob(
-                                                    job['id'] as int);
-                                                fetchJobs();
-                                              } catch (e) {
-                                                ScaffoldMessenger.of(context)
-                                                    .showSnackBar(SnackBar(
-                                                  content: Text(
-                                                      "Error deleting job: $e"),
-                                                ));
-                                              }
-                                            },
-                                          ),
-                                          if (widget.onJobSelected != null)
-                                            IconButton(
-                                              icon: const Icon(
-                                                  Icons.check_circle,
-                                                  color: Colors.green),
-                                              tooltip: "Select Job",
-                                              onPressed: () =>
-                                                  widget.onJobSelected!(
-                                                      job['id'] as int),
-                                            ),
-                                        ],
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    "No jobs found",
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.grey.shade400
+                                          : Colors.grey.shade600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    searchQuery.isNotEmpty
+                                        ? "Try adjusting your search"
+                                        : "Create your first job posting",
+                                    style: TextStyle(
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.grey.shade500
+                                          : Colors.grey.shade500,
+                                    ),
+                                  ),
+                                  if (!searchQuery.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 16),
+                                      child: CustomButton(
+                                        text: "Add Job",
+                                        onPressed: () => openJobForm(),
+                                        small: true,
                                       ),
                                     ),
-                                  );
-                                },
+                                ],
                               ),
-                      ),
-                    ],
-                  ),
+                            )
+                          : ListView.builder(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 24),
+                              itemCount: jobs.length,
+                              itemBuilder: (_, index) {
+                                final job = jobs[index];
+                                return _buildJobCard(job, themeProvider);
+                              },
+                            ),
+                    ),
+
+                    // Pagination
+                    _buildPagination(),
+                  ],
                 ),
         ),
       ),
@@ -204,6 +1147,7 @@ class _JobManagementState extends State<JobManagement> {
 }
 
 // ---------------- Job + Assessment Form Dialog ----------------
+// (Keep your existing JobFormDialog class exactly as it was)
 class JobFormDialog extends StatefulWidget {
   final Map<String, dynamic>? job;
   final VoidCallback onSaved;
@@ -311,10 +1255,20 @@ class _JobFormDialogState extends State<JobFormDialog>
     };
 
     try {
-      if (widget.job == null) {
-        await admin.createJob(jobData);
-      } else {
-        await admin.updateJob(widget.job!['id'] as int, jobData);
+      // Try enhanced method first
+      try {
+        if (widget.job == null) {
+          await admin.createJobEnhanced(jobData);
+        } else {
+          await admin.updateJobEnhanced(widget.job!['id'] as int, jobData);
+        }
+      } catch (e) {
+        // Fallback to original methods
+        if (widget.job == null) {
+          await admin.createJob(jobData);
+        } else {
+          await admin.updateJob(widget.job!['id'] as int, jobData);
+        }
       }
       widget.onSaved();
       Navigator.pop(context);

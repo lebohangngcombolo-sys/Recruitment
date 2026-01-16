@@ -51,6 +51,13 @@ class User(db.Model):
         lazy=True
     )
     
+    job_activity_logs = db.relationship(
+        'JobActivityLog',
+        back_populates='user_relation',  # must match the name in JobActivityLog
+        lazy=True,
+        cascade='all, delete-orphan'
+    )
+    
     @property
     def full_name(self):
         """
@@ -123,6 +130,44 @@ class OAuthConnection(db.Model):
         }
 
 
+# ------------------- JOB ACTIVITY LOG -------------------
+class JobActivityLog(db.Model):
+    """Audit trail for job/requisition activities"""
+    __tablename__ = 'job_activity_logs'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(db.Integer, db.ForeignKey('requisitions.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    action = db.Column(db.String(50), nullable=False)  # 'CREATE', 'UPDATE', 'DELETE', 'VIEW', 'VIEW_DETAILED', 'RESTORE'
+    details = db.Column(JSON, default={})
+    ip_address = db.Column(db.String(45))
+    user_agent = db.Column(db.Text)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    
+    # Relationships
+    job = db.relationship('Requisition', backref=db.backref('activity_logs', lazy=True, cascade='all, delete-orphan'))
+    user_relation = db.relationship('User', foreign_keys=[user_id], back_populates='job_activity_logs')
+    
+    def to_dict(self):
+        """Serialize for API responses"""
+        user_name = None
+        if self.user_relation:
+            user_name = self.user_relation.full_name
+        
+        return {
+            'id': self.id,
+            'job_id': self.job_id,
+            'user_id': self.user_id,
+            'user_name': user_name,
+            'user_email': self.user_relation.email if self.user_relation else None,
+            'action': self.action,
+            'details': self.details,
+            'ip_address': self.ip_address,
+            'user_agent': self.user_agent,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None
+        }
+
+
 # ------------------- REQUISITION -------------------
 class Requisition(db.Model):
     __tablename__ = 'requisitions'
@@ -143,6 +188,11 @@ class Requisition(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     published_on = db.Column(db.DateTime, default=datetime.utcnow)
     vacancy = db.Column(db.Integer, default=1)
+    
+    # NEW FIELDS FOR ENHANCED CRUD
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     applications = db.relationship('Application', back_populates='requisition', lazy=True)
 
@@ -162,12 +212,40 @@ class Requisition(db.Model):
             "weightings": self.weightings,
             "assessment_pack": self.assessment_pack,
             "created_by": self.created_by,
-            "created_at": self.created_at.isoformat(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "published_on": self.published_on.isoformat(),
             "vacancy": self.vacancy,
+            "is_active": self.is_active,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
         }
-
-
+    
+    def to_dict_with_stats(self):
+        """Return job data with application statistics"""
+        from . import Application
+        
+        base_dict = self.to_dict()
+        
+        # Get application statistics
+        applications = Application.query.filter_by(requisition_id=self.id).all()
+        total_applications = len(applications)
+        
+        # Status breakdown
+        status_counts = {}
+        for app in applications:
+            status_counts[app.status] = status_counts.get(app.status, 0) + 1
+        
+        base_dict.update({
+            "statistics": {
+                "total_applications": total_applications,
+                "applications_by_status": status_counts,
+                "created_at": self.created_at.isoformat() if self.created_at else None,
+                "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+                "days_active": (datetime.utcnow() - self.created_at).days if self.created_at else 0
+            }
+        })
+        
+        return base_dict
 
 # ------------------- CANDIDATE -------------------
 class Candidate(db.Model):
