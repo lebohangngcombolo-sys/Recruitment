@@ -23,6 +23,12 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
   final ScrollController _scrollController = ScrollController();
   bool _isProgressCollapsed = false;
 
+  // Define the custom red color
+  final Color customRed = const Color(0xFFC10D00);
+
+  // Define the box fill color: #f2f2f2 with 40% opacity
+  final Color boxFillColor = const Color(0xFFF2F2F2).withOpacity(0.2);
+
   // ------------------- Personal Details -------------------
   final TextEditingController nameController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
@@ -170,7 +176,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
 
     if (response.containsKey('error')) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(response['error'])),
+        SnackBar(
+            content: Text(response['error'],
+                style: const TextStyle(fontFamily: 'Poppins'))),
       );
     } else {
       Navigator.pushReplacement(
@@ -201,7 +209,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
 
       if (response.containsKey('error')) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(response['error'])),
+          SnackBar(
+              content: Text(response['error'],
+                  style: const TextStyle(fontFamily: 'Poppins'))),
         );
         return;
       }
@@ -223,7 +233,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     } catch (e) {
       debugPrint('Error parsing CV: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to parse CV')),
+        SnackBar(
+            content: Text('Failed to parse CV',
+                style: const TextStyle(fontFamily: 'Poppins'))),
       );
     } finally {
       setState(() => loading = false);
@@ -247,14 +259,14 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         height: _isProgressCollapsed ? 40 : 48,
         decoration: BoxDecoration(
           color: isActive
-              ? Colors.redAccent
+              ? customRed
               : isCompleted
                   ? Colors.green
                   : Colors.grey.shade300,
           shape: BoxShape.circle,
           border: Border.all(
             color: isActive
-                ? Colors.redAccent
+                ? customRed
                 : isCompleted
                     ? Colors.green
                     : Colors.grey.shade400,
@@ -268,6 +280,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
               color: Colors.white,
               fontSize: _isProgressCollapsed ? 16 : 18,
               fontWeight: FontWeight.w800,
+              fontFamily: 'Poppins',
             ),
           ),
         ),
@@ -291,72 +304,36 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
   }
 
   Widget _buildModernCard(Widget child, {String? title, String? subtitle}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (title != null) ...[
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+              fontFamily: 'Poppins',
+            ),
           ),
-        ],
-        border: Border.all(color: Colors.grey.shade100, width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (title != null) ...[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 6,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent,
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black,
-                          ),
-                        ),
-                        if (subtitle != null) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            subtitle,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade600,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey.shade300,
+                fontWeight: FontWeight.w500,
+                fontFamily: 'Poppins',
               ),
-              const SizedBox(height: 20),
-            ],
-            child,
+            ),
           ],
-        ),
-      ),
+          const SizedBox(height: 16),
+        ],
+        child,
+        const SizedBox(height: 24),
+      ],
     );
   }
 
@@ -373,16 +350,22 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           style: const TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: Colors.black87,
+            color: Colors.white,
+            fontFamily: 'Poppins',
           ),
         ),
         const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
+            color: boxFillColor,
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: customRed,
+              width: 1.5,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withOpacity(0.1),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -395,26 +378,16 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             readOnly: readOnly,
             style: const TextStyle(
               fontSize: 16,
-              color: Colors.black,
+              color: Colors.white,
               fontWeight: FontWeight.w500,
+              fontFamily: 'Poppins',
             ),
             decoration: InputDecoration(
               filled: true,
-              fillColor: Colors.white,
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: Colors.grey.shade300,
-                  width: 1.5,
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                  color: Colors.redAccent,
-                  width: 2,
-                ),
-              ),
+              fillColor: Colors.transparent,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
               prefixIcon: prefixIcon != null
@@ -422,7 +395,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                       margin: const EdgeInsets.only(left: 12, right: 8),
                       child: Icon(
                         prefixIcon,
-                        color: Colors.redAccent,
+                        color: customRed,
                         size: 22,
                       ),
                     )
@@ -444,7 +417,8 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: Colors.black87,
+            color: Colors.white,
+            fontFamily: 'Poppins',
           ),
         ),
         const SizedBox(height: 10),
@@ -452,10 +426,15 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           onTap: () => _selectDate(),
           child: Container(
             decoration: BoxDecoration(
+              color: boxFillColor,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: customRed,
+                width: 1.5,
+              ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withOpacity(0.1),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -467,33 +446,21 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                 readOnly: true,
                 style: const TextStyle(
                   fontSize: 16,
-                  color: Colors.black,
+                  color: Colors.white,
                   fontWeight: FontWeight.w500,
+                  fontFamily: 'Poppins',
                 ),
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: Colors.white,
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(
-                      color: Colors.grey.shade300,
-                      width: 1.5,
-                    ),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: Colors.redAccent,
-                      width: 2,
-                    ),
-                  ),
+                  fillColor: Colors.transparent,
+                  border: InputBorder.none,
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
                   prefixIcon: Container(
                     margin: const EdgeInsets.only(left: 12, right: 8),
                     child: Icon(
                       Icons.calendar_today_rounded,
-                      color: Colors.redAccent,
+                      color: customRed,
                       size: 22,
                     ),
                   ),
@@ -501,15 +468,16 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                     padding: const EdgeInsets.only(right: 12),
                     child: Icon(
                       Icons.arrow_drop_down_rounded,
-                      color: Colors.grey.shade500,
+                      color: Colors.grey.shade300,
                       size: 28,
                     ),
                   ),
                   hintText: "Select your date of birth",
                   hintStyle: TextStyle(
-                    color: Colors.grey.shade500,
+                    color: Colors.grey.shade300,
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
+                    fontFamily: 'Poppins',
                   ),
                 ),
               ),
@@ -530,13 +498,16 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       builder: (BuildContext context, Widget? child) {
         return Theme(
           data: ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Colors.redAccent,
+            colorScheme: ColorScheme.light(
+              primary: customRed,
               onPrimary: Colors.white,
               surface: Colors.white,
               onSurface: Colors.black,
             ),
             dialogTheme: DialogThemeData(backgroundColor: Colors.white),
+            textTheme: ThemeData.light().textTheme.apply(
+                  fontFamily: 'Poppins',
+                ),
           ),
           child: child!,
         );
@@ -561,16 +532,22 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: Colors.black87,
+            color: Colors.white,
+            fontFamily: 'Poppins',
           ),
         ),
         const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
+            color: boxFillColor,
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: customRed,
+              width: 1.5,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withOpacity(0.1),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -583,54 +560,43 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                 selectedGender = newValue;
               });
             },
+            dropdownColor: Colors.grey[900],
+            style: const TextStyle(
+              fontSize: 16,
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+              fontFamily: 'Poppins',
+            ),
             decoration: InputDecoration(
               filled: true,
-              fillColor: Colors.white,
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: Colors.grey.shade300,
-                  width: 1.5,
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                  color: Colors.redAccent,
-                  width: 2,
-                ),
-              ),
+              fillColor: Colors.transparent,
+              border: InputBorder.none,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
               prefixIcon: Container(
                 margin: const EdgeInsets.only(left: 12, right: 8),
                 child: Icon(
                   Icons.person_outline_rounded,
-                  color: Colors.redAccent,
+                  color: customRed,
                   size: 22,
                 ),
               ),
-            ),
-            dropdownColor: Colors.white,
-            style: const TextStyle(
-              fontSize: 16,
-              color: Colors.black,
-              fontWeight: FontWeight.w500,
-            ),
-            icon: Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: Icon(
-                Icons.arrow_drop_down_rounded,
-                color: Colors.grey.shade500,
-                size: 28,
+              suffixIcon: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Icon(
+                  Icons.arrow_drop_down_rounded,
+                  color: Colors.grey.shade300,
+                  size: 28,
+                ),
               ),
             ),
             hint: Text(
               "Select Gender",
               style: TextStyle(
-                color: Colors.grey.shade500,
+                color: Colors.grey.shade300,
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
+                fontFamily: 'Poppins',
               ),
             ),
             items: <String>['Male', 'Female', 'Other', 'Prefer not to say']
@@ -644,7 +610,8 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
-                      color: Colors.black,
+                      color: Colors.white,
+                      fontFamily: 'Poppins',
                     ),
                   ),
                 ),
@@ -661,287 +628,407 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: loading || profileLoading
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 90,
-                    height: 90,
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Padding(
-                      padding: EdgeInsets.all(22),
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 4,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    "Loading Enrollment Form...",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ],
+      backgroundColor: Colors.transparent,
+      body: Stack(
+        children: [
+          // Background Image
+          Container(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage(
+                    'assets/images/dark.png'), // Update with your actual path
+                fit: BoxFit.cover,
               ),
-            )
-          : Column(
-              children: [
-                const SizedBox(height: 50),
-                SizedBox(
-                  height: _isProgressCollapsed ? 70 : 120,
+            ),
+          ),
+
+          // Dark overlay for better text readability
+          Container(
+            color: Colors.black.withOpacity(0.4),
+          ),
+
+          // Main content
+          loading || profileLoading
+              ? Center(
                   child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Expanded(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                          children: List.generate(4, (index) {
-                            return Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                _buildStepIndicator(index),
-                                if (!_isProgressCollapsed) ...[
-                                  const SizedBox(height: 8),
-                                  SizedBox(
-                                    width: 80,
-                                    child: Text(
-                                      _getStepLabel(index),
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: currentStep >= index
-                                            ? Colors.black87
-                                            : Colors.grey.shade400,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            );
-                          }),
+                      Container(
+                        width: 90,
+                        height: 90,
+                        decoration: BoxDecoration(
+                          color: customRed,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Padding(
+                          padding: EdgeInsets.all(22),
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 4,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        "Loading Enrollment Form...",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          fontFamily: 'Poppins',
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 10),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
-                      // ------------------- Step 1: Personal Details -------------------
-                      SingleChildScrollView(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 10),
-                        child: Column(
-                          children: [
-                            _buildModernCard(
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _buildTextField(nameController, "Full Name"),
-                                  _buildTextField(phoneController, "Phone",
-                                      keyboardType: TextInputType.phone),
-                                  _buildTextField(addressController, "Address"),
-                                  _buildDateOfBirthField(),
-                                  _buildTextField(
-                                      linkedinController, "LinkedIn Profile"),
-                                  _buildGenderDropdown(),
-                                ],
-                              ),
-                              title: "Personal Details",
-                              subtitle: "Enter your basic information",
+                )
+              : Column(
+                  children: [
+                    const SizedBox(height: 50),
+                    SizedBox(
+                      height: _isProgressCollapsed ? 70 : 120,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: List.generate(4, (index) {
+                                return Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    _buildStepIndicator(index),
+                                    if (!_isProgressCollapsed) ...[
+                                      const SizedBox(height: 8),
+                                      SizedBox(
+                                        width: 80,
+                                        child: Text(
+                                          _getStepLabel(index),
+                                          textAlign: TextAlign.center,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: currentStep >= index
+                                                ? Colors.white
+                                                : Colors.grey.shade300,
+                                            fontWeight: FontWeight.w500,
+                                            fontFamily: 'Poppins',
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                );
+                              }),
                             ),
-                            _buildModernCard(
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  ElevatedButton.icon(
-                                    onPressed: () async {
-                                      FilePickerResult? result =
-                                          await FilePicker.platform.pickFiles(
-                                        type: FileType.custom,
-                                        allowedExtensions: [
-                                          'pdf',
-                                          'doc',
-                                          'docx'
-                                        ],
-                                      );
-
-                                      if (result != null) {
-                                        setState(() {
-                                          selectedCV = result.files.first;
-                                        });
-
-                                        await _parseCV(selectedCV!);
-                                      }
-                                    },
-                                    icon: const Icon(Icons.upload_file_rounded),
-                                    label: Text(selectedCV != null
-                                        ? "CV Selected"
-                                        : "Upload CV"),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.redAccent,
-                                      foregroundColor: Colors.white,
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 20, vertical: 14),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: TabBarView(
+                        controller: _tabController,
+                        physics: const NeverScrollableScrollPhysics(),
+                        children: [
+                          // ------------------- Step 1: Personal Details -------------------
+                          SingleChildScrollView(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
+                            child: Column(
+                              children: [
+                                _buildModernCard(
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _buildTextField(
+                                          nameController, "Full Name"),
+                                      _buildTextField(phoneController, "Phone",
+                                          keyboardType: TextInputType.phone),
+                                      _buildTextField(
+                                          addressController, "Address"),
+                                      _buildDateOfBirthField(),
+                                      _buildTextField(linkedinController,
+                                          "LinkedIn Profile"),
+                                      _buildGenderDropdown(),
+                                    ],
                                   ),
-                                  if (selectedCV != null) ...[
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      "Selected file: ${selectedCV!.name}",
-                                      style: TextStyle(
-                                        color: Colors.grey.shade700,
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
+                                  title: "Personal Details",
+                                  subtitle: "Enter your basic information",
+                                ),
+                                _buildModernCard(
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // CV Upload Button
+                                      GestureDetector(
+                                        onTap: () async {
+                                          FilePickerResult? result =
+                                              await FilePicker.platform
+                                                  .pickFiles(
+                                            type: FileType.custom,
+                                            allowedExtensions: [
+                                              'pdf',
+                                              'doc',
+                                              'docx'
+                                            ],
+                                          );
+
+                                          if (result != null) {
+                                            setState(() {
+                                              selectedCV = result.files.first;
+                                            });
+                                            await _parseCV(selectedCV!);
+                                          }
+                                        },
+                                        child: Container(
+                                          width: double.infinity,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 16,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: boxFillColor,
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            border: Border.all(
+                                              color: customRed,
+                                              width: 1.5,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.upload_file_rounded,
+                                                color: customRed,
+                                                size: 24,
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      'Upload CV',
+                                                      style: TextStyle(
+                                                        fontSize: 16,
+                                                        color: Colors.white,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                        fontFamily: 'Poppins',
+                                                      ),
+                                                    ),
+                                                    if (selectedCV != null) ...[
+                                                      const SizedBox(height: 4),
+                                                      Text(
+                                                        selectedCV!.name,
+                                                        style: TextStyle(
+                                                          fontSize: 14,
+                                                          color: Colors
+                                                              .grey.shade300,
+                                                          fontWeight:
+                                                              FontWeight.w400,
+                                                          fontFamily: 'Poppins',
+                                                        ),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
+                                              ),
+                                              Icon(
+                                                Icons.arrow_forward_ios_rounded,
+                                                size: 16,
+                                                color: Colors.grey.shade300,
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
+                                    ],
+                                  ),
+                                  title: "CV Upload",
+                                  subtitle:
+                                      "Upload your CV to auto-fill fields",
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // ------------------- Step 2: Education -------------------
+                          SingleChildScrollView(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
+                            child: Column(
+                              children: [
+                                _buildModernCard(
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _buildTextField(educationController,
+                                          "Education Level"),
+                                      _buildTextField(universityController,
+                                          "University/College"),
+                                      _buildTextField(graduationYearController,
+                                          "Graduation Year",
+                                          keyboardType: TextInputType.number),
+                                    ],
+                                  ),
+                                  title: "Education Background",
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // ------------------- Step 3: Skills -------------------
+                          SingleChildScrollView(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
+                            child: Column(
+                              children: [
+                                _buildModernCard(
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _buildTextField(
+                                          skillsController, "Skills"),
+                                      _buildTextField(certificationsController,
+                                          "Certifications"),
+                                      _buildTextField(
+                                          languagesController, "Languages"),
+                                    ],
+                                  ),
+                                  title: "Skills & Certifications",
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          // ------------------- Step 4: Experience -------------------
+                          SingleChildScrollView(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
+                            child: Column(
+                              children: [
+                                _buildModernCard(
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      _buildTextField(experienceController,
+                                          "Work Experience",
+                                          maxLines: 3),
+                                      _buildTextField(
+                                          previousCompaniesController,
+                                          "Previous Companies"),
+                                      _buildTextField(
+                                          positionController, "Position"),
+                                    ],
+                                  ),
+                                  title: "Work Experience",
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // ------------------- Navigation Buttons -------------------
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20, vertical: 10),
+                      child: Row(
+                        children: [
+                          if (currentStep > 0)
+                            Expanded(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: customRed,
+                                  borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: customRed.withOpacity(0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 4),
                                     ),
                                   ],
-                                ],
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: previousStep,
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 16),
+                                      alignment: Alignment.center,
+                                      child: const Text(
+                                        "Back",
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          fontFamily: 'Poppins',
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
-                              title: "CV Upload",
-                              subtitle: "Upload your CV to auto-fill fields",
                             ),
-                          ],
-                        ),
-                      ),
-
-                      // ------------------- Step 2: Education -------------------
-                      SingleChildScrollView(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 10),
-                        child: Column(
-                          children: [
-                            _buildModernCard(
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _buildTextField(
-                                      educationController, "Education Level"),
-                                  _buildTextField(universityController,
-                                      "University/College"),
-                                  _buildTextField(graduationYearController,
-                                      "Graduation Year",
-                                      keyboardType: TextInputType.number),
-                                ],
-                              ),
-                              title: "Education Background",
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // ------------------- Step 3: Skills -------------------
-                      SingleChildScrollView(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 10),
-                        child: Column(
-                          children: [
-                            _buildModernCard(
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _buildTextField(skillsController, "Skills"),
-                                  _buildTextField(certificationsController,
-                                      "Certifications"),
-                                  _buildTextField(
-                                      languagesController, "Languages"),
-                                ],
-                              ),
-                              title: "Skills & Certifications",
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // ------------------- Step 4: Experience -------------------
-                      SingleChildScrollView(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 10),
-                        child: Column(
-                          children: [
-                            _buildModernCard(
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  _buildTextField(
-                                      experienceController, "Work Experience",
-                                      maxLines: 3),
-                                  _buildTextField(previousCompaniesController,
-                                      "Previous Companies"),
-                                  _buildTextField(
-                                      positionController, "Position"),
-                                ],
-                              ),
-                              title: "Work Experience",
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // ------------------- Navigation Buttons -------------------
-                Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  child: Row(
-                    children: [
-                      if (currentStep > 0)
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: previousStep,
-                            child: const Text("Back"),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.redAccent,
-                              side: const BorderSide(color: Colors.redAccent),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
+                          if (currentStep > 0) const SizedBox(width: 16),
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: customRed,
                                 borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: customRed.withOpacity(0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: nextStep,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 16),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      currentStep == 3 ? "Submit" : "Next",
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        fontFamily: 'Poppins',
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      if (currentStep > 0) const SizedBox(width: 16),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: nextStep,
-                          child: Text(currentStep == 3 ? "Submit" : "Next"),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.redAccent,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+        ],
+      ),
     );
   }
 
