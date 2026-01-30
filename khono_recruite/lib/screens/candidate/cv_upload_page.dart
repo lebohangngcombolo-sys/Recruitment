@@ -25,12 +25,8 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
   final Color _primaryDark = Colors.white; // Background
   final Color _cardDark = Colors.white; // Card background
   final Color _accentRed = Color(0xFFE53935); // Main red
-  final Color _accentPurple = Color(0xFFD32F2F); // Dark red
-  final Color _accentBlue = Color(0xFFEF5350); // Light red
-  final Color _accentGreen = Color(0xFF43A047); // Success
   final Color _textPrimary = Colors.black; // Main text
   final Color _textSecondary = Colors.redAccent; // Secondary text
-  final Color _surfaceOverlay = Colors.red.withOpacity(0.1); // subtle overlay
 
   @override
   void initState() {
@@ -155,10 +151,10 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
                 decoration: BoxDecoration(
                   color: _cardDark,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: _accentRed.withOpacity(0.3)),
+                  border: Border.all(color: _accentRed.withValues(alpha: 0.3)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
+                      color: Colors.black.withValues(alpha: 0.3),
                       blurRadius: 20,
                       offset: const Offset(0, 10),
                     ),
@@ -221,10 +217,10 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
                       const SizedBox(height: 12),
                       Container(
                         decoration: BoxDecoration(
-                          color: _primaryDark.withOpacity(0.5),
+                          color: _primaryDark.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(12),
-                          border:
-                              Border.all(color: _accentRed.withOpacity(0.3)),
+                          border: Border.all(
+                              color: _accentRed.withValues(alpha: 0.3)),
                         ),
                         child: TextField(
                           controller: resumeTextController,
