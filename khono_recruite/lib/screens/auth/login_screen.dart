@@ -338,9 +338,9 @@ class _LoginScreenState extends State<LoginScreen>
                           controller: emailController,
                           inputType: TextInputType.emailAddress,
                           backgroundColor:
-                              const Color.fromARGB(0, 129, 128, 128)
-                                  .withOpacity(0.1),
-                          textColor: const Color.fromARGB(255, 172, 0, 0),
+                              Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
+                          textColor: Color(0xFFC10D00), // #c10d00
+                          borderColor: Color(0xFFC10D00), // #c10d00 stroke
                         ),
                         const SizedBox(height: 12),
                         CustomTextField(
@@ -348,9 +348,9 @@ class _LoginScreenState extends State<LoginScreen>
                           controller: passwordController,
                           obscureText: true,
                           backgroundColor:
-                              const Color.fromARGB(0, 123, 123, 123)
-                                  .withOpacity(0.1),
-                          textColor: const Color.fromARGB(255, 201, 0, 0),
+                              Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
+                          textColor: Color(0xFFC10D00), // #c10d00
+                          borderColor: Color(0xFFC10D00), // #c10d00 stroke
                         ),
                         const SizedBox(height: 12),
                         Align(
@@ -452,7 +452,8 @@ class _LoginScreenState extends State<LoginScreen>
                           children: [
                             Expanded(
                                 child: Divider(
-                                    color: Colors.white.withOpacity(0.4))),
+                                    color:
+                                        Colors.white.withValues(alpha: 0.4))),
                             Padding(
                               padding:
                                   const EdgeInsets.symmetric(horizontal: 16),
@@ -466,7 +467,8 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             Expanded(
                                 child: Divider(
-                                    color: Colors.white.withOpacity(0.4))),
+                                    color:
+                                        Colors.white.withValues(alpha: 0.4))),
                           ],
                         ),
                         const SizedBox(height: 20),

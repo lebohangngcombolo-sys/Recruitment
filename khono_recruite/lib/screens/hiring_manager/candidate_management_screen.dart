@@ -109,7 +109,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                   color: (themeProvider.isDarkMode
                           ? const Color(0xFF14131E)
                           : Colors.white)
-                      .withOpacity(0.9),
+                      .withValues(alpha: 0.9),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -182,7 +182,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                             color: (themeProvider.isDarkMode
                                                     ? const Color(0xFF14131E)
                                                     : Colors.white)
-                                                .withOpacity(0.9),
+                                                .withValues(alpha: 0.9),
                                             borderRadius:
                                                 BorderRadius.circular(12),
                                             border: Border.all(
@@ -192,7 +192,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                             boxShadow: [
                                               BoxShadow(
                                                 color: Colors.black
-                                                    .withOpacity(0.03),
+                                                    .withValues(alpha: 0.03),
                                                 blurRadius: 6,
                                                 offset: const Offset(0, 3),
                                               )

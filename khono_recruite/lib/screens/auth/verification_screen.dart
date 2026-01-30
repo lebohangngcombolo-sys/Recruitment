@@ -150,7 +150,7 @@ class _VerificationScreenState extends State<VerificationScreen>
                         Container(
                           padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
@@ -234,7 +234,7 @@ class _VerificationScreenState extends State<VerificationScreen>
                               Text(
                                 "Didn't receive code? ",
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.7),
+                                  color: Colors.white.withValues(alpha: 0.7),
                                   fontSize: 13,
                                 ),
                               ),
@@ -266,7 +266,7 @@ class _VerificationScreenState extends State<VerificationScreen>
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: IconButton(
@@ -290,7 +290,7 @@ class _VerificationScreenState extends State<VerificationScreen>
 
           if (loading)
             Container(
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withValues(alpha: 0.5),
               child: const Center(
                 child: CircularProgressIndicator(
                   color: Colors.white,

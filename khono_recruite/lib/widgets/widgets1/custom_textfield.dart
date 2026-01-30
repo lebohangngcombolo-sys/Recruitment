@@ -95,7 +95,7 @@ class CustomTextField extends StatelessWidget {
 
     // Default colors based on theme
     final defaultBackgroundColor =
-        isDark ? Colors.grey.shade900.withOpacity(0.7) : Colors.white;
+        isDark ? Colors.grey.shade900.withValues(alpha: 0.7) : Colors.white;
 
     final defaultTextColor = isDark ? Colors.white : Colors.black87;
     final defaultLabelColor =
@@ -153,7 +153,7 @@ class CustomTextField extends StatelessWidget {
               boxShadow: [
                 if (enabled && !readOnly)
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -234,7 +234,7 @@ class CustomTextField extends StatelessWidget {
                 disabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(borderRadius),
                   borderSide: BorderSide(
-                    color: defaultBorderColor.withOpacity(0.5),
+                    color: defaultBorderColor.withValues(alpha: 0.5),
                     width: borderWidth,
                   ),
                 ),
@@ -364,8 +364,9 @@ class CustomTextFieldVariants {
       label: label,
       controller: controller,
       hintText: hintText,
-      backgroundColor:
-          isDark ? Colors.grey.shade900.withOpacity(0.8) : Colors.grey.shade50,
+      backgroundColor: isDark
+          ? Colors.grey.shade900.withValues(alpha: 0.8)
+          : Colors.grey.shade50,
       borderColor: Colors.transparent,
       focusedBorderColor: primaryColor ?? Colors.blueAccent,
       borderRadius: 10,

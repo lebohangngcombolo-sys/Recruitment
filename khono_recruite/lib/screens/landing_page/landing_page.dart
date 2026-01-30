@@ -51,11 +51,8 @@ class LandingPage extends StatelessWidget {
                             height: 120,
                             fit: BoxFit.contain,
                           ),
-                          Row(
-                            children: [
-                              // Navigation items removed as requested
-                            ],
-                          ),
+                          // Navigation items removed as requested
+                          Container(), // Empty container to maintain layout structure
                         ],
                       ),
                       const Spacer(),
@@ -275,7 +272,7 @@ class LandingPage extends StatelessWidget {
                           padding: const EdgeInsets.all(20),
                           width: 600,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
+                            color: Colors.white.withValues(alpha: 0.05),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: Colors.white10),
                           ),
@@ -291,7 +288,14 @@ class LandingPage extends StatelessWidget {
                               const SizedBox(height: 24),
                               ElevatedButton(
                                 onPressed: () {
-                                  // TODO: Form submission logic
+                                  // Form submission logic - implement email sending functionality
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                          'Form submission functionality coming soon!'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: accentRed,
@@ -400,6 +404,8 @@ class LandingPage extends StatelessWidget {
   }
 
   // -------------------- Helper Widgets --------------------
+  // Removed _navItem method as it's no longer needed
+
   Widget _textField(String hint, {int maxLines = 1}) {
     return TextField(
       maxLines: maxLines,
@@ -509,7 +515,7 @@ class _FeatureCard extends StatelessWidget {
           width: 300,
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.08),
+            color: Colors.white.withValues(alpha: 0.08),
             border: Border.all(color: Colors.white10),
             borderRadius: BorderRadius.circular(16),
           ),

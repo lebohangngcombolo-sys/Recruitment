@@ -587,7 +587,7 @@ class _HRDashboardState extends State<HRDashboard> {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: offer.statusColor.withOpacity(0.2),
+          color: offer.statusColor.withValues(alpha: 0.2),
           shape: BoxShape.circle,
         ),
         child: Icon(

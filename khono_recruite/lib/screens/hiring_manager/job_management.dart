@@ -116,7 +116,7 @@ class _JobManagementState extends State<JobManagement> {
                                     color: (themeProvider.isDarkMode
                                             ? const Color(0xFF14131E)
                                             : Colors.white)
-                                        .withOpacity(0.9),
+                                        .withValues(alpha: 0.9),
                                     elevation: 3,
                                     margin:
                                         const EdgeInsets.symmetric(vertical: 8),
@@ -337,7 +337,7 @@ class _JobFormDialogState extends State<JobFormDialog>
           color: (themeProvider.isDarkMode
                   ? const Color(0xFF14131E)
                   : Colors.white)
-              .withOpacity(0.95),
+              .withValues(alpha: 0.95),
           borderRadius: BorderRadius.circular(24),
         ),
         child: Column(
@@ -453,7 +453,7 @@ class _JobFormDialogState extends State<JobFormDialog>
                                 color: (themeProvider.isDarkMode
                                         ? const Color(0xFF14131E)
                                         : Colors.white)
-                                    .withOpacity(0.9),
+                                    .withValues(alpha: 0.9),
                                 margin: const EdgeInsets.symmetric(vertical: 8),
                                 child: Padding(
                                   padding: const EdgeInsets.all(12),

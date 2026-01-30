@@ -27,7 +27,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
   final Color customRed = const Color(0xFFC10D00);
 
   // Define the box fill color: #f2f2f2 with 40% opacity
-  final Color boxFillColor = const Color(0xFFF2F2F2).withOpacity(0.2);
+  final Color boxFillColor = const Color(0xFFF2F2F2).withValues(alpha: 0.2);
 
   // ------------------- Personal Details -------------------
   final TextEditingController nameController = TextEditingController();
@@ -365,7 +365,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -434,7 +434,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Colors.black.withValues(alpha: 0.1),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -547,7 +547,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -644,7 +644,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
 
           // Dark overlay for better text readability
           Container(
-            color: Colors.black.withOpacity(0.4),
+            color: Colors.black.withValues(alpha: 0.4),
           ),
 
           // Main content
@@ -956,7 +956,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                                   borderRadius: BorderRadius.circular(12),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: customRed.withOpacity(0.3),
+                                      color: customRed.withValues(alpha: 0.3),
                                       blurRadius: 8,
                                       offset: const Offset(0, 4),
                                     ),
@@ -993,7 +993,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                                 borderRadius: BorderRadius.circular(12),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: customRed.withOpacity(0.3),
+                                    color: customRed.withValues(alpha: 0.3),
                                     blurRadius: 8,
                                     offset: const Offset(0, 4),
                                   ),

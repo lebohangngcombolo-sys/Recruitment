@@ -102,7 +102,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
           child: Card(
-            color: Colors.white.withOpacity(0.1),
+            color: Colors.white.withValues(alpha: 0.1),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),

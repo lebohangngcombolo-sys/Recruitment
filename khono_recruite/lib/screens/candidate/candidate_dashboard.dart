@@ -53,7 +53,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   String _selectedRoleFilter = 'All Roles';
   String _selectedPlaceFilter = 'All Locations';
   String _selectedJobTypeFilter = 'All Types';
-  String _selectedDateFilter = 'Any Time';
   final TextEditingController _searchController = TextEditingController();
 
   // Your existing chatbot state
@@ -71,18 +70,14 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   final PageController _pageController = PageController();
 
   final Color _primaryDark = const Color(0xFF0A0F2D);
-  final Color _secondaryDark = const Color(0xFF1A1F37);
   final Color _accentRed = const Color(0xFFE53935);
   final Color _accentRedLight = const Color(0xFFEF5350);
-  final Color _cardDark = const Color(0xFF252A42);
   final Color _textPrimary = Colors.white;
   final Color _textSecondary = const Color(0xFFA8B2C9);
-  final Color _successColor = const Color(0xFF2E8B57);
 
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
   String _profileImageUrl = "";
-  final ImagePicker _picker = ImagePicker();
   final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
   @override
@@ -156,18 +151,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       }
     } catch (e) {
       debugPrint("Error fetching profile image: $e");
-    }
-  }
-
-  // ---------- Pick new profile picture ----------
-  Future<void> _pickProfileImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-
-    if (pickedFile != null) {
-      if (kIsWeb) _profileImageBytes = await pickedFile.readAsBytes();
-
-      setState(() => _profileImage = pickedFile);
-      await uploadProfileImage();
     }
   }
 
@@ -357,14 +340,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return ['All Jobs', ...titles];
   }
 
-  List<String> get _roles {
-    final roles = availableJobs
-        .map((job) => job['role']?.toString() ?? 'General')
-        .toSet()
-        .toList();
-    return ['All Roles', ...roles];
-  }
-
   List<String> get _locations {
     final locations = availableJobs
         .map((job) => job['location']?.toString() ?? 'Remote')
@@ -465,10 +440,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         return BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Dialog(
-            backgroundColor: Colors.white.withOpacity(0.95),
+            backgroundColor: Colors.white.withValues(alpha: 0.95),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              side: BorderSide(color: primaryColor.withOpacity(0.5), width: 1),
+              side: BorderSide(
+                  color: primaryColor.withValues(alpha: 0.5), width: 1),
             ),
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -600,7 +576,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           children: [
             CircleAvatar(
               radius: 40,
-              backgroundColor: primaryColor.withOpacity(0.1),
+              backgroundColor: primaryColor.withValues(alpha: 0.1),
               backgroundImage: job['company_logo'] != null
                   ? NetworkImage(job['company_logo'])
                   : null,
@@ -1304,7 +1280,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: _accentRed.withOpacity(0.2)),
+              border: Border.all(color: _accentRed.withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
@@ -1313,7 +1289,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                     onPressed: () => _safeSetState(() => cvParserMode = false),
                     style: TextButton.styleFrom(
                       backgroundColor: !cvParserMode
-                          ? _accentRed.withOpacity(0.2)
+                          ? _accentRed.withValues(alpha: 0.2)
                           : Colors.transparent,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
@@ -1334,7 +1310,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                     onPressed: () => _safeSetState(() => cvParserMode = true),
                     style: TextButton.styleFrom(
                       backgroundColor: cvParserMode
-                          ? _accentRed.withOpacity(0.2)
+                          ? _accentRed.withValues(alpha: 0.2)
                           : Colors.transparent,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
@@ -1379,7 +1355,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 child: Container(
                   decoration: BoxDecoration(
                     color: msg['text']!.startsWith('You:')
-                        ? _accentRed.withOpacity(0.2)
+                        ? _accentRed.withValues(alpha: 0.2)
                         : const Color.fromARGB(255, 149, 15, 15),
                     borderRadius: BorderRadius.circular(8),
                     boxShadow: [
@@ -1406,7 +1382,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           ),
         ),
         if (_isLoading)
-          LinearProgressIndicator(color: _accentRed.withOpacity(0.7)),
+          LinearProgressIndicator(color: _accentRed.withValues(alpha: 0.7)),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -1440,7 +1416,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             const SizedBox(width: 8),
             Container(
               decoration: BoxDecoration(
-                color: _accentRed.withOpacity(0.2),
+                color: _accentRed.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: IconButton(
@@ -1491,7 +1467,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                   decoration: InputDecoration(
                     hintText: "Paste position requirements here...",
                     hintStyle: GoogleFonts.poppins(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.black.withValues(alpha: 0.5),
                       fontSize: 12,
                     ),
                     border: InputBorder.none,
@@ -1528,7 +1504,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                   decoration: InputDecoration(
                     hintText: "Paste your professional CV here...",
                     hintStyle: GoogleFonts.poppins(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.black.withValues(alpha: 0.5),
                       fontSize: 12,
                     ),
                     border: InputBorder.none,
@@ -1583,7 +1559,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                     Text(
                       uploadedResume!.name,
                       style: GoogleFonts.poppins(
-                          color: Colors.black.withOpacity(0.5), fontSize: 10),
+                          color: Colors.black.withValues(alpha: 0.5),
+                          fontSize: 10),
                     ),
                 ],
               ),
@@ -1592,7 +1569,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               // Analyze Button
               Container(
                 decoration: BoxDecoration(
-                  color: _accentRed.withOpacity(0.2),
+                  color: _accentRed.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: ElevatedButton(

@@ -35,12 +35,8 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
   final Color _primaryDark = Colors.white; // Background
   final Color _cardDark = Colors.white; // Card background
   final Color _accentRed = Color(0xFFE53935); // Main red
-  final Color _accentPurple = Color(0xFFD32F2F); // Dark red
-  final Color _accentBlue = Color(0xFFEF5350); // Light red
-  final Color _accentGreen = Color(0xFF43A047); // Success
   final Color _textPrimary = Colors.black; // Main text
   final Color _textSecondary = Colors.redAccent; // Secondary text
-  final Color _surfaceOverlay = Colors.red.withOpacity(0.1); // subtle overlay
 
   @override
   void initState() {
@@ -344,9 +340,9 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Colors.black.withOpacity(0.6),
+                            Colors.black.withValues(alpha: 0.6),
                             Colors.transparent,
-                            Colors.black.withOpacity(0.3),
+                            Colors.black.withValues(alpha: 0.3),
                           ],
                         ),
                       ),
@@ -356,11 +352,11 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                       left: 16,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           borderRadius: BorderRadius.circular(30),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
+                              color: Colors.black.withValues(alpha: 0.2),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -392,7 +388,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                           Text(
                             "${widget.job["company"] ?? ""} • ${widget.job["location"] ?? ""}",
                             style: GoogleFonts.poppins(
-                              color: Colors.white.withOpacity(0.9),
+                              color: Colors.white.withValues(alpha: 0.9),
                               fontSize: 18,
                             ),
                           ),
@@ -809,21 +805,21 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: _cardDark.withOpacity(0.9),
+        color: _cardDark.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha: 0.3),
             blurRadius: 25,
             offset: const Offset(0, 8),
           ),
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
         ],
-        border: Border.all(color: _accentRed.withOpacity(0.3), width: 1),
+        border: Border.all(color: _accentRed.withValues(alpha: 0.3), width: 1),
       ),
       child: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -835,7 +831,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.2),
+                    color: color.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(icon, color: color, size: 24),
@@ -911,18 +907,18 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
         prefixIcon: Icon(icon, color: _textSecondary),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: _accentRed.withOpacity(0.3)),
+          borderSide: BorderSide(color: _accentRed.withValues(alpha: 0.3)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: _accentRed.withOpacity(0.3)),
+          borderSide: BorderSide(color: _accentRed.withValues(alpha: 0.3)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide(color: _accentRed, width: 2),
         ),
         filled: true,
-        fillColor: _primaryDark.withOpacity(0.5),
+        fillColor: _primaryDark.withValues(alpha: 0.5),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       ),
