@@ -14,10 +14,16 @@ class AuthService {
   static Future<Map<String, dynamic>> register(
     Map<String, dynamic> data,
   ) async {
+    // Only keep email and password
+    final requestData = {
+      "email": data["email"],
+      "password": data["password"],
+    };
+
     final response = await http.post(
       Uri.parse(ApiEndpoints.register),
       headers: {"Content-Type": "application/json"},
-      body: jsonEncode(data),
+      body: jsonEncode(requestData),
     );
 
     final body = jsonDecode(response.body);

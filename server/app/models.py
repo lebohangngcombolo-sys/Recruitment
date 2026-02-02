@@ -14,8 +14,9 @@ class User(db.Model):
     password = db.Column(db.String(200), nullable=False)
     role = db.Column(db.String(50), default='candidate')
 
-    profile = db.Column(JSON, default=dict)
-    settings = db.Column(JSON, default=dict)
+    profile = db.Column(JSON, default=lambda: {})
+    settings = db.Column(JSON, default=lambda: {})
+
     is_verified = db.Column(db.Boolean, default=False)
     enrollment_completed = db.Column(db.Boolean, default=False)
     dark_mode = db.Column(db.Boolean, default=False)
