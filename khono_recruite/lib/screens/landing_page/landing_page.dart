@@ -193,7 +193,7 @@ class LandingPage extends StatelessWidget {
                   title: "MEET OUR TEAM",
                   description:
                       "Our team is made up of diverse talents committed to delivering innovative digital solutions.",
-                  backgroundImage: 'assets/images/bg4.jpg',
+                  backgroundImage: 'assets/images/bg3.jpeg',
                   child: Center(
                     child: Wrap(
                       spacing: 20,
@@ -240,7 +240,7 @@ class LandingPage extends StatelessWidget {
                   title: "CONTACT US",
                   description:
                       "Reach out to us for collaborations, inquiries, or digital transformation solutions.",
-                  backgroundImage: 'assets/images/bg4.jpg',
+                  backgroundImage: 'assets/images/bg3.jpeg',
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

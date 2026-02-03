@@ -99,6 +99,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
   @override
   void initState() {
     super.initState();
+    _bootstrapAuthFromToken();
     fetchStats();
     fetchPowerBIStatus();
     fetchAudits(page: 1);
@@ -115,6 +116,20 @@ class _AdminDAshboardState extends State<AdminDAshboard>
     _sidebarWidthAnimation = Tween<double>(begin: 260, end: 72).animate(
       CurvedAnimation(parent: _sidebarAnimController, curve: Curves.easeInOut),
     );
+  }
+
+  Future<void> _bootstrapAuthFromToken() async {
+    if (widget.token.isEmpty) return;
+    try {
+      await AuthService.saveToken(widget.token);
+      final userProfile = await AuthService.getUserProfile(widget.token);
+      final user = userProfile['user'] ?? userProfile;
+      if (user is Map<String, dynamic>) {
+        await AuthService.saveUserInfo(user);
+      }
+    } catch (_) {
+      // Best-effort: avoid blocking dashboard load
+    }
   }
 
   @override

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../constants/app_colors.dart';
 import '../../../providers/theme_provider.dart';
 import '../../../services/websocket_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/admin_service.dart';
 import 'meeting_screen.dart';
 
@@ -32,11 +33,52 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
   bool _isLoading = true;
   bool _isSending = false;
 
+  // Cache user ID locally for synchronous access
+  int? _cachedUserId;
+
   @override
   void initState() {
     super.initState();
     _initializeChat();
     _loadTeamData();
+    _loadUserId();
+  }
+
+  /// Load user ID asynchronously and cache it
+  Future<void> _loadUserId() async {
+    try {
+      // Try WebSocketService first (fastest, already connected)
+      final wsUserId = _webSocketService?.userId;
+      if (wsUserId != null) {
+        _cachedUserId = wsUserId;
+        return;
+      }
+      // Fallback to AuthService (handles int, double, string including "42.0")
+      final userInfo = await AuthService.getUserInfo();
+      final parsed = _safeUserIdFromDynamic(userInfo?['id']);
+      if (parsed != null) {
+        _cachedUserId = parsed;
+      }
+      // Never overwrite _cachedUserId with null - preserves existing valid value
+    } catch (e) {
+      debugPrint('Error loading user ID: $e');
+    } finally {
+      if (mounted) setState(() {});
+    }
+  }
+
+  /// Safely parses user ID from dynamic (int, double, string e.g. "42.0")
+  static int? _safeUserIdFromDynamic(dynamic id) {
+    if (id == null) return null;
+    if (id is int) return id;
+    if (id is double) return id.toInt();
+    if (id is String) {
+      final i = int.tryParse(id);
+      if (i != null) return i;
+      final d = double.tryParse(id);
+      return d?.toInt();
+    }
+    return null;
   }
 
   Future<void> _initializeChat() async {
@@ -54,9 +96,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
       // Update presence to online
       _webSocketService!.updatePresence('online');
 
-      setState(() {
-        _isConnected = true;
-      });
+      final uid = _webSocketService?.userId;
+      if (uid != null) _cachedUserId = uid;
+      setState(() => _isConnected = true);
+      // Ensure user ID is cached (in case onConnected hasn't fired yet)
+      await _loadUserId();
     } catch (e) {
       debugPrint("Error initializing chat: $e");
       setState(() {
@@ -69,9 +113,9 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
     if (_webSocketService == null) return;
 
     _webSocketService!.onConnected = () {
-      setState(() {
-        _isConnected = true;
-      });
+      final uid = _webSocketService?.userId;
+      if (uid != null) _cachedUserId = uid;
+      setState(() => _isConnected = true);
     };
 
     _webSocketService!.onDisconnected = () {
@@ -419,11 +463,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           width: 280,
           child: Column(
             children: [
-              _buildTeamMembersPanel(themeProvider),
+              Expanded(child: _buildTeamMembersPanel(themeProvider)),
               const SizedBox(height: 16),
               _buildQuickActionsPanel(themeProvider),
               const SizedBox(height: 16),
-              _buildSharedNotesPanel(themeProvider),
+              Expanded(child: _buildSharedNotesPanel(themeProvider)),
             ],
           ),
         ),
@@ -495,10 +539,14 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           if (_teamMembers.isEmpty)
             _buildEmptyTeamState(themeProvider)
           else
-            Column(
-              children: _teamMembers
-                  .map((member) => _buildTeamMemberTile(member, themeProvider))
-                  .toList(),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _teamMembers.length,
+                itemBuilder: (context, index) {
+                  final member = _teamMembers[index];
+                  return _buildTeamMemberTile(member, themeProvider);
+                },
+              ),
             ),
         ],
       ),
@@ -1381,7 +1429,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                 style: GoogleFonts.inter(
                   color: themeProvider.isDarkMode ? Colors.white : Colors.black,
                 ),
-                enabled: _currentThreadId != null && !_isSending,
+                enabled: !_isSending,
                 onChanged: (value) {
                   if (_currentThreadId != null && _webSocketService != null) {
                     _webSocketService!
@@ -1410,8 +1458,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               ],
             ),
             child: IconButton(
-              onPressed:
-                  _currentThreadId != null && !_isSending ? _sendMessage : null,
+              onPressed: !_isSending ? _sendMessage : null,
               icon: _isSending
                   ? const SizedBox(
                       width: 20,
@@ -1434,8 +1481,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
   // All other methods remain exactly the same (unchanged)
   Future<void> _sendMessage() async {
-    if (_messageController.text.trim().isEmpty || _currentThreadId == null)
-      return;
+    if (_messageController.text.trim().isEmpty) return;
 
     setState(() {
       _isSending = true;
@@ -1444,22 +1490,39 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
     try {
       final content = _messageController.text.trim();
 
-      // Send via WebSocket for real-time
-      _webSocketService?.sendMessage(
-        threadId: _currentThreadId!,
+      // Create a default thread if none selected
+      if (_currentThreadId == null) {
+        final participantIds = _teamMembers.map((m) => m.userId).toList();
+        final newThread = await _apiService.createChatThread(
+          title: 'Team Chat',
+          participantIds: participantIds,
+        );
+        setState(() {
+          _currentThreadId = newThread['id'];
+          _currentThreadTitle = newThread['title'] ?? 'Team Chat';
+          _chatThreads.insert(0, newThread);
+        });
+      }
+
+      final threadId = _currentThreadId!;
+
+      // Send via API for persistence (also broadcasts to other participants)
+      final response = await _apiService.sendMessage(
+        threadId: threadId,
         content: content,
       );
 
-      // Also send via API for persistence
-      await _apiService.sendMessage(
-        threadId: _currentThreadId!,
-        content: content,
-      );
+      final messageData = response['message_data'] ?? response;
+      if (messageData is Map<String, dynamic>) {
+        setState(() {
+          _messages.insert(0, ChatMessage.fromJson(messageData));
+        });
+      }
 
       _messageController.clear();
 
       // Clear typing indicator
-      _webSocketService?.sendTyping(_currentThreadId!, false);
+      _webSocketService?.sendTyping(threadId, false);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -2056,9 +2119,18 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
   }
 
   int _getCurrentUserId() {
-    // This should be replaced with actual user ID from authentication
-    // For now, return 1 as a placeholder
-    return 1;
+    // Return cached value if available
+    if (_cachedUserId != null) return _cachedUserId!;
+
+    // Try WebSocketService synchronously
+    if (_webSocketService?.userId != null) {
+      _cachedUserId = _webSocketService!.userId;
+      return _cachedUserId!;
+    }
+
+    // Last resort: return 0 (no message will match, isCurrentUser will be false)
+    // Prefer this over throwing to avoid build-time crashes
+    return 0;
   }
 
   String _formatTimeAgo(DateTime dateTime) {
