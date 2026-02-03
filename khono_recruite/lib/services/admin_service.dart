@@ -771,7 +771,11 @@ class AdminService {
     );
 
     if (res.statusCode == 201) {
-      return json.decode(res.body);
+      final data = json.decode(res.body);
+      if (data is Map<String, dynamic>) {
+        return data['thread'] ?? data;
+      }
+      return {};
     }
     throw Exception('Failed to create chat thread: ${res.body}');
   }
@@ -780,7 +784,7 @@ class AdminService {
     final token = await AuthService.getAccessToken();
 
     final res = await http.get(
-      Uri.parse('${ApiEndpoints.getChatThread}/$threadId'),
+      Uri.parse(ApiEndpoints.getChatThread(threadId)),
       headers: {...headers, 'Authorization': 'Bearer $token'},
     );
 
@@ -798,7 +802,7 @@ class AdminService {
     final params = <String, String>{'limit': limit.toString()};
     if (before != null) params['before'] = before;
 
-    final uri = Uri.parse('${ApiEndpoints.getChatThread}/$threadId/messages')
+    final uri = Uri.parse(ApiEndpoints.getChatMessages(threadId))
         .replace(queryParameters: params);
 
     final res = await http.get(
@@ -822,7 +826,7 @@ class AdminService {
     final token = await AuthService.getAccessToken();
 
     final res = await http.post(
-      Uri.parse('${ApiEndpoints.getChatThread}/$threadId/messages'),
+      Uri.parse(ApiEndpoints.sendChatMessage(threadId)),
       headers: {...headers, 'Authorization': 'Bearer $token'},
       body: json.encode({
         'content': content,
@@ -844,7 +848,7 @@ class AdminService {
     final token = await AuthService.getAccessToken();
 
     final res = await http.post(
-      Uri.parse('${ApiEndpoints.getChatThread}/$threadId/mark-read'),
+      Uri.parse(ApiEndpoints.markMessagesAsRead(threadId)),
       headers: {...headers, 'Authorization': 'Bearer $token'},
       body: json.encode({
         'message_ids': messageIds ?? [],
@@ -940,7 +944,13 @@ class AdminService {
 
     if (res.statusCode == 200) {
       final data = json.decode(res.body);
-      return data['users'] ?? [];
+      if (data is List) {
+        return data;
+      }
+      if (data is Map<String, dynamic>) {
+        return data['users'] ?? [];
+      }
+      return [];
     }
 
     throw Exception("Failed to load users: ${res.body}");
