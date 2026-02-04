@@ -1,3 +1,32 @@
 server/scripts/token.pickle
 server/token.pickle
 server/scripts/credentials.json
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.staging
+
+# Python cache files
+*.pyc
+__pycache__/
+**/__pycache__/
+*.pyo
+*.pyd
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+server/instance/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
