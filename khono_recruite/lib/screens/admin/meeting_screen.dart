@@ -173,11 +173,11 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -227,7 +227,7 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                     fillColor: (themeProvider.isDarkMode
                             ? const Color(0xFF14131E)
                             : Colors.grey.shade50)
-                        .withOpacity(0.9),
+                        .withValues(alpha: 0.9),
                     filled: true,
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 12),
@@ -320,7 +320,7 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
 
     return Card(
       color: (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-          .withOpacity(0.9),
+          .withValues(alpha: 0.9),
       margin: const EdgeInsets.symmetric(vertical: 6),
       elevation: 2,
       shape: RoundedRectangleBorder(
@@ -392,7 +392,7 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
           backgroundColor: (themeProvider.isDarkMode
                   ? const Color(0xFF14131E)
                   : Colors.white)
-              .withOpacity(0.95),
+              .withValues(alpha: 0.95),
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(meeting != null ? 'Edit Meeting' : 'Create Meeting',
@@ -415,7 +415,7 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                     fillColor: (themeProvider.isDarkMode
                             ? const Color(0xFF14131E)
                             : Colors.grey.shade50)
-                        .withOpacity(0.9),
+                        .withValues(alpha: 0.9),
                     labelStyle: GoogleFonts.inter(
                       color: themeProvider.isDarkMode
                           ? Colors.grey.shade400
@@ -441,7 +441,7 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                     fillColor: (themeProvider.isDarkMode
                             ? const Color(0xFF14131E)
                             : Colors.grey.shade50)
-                        .withOpacity(0.9),
+                        .withValues(alpha: 0.9),
                     labelStyle: GoogleFonts.inter(
                       color: themeProvider.isDarkMode
                           ? Colors.grey.shade400
@@ -466,7 +466,7 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                     fillColor: (themeProvider.isDarkMode
                             ? const Color(0xFF14131E)
                             : Colors.grey.shade50)
-                        .withOpacity(0.9),
+                        .withValues(alpha: 0.9),
                     labelStyle: GoogleFonts.inter(
                       color: themeProvider.isDarkMode
                           ? Colors.grey.shade400
@@ -491,7 +491,7 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                     fillColor: (themeProvider.isDarkMode
                             ? const Color(0xFF14131E)
                             : Colors.grey.shade50)
-                        .withOpacity(0.9),
+                        .withValues(alpha: 0.9),
                     labelStyle: GoogleFonts.inter(
                       color: themeProvider.isDarkMode
                           ? Colors.grey.shade400
@@ -716,7 +716,6 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
   }
 
   void _cancelMeeting(Meeting meeting) async {
-    final primaryRed = const Color.fromRGBO(151, 18, 8, 1);
     try {
       await _apiService.cancelMeeting(meeting.id);
       await _loadMeetings();
@@ -729,7 +728,6 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
   }
 
   void _deleteMeeting(Meeting meeting) async {
-    final primaryRed = const Color.fromRGBO(151, 18, 8, 1);
     try {
       await _apiService.deleteMeeting(meeting.id);
       await _loadMeetings();
@@ -743,7 +741,6 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
 
   void _showMeetingDetailsDialog(Meeting meeting) {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    final primaryRed = const Color.fromRGBO(151, 18, 8, 1);
 
     showDialog(
         context: context,
@@ -751,7 +748,7 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
               backgroundColor: (themeProvider.isDarkMode
                       ? const Color(0xFF14131E)
                       : Colors.white)
-                  .withOpacity(0.95),
+                  .withValues(alpha: 0.95),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16)),
               title: Text(

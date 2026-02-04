@@ -24,12 +24,12 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
   final Color _primaryDark = Colors.white; // Background
   final Color _cardDark = Colors.white; // Card background
   final Color _accentRed = Color(0xFFE53935); // Main red
-  final Color _accentPurple = Color(0xFFD32F2F); // Dark red
   final Color _accentBlue = Color(0xFFEF5350); // Light red
   final Color _accentGreen = Color(0xFF43A047); // Success
   final Color _textPrimary = Colors.black; // Main text
   final Color _textSecondary = Colors.redAccent; // Secondary text
-  final Color _surfaceOverlay = Colors.red.withOpacity(0.1); // subtle overlay
+  final Color _surfaceOverlay =
+      Colors.red.withValues(alpha: 0.1); // subtle overlay
 
   @override
   void initState() {
@@ -77,7 +77,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
         border: Border.all(color: _surfaceOverlay),
         boxShadow: [
           BoxShadow(
-            color: Colors.red.withOpacity(0.1),
+            color: Colors.red.withValues(alpha: 0.1),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -133,7 +133,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
                   pointColorMapper: (_ChartData data, _) =>
                       data.label == 'Score'
                           ? color
-                          : _textSecondary.withOpacity(0.1),
+                          : _textSecondary.withValues(alpha: 0.1),
                   radius: '100%',
                   innerRadius: '75%',
                   dataLabelSettings: const DataLabelSettings(isVisible: false),
@@ -158,7 +158,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
         border: Border.all(color: _surfaceOverlay),
         boxShadow: [
           BoxShadow(
-            color: Colors.red.withOpacity(0.1),
+            color: Colors.red.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -196,14 +196,14 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            color.withOpacity(0.15),
-                            color.withOpacity(0.08),
+                            color.withValues(alpha: 0.15),
+                            color.withValues(alpha: 0.08),
                           ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: color.withOpacity(0.3)),
+                        border: Border.all(color: color.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -240,12 +240,12 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                statusColor.withOpacity(0.1),
-                statusColor.withOpacity(0.05),
+                statusColor.withValues(alpha: 0.1),
+                statusColor.withValues(alpha: 0.05),
               ],
             ),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: statusColor.withOpacity(0.2)),
+            border: Border.all(color: statusColor.withValues(alpha: 0.2)),
           ),
           child: Text(
             status,
@@ -263,16 +263,19 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
             gradient: LinearGradient(
               colors: passFail == "Pass"
                   ? [
-                      _accentGreen.withOpacity(0.1),
-                      _accentGreen.withOpacity(0.05)
+                      _accentGreen.withValues(alpha: 0.1),
+                      _accentGreen.withValues(alpha: 0.05)
                     ]
-                  : [_accentRed.withOpacity(0.1), _accentRed.withOpacity(0.05)],
+                  : [
+                      _accentRed.withValues(alpha: 0.1),
+                      _accentRed.withValues(alpha: 0.05)
+                    ],
             ),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: passFail == "Pass"
-                  ? _accentGreen.withOpacity(0.2)
-                  : _accentRed.withOpacity(0.2),
+                  ? _accentGreen.withValues(alpha: 0.2)
+                  : _accentRed.withValues(alpha: 0.2),
             ),
           ),
           child: Row(
@@ -315,7 +318,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
         border: Border.all(color: _surfaceOverlay),
         boxShadow: [
           BoxShadow(
-            color: Colors.red.withOpacity(0.1),
+            color: Colors.red.withValues(alpha: 0.1),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -402,13 +405,13 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
                         horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       color: assessmentScore >= 60
-                          ? _accentGreen.withOpacity(0.1)
-                          : _accentRed.withOpacity(0.1),
+                          ? _accentGreen.withValues(alpha: 0.1)
+                          : _accentRed.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: assessmentScore >= 60
-                            ? _accentGreen.withOpacity(0.2)
-                            : _accentRed.withOpacity(0.2),
+                            ? _accentGreen.withValues(alpha: 0.2)
+                            : _accentRed.withValues(alpha: 0.2),
                       ),
                     ),
                     child: Row(
@@ -469,9 +472,9 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: _accentRed.withOpacity(0.1),
+                color: _accentRed.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _accentRed.withOpacity(0.2)),
+                border: Border.all(color: _accentRed.withValues(alpha: 0.2)),
               ),
               child: Row(
                 children: [
@@ -670,7 +673,8 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
                                       Container(
                                         padding: const EdgeInsets.all(8),
                                         decoration: BoxDecoration(
-                                          color: _accentRed.withOpacity(0.2),
+                                          color:
+                                              _accentRed.withValues(alpha: 0.2),
                                           borderRadius:
                                               BorderRadius.circular(12),
                                         ),

@@ -30,7 +30,9 @@ class CandidateProfileDialog extends StatelessWidget {
                   radius: 30,
                   backgroundColor: AppColors.primaryRed.withValues(alpha: 0.1),
                   child: Text(
-                    candidate.name.isNotEmpty ? candidate.name[0].toUpperCase() : 'C',
+                    candidate.name.isNotEmpty
+                        ? candidate.name[0].toUpperCase()
+                        : 'C',
                     style: const TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -76,9 +78,9 @@ class CandidateProfileDialog extends StatelessWidget {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             // Match Score
             Container(
               padding: const EdgeInsets.all(16),
@@ -101,9 +103,9 @@ class CandidateProfileDialog extends StatelessWidget {
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Skills
             if (candidate.skills.isNotEmpty) ...[
               const Text(
@@ -120,7 +122,8 @@ class CandidateProfileDialog extends StatelessWidget {
                 runSpacing: 4,
                 children: candidate.skills.map((skill) {
                   return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: AppColors.primaryRed.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(16),
@@ -137,7 +140,7 @@ class CandidateProfileDialog extends StatelessWidget {
               ),
               const SizedBox(height: 16),
             ],
-            
+
             // Status and Applied Date
             Row(
               children: [
@@ -155,9 +158,11 @@ class CandidateProfileDialog extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: _getStatusColor(candidate.status).withValues(alpha: 0.1),
+                          color: _getStatusColor(candidate.status)
+                              .withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
@@ -197,23 +202,22 @@ class CandidateProfileDialog extends StatelessWidget {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 24),
-            
-            // Actions
+
+            // Action Buttons
             Row(
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      // TODO: Implement view full profile
                       Navigator.of(context).pop();
                     },
                     icon: const Icon(Icons.person, size: 16),
                     label: const Text('View Full Profile'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryRed.withValues(alpha: 0.1),
-                      foregroundColor: AppColors.primaryRed,
+                      backgroundColor: Colors.grey,
+                      foregroundColor: Colors.white,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
@@ -223,7 +227,6 @@ class CandidateProfileDialog extends StatelessWidget {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      // TODO: Implement schedule interview
                       Navigator.of(context).pop();
                     },
                     icon: const Icon(Icons.calendar_today, size: 16),
@@ -257,4 +260,4 @@ class CandidateProfileDialog extends StatelessWidget {
         return AppColors.textGrey;
     }
   }
-} 
+}
