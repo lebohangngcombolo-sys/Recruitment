@@ -5,7 +5,6 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
-import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -93,7 +92,6 @@ class _AdminDAshboardState extends State<AdminDAshboard>
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
   String _profileImageUrl = "";
-  final ImagePicker _picker = ImagePicker();
   final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
   @override
@@ -145,15 +143,6 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       }
     } catch (e) {
       debugPrint("Error fetching profile image: $e");
-    }
-  }
-
-  Future<void> _pickProfileImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      if (kIsWeb) _profileImageBytes = await pickedFile.readAsBytes();
-      setState(() => _profileImage = pickedFile);
-      await uploadProfileImage();
     }
   }
 
@@ -350,8 +339,6 @@ class _AdminDAshboardState extends State<AdminDAshboard>
     });
   }
 
-  bool _isLoggingOut = false;
-
   // ---------- UI Build ----------
   @override
   Widget build(BuildContext context) {
@@ -388,7 +375,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                       boxShadow: [
                         BoxShadow(
                           color: const Color.fromARGB(255, 20, 19, 30)
-                              .withOpacity(0.02),
+                              .withValues(alpha: 0.02),
                           blurRadius: 8,
                           offset: const Offset(2, 0),
                         ),
@@ -552,8 +539,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                     Container(
                       height: 72,
                       color: themeProvider.isDarkMode
-                          ? const Color(0xFF14131E).withOpacity(0.8)
-                          : Colors.white.withOpacity(0.8),
+                          ? const Color(0xFF14131E).withValues(alpha: 0.8)
+                          : Colors.white.withValues(alpha: 0.8),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
@@ -565,18 +552,18 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                                 decoration: BoxDecoration(
                                   color: (themeProvider.isDarkMode
                                       ? const Color(0xFF14131E)
-                                      : Colors.white.withOpacity(0.8)),
+                                      : Colors.white.withValues(alpha: 0.8)),
                                   borderRadius: BorderRadius.circular(40),
                                   border: Border.all(
                                     color: themeProvider.isDarkMode
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.black.withOpacity(0.05),
+                                        ? Colors.white.withValues(alpha: 0.1)
+                                        : Colors.black.withValues(alpha: 0.05),
                                   ),
                                   boxShadow: [
                                     BoxShadow(
                                       color: themeProvider.isDarkMode
-                                          ? Colors.black.withOpacity(0.3)
-                                          : Colors.grey.withOpacity(0.2),
+                                          ? Colors.black.withValues(alpha: 0.3)
+                                          : Colors.grey.withValues(alpha: 0.2),
                                       blurRadius: 10,
                                       offset: const Offset(0, 4),
                                     ),
@@ -613,7 +600,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                                     fontFamily: 'Poppins',
                                     color: themeProvider.isDarkMode
                                         ? Colors.white
-                                        : Colors.black.withOpacity(0.8),
+                                        : Colors.black.withValues(alpha: 0.8),
                                     fontSize: 14,
                                   ),
                                 ),
@@ -682,8 +669,9 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                                     boxShadow: [
                                       BoxShadow(
                                         color: powerBIConnected
-                                            ? Colors.green.withOpacity(0.6)
-                                            : Colors.red.withOpacity(0.6),
+                                            ? Colors.green
+                                                .withValues(alpha: 0.6)
+                                            : Colors.red.withValues(alpha: 0.6),
                                         blurRadius: 12,
                                         spreadRadius: 2,
                                       ),
@@ -815,7 +803,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       onTap: () => setState(() => currentScreen = screenKey),
       child: Container(
         color: selected
-            ? const Color.fromRGBO(151, 18, 8, 1).withOpacity(0.06)
+            ? const Color.fromRGBO(151, 18, 8, 1).withValues(alpha: 0.06)
             : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
@@ -926,7 +914,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: Colors.redAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: Row(
@@ -961,7 +949,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                     fillColor: (themeProvider.isDarkMode
                             ? const Color(0xFF14131E)
                             : Colors.white)
-                        .withOpacity(0.9),
+                        .withValues(alpha: 0.9),
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 10),
                     border: OutlineInputBorder(
@@ -982,7 +970,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                   color: (themeProvider.isDarkMode
                           ? const Color(0xFF14131E)
                           : Colors.white)
-                      .withOpacity(0.9),
+                      .withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: DropdownButtonHideUnderline(
@@ -1016,11 +1004,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               color: (themeProvider.isDarkMode
                       ? const Color(0xFF14131E)
                       : Colors.white)
-                  .withOpacity(0.9),
+                  .withValues(alpha: 0.9),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: Colors.redAccent.withValues(alpha: 0.1),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
@@ -1131,11 +1119,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               color: (themeProvider.isDarkMode
                       ? const Color(0xFF14131E)
                       : Colors.white)
-                  .withOpacity(0.9),
+                  .withValues(alpha: 0.9),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
+                  color: Colors.grey.withValues(alpha: 0.1),
                   blurRadius: 15,
                   offset: const Offset(0, 8),
                 ),
@@ -1176,7 +1164,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
 
                       return ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: color.withOpacity(0.15),
+                          backgroundColor: color.withValues(alpha: 0.15),
                           child: Icon(icon, color: color),
                         ),
                         title: Text(
@@ -1195,7 +1183,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: color.withOpacity(0.1),
+                            color: color.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
@@ -1320,11 +1308,12 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                       color: (themeProvider.isDarkMode
                               ? const Color(0xFF14131E)
                               : Colors.white)
-                          .withOpacity(0.9),
+                          .withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: (item["color"] as Color).withOpacity(0.1),
+                          color:
+                              (item["color"] as Color).withValues(alpha: 0.1),
                           blurRadius: 15,
                           offset: const Offset(0, 6),
                         ),
@@ -1377,11 +1366,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1406,7 +1395,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: Colors.redAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1459,7 +1448,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                   width: 60,
                   height: 60,
                   decoration: BoxDecoration(
-                    color: Colors.redAccent.withOpacity(0.1),
+                    color: Colors.redAccent.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.redAccent, width: 2),
                   ),
@@ -1485,11 +1474,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1514,8 +1503,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color:
-                      const Color.fromARGB(255, 153, 26, 26).withOpacity(0.1),
+                  color: const Color.fromARGB(255, 153, 26, 26)
+                      .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1584,11 +1573,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1613,8 +1602,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color:
-                      const Color.fromARGB(255, 153, 26, 26).withOpacity(0.1),
+                  color: const Color.fromARGB(255, 153, 26, 26)
+                      .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1679,11 +1668,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1708,8 +1697,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color:
-                      const Color.fromARGB(255, 153, 26, 26).withOpacity(0.1),
+                  color: const Color.fromARGB(255, 153, 26, 26)
+                      .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1787,11 +1776,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.blueGrey.withOpacity(0.1),
+            color: Colors.blueGrey.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1801,8 +1790,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.blue.shade900.withOpacity(0.3),
-                  Colors.purple.shade900.withOpacity(0.3),
+                  Colors.blue.shade900.withValues(alpha: 0.3),
+                  Colors.purple.shade900.withValues(alpha: 0.3),
                 ],
               )
             : LinearGradient(
@@ -1826,7 +1815,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: const Color.fromARGB(255, 153, 26, 26)
-                          .withOpacity(0.1),
+                          .withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.calendar_month,
@@ -1848,7 +1837,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.blueAccent.withOpacity(0.1),
+                  color: Colors.blueAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: StreamBuilder(
@@ -1875,11 +1864,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               color: (themeProvider.isDarkMode
                       ? const Color(0xFF14131E)
                       : Colors.white)
-                  .withOpacity(0.9),
+                  .withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -1920,96 +1909,6 @@ class _AdminDAshboardState extends State<AdminDAshboard>
     );
   }
 
-  Widget _calendarStat(String label, String value, Color color) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            Icons.circle_rounded,
-            color: color,
-            size: 6,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: color,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 9,
-            color: Colors.grey.shade600,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _calendarLegend(Color color, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          text,
-          style: const TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w500, fontFamily: 'Poppins'),
-        ),
-      ],
-    );
-  }
-
-  List<Appointment> _getAppointments() {
-    final now = DateTime.now();
-    return [
-      Appointment(
-        startTime: now.add(const Duration(days: 1, hours: 10)),
-        endTime: now.add(const Duration(days: 1, hours: 11)),
-        subject: 'Technical Interview',
-        color: Colors.blueAccent,
-      ),
-      Appointment(
-        startTime: now.add(const Duration(days: 2, hours: 14)),
-        endTime: now.add(const Duration(days: 2, hours: 15)),
-        subject: 'HR Meeting',
-        color: Colors.green,
-      ),
-      Appointment(
-        startTime: now.add(const Duration(days: 3, hours: 9)),
-        endTime: now.add(const Duration(days: 3, hours: 10)),
-        subject: 'CV Review Deadline',
-        color: Colors.orange,
-      ),
-      Appointment(
-        startTime: now.add(const Duration(days: 5, hours: 11)),
-        endTime: now.add(const Duration(days: 5, hours: 12)),
-        subject: 'Candidate Screening',
-        color: Colors.purple,
-      ),
-    ];
-  }
-
   Widget activitiesCard() {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
@@ -2018,11 +1917,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -2036,7 +1935,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: Colors.redAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.timeline,
@@ -2069,7 +1968,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                     color: (themeProvider.isDarkMode
                             ? const Color(0xFF14131E)
                             : Colors.grey.shade50)
-                        .withOpacity(0.9),
+                        .withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: Colors.grey.shade200),
                   ),
@@ -2141,7 +2040,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
+                      color: Colors.black.withValues(alpha: 0.08),
                       blurRadius: 6,
                       offset: const Offset(0, 3),
                     ),
@@ -2157,7 +2056,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -2242,10 +2141,4 @@ class _ChartData {
   final String label;
   final int value;
   _ChartData(this.label, this.value);
-}
-
-class _MeetingDataSource extends CalendarDataSource {
-  _MeetingDataSource(List<Appointment> source) {
-    appointments = source;
-  }
 }

@@ -27,12 +27,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
   final Color _primaryDark = Colors.white; // Background
   final Color _cardDark = Colors.white; // Card background
   final Color _accentRed = Color(0xFFE53935); // Main red
-  final Color _accentPurple = Color(0xFFD32F2F); // Dark red
-  final Color _accentBlue = Color(0xFFEF5350); // Light red
-  final Color _accentGreen = Color(0xFF43A047); // Success
   final Color _textPrimary = Colors.black; // Main text
-  final Color _textSecondary = Colors.redAccent; // Secondary text
-  final Color _surfaceOverlay = Colors.red.withOpacity(0.1); // subtle overlay
 
   @override
   void initState() {
@@ -317,10 +312,10 @@ class _AssessmentPageState extends State<AssessmentPage> {
                 decoration: BoxDecoration(
                   color: _cardDark,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: _accentRed.withOpacity(0.3)),
+                  border: Border.all(color: _accentRed.withValues(alpha: 0.3)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
+                      color: Colors.black.withValues(alpha: 0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -347,10 +342,10 @@ class _AssessmentPageState extends State<AssessmentPage> {
                           return Container(
                             margin: const EdgeInsets.only(bottom: 8),
                             decoration: BoxDecoration(
-                              color: _primaryDark.withOpacity(0.5),
+                              color: _primaryDark.withValues(alpha: 0.5),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: _accentRed.withOpacity(0.2),
+                                color: _accentRed.withValues(alpha: 0.2),
                               ),
                             ),
                             child: RadioListTile<String>(
@@ -359,8 +354,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
                                 style: TextStyle(color: _textPrimary),
                               ),
                               value: optionLabel,
-                              groupValue: answers[
-                                  index], // already prefilled from draft
+                              groupValue: answers[index],
                               onChanged: (val) {
                                 setState(() {
                                   answers[index] = val!;
@@ -368,7 +362,8 @@ class _AssessmentPageState extends State<AssessmentPage> {
                               },
                               activeColor: _accentRed,
                               tileColor: Colors.transparent,
-                              selectedTileColor: _accentRed.withOpacity(0.1),
+                              selectedTileColor:
+                                  _accentRed.withValues(alpha: 0.1),
                             ),
                           );
                         }),

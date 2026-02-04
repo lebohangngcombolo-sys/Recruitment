@@ -3228,11 +3228,10 @@ def get_upcoming_meetings():
             query = query.filter(Meeting.cancelled == False)
 
         # user is organizer OR participant
-        from sqlalchemy.dialects.postgresql import JSONB
         query = query.filter(
             or_(
                 Meeting.organizer_id == user_id,
-                Meeting.participants.cast(JSONB).contains([user_email])
+                Meeting.participants.contains([user_email])
             )
         )
 

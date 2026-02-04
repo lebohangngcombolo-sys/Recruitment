@@ -1,7 +1,6 @@
 from app.extensions import db
 from datetime import datetime
 from sqlalchemy.dialects.postgresql import JSON
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 import enum
 
@@ -682,7 +681,7 @@ class Meeting(db.Model):
     start_time = db.Column(db.DateTime, nullable=False)
     end_time = db.Column(db.DateTime, nullable=False)
     organizer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    participants = db.Column(JSONB, nullable=False, default=[])  # list of user emails or IDs
+    participants = db.Column(JSON, nullable=False, default=[])  # list of user emails or IDs
     meeting_link = db.Column(db.String(500))
     location = db.Column(db.String(500))
     meeting_type = db.Column(db.String(50), default="general")
@@ -916,8 +915,8 @@ class Offer(db.Model):
 
     # Compensation
     base_salary = db.Column(db.Numeric(12, 2), nullable=True)
-    allowances = db.Column(JSONB, default=dict, nullable=False)
-    bonuses = db.Column(JSONB, default=dict, nullable=False)
+    allowances = db.Column(JSON, default=dict, nullable=False)
+    bonuses = db.Column(JSON, default=dict, nullable=False)
 
     # Contract details
     contract_type = db.Column(db.String(50))

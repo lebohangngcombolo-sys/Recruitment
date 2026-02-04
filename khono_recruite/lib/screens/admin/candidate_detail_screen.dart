@@ -1,4 +1,4 @@
-import 'dart:html' as html; // For web download
+import 'package:web/web.dart' as web; // For web download
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'dart:convert';
@@ -192,9 +192,10 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
       }
 
       if (kIsWeb) {
-        final anchor = html.AnchorElement(href: cvUrl)
-          ..setAttribute("download", "cv_$fullName.pdf")
-          ..click();
+        final link = web.document.createElement('a') as web.HTMLAnchorElement;
+        link.href = cvUrl;
+        link.download = "cv_$fullName.pdf";
+        link.click();
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Download started")),
@@ -239,10 +240,10 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
             color: isDark ? Colors.white : Colors.black87,
           ),
         ),
-        backgroundColor:
-            (isDark ? const Color(0xFF14131E) : Colors.white).withOpacity(0.95),
+        backgroundColor: (isDark ? const Color(0xFF14131E) : Colors.white)
+            .withValues(alpha: 0.95),
         elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.1),
+        shadowColor: Colors.black.withValues(alpha: 0.1),
         actions: [
           IconButton(
             onPressed: fetchAllData,
@@ -280,8 +281,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
               strokeWidth: 3,
               valueColor: AlwaysStoppedAnimation<Color>(
                   isDark ? Colors.white : Colors.black87),
-              backgroundColor:
-                  (isDark ? Colors.white : Colors.black87).withOpacity(0.2),
+              backgroundColor: (isDark ? Colors.white : Colors.black87)
+                  .withValues(alpha: 0.2),
             ),
           ),
           const SizedBox(height: 20),
@@ -303,7 +304,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: Colors.red.shade50.withOpacity(0.9),
+          color: Colors.red.shade50.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.red.shade200),
         ),
@@ -393,26 +394,26 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
           end: Alignment.bottomRight,
           colors: isDark
               ? [
-                  Color(0xFF1E1B2E).withOpacity(0.9),
-                  Color(0xFF14131E).withOpacity(0.9),
+                  Color(0xFF1E1B2E).withValues(alpha: 0.9),
+                  Color(0xFF14131E).withValues(alpha: 0.9),
                 ]
               : [
-                  Colors.white.withOpacity(0.95),
-                  Colors.grey.shade50.withOpacity(0.95),
+                  Colors.white.withValues(alpha: 0.95),
+                  Colors.grey.shade50.withValues(alpha: 0.95),
                 ],
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 25,
             offset: const Offset(0, 10),
           ),
         ],
         border: Border.all(
           color: isDark
-              ? Colors.white.withOpacity(0.1)
-              : Colors.black.withOpacity(0.05),
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.black.withValues(alpha: 0.05),
         ),
       ),
       child: Row(
@@ -424,8 +425,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Colors.blueAccent.withOpacity(0.2),
-                  Colors.purpleAccent.withOpacity(0.3),
+                  Colors.blueAccent.withValues(alpha: 0.2),
+                  Colors.purpleAccent.withValues(alpha: 0.3),
                 ],
               ),
               shape: BoxShape.circle,
@@ -498,11 +499,12 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: _getStatusColor(candidateData!['status']).withOpacity(0.1),
+              color: _getStatusColor(candidateData!['status'])
+                  .withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color:
-                    _getStatusColor(candidateData!['status']).withOpacity(0.3),
+                color: _getStatusColor(candidateData!['status'])
+                    .withValues(alpha: 0.3),
               ),
             ),
             child: Row(
@@ -671,26 +673,26 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
           end: Alignment.bottomRight,
           colors: isDark
               ? [
-                  Color(0xFF1E1B2E).withOpacity(0.8),
-                  Color(0xFF14131E).withOpacity(0.9),
+                  Color(0xFF1E1B2E).withValues(alpha: 0.8),
+                  Color(0xFF14131E).withValues(alpha: 0.9),
                 ]
               : [
-                  Colors.white.withOpacity(0.95),
-                  Colors.grey.shade50.withOpacity(0.95),
+                  Colors.white.withValues(alpha: 0.95),
+                  Colors.grey.shade50.withValues(alpha: 0.95),
                 ],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 15,
             offset: const Offset(0, 6),
           ),
         ],
         border: Border.all(
           color: isDark
-              ? Colors.white.withOpacity(0.1)
-              : Colors.black.withOpacity(0.05),
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.black.withValues(alpha: 0.05),
         ),
       ),
       child: Stack(
@@ -705,7 +707,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.blueAccent.withOpacity(0.1),
+                        color: Colors.blueAccent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(icon, size: 20, color: Colors.blueAccent),
@@ -735,7 +737,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
                 icon: Icon(actionIcon,
                     size: 20, color: isDark ? Colors.white : Colors.black87),
                 style: IconButton.styleFrom(
-                  backgroundColor: Colors.blueAccent.withOpacity(0.1),
+                  backgroundColor: Colors.blueAccent.withValues(alpha: 0.1),
                   padding: const EdgeInsets.all(6),
                 ),
               ),
@@ -799,9 +801,9 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: color.withOpacity(0.3)),
+              border: Border.all(color: color.withValues(alpha: 0.3)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -828,10 +830,13 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
+        color:
+            isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade200,
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.grey.shade200,
         ),
       ),
       child: Row(
