@@ -14,7 +14,6 @@ import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
 
 // ------------------- API Base URL -------------------
-const String candidateBase = "http://127.0.0.1:5000/api/candidate";
 
 class ProfilePage extends StatefulWidget {
   final String token;
@@ -24,8 +23,7 @@ class ProfilePage extends StatefulWidget {
   _ProfilePageState createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage>
-    with TickerProviderStateMixin {
+class _ProfilePageState extends State<ProfilePage> {
   bool loading = true;
   bool showProfileSummary = true;
 
@@ -655,7 +653,7 @@ class _ProfilePageState extends State<ProfilePage>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 16,
             offset: const Offset(0, 8),
           ),
@@ -668,7 +666,7 @@ class _ProfilePageState extends State<ProfilePage>
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: headerColor ?? Colors.redAccent.withOpacity(0.1),
+              color: headerColor ?? Colors.redAccent.withValues(alpha: 0.1),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(20),
                 topRight: Radius.circular(20),
@@ -692,6 +690,36 @@ class _ProfilePageState extends State<ProfilePage>
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    fullNameController.dispose();
+    emailController.dispose();
+    phoneController.dispose();
+    genderController.dispose();
+    dobController.dispose();
+    nationalityController.dispose();
+    idNumberController.dispose();
+    bioController.dispose();
+    locationController.dispose();
+    titleController.dispose();
+
+    degreeController.dispose();
+    institutionController.dispose();
+    graduationYearController.dispose();
+    skillsController.dispose();
+    workExpController.dispose();
+    jobTitleController.dispose();
+    companyController.dispose();
+    yearsOfExpController.dispose();
+    linkedinController.dispose();
+    githubController.dispose();
+    portfolioController.dispose();
+    cvTextController.dispose();
+    cvUrlController.dispose();
+
+    super.dispose();
   }
 
   @override
@@ -743,7 +771,7 @@ class _ProfilePageState extends State<ProfilePage>
                     : Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 8,
                     offset: const Offset(2, 0),
                   ),
@@ -821,7 +849,7 @@ class _ProfilePageState extends State<ProfilePage>
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.1),
+                              color: Colors.green.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: Colors.green),
                             ),
@@ -875,7 +903,7 @@ class _ProfilePageState extends State<ProfilePage>
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Material(
         color:
-            isSelected ? Colors.redAccent.withOpacity(0.1) : Colors.transparent,
+            isSelected ? Colors.redAccent.withValues(alpha: 0.1) : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: () {
@@ -968,7 +996,7 @@ class _ProfilePageState extends State<ProfilePage>
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                       ),
                     ],
@@ -1003,8 +1031,8 @@ class _ProfilePageState extends State<ProfilePage>
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: _mfaEnabled
-                            ? Colors.green.withOpacity(0.1)
-                            : Colors.orange.withOpacity(0.1),
+                            ? Colors.green.withValues(alpha: 0.1)
+                            : Colors.orange.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
@@ -1207,7 +1235,7 @@ class _ProfilePageState extends State<ProfilePage>
                   ),
                 ],
               ),
-              headerColor: Colors.blue.withOpacity(0.1),
+              headerColor: Colors.blue.withValues(alpha: 0.1),
             ),
           ],
 
@@ -1228,7 +1256,7 @@ class _ProfilePageState extends State<ProfilePage>
                     "Your account is now protected with 2FA"),
               ],
             ),
-            headerColor: Colors.purple.withOpacity(0.1),
+            headerColor: Colors.purple.withValues(alpha: 0.1),
           ),
         ],
       ),
@@ -1258,7 +1286,7 @@ class _ProfilePageState extends State<ProfilePage>
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: Colors.blue, size: 20),
@@ -1311,7 +1339,7 @@ class _ProfilePageState extends State<ProfilePage>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 18),
@@ -1411,17 +1439,6 @@ class _ProfilePageState extends State<ProfilePage>
   Widget _buildProfileSummary() {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
-    Future<void> _launchUrl(String url) async {
-      final uri = Uri.tryParse(url) ?? Uri();
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Could not launch URL")),
-        );
-      }
-    }
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -1441,7 +1458,7 @@ class _ProfilePageState extends State<ProfilePage>
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                       ),
                     ],
@@ -1465,7 +1482,7 @@ class _ProfilePageState extends State<ProfilePage>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: Colors.redAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -1527,7 +1544,7 @@ class _ProfilePageState extends State<ProfilePage>
                 ],
               ],
             ),
-            headerColor: Colors.blue.withOpacity(0.1),
+            headerColor: Colors.blue.withValues(alpha: 0.1),
           ),
 
           // Education & Skills Card
@@ -1565,7 +1582,7 @@ class _ProfilePageState extends State<ProfilePage>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.redAccent.withOpacity(0.1),
+                          color: Colors.redAccent.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Text(
@@ -1582,7 +1599,7 @@ class _ProfilePageState extends State<ProfilePage>
                 ],
               ],
             ),
-            headerColor: Colors.green.withOpacity(0.1),
+            headerColor: Colors.green.withValues(alpha: 0.1),
           ),
 
           // Online Profiles Card
@@ -1604,7 +1621,7 @@ class _ProfilePageState extends State<ProfilePage>
                         "Portfolio", portfolioController.text, Icons.public),
                 ],
               ),
-              headerColor: Colors.purple.withOpacity(0.1),
+              headerColor: Colors.purple.withValues(alpha: 0.1),
             ),
         ],
       ),
@@ -1716,7 +1733,7 @@ class _ProfilePageState extends State<ProfilePage>
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                       ),
                     ],
@@ -1993,7 +2010,7 @@ class _ProfilePageState extends State<ProfilePage>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.redAccent.withOpacity(0.1),
+              color: Colors.redAccent.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: Colors.redAccent, size: 20),
@@ -2054,7 +2071,7 @@ class _ProfilePageState extends State<ProfilePage>
 
       try {
         final response = await http.post(
-          Uri.parse("$candidateBase/settings/change_password"),
+          Uri.parse("$apiBase/settings/change_password"),
           headers: {
             "Authorization": "Bearer ${widget.token}",
             "Content-Type": "application/json",

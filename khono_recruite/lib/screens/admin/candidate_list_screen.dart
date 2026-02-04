@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:vector_math/vector_math_64.dart' as vm;
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/auth_service.dart';
 import '../../utils/api_endpoints.dart';
@@ -18,7 +19,9 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
   bool loading = true;
 
   // Track hovered card
-  int? hoveredIndex;
+
+
+
 
   @override
   void initState() {
@@ -76,7 +79,7 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
             backgroundColor: (themeProvider.isDarkMode
                     ? const Color(0xFF14131E)
                     : Colors.white)
-                .withOpacity(0.9),
+                .withAlpha((255 * 0.9).round()),
             elevation: 0,
             foregroundColor:
                 themeProvider.isDarkMode ? Colors.white : Colors.black87,
@@ -152,11 +155,11 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                             color: (themeProvider.isDarkMode
                                     ? const Color(0xFF14131E)
                                     : Colors.white)
-                                .withOpacity(0.9),
+                                .withAlpha((255 * 0.9).round()),
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
+                                color: Colors.black.withAlpha((255 * 0.05).round()),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
@@ -167,7 +170,7 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.redAccent.withOpacity(0.1),
+                                  color: Colors.redAccent.withAlpha((255 * 0.1).round()),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Icon(
@@ -206,7 +209,7 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 16, vertical: 8),
                                 decoration: BoxDecoration(
-                                  color: Colors.redAccent.withOpacity(0.1),
+                                  color: Colors.redAccent.withAlpha((255 * 0.1).round()),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
@@ -261,23 +264,21 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                             const Duration(milliseconds: 200),
                                         transform: isHovered
                                             ? (Matrix4.identity()
-                                              ..translate(0, -8, 0))
+                                              ..translateByVector3(vm.Vector3(0, -8, 0)))
                                             : Matrix4.identity(),
                                         width: cardWidth,
                                         decoration: BoxDecoration(
                                           color: (themeProvider.isDarkMode
                                                   ? const Color(0xFF14131E)
                                                   : Colors.white)
-                                              .withOpacity(0.9),
+                                              .withAlpha((255 * 0.9).round()),
                                           borderRadius:
                                               BorderRadius.circular(20),
                                           boxShadow: [
                                             BoxShadow(
                                               color: isHovered
-                                                  ? Colors.redAccent
-                                                      .withOpacity(0.15)
-                                                  : Colors.black
-                                                      .withOpacity(0.08),
+                                                  ? Colors.redAccent.withAlpha((255 * 0.15).round())
+                                                  : Colors.black.withAlpha((255 * 0.08).round()),
                                               blurRadius: isHovered ? 25 : 15,
                                               offset: const Offset(0, 8),
                                             ),
@@ -285,7 +286,7 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                           border: Border.all(
                                             color: themeProvider.isDarkMode
                                                 ? Colors.grey.shade800
-                                                : Colors.grey.withOpacity(0.1),
+                                                : Colors.grey.withAlpha((255 * 0.1).round()),
                                           ),
                                         ),
                                         child: Column(
@@ -297,7 +298,7 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                               padding: const EdgeInsets.all(20),
                                               decoration: BoxDecoration(
                                                 color: Colors.redAccent
-                                                    .withOpacity(0.03),
+                                                    .withAlpha((255 * 0.03).round()),
                                                 borderRadius:
                                                     const BorderRadius.only(
                                                   topLeft: Radius.circular(20),
@@ -317,14 +318,13 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                                             BoxDecoration(
                                                           color: Colors
                                                               .redAccent
-                                                              .withOpacity(0.1),
+                                                              .withAlpha((255 * 0.1).round()),
                                                           shape:
                                                               BoxShape.circle,
                                                           border: Border.all(
                                                             color: Colors
                                                                 .redAccent
-                                                                .withOpacity(
-                                                                    0.2),
+                                                                .withAlpha((255 * 0.2).round()),
                                                             width: 2,
                                                           ),
                                                         ),
@@ -348,8 +348,7 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                                                     size: 30,
                                                                     color: Colors
                                                                         .redAccent
-                                                                        .withOpacity(
-                                                                            0.6),
+                                                                        .withAlpha((255 * 0.6).round()),
                                                                   ),
                                                       ),
                                                       Positioned(
@@ -479,8 +478,7 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                                               BoxShadow(
                                                                 color: Colors
                                                                     .blue
-                                                                    .withOpacity(
-                                                                        0.3),
+                                                                    .withAlpha((255 * 0.3).round()),
                                                                 blurRadius: 8,
                                                                 offset:
                                                                     const Offset(
@@ -539,8 +537,7 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                                             BoxShadow(
                                                               color: Colors
                                                                   .redAccent
-                                                                  .withOpacity(
-                                                                      0.3),
+                                                                  .withAlpha((255 * 0.3).round()),
                                                               blurRadius: 8,
                                                               offset:
                                                                   const Offset(

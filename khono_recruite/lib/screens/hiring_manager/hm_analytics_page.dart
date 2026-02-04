@@ -227,8 +227,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          AppColors.primaryRed.withOpacity(0.05),
-          Colors.blue.withOpacity(0.05),
+          AppColors.primaryRed.withValues(alpha: 0.05),
+          Colors.blue.withValues(alpha: 0.05),
         ],
       ),
       child: Padding(
@@ -248,7 +248,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryRed.withOpacity(0.1),
+                    color: AppColors.primaryRed.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${_monthlyApps.length} months',
@@ -313,8 +313,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Colors.green.withOpacity(0.05),
-          Colors.teal.withOpacity(0.05),
+          Colors.green.withValues(alpha: 0.05),
+          Colors.teal.withValues(alpha: 0.05),
         ],
       ),
       child: Padding(
@@ -334,7 +334,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
+                    color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${data.length} roles',
@@ -395,8 +395,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Colors.purple.withOpacity(0.05),
-          Colors.blue.withOpacity(0.05),
+          Colors.purple.withValues(alpha: 0.05),
+          Colors.blue.withValues(alpha: 0.05),
         ],
       ),
       child: Padding(
@@ -416,7 +416,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.purple.withOpacity(0.1),
+                    color: Colors.purple.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Text('Trend',
@@ -484,8 +484,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Colors.orange.withOpacity(0.05),
-          Colors.amber.withOpacity(0.05),
+          Colors.orange.withValues(alpha: 0.05),
+          Colors.amber.withValues(alpha: 0.05),
         ],
       ),
       child: Padding(
@@ -505,7 +505,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
+                    color: Colors.orange.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${data.length} categories',
@@ -556,8 +556,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Colors.blue.withOpacity(0.05),
-          Colors.indigo.withOpacity(0.05),
+          Colors.blue.withValues(alpha: 0.05),
+          Colors.indigo.withValues(alpha: 0.05),
         ],
       ),
       child: Padding(
@@ -577,7 +577,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${topSkills.length} skills',
@@ -642,8 +642,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Colors.teal.withOpacity(0.05),
-          Colors.green.withOpacity(0.05),
+          Colors.teal.withValues(alpha: 0.05),
+          Colors.green.withValues(alpha: 0.05),
         ],
       ),
       child: Padding(
@@ -663,7 +663,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.teal.withOpacity(0.1),
+                    color: Colors.teal.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${items.length} ranges',

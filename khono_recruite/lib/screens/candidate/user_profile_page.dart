@@ -472,7 +472,7 @@ class _ProfilePageState extends State<ProfilePage>
                                   Icons.vpn_key,
                                   color: Colors.redAccent,
                                   size: 16,
-                                ),
+                              ],
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: SelectableText(
@@ -481,7 +481,7 @@ class _ProfilePageState extends State<ProfilePage>
                                       fontSize: 16,
                                       fontWeight: FontWeight.w500,
                                       color: Colors.black,
-                                    ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -1059,7 +1059,7 @@ class _ProfilePageState extends State<ProfilePage>
                                 ),
                               ),
                             ],
-                          ),
+                          ],
                           const SizedBox(height: 16),
                           Text(
                             fullNameController.text.isNotEmpty
@@ -1113,8 +1113,7 @@ class _ProfilePageState extends State<ProfilePage>
                                 ),
                               ),
                             ],
-                          ),
-                        ],
+                          ],
                       const SizedBox(height: 40),
                       // Navigation buttons
                       _sidebarButton("Profile", Icons.person_outline_rounded),

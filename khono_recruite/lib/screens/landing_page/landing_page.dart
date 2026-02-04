@@ -281,7 +281,7 @@ class LandingPage extends StatelessWidget {
                           padding: const EdgeInsets.all(20),
                           width: 600,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
+                            color: Colors.white.withValues(alpha: 0.05),
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(color: Colors.white10),
                           ),
@@ -528,7 +528,7 @@ class _FeatureCard extends StatelessWidget {
           width: 300,
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.08),
+            color: Colors.white.withValues(alpha: 0.08),
             border: Border.all(color: Colors.white10),
             borderRadius: BorderRadius.circular(16),
           ),

@@ -25,17 +25,17 @@ class GlassCard extends StatelessWidget {
       height: height,
       decoration: BoxDecoration(
         color: gradient == null
-            ? Colors.white.withOpacity(opacity ?? 0.15)
+            ? Colors.white.withValues(alpha: opacity ?? 0.15)
             : null, // Only use color if gradient is not set
         gradient: gradient,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.white.withOpacity(0.2),
+          color: Colors.white.withValues(alpha: 0.2),
           width: 1.5,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: blur ?? 8,
             offset: const Offset(2, 4),
           ),

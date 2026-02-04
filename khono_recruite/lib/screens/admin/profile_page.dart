@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io' show File;
-import 'package:url_launcher/url_launcher.dart';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -14,7 +14,6 @@ import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
 
 // ------------------- API Base URL -------------------
-const String candidateBase = "http://127.0.0.1:5000/api/candidate";
 
 class ProfilePage extends StatefulWidget {
   final String token;
@@ -24,8 +23,7 @@ class ProfilePage extends StatefulWidget {
   _ProfilePageState createState() => _ProfilePageState();
 }
 
-class _ProfilePageState extends State<ProfilePage>
-    with TickerProviderStateMixin {
+class _ProfilePageState extends State<ProfilePage> {
   bool loading = true;
   bool showProfileSummary = true;
 
@@ -692,6 +690,36 @@ class _ProfilePageState extends State<ProfilePage>
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    fullNameController.dispose();
+    emailController.dispose();
+    phoneController.dispose();
+    genderController.dispose();
+    dobController.dispose();
+    nationalityController.dispose();
+    idNumberController.dispose();
+    bioController.dispose();
+    locationController.dispose();
+    titleController.dispose();
+
+    degreeController.dispose();
+    institutionController.dispose();
+    graduationYearController.dispose();
+    skillsController.dispose();
+    workExpController.dispose();
+    jobTitleController.dispose();
+    companyController.dispose();
+    yearsOfExpController.dispose();
+    linkedinController.dispose();
+    githubController.dispose();
+    portfolioController.dispose();
+    cvTextController.dispose();
+    cvUrlController.dispose();
+
+    super.dispose();
   }
 
   @override
@@ -2044,7 +2072,7 @@ class _ProfilePageState extends State<ProfilePage>
 
       try {
         final response = await http.post(
-          Uri.parse("$candidateBase/settings/change_password"),
+          Uri.parse("$apiBase/settings/change_password"),
           headers: {
             "Authorization": "Bearer ${widget.token}",
             "Content-Type": "application/json",

@@ -505,9 +505,9 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: item['color'].withOpacity(0.1),
+              color: item['color'].withValues(alpha: 0.1),
               shape: BoxShape.circle,
-              border: Border.all(color: item['color'].withOpacity(0.3)),
+              border: Border.all(color: item['color'].withValues(alpha: 0.3)),
             ),
             child: Icon(item['icon'], color: item['color'], size: 20),
           ),

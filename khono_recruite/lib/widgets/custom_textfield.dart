@@ -95,7 +95,7 @@ class CustomTextField extends StatelessWidget {
 
     // Default colors based on theme
     final defaultBackgroundColor =
-        isDark ? Colors.grey.shade900.withOpacity(0.7) : Colors.white;
+        isDark ? Colors.grey.shade900.withValues(alpha: 0.7) : Colors.white;
 
     final defaultTextColor = isDark ? Colors.white : Colors.black87;
     final defaultLabelColor =
@@ -223,7 +223,7 @@ class CustomTextField extends StatelessWidget {
               disabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(borderRadius),
                 borderSide: BorderSide(
-                  color: (borderColor ?? defaultBorderColor).withOpacity(0.5),
+                  color: (borderColor ?? defaultBorderColor).withValues(alpha: 0.5),
                   width: borderWidth,
                 ),
               ),

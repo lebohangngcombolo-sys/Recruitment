@@ -53,11 +53,11 @@ class CustomTextField extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: backgroundColor ??
-            const Color.fromARGB(0, 0, 0, 0).withOpacity(0.1),
+            const Color.fromARGB(0, 0, 0, 0).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
         border: border == null
             ? Border.all(
-                color: borderColor ?? Colors.white.withOpacity(0.3),
+                color: borderColor ?? Colors.white.withValues(alpha: 0.3),
               )
             : null,
       ),
@@ -78,11 +78,11 @@ class CustomTextField extends StatelessWidget {
         decoration: InputDecoration(
           labelText: label,
           labelStyle: TextStyle(
-            color: labelColor ?? textColor?.withOpacity(0.7) ?? Colors.white70,
+            color: labelColor ?? textColor?.withValues(alpha: 0.7) ?? Colors.white70,
           ),
           hintText: hintText.isNotEmpty ? hintText : null,
           hintStyle: TextStyle(
-            color: textColor?.withOpacity(0.5) ?? Colors.white54,
+            color: textColor?.withValues(alpha: 0.5) ?? Colors.white54,
           ),
 
           // ⭐ Apply border from parameter

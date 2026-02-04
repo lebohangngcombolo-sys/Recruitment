@@ -337,7 +337,7 @@ class _LoginScreenState extends State<LoginScreen>
                           inputType: TextInputType.emailAddress,
                           backgroundColor:
                               const Color.fromARGB(0, 129, 128, 128)
-                                  .withOpacity(0.1),
+                                  .withValues(alpha: 0.1),
                           textColor: const Color.fromARGB(255, 172, 0, 0),
                         ),
                         const SizedBox(height: 12),
@@ -347,7 +347,7 @@ class _LoginScreenState extends State<LoginScreen>
                           obscureText: true,
                           backgroundColor:
                               const Color.fromARGB(0, 123, 123, 123)
-                                  .withOpacity(0.1),
+                                  .withValues(alpha: 0.1),
                           textColor: const Color.fromARGB(255, 201, 0, 0),
                         ),
                         const SizedBox(height: 12),
@@ -445,7 +445,8 @@ class _LoginScreenState extends State<LoginScreen>
                           children: [
                             Expanded(
                                 child: Divider(
-                                    color: Colors.white.withOpacity(0.4))),
+                                    color:
+                                        Colors.white.withValues(alpha: 0.4))),
                             const Padding(
                               padding: EdgeInsets.symmetric(horizontal: 16),
                               child: Text("Or login with",
@@ -454,7 +455,8 @@ class _LoginScreenState extends State<LoginScreen>
                             ),
                             Expanded(
                                 child: Divider(
-                                    color: Colors.white.withOpacity(0.4))),
+                                    color:
+                                        Colors.white.withValues(alpha: 0.4))),
                           ],
                         ),
                         const SizedBox(height: 20),

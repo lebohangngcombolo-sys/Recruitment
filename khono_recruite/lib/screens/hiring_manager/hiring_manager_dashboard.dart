@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -14,13 +16,12 @@ import 'hm_analytics_page.dart';
 import 'hm_team_collaboration_page.dart';
 import 'package:http/http.dart' as http;
 
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
 
-import 'package:syncfusion_flutter_calendar/calendar.dart';
+
+
+
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
+
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
@@ -48,9 +49,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
   int? selectedJobId;
 
-  // Calendar state
-  DateTime focusedDay = DateTime.now();
-  DateTime selectedDay = DateTime.now();
+  // Calendar state - removed unused fields
 
   final AdminService admin = AdminService();
 
@@ -73,44 +72,17 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   bool checkingPowerBI = true;
   Timer? _statusTimer;
 
-  // --- Audits ---
-  List<Map<String, dynamic>> audits = [];
-  List<_ChartData> auditTrendData = [];
-  int auditPage = 1;
-  int auditPerPage = 20;
-  String? auditActionFilter;
-  DateTime? auditStartDate;
-  DateTime? auditEndDate;
-  String? auditSearchQuery;
-  bool loadingAudits = true;
-
-  TextEditingController auditSearchController = TextEditingController();
-  DateTime? filterStartDate;
-  DateTime? filterEndDate;
-  String? filterAction;
-
-  final List<String> auditActions = [
-    "login",
-    "logout",
-    "create",
-    "update",
-    "delete"
-  ];
+  // Audits removed
 
   // ---------- Profile image state ----------
-  XFile? _profileImage;
-  Uint8List? _profileImageBytes;
-  String _profileImageUrl = "";
-  final ImagePicker _picker = ImagePicker();
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+
 
   @override
   void initState() {
     super.initState();
     fetchStats();
     fetchPowerBIStatus();
-    fetchAudits(page: 1);
-    fetchProfileImage();
+
 
     _statusTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       fetchPowerBIStatus();
@@ -129,89 +101,17 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   void dispose() {
     _sidebarAnimController.dispose();
     _statusTimer?.cancel();
-    auditSearchController.dispose();
     super.dispose();
   }
 
   // ---------- Profile Image Methods ----------
-  Future<void> fetchProfileImage() async {
-    try {
-      final profileRes = await http.get(
-        Uri.parse("$apiBase/profile"),
-        headers: {
-          'Authorization': 'Bearer ${widget.token}',
-          'Content-Type': 'application/json'
-        },
-      );
 
-      if (profileRes.statusCode == 200) {
-        final data = json.decode(profileRes.body)['data'];
-        final candidate = data['candidate'] ?? {};
-        setState(() {
-          _profileImageUrl = candidate['profile_picture'] ?? "";
-        });
-      }
-    } catch (e) {
-      debugPrint("Error fetching profile image: $e");
-    }
-  }
 
-  Future<void> _pickProfileImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      if (kIsWeb) _profileImageBytes = await pickedFile.readAsBytes();
-      setState(() => _profileImage = pickedFile);
-      await uploadProfileImage();
-    }
-  }
 
-  Future<void> uploadProfileImage() async {
-    if (_profileImage == null) return;
-    try {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse("$apiBase/upload_profile_picture"),
-      );
-      request.headers['Authorization'] = 'Bearer ${widget.token}';
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'image',
-          kIsWeb
-              ? _profileImageBytes!
-              : File(_profileImage!.path).readAsBytesSync(),
-          filename: _profileImage!.name,
-        ),
-      );
 
-      var response = await request.send();
-      final respStr = await response.stream.bytesToString();
-      final respJson = json.decode(respStr);
 
-      if (response.statusCode == 200 && respJson['success'] == true) {
-        setState(() {
-          _profileImageUrl = respJson['data']['profile_picture'];
-          _profileImage = null;
-          _profileImageBytes = null;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Profile picture updated")));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Upload failed: ${response.statusCode}")));
-      }
-    } catch (e) {
-      debugPrint("Profile image upload error: $e");
-    }
-  }
 
-  ImageProvider<Object> _getProfileImageProvider() {
-    if (_profileImage != null) {
-      if (kIsWeb) return MemoryImage(_profileImageBytes!);
-      return FileImage(File(_profileImage!.path));
-    }
-    if (_profileImageUrl.isNotEmpty) return NetworkImage(_profileImageUrl);
-    return const AssetImage("assets/images/profile_placeholder.png");
-  }
+
 
   // ---------- Dashboard Stats & PowerBI ----------
   Future<void> fetchStats() async {
@@ -231,6 +131,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         activities = List<String>.from(data["recent_activities"] ?? []);
       }
 
+      if (!mounted) return;
+
       setState(() {
         jobsCount = counts["jobs"] ?? 0;
         candidatesCount = counts["candidates"] ?? 0;
@@ -241,7 +143,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         loadingStats = false;
       });
     } catch (e) {
-      setState(() => loadingStats = false);
+      if (mounted) setState(() => loadingStats = false);
       debugPrint("Error fetching dashboard stats: $e");
     }
   }
@@ -255,6 +157,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         headers: {"Authorization": "Bearer $token"},
       );
 
+      if (!mounted) return;
+
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         setState(() {
@@ -264,58 +168,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         setState(() => powerBIConnected = false);
       }
     } catch (e) {
-      setState(() => powerBIConnected = false);
+      if (mounted) setState(() => powerBIConnected = false);
     } finally {
-      setState(() => checkingPowerBI = false);
+      if (mounted) setState(() => checkingPowerBI = false);
     }
   }
 
-  Future<void> fetchAudits({int page = 1}) async {
-    setState(() => loadingAudits = true);
-    try {
-      final token = await AuthService.getAccessToken();
-      final queryParams = {
-        "page": page.toString(),
-        "per_page": auditPerPage.toString(),
-        if (auditActionFilter != null) "action": auditActionFilter!,
-        if (auditStartDate != null)
-          "start_date":
-              "${auditStartDate!.year}-${auditStartDate!.month.toString().padLeft(2, '0')}-${auditStartDate!.day.toString().padLeft(2, '0')}",
-        if (auditEndDate != null)
-          "end_date":
-              "${auditEndDate!.year}-${auditEndDate!.month.toString().padLeft(2, '0')}-${auditEndDate!.day.toString().padLeft(2, '0')}",
-        if (auditSearchQuery != null) "q": auditSearchQuery!,
-      };
-      final uri = Uri.http("127.0.0.1:5000", "/api/admin/audits", queryParams);
-      final res =
-          await http.get(uri, headers: {"Authorization": "Bearer $token"});
-
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        setState(() {
-          audits = List<Map<String, dynamic>>.from(data["results"]);
-          auditPage = data["page"];
-          auditPerPage = data["per_page"];
-          auditTrendData = audits
-              .map((e) => DateTime.parse(e["timestamp"]))
-              .fold<Map<String, int>>({}, (map, dt) {
-                final day =
-                    "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
-                map[day] = (map[day] ?? 0) + 1;
-                return map;
-              })
-              .entries
-              .map((e) => _ChartData(e.key, e.value))
-              .toList();
-          loadingAudits = false;
-        });
-      } else {
-        setState(() => loadingAudits = false);
-      }
-    } catch (e) {
-      setState(() => loadingAudits = false);
-    }
-  }
+  // fetchAudits removed
 
   void _showLogoutConfirmation(BuildContext context) {
     showDialog(
@@ -358,8 +217,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     });
   }
 
-  bool _isLoggingOut = false;
-
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -395,7 +252,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                       boxShadow: [
                         BoxShadow(
                           color: const Color.fromARGB(255, 20, 19, 30)
-                              .withOpacity(0.02),
+                              .withValues(alpha: 0.02),
                           blurRadius: 8,
                           offset: const Offset(2, 0),
                         ),
@@ -483,8 +340,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                       child: CircleAvatar(
                                         radius: 18,
                                         backgroundColor: Colors.grey.shade200,
-                                        backgroundImage:
-                                            _getProfileImageProvider(),
+                                        backgroundImage: const AssetImage("assets/images/profile_placeholder.png"),
                                         child: null,
                                       ),
                                     ),
@@ -515,7 +371,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                       radius: 18,
                                       backgroundColor: Colors.grey.shade200,
                                       backgroundImage:
-                                          _getProfileImageProvider(),
+                                          const AssetImage("assets/images/profile_placeholder.png"),
                                       child: null,
                                     ),
                                   ),
@@ -560,8 +416,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     Container(
                       height: 72,
                       color: themeProvider.isDarkMode
-                          ? const Color(0xFF14131E).withOpacity(0.8)
-                          : Colors.white.withOpacity(0.8),
+                          ? const Color(0xFF14131E).withValues(alpha: 0.8)
+                          : Colors.white.withValues(alpha: 0.8),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
@@ -573,18 +429,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                 decoration: BoxDecoration(
                                   color: (themeProvider.isDarkMode
                                       ? const Color(0xFF14131E)
-                                      : Colors.white.withOpacity(0.8)),
+                                      : Colors.white.withValues(alpha: 0.8)),
                                   borderRadius: BorderRadius.circular(40),
                                   border: Border.all(
                                     color: themeProvider.isDarkMode
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.black.withOpacity(0.05),
+                                        ? Colors.white.withValues(alpha: 0.1)
+                                        : Colors.black.withValues(alpha: 0.05),
                                   ),
                                   boxShadow: [
                                     BoxShadow(
                                       color: themeProvider.isDarkMode
-                                          ? Colors.black.withOpacity(0.3)
-                                          : Colors.grey.withOpacity(0.2),
+                                          ? Colors.black.withValues(alpha: 0.3)
+                                          : Colors.grey.withValues(alpha: 0.2),
                                       blurRadius: 10,
                                       offset: const Offset(0, 4),
                                     ),
@@ -621,7 +477,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     fontFamily: 'Poppins',
                                     color: themeProvider.isDarkMode
                                         ? Colors.white
-                                        : Colors.black.withOpacity(0.8),
+                                        : Colors.black.withValues(alpha: 0.8),
                                     fontSize: 14,
                                   ),
                                 ),
@@ -691,8 +547,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     boxShadow: [
                                       BoxShadow(
                                         color: powerBIConnected
-                                            ? Colors.green.withOpacity(0.6)
-                                            : Colors.red.withOpacity(0.6),
+                                            ? Colors.green.withValues(alpha: 0.6)
+                                            : Colors.red.withValues(alpha: 0.6),
                                         blurRadius: 12,
                                         spreadRadius: 2,
                                       ),
@@ -778,7 +634,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                   child: CircleAvatar(
                                     radius: 18,
                                     backgroundColor: Colors.grey.shade200,
-                                    backgroundImage: _getProfileImageProvider(),
+                                    backgroundImage: const AssetImage("assets/images/profile_placeholder.png"),
                                     child: null,
                                   ),
                                 ),
@@ -823,7 +679,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       onTap: () => setState(() => currentScreen = screenKey),
       child: Container(
         color: selected
-            ? const Color.fromRGBO(151, 18, 8, 1).withOpacity(0.06)
+            ? const Color.fromRGBO(151, 18, 8, 1).withValues(alpha: 0.06)
             : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
@@ -999,11 +855,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                       color: (themeProvider.isDarkMode
                               ? const Color(0xFF14131E)
                               : Colors.white)
-                          .withOpacity(0.9),
+                          .withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: (item["color"] as Color).withOpacity(0.1),
+                          color: (item["color"] as Color).withValues(alpha: 0.1),
                           blurRadius: 15,
                           offset: const Offset(0, 6),
                         ),
@@ -1065,11 +921,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1079,8 +935,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.red.shade900.withOpacity(0.2),
-                  Colors.red.shade800.withOpacity(0.1),
+                  Colors.red.shade900.withValues(alpha: 0.2),
+                  Colors.red.shade800.withValues(alpha: 0.1),
                 ],
               )
             : LinearGradient(
@@ -1088,7 +944,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 end: Alignment.bottomRight,
                 colors: [
                   Colors.red.shade50,
-                  Colors.red.shade100.withOpacity(0.3),
+                  Colors.red.shade100.withValues(alpha: 0.3),
                 ],
               ),
       ),
@@ -1109,7 +965,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text("${data.length} stages",
@@ -1182,11 +1038,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1196,8 +1052,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.blue.shade900.withOpacity(0.2),
-                  Colors.purple.shade800.withOpacity(0.1),
+                  Colors.blue.shade900.withValues(alpha: 0.2),
+                  Colors.purple.shade800.withValues(alpha: 0.1),
                 ],
               )
             : LinearGradient(
@@ -1226,7 +1082,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -1305,11 +1161,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.purple.withOpacity(0.1),
+            color: Colors.purple.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1319,8 +1175,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.purple.shade900.withOpacity(0.2),
-                  Colors.indigo.shade800.withOpacity(0.1),
+                  Colors.purple.shade900.withValues(alpha: 0.2),
+                  Colors.indigo.shade800.withValues(alpha: 0.1),
                 ],
               )
             : LinearGradient(
@@ -1441,11 +1297,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.green.withOpacity(0.1),
+            color: Colors.green.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1455,8 +1311,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.green.shade900.withOpacity(0.2),
-                  Colors.teal.shade800.withOpacity(0.1),
+                  Colors.green.shade900.withValues(alpha: 0.2),
+                  Colors.teal.shade800.withValues(alpha: 0.1),
                 ],
               )
             : LinearGradient(
@@ -1485,7 +1341,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text("${messages.length} updates",
@@ -1507,11 +1363,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: themeProvider.isDarkMode
-                        ? Colors.black.withOpacity(0.3)
+                        ? Colors.black.withValues(alpha: 0.3)
                         : Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: Colors.green.withOpacity(0.2),
+                      color: Colors.green.withValues(alpha: 0.2),
                     ),
                   ),
                   child: Row(
@@ -1558,11 +1414,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.orange.withOpacity(0.1),
+            color: Colors.orange.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1572,8 +1428,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.orange.shade900.withOpacity(0.2),
-                  Colors.amber.shade800.withOpacity(0.1),
+                  Colors.orange.shade900.withValues(alpha: 0.2),
+                  Colors.amber.shade800.withValues(alpha: 0.1),
                 ],
               )
             : LinearGradient(
@@ -1599,7 +1455,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
+                  color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text("${activities.length} items",
@@ -1630,7 +1486,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: themeProvider.isDarkMode
-                              ? Colors.black.withOpacity(0.3)
+                              ? Colors.black.withValues(alpha: 0.3)
                               : Colors.white,
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -1676,11 +1532,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.blueGrey.withOpacity(0.1),
+            color: Colors.blueGrey.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1690,8 +1546,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.blue.shade900.withOpacity(0.3),
-                  Colors.purple.shade900.withOpacity(0.3),
+                  Colors.blue.shade900.withValues(alpha: 0.3),
+                  Colors.purple.shade900.withValues(alpha: 0.3),
                 ],
               )
             : LinearGradient(
@@ -1715,7 +1571,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: const Color.fromARGB(255, 153, 26, 26)
-                          .withOpacity(0.1),
+                          .withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.calendar_month,
@@ -1737,7 +1593,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.blueAccent.withOpacity(0.1),
+                  color: Colors.blueAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: StreamBuilder(
@@ -1764,11 +1620,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               color: (themeProvider.isDarkMode
                       ? const Color(0xFF14131E)
                       : Colors.white)
-                  .withOpacity(0.9),
+                  .withValues(alpha: 0.9),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -1833,7 +1689,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
+                      color: Colors.black.withValues(alpha: 0.08),
                       blurRadius: 6,
                       offset: const Offset(0, 3),
                     ),
@@ -1849,7 +1705,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1893,51 +1749,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 }
 
 // Data classes for charts
-class _DepartmentData {
-  final String department;
-  final int count;
-  final Color color;
-  _DepartmentData(this.department, this.count, this.color);
-}
 
-class _HistogramData {
-  final String jobRole;
-  final int candidateCount;
-  _HistogramData(this.jobRole, this.candidateCount);
-}
-
-class _InterviewData {
-  final String status;
-  final int count;
-  _InterviewData(this.status, this.count);
-}
-
-class _CvReviewData {
-  final String week;
-  final int reviewsCompleted;
-  final int reviewsPending;
-  _CvReviewData(this.week, this.reviewsCompleted, this.reviewsPending);
-}
-
-class StackedLineData {
-  final String month;
-  final int login;
-  final int logout;
-  final int create;
-  final int update;
-  final int delete;
-  StackedLineData(this.month, this.login, this.logout, this.create, this.update,
-      this.delete);
-}
+// StackedLineData removed
 
 class _ChartData {
   final String label;
   final int value;
   _ChartData(this.label, this.value);
-}
-
-class _MeetingDataSource extends CalendarDataSource {
-  _MeetingDataSource(List<Appointment> source) {
-    appointments = source;
-  }
 }

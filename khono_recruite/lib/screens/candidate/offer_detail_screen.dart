@@ -467,7 +467,7 @@ class _CandidateOfferDetailScreenState
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: (color ?? Theme.of(context).primaryColor).withOpacity(0.1),
+              color: (color ?? Theme.of(context).primaryColor).withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon,
