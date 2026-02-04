@@ -1,4 +1,4 @@
-import 'dart:html' as html; // For web download
+import 'package:web/web.dart' as web; // For web download
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'dart:convert';
@@ -146,9 +146,10 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
       }
 
       if (kIsWeb) {
-        final anchor = html.AnchorElement(href: cvUrl)
-          ..setAttribute("download", "cv_$fullName.pdf")
-          ..click();
+        final anchor = web.document.createElement('a') as web.HTMLAnchorElement;
+        anchor.href = cvUrl;
+        anchor.download = 'cv_$fullName.pdf';
+        anchor.click();
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Download started")),
@@ -194,7 +195,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
               onPressed: () => Navigator.pop(context),
             ),
             title: Text(candidateData?['full_name'] ?? "Candidate Details"),
-            backgroundColor: Colors.black87.withOpacity(0.8),
+            backgroundColor: Colors.black87.withValues(alpha: 0.8),
             elevation: 0,
           ),
           body: loading
@@ -392,7 +393,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
             color: (themeProvider.isDarkMode
                     ? const Color(0xFF14131E)
                     : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
                 color: themeProvider.isDarkMode ? Colors.white24 : Colors.white,
@@ -489,7 +490,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
     return Drawer(
       backgroundColor:
           (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-              .withOpacity(0.9),
+              .withValues(alpha: 0.9),
       child: SafeArea(
         child: ListView(
           padding: EdgeInsets.zero,

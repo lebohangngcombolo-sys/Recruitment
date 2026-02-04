@@ -38,7 +38,7 @@ dependencies:
   vector_math: ^2.1.4
   file_picker: ^10.3.3
   qr_flutter: ^4.1.0
-  
+  web: ^1.0.0
 
 dev_dependencies:
   flutter_test:
