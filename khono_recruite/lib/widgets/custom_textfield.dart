@@ -95,7 +95,7 @@ class CustomTextField extends StatelessWidget {
 
     // Default colors based on theme
     final defaultBackgroundColor =
-        isDark ? Colors.grey.shade900.withOpacity(0.7) : Colors.white;
+        isDark ? Colors.grey.shade900.withValues(alpha: 0.7) : Colors.white;
 
     final defaultTextColor = isDark ? Colors.white : Colors.black87;
     final defaultLabelColor =
@@ -223,7 +223,8 @@ class CustomTextField extends StatelessWidget {
               disabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(borderRadius),
                 borderSide: BorderSide(
-                  color: (borderColor ?? defaultBorderColor).withOpacity(0.5),
+                  color: (borderColor ?? defaultBorderColor)
+                      .withValues(alpha: 0.5),
                   width: borderWidth,
                 ),
               ),
@@ -292,6 +293,34 @@ class CustomTextField extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+
+  // Static method to create login fields with specified styling
+  static Widget buildLoginFields({
+    required TextEditingController emailController,
+    required TextEditingController passwordController,
+  }) {
+    return Column(
+      children: [
+        CustomTextField(
+          label: "Email",
+          controller: emailController,
+          inputType: TextInputType.emailAddress,
+          backgroundColor: Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
+          textColor: Color(0xFFC10D00), // #c10d00
+          borderColor: Color(0xFFC10D00), // #c10d00 stroke
+        ),
+        const SizedBox(height: 12),
+        CustomTextField(
+          label: "Password",
+          controller: passwordController,
+          obscureText: true,
+          backgroundColor: Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
+          textColor: Color(0xFFC10D00), // #c10d00
+          borderColor: Color(0xFFC10D00), // #c10d00 stroke
+        ),
+      ],
     );
   }
 }

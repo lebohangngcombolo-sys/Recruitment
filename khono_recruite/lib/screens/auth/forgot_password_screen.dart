@@ -81,7 +81,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                   icon: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.4),
+                      color: Colors.black.withValues(alpha: 0.4),
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: Colors.white24),
                     ),
@@ -114,7 +114,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
@@ -124,12 +124,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           ),
                         ),
                         const SizedBox(height: 16),
-                        const Text(
+                        Text(
                           "FORGOT PASSWORD",
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
+                            fontFamily: 'Poppins',
                             shadows: [
                               Shadow(
                                   color: Colors.black26,
@@ -139,9 +140,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           ),
                         ),
                         const SizedBox(height: 16),
-                        const Text(
+                        Text(
                           "Enter your email to receive reset instructions",
-                          style: TextStyle(fontSize: 16, color: Colors.white70),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white70,
+                            fontFamily: 'Poppins',
+                          ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 24),
@@ -149,10 +154,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           label: "Email",
                           controller: emailController,
                           inputType: TextInputType.emailAddress,
-                          textColor: Colors.white,
-                          backgroundColor: Colors.transparent,
-                          borderColor: Colors.white.withOpacity(0.3),
-                          focusedBorderColor: Colors.white,
+                          backgroundColor:
+                              Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
+                          textColor: Color(0xFFC10D00), // #c10d00
+                          borderColor: Color(0xFFC10D00), // #c10d00 stroke
                           borderRadius: 15,
                           borderWidth: 1,
                           focusedBorderWidth: 1.5,
@@ -165,7 +170,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           child: ElevatedButton(
                             onPressed: loading ? null : submit,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
+                              backgroundColor: const Color(0xFFC10D00),
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius:
@@ -183,11 +188,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                                           Colors.white),
                                     ),
                                   )
-                                : const Text(
+                                : Text(
                                     "SUBMIT",
                                     style: TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
+                                      fontFamily: 'Poppins',
                                     ),
                                   ),
                           ),
@@ -197,7 +203,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: IconButton(
@@ -222,7 +228,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
           if (loading)
             Container(
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withValues(alpha: 0.5),
               child: const Center(
                 child: CircularProgressIndicator(
                   color: Colors.white,

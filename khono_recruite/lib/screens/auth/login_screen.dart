@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart';
 import '../hiring_manager/hiring_manager_dashboard.dart';
@@ -308,9 +309,9 @@ class _LoginScreenState extends State<LoginScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const SizedBox(height: 16),
-                        const Text(
+                        Text(
                           "WELCOME BACK",
-                          style: TextStyle(
+                          style: GoogleFonts.poppins(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
@@ -323,12 +324,13 @@ class _LoginScreenState extends State<LoginScreen>
                           ),
                         ),
                         const SizedBox(height: 24),
-                        const Text(
+                        Text(
                           "Login",
-                          style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white),
+                          style: GoogleFonts.poppins(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
                         const SizedBox(height: 24),
                         CustomTextField(
@@ -336,9 +338,9 @@ class _LoginScreenState extends State<LoginScreen>
                           controller: emailController,
                           inputType: TextInputType.emailAddress,
                           backgroundColor:
-                              const Color.fromARGB(0, 129, 128, 128)
-                                  .withOpacity(0.1),
-                          textColor: const Color.fromARGB(255, 172, 0, 0),
+                              Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
+                          textColor: Color(0xFFC10D00), // #c10d00
+                          borderColor: Color(0xFFC10D00), // #c10d00 stroke
                         ),
                         const SizedBox(height: 12),
                         CustomTextField(
@@ -346,9 +348,9 @@ class _LoginScreenState extends State<LoginScreen>
                           controller: passwordController,
                           obscureText: true,
                           backgroundColor:
-                              const Color.fromARGB(0, 123, 123, 123)
-                                  .withOpacity(0.1),
-                          textColor: const Color.fromARGB(255, 201, 0, 0),
+                              Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
+                          textColor: Color(0xFFC10D00), // #c10d00
+                          borderColor: Color(0xFFC10D00), // #c10d00 stroke
                         ),
                         const SizedBox(height: 12),
                         Align(
@@ -359,22 +361,25 @@ class _LoginScreenState extends State<LoginScreen>
                               MaterialPageRoute(
                                   builder: (_) => const ForgotPasswordScreen()),
                             ),
-                            child: const Text(
+                            child: Text(
                               "Forgot Password?",
-                              style: TextStyle(
-                                  color: Colors.blueAccent, fontSize: 14),
+                              style: GoogleFonts.poppins(
+                                color: const Color(0xFFC10D00), // C10D00 color
+                                fontSize: 14,
+                              ),
                             ),
                           ),
                         ),
                         const SizedBox(height: 20),
-                        // Updated Login Button - Medium size and Red color
+                        // Updated Login Button - Medium size and C10D00 color
                         SizedBox(
                           width: 200, // Medium width
                           height: 44, // Medium height
                           child: ElevatedButton(
                             onPressed: loading ? null : _login,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red, // Red background
+                              backgroundColor:
+                                  const Color(0xFFC10D00), // C10D00 background
                               foregroundColor: Colors.white, // White text
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(20)),
@@ -390,16 +395,17 @@ class _LoginScreenState extends State<LoginScreen>
                                           Colors.white),
                                     ),
                                   )
-                                : const Text(
+                                : Text(
                                     "LOGIN",
-                                    style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold),
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                           ),
                         ),
                         const SizedBox(height: 16),
-                        // 🆕 Enterprise SSO Button - White with red text and icon
+                        // 🆕 Enterprise SSO Button - White with C10D00 text and icon
                         SizedBox(
                           width: 200, // Same medium width as login button
                           height: 44, // Same medium height as login button
@@ -415,23 +421,24 @@ class _LoginScreenState extends State<LoginScreen>
                                     ),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white, // White background
-                              foregroundColor: Colors.red, // Red text
+                              foregroundColor:
+                                  const Color(0xFFC10D00), // C10D00 text
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(20)),
                               elevation: 5,
                             ),
-                            child: const Row(
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
                                   Icons.business,
                                   size: 18,
-                                  color: Colors.red,
+                                  color: const Color(0xFFC10D00), // C10D00 icon
                                 ),
-                                SizedBox(width: 8),
+                                const SizedBox(width: 8),
                                 Text(
                                   "Enterprise SSO",
-                                  style: TextStyle(
+                                  style: GoogleFonts.poppins(
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -445,16 +452,23 @@ class _LoginScreenState extends State<LoginScreen>
                           children: [
                             Expanded(
                                 child: Divider(
-                                    color: Colors.white.withOpacity(0.4))),
-                            const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 16),
-                              child: Text("Or login with",
-                                  style: TextStyle(
-                                      color: Colors.white70, fontSize: 14)),
+                                    color:
+                                        Colors.white.withValues(alpha: 0.4))),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: Text(
+                                "Or login with",
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                ),
+                              ),
                             ),
                             Expanded(
                                 child: Divider(
-                                    color: Colors.white.withOpacity(0.4))),
+                                    color:
+                                        Colors.white.withValues(alpha: 0.4))),
                           ],
                         ),
                         const SizedBox(height: 20),
@@ -480,8 +494,12 @@ class _LoginScreenState extends State<LoginScreen>
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Text("Don't have an account? ",
-                                style: TextStyle(color: Colors.white70)),
+                            Text(
+                              "Don't have an account? ",
+                              style: GoogleFonts.poppins(
+                                color: Colors.white70,
+                              ),
+                            ),
                             GestureDetector(
                               onTap: loading
                                   ? null
@@ -491,8 +509,13 @@ class _LoginScreenState extends State<LoginScreen>
                                             builder: (_) =>
                                                 const RegisterScreen()),
                                       ),
-                              child: const Text("Register",
-                                  style: TextStyle(color: Colors.redAccent)),
+                              child: Text(
+                                "Register",
+                                style: GoogleFonts.poppins(
+                                  color:
+                                      const Color(0xFFC10D00), // C10D00 color
+                                ),
+                              ),
                             ),
                           ],
                         ),

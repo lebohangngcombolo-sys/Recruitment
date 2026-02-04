@@ -19,8 +19,6 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   List<Map<String, dynamic>> _applications = [];
   List<Map<String, dynamic>> _interviews = [];
   List<Map<String, dynamic>> _offers = [];
-  List<Map<String, dynamic>> _candidatesReadyForOffer = [];
-  Map<String, dynamic> _pipelineStats = {};
   Map<String, dynamic> _quickStats = {};
   List<Map<String, dynamic>> _pipelineStages = [];
   Map<String, dynamic> _analytics = {};
@@ -54,7 +52,6 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
       final analyticsData = await _recruitmentService.loadAnalyticsData();
 
       setState(() {
-        _pipelineStats = pipelineData['stats'] ?? {};
         _quickStats = pipelineData['quickStats'] ?? {};
         _pipelineStages =
             List<Map<String, dynamic>>.from(pipelineData['stages'] ?? []);
@@ -65,8 +62,6 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         _interviews =
             List<Map<String, dynamic>>.from(pipelineData['interviews'] ?? []);
         _offers = List<Map<String, dynamic>>.from(pipelineData['offers'] ?? []);
-        _candidatesReadyForOffer = List<Map<String, dynamic>>.from(
-            pipelineData['readyCandidates'] ?? []);
 
         _requisitions =
             List<Map<String, dynamic>>.from(requisitionsData['jobs'] ?? []);
@@ -92,7 +87,6 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
       final refreshedData = await _recruitmentService.refreshAllData();
 
       setState(() {
-        _pipelineStats = refreshedData['stats'] ?? {};
         _applications = List<Map<String, dynamic>>.from(
             refreshedData['applications'] ?? []);
         _interviews =
@@ -101,8 +95,6 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             List<Map<String, dynamic>>.from(refreshedData['offers'] ?? []);
         _requisitions =
             List<Map<String, dynamic>>.from(refreshedData['jobs'] ?? []);
-        _candidatesReadyForOffer = List<Map<String, dynamic>>.from(
-            refreshedData['readyCandidates'] ?? []);
 
         _activeJobs =
             _requisitions.where((r) => r['status'] == 'active').length;
@@ -130,7 +122,6 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             filter: _selectedFilter == 'all' ? null : _selectedFilter,
           );
           setState(() {
-            _pipelineStats = pipelineData['stats'] ?? {};
             _quickStats = pipelineData['quickStats'] ?? {};
             _pipelineStages =
                 List<Map<String, dynamic>>.from(pipelineData['stages'] ?? []);
@@ -140,8 +131,6 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                 pipelineData['interviews'] ?? []);
             _offers =
                 List<Map<String, dynamic>>.from(pipelineData['offers'] ?? []);
-            _candidatesReadyForOffer = List<Map<String, dynamic>>.from(
-                pipelineData['readyCandidates'] ?? []);
           });
           break;
 
@@ -289,7 +278,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -432,9 +421,9 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.2)),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -452,7 +441,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             label,
             style: GoogleFonts.inter(
               fontSize: 12,
-              color: color.withOpacity(0.8),
+              color: color.withValues(alpha: 0.8),
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -607,7 +596,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           boxShadow: isActive
               ? [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -736,7 +725,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 15,
             offset: const Offset(0, 4),
           ),
@@ -748,7 +737,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 24),
@@ -822,7 +811,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -840,7 +829,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
+                    color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -856,7 +845,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: recommendationColor.withOpacity(0.1),
+                    color: recommendationColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
@@ -945,7 +934,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -979,8 +968,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color:
-                      const Color.fromARGB(255, 135, 20, 20).withOpacity(0.1),
+                  color: const Color.fromARGB(255, 135, 20, 20)
+                      .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Center(
@@ -1022,7 +1011,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
+                  color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -1169,7 +1158,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 5,
             offset: const Offset(0, 2),
           ),
@@ -1212,8 +1201,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color:
-                      const Color.fromARGB(255, 135, 20, 20).withOpacity(0.1),
+                  color: const Color.fromARGB(255, 135, 20, 20)
+                      .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -1355,7 +1344,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1366,7 +1355,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 24),
@@ -1417,7 +1406,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1437,7 +1426,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                   decoration: BoxDecoration(
                     color: isActive
                         ? const Color.fromARGB(255, 135, 20, 20)
-                            .withOpacity(0.1)
+                            .withValues(alpha: 0.1)
                         : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(20),
                   ),
@@ -1544,7 +1533,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -1675,7 +1664,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 5,
             offset: const Offset(0, 2),
           ),
@@ -1686,7 +1675,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color.fromARGB(255, 135, 20, 20).withOpacity(0.1),
+              color:
+                  const Color.fromARGB(255, 135, 20, 20).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -1712,8 +1702,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
-                    color:
-                        const Color.fromARGB(255, 135, 20, 20).withOpacity(0.8),
+                    color: const Color.fromARGB(255, 135, 20, 20)
+                        .withValues(alpha: 0.8),
                   ),
                 ),
               ],
@@ -1805,7 +1795,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 5,
             offset: const Offset(0, 2),
           ),
@@ -1816,7 +1806,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
+              color: Colors.green.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(Icons.work_outline, color: Colors.green, size: 24),
@@ -1873,7 +1863,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
+              color: statusColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
@@ -1971,7 +1961,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -2006,7 +1996,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -2049,7 +2039,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -2061,7 +2051,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(icon, color: color, size: 24),
@@ -2137,7 +2127,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: const Color.fromARGB(255, 135, 20, 20).withOpacity(0.1),
+              color:
+                  const Color.fromARGB(255, 135, 20, 20).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Center(
@@ -2177,7 +2168,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.1),
+              color: Colors.green.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
@@ -2215,7 +2206,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

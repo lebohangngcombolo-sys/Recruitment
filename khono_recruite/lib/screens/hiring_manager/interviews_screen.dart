@@ -72,7 +72,7 @@ class _InterviewsScreenState extends State<InterviewsScreen> {
             backgroundColor: (themeProvider.isDarkMode
                     ? const Color(0xFF14131E)
                     : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
             iconTheme: IconThemeData(
               color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
             ),
@@ -118,7 +118,7 @@ class _InterviewsScreenState extends State<InterviewsScreen> {
                               color: (themeProvider.isDarkMode
                                       ? const Color(0xFF14131E)
                                       : Colors.white)
-                                  .withOpacity(0.9),
+                                  .withValues(alpha: 0.9),
                               margin: const EdgeInsets.symmetric(vertical: 8),
                               child: ListTile(
                                 title: Text(
