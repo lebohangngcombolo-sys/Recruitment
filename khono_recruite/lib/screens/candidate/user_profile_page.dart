@@ -1114,13 +1114,13 @@ class _ProfilePageState extends State<ProfilePage>
                               ),
                             ],
                           ),
+                        ],
                       const SizedBox(height: 40),
                       // Navigation buttons
                       _sidebarButton("Profile", Icons.person_outline_rounded),
                       _sidebarButton("Settings", Icons.settings_outlined),
                       _sidebarButton("2FA", Icons.security_outlined),
-                      _sidebarButton(
-                          "Reset Password", Icons.lock_reset_rounded),
+                      _sidebarButton("Reset Password", Icons.lock_reset_rounded),
                     ],
                   ),
                 ),
