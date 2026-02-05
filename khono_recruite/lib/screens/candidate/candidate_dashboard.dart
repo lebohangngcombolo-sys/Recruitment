@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:go_router/go_router.dart';
 import 'dart:ui';
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
@@ -19,7 +20,6 @@ import '../../screens/candidate/user_profile_page.dart';
 import 'jobs_applied_page.dart';
 import 'saved_application_screen.dart';
 import '../../services/auth_service.dart';
-import '../../screens/auth/login_screen.dart';
 import 'offers_screen.dart';
 
 class CandidateDashboard extends StatefulWidget {
@@ -488,7 +488,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                         ),
                         child: TextButton(
                           onPressed: () {
-                            Navigator.of(context).pop();
                             _performLogout(context);
                           },
                           child: Text("Logout",
@@ -509,15 +508,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   void _performLogout(BuildContext context) async {
-    Navigator.of(context).pop();
+    // Don't use Navigator.pop() here - with GoRouter it pops the route and empties the stack.
+    // context.go('/login') will replace the route and dismiss the dialog.
     await AuthService.logout();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (Route<dynamic> route) => false,
-        );
-      }
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      context.go('/login');
     });
   }
 
@@ -1587,10 +1584,23 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                   SliverAppBar(
                     backgroundColor: Colors.transparent,
                     elevation: 2,
-                    title: Image.asset(
-                      'assets/icons/khono.png',
-                      height: 40,
-                      fit: BoxFit.contain,
+                    leading: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: () {
+                        if (context.canPop()) {
+                          context.pop();
+                        } else {
+                          context.go('/');
+                        }
+                      },
+                    ),
+                    title: GestureDetector(
+                      onTap: () => context.go('/'),
+                      child: Image.asset(
+                        'assets/icons/khono.png',
+                        height: 40,
+                        fit: BoxFit.contain,
+                      ),
                     ),
                     actions: [
                       Container(

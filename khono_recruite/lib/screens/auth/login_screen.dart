@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -18,6 +19,17 @@ import 'mfa_verification_screen.dart'; // 🆕 Import MFA screen
 import 'sso_enterprise_screen.dart'; // 🆕 Import SSO Enterprise screen
 import '../hr/hr_dashboard.dart';
 
+/// Hides the scrollbar while keeping scroll behavior (e.g. for auth screens).
+class _NoScrollbarScrollBehavior extends ScrollBehavior {
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) =>
+      child;
+}
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -30,6 +42,7 @@ class _LoginScreenState extends State<LoginScreen>
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool loading = false;
+  bool _obscurePassword = true;
 
   // 🆕 MFA state variables - PROPERLY TYPED
   String? _mfaSessionToken;
@@ -206,40 +219,26 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   // ------------------- NAVIGATION HELPER -------------------
+  // Use GoRouter (context.go) so we don't trigger Navigator._debugLocked.
+  // Defer to next frame so navigation runs after current build completes.
   void _navigateToDashboard({
     required String token,
     required String role,
     required String dashboard,
   }) {
-    if (role == "admin") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => AdminDAshboard(token: token)),
-      );
-    } else if (role == "hiring_manager") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => HMMainDashboard(token: token)),
-      );
-    }
-
-    // 🆕 NEW HR ROLE SUPPORT
-    else if (role == "hr") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => HRDashboard(token: token)),
-      );
-    } else if (role == "candidate" && dashboard == "/enrollment") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => EnrollmentScreen(token: token)),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => CandidateDashboard(token: token)),
-      );
-    }
+    final encodedToken = Uri.encodeComponent(token);
+    final path = switch (role) {
+      "admin" => '/admin-dashboard?token=$encodedToken',
+      "hiring_manager" => '/hiring-manager-dashboard?token=$encodedToken',
+      "hr" => '/hr-dashboard?token=$encodedToken',
+      "candidate" when dashboard == "/enrollment" =>
+        '/enrollment?token=$encodedToken',
+      _ => '/candidate-dashboard?token=$encodedToken',
+    };
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      context.go(path);
+    });
   }
 
   @override
@@ -271,44 +270,26 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
 
-          // Logos at top-left and top-right
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Image.asset(
-                    "assets/images/logo2.png",
-                    width: 300,
-                    height: 120,
-                  ),
-                  Image.asset(
-                    "assets/images/logo.png",
-                    width: 300,
-                    height: 120,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Centered Content - Glass container removed
+          // Centered Content - scroll fills screen so scroll works from anywhere
           Center(
-            child: SingleChildScrollView(
-              child: MouseRegion(
-                onEnter: (_) => kIsWeb ? _animationController.forward() : null,
-                onExit: (_) => kIsWeb ? _animationController.reverse() : null,
-                child: ScaleTransition(
-                  scale: _scaleAnimation,
-                  child: Container(
-                    width: size.width > 800 ? 400 : size.width * 0.9,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(height: 16),
+            child: SizedBox.expand(
+              child: ScrollConfiguration(
+                behavior: _NoScrollbarScrollBehavior(),
+                child: SingleChildScrollView(
+                  child: Center(
+                    child: MouseRegion(
+                      onEnter: (_) => kIsWeb ? _animationController.forward() : null,
+                      onExit: (_) => kIsWeb ? _animationController.reverse() : null,
+                      child: ScaleTransition(
+                        scale: _scaleAnimation,
+                        child: Container(
+                          width: size.width > 800 ? 400 : size.width * 0.9,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 32),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(height: 16),
                         Text(
                           "WELCOME BACK",
                           style: GoogleFonts.poppins(
@@ -337,35 +318,46 @@ class _LoginScreenState extends State<LoginScreen>
                           label: "Email",
                           controller: emailController,
                           inputType: TextInputType.emailAddress,
-                          backgroundColor:
-                              Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
-                          textColor: Color(0xFFC10D00), // #c10d00
-                          borderColor: Color(0xFFC10D00), // #c10d00 stroke
+                          backgroundColor: Colors.white,
+                          textColor: Colors.black,
+                          borderColor: Colors.grey.shade300,
+                          labelColor: Colors.white,
+                          textInputAction: TextInputAction.next,
                         ),
                         const SizedBox(height: 12),
                         CustomTextField(
                           label: "Password",
                           controller: passwordController,
-                          obscureText: true,
-                          backgroundColor:
-                              Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
-                          textColor: Color(0xFFC10D00), // #c10d00
-                          borderColor: Color(0xFFC10D00), // #c10d00 stroke
+                          obscureText: _obscurePassword,
+                          backgroundColor: Colors.white,
+                          textColor: Colors.black,
+                          borderColor: Colors.grey.shade300,
+                          labelColor: Colors.white,
+                          textInputAction: TextInputAction.done,
+                          onSubmitted: (_) => _login(),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: Colors.grey.shade600,
+                            ),
+                            onPressed: () {
+                              setState(() => _obscurePassword = !_obscurePassword);
+                            },
+                          ),
                         ),
                         const SizedBox(height: 12),
                         Align(
                           alignment: Alignment.centerRight,
                           child: GestureDetector(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (_) => const ForgotPasswordScreen()),
-                            ),
+                            onTap: () => context.push('/forgot-password'),
                             child: Text(
                               "Forgot Password?",
                               style: GoogleFonts.poppins(
-                                color: const Color(0xFFC10D00), // C10D00 color
+                                color: Colors.white,
                                 fontSize: 14,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
@@ -412,13 +404,7 @@ class _LoginScreenState extends State<LoginScreen>
                           child: ElevatedButton(
                             onPressed: loading
                                 ? null
-                                : () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const SsoEnterpriseScreen(),
-                                      ),
-                                    ),
+                                : () => context.push('/sso-enterprise'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white, // White background
                               foregroundColor:
@@ -503,17 +489,12 @@ class _LoginScreenState extends State<LoginScreen>
                             GestureDetector(
                               onTap: loading
                                   ? null
-                                  : () => Navigator.pushReplacement(
-                                        context,
-                                        MaterialPageRoute(
-                                            builder: (_) =>
-                                                const RegisterScreen()),
-                                      ),
+                                  : () => context.go('/register'),
                               child: Text(
                                 "Register",
                                 style: GoogleFonts.poppins(
-                                  color:
-                                      const Color(0xFFC10D00), // C10D00 color
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
@@ -531,9 +512,40 @@ class _LoginScreenState extends State<LoginScreen>
                               : () => themeProvider.toggleTheme(),
                         ),
                         const SizedBox(height: 16),
-                      ],
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
+                ),
+              ),
+            ),
+          ),
+
+          // Top bar on top so back arrow and logo receive taps
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back,
+                          color: Colors.white, size: 28),
+                      onPressed: () => context.go('/'),
+                    ),
+                    const SizedBox(width: 12),
+                    GestureDetector(
+                      onTap: () => context.go('/'),
+                      child: Image.asset(
+                        "assets/icons/khono.png",
+                        height: 40,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

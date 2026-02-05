@@ -189,8 +189,16 @@ class AdminService {
     if (res.statusCode == 201) {
       return json.decode(res.body);
     } else {
-      final error = json.decode(res.body);
-      throw Exception('Failed to create job: ${error['error'] ?? res.body}');
+      Map<String, dynamic> body = {};
+      try {
+        if (res.body.isNotEmpty) body = json.decode(res.body);
+      } catch (_) {}
+      final error = body['error'] ?? 'Failed to create job';
+      final details = body['details'];
+      final msg = details != null
+          ? '$error: ${details is Map ? details.entries.map((e) => '${e.key}: ${e.value}').join('; ') : details}'
+          : error.toString();
+      throw Exception(msg);
     }
   }
 
@@ -230,7 +238,16 @@ class AdminService {
       body: json.encode(data),
     );
     if (res.statusCode == 201) return json.decode(res.body);
-    throw Exception('Failed to create job: ${res.body}');
+    Map<String, dynamic> body = {};
+    try {
+      if (res.body.isNotEmpty) body = json.decode(res.body);
+    } catch (_) {}
+    final error = body['error'] ?? 'Failed to create job';
+    final details = body['details'];
+    final msg = details != null
+        ? '$error: ${details is Map ? details.entries.map((e) => '${e.key}: ${e.value}').join('; ') : details}'
+        : (body['message'] ?? error).toString();
+    throw Exception(msg);
   }
 
   Future<Map<String, dynamic>> updateJob(

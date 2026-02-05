@@ -1,7 +1,7 @@
 from flask import Flask
 from .extensions import db, jwt, mail, cloudinary_client, mongo_client, migrate, cors, bcrypt, oauth, limiter, socketio
 from .models import *
-from .routes import auth, admin_routes, candidate_routes, ai_routes, mfa_routes, sso_routes, analytics_routes, chat_routes, offer_routes  # import sso_routes
+from .routes import auth, admin_routes, candidate_routes, ai_routes, mfa_routes, sso_routes, analytics_routes, chat_routes, offer_routes, public_routes
 from .websocket_handler import register_websocket_handlers
 
 def create_app():
@@ -42,6 +42,7 @@ def create_app():
     app.register_blueprint(analytics_routes.analytics_bp, url_prefix="/api")
     app.register_blueprint(chat_routes.chat_bp, url_prefix="/api/chat")
     app.register_blueprint(offer_routes.offer_bp, url_prefix="/api/offer")
+    app.register_blueprint(public_routes.public_bp, url_prefix="/api/public")
 
     # ---------------- Register SSO Blueprint ----------------
     sso_routes.register_sso_provider(app)      # initialize Auth0 / SSO provider
