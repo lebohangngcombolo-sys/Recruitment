@@ -472,7 +472,7 @@ class _ProfilePageState extends State<ProfilePage>
                                   Icons.vpn_key,
                                   color: Colors.redAccent,
                                   size: 16,
-                              ],
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: SelectableText(
@@ -481,7 +481,7 @@ class _ProfilePageState extends State<ProfilePage>
                                       fontSize: 16,
                                       fontWeight: FontWeight.w500,
                                       color: Colors.black,
-                                    ],
+                                    ),
                                   ),
                                 ),
                               ],
@@ -926,7 +926,6 @@ class _ProfilePageState extends State<ProfilePage>
 
   @override
   Widget build(BuildContext context) {
-
     if (loading) {
       return Scaffold(
         backgroundColor: Colors.transparent,
@@ -994,10 +993,11 @@ class _ProfilePageState extends State<ProfilePage>
                   padding:
                       const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05), // almost invisible
+                    color: Colors.white
+                        .withValues(alpha: 0.05), // almost invisible
                     border: Border(
-                        right:
-                            BorderSide(color: Colors.white.withValues(alpha: 0.1))),
+                        right: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.1))),
                   ),
                   child: Column(
                     children: [
@@ -1024,10 +1024,12 @@ class _ProfilePageState extends State<ProfilePage>
                                     errorBuilder:
                                         (context, error, stackTrace) =>
                                             Container(
-                                      color: Colors.white.withValues(alpha: 0.1),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.1),
                                       child: Icon(
                                         Icons.person,
-                                        color: Colors.white.withValues(alpha: 0.3),
+                                        color:
+                                            Colors.white.withValues(alpha: 0.3),
                                         size: 40,
                                       ),
                                     ),
@@ -1043,7 +1045,8 @@ class _ProfilePageState extends State<ProfilePage>
                                     width: 32,
                                     height: 32,
                                     decoration: BoxDecoration(
-                                      color: Colors.redAccent.withValues(alpha: 0.8),
+                                      color: Colors.redAccent
+                                          .withValues(alpha: 0.8),
                                       shape: BoxShape.circle,
                                       border: Border.all(
                                         color: Colors.white,
@@ -1059,7 +1062,7 @@ class _ProfilePageState extends State<ProfilePage>
                                 ),
                               ),
                             ],
-                          ],
+                          ),
                           const SizedBox(height: 16),
                           Text(
                             fullNameController.text.isNotEmpty
@@ -1083,43 +1086,15 @@ class _ProfilePageState extends State<ProfilePage>
                             ),
                             textAlign: TextAlign.center,
                           ),
-                          if (_mfaEnabled) ...[
-                            Container(
-                              width: 100,
-                              height: 100,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white.withValues(alpha: 0.3),
-                                  width: 2,
-                                ),
-                              ),
-                              child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(50),
-                                  child: Image(
-                                    image: _getProfileImageProvider(),
-                                    fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            Container(
-                                      color: Colors.white.withValues(alpha: 0.1),
-                                      child: Icon(
-                                        Icons.person,
-                                        color: Colors.white.withValues(alpha: 0.3),
-                                        size: 40,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
+                        ],
+                      ),
                       const SizedBox(height: 40),
                       // Navigation buttons
                       _sidebarButton("Profile", Icons.person_outline_rounded),
                       _sidebarButton("Settings", Icons.settings_outlined),
                       _sidebarButton("2FA", Icons.security_outlined),
-                      _sidebarButton("Reset Password", Icons.lock_reset_rounded),
+                      _sidebarButton(
+                          "Reset Password", Icons.lock_reset_rounded),
                     ],
                   ),
                 ),
@@ -2421,7 +2396,8 @@ class _ProfilePageState extends State<ProfilePage>
                               icon: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.redAccent.withValues(alpha: 0.1),
+                                  color:
+                                      Colors.redAccent.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Icon(
@@ -2636,7 +2612,8 @@ class _ProfilePageState extends State<ProfilePage>
                               icon: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.redAccent.withValues(alpha: 0.1),
+                                  color:
+                                      Colors.redAccent.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Icon(
@@ -3367,11 +3344,15 @@ class CustomTextField extends StatelessWidget {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(borderRadius),
-          borderSide: BorderSide(color: focusedBorderColor, width: focusedBorderWidth),
+          borderSide:
+              BorderSide(color: focusedBorderColor, width: focusedBorderWidth),
         ),
-        labelStyle: TextStyle(color: labelColor ?? textColor.withValues(alpha: 0.7)),
-        hintStyle: TextStyle(color: hintColor ?? textColor.withValues(alpha: 0.5)),
-        contentPadding: contentPadding ?? const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        labelStyle:
+            TextStyle(color: labelColor ?? textColor.withValues(alpha: 0.7)),
+        hintStyle:
+            TextStyle(color: hintColor ?? textColor.withValues(alpha: 0.5)),
+        contentPadding: contentPadding ??
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         prefixIcon: prefixIcon,
       ),
     );

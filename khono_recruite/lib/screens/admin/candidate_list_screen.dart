@@ -19,6 +19,7 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
   bool loading = true;
 
   // Track hovered card
+  int? hoveredIndex;
 
 
 
