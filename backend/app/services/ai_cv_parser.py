@@ -7,7 +7,15 @@ import pdfplumber
 import docx
 
 logger = logging.getLogger(__name__)
-analyzer = HybridResumeAnalyzer()  # Singleton instance
+# Singleton instance that will be initialized when needed
+analyzer = None
+
+def get_analyzer():
+    """Get or create the analyzer instance (lazy initialization)."""
+    global analyzer
+    if analyzer is None:
+        analyzer = HybridResumeAnalyzer()
+    return analyzer
 
 class AIParser:
 
@@ -26,7 +34,8 @@ class AIParser:
 
             # Step 1: Try AI parsing
             try:
-                parsed_data = analyzer.analyse(resume_content=cv_text, job_id=job_id)
+                analyzer_instance = get_analyzer()
+                parsed_data = analyzer_instance.analyse(resume_content=cv_text, job_id=job_id)
             except Exception as e:
                 logger.warning(f"AI parsing failed: {e}")
                 parsed_data = {}
