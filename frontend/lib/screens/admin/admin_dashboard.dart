@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import '../../utils/api_endpoints.dart';
 import '../auth/login_screen.dart';
 
 import '../../services/admin_service.dart';
@@ -92,7 +93,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
   String _profileImageUrl = "";
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  final String apiBase = ApiEndpoints.candidateBase;
 
   @override
   void initState() {
@@ -202,7 +203,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       final token = await AuthService.getAccessToken();
 
       final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/recent-activities"),
+        Uri.parse("${ApiEndpoints.adminBase}/recent-activities"),
         headers: {"Authorization": "Bearer $token"},
       );
 
@@ -232,7 +233,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
     try {
       final token = await AuthService.getAccessToken();
       final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/powerbi/status"),
+        Uri.parse("${ApiEndpoints.adminBase}/powerbi/status"),
         headers: {"Authorization": "Bearer $token"},
       );
 
@@ -267,7 +268,16 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               "${auditEndDate!.year}-${auditEndDate!.month.toString().padLeft(2, '0')}-${auditEndDate!.day.toString().padLeft(2, '0')}",
         if (auditSearchQuery != null) "q": auditSearchQuery!,
       };
-      final uri = Uri.http("127.0.0.1:5000", "/api/admin/audits", queryParams);
+
+      final baseUri = Uri.parse(ApiEndpoints.adminBase);
+      final uri = Uri(
+        scheme: baseUri.scheme,
+        host: baseUri.host,
+        port: baseUri.port,
+        path: "${baseUri.path}/audits",
+        queryParameters: queryParams,
+      );
+
       final res =
           await http.get(uri, headers: {"Authorization": "Bearer $token"});
 

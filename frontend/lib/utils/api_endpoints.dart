@@ -1,19 +1,24 @@
+import 'app_config.dart';
+
 class ApiEndpoints {
   // ------------------- Base URLs -------------------
-  static const authBase = "http://127.0.0.1:5000/api/auth";
-  static const candidateBase = "http://127.0.0.1:5000/api/candidate";
-  static const adminBase = "http://127.0.0.1:5000/api/admin";
-  static const chatbotBase = "http://127.0.0.1:5000/api/chatbot";
-  static const hmBase = "http://127.0.0.1:5000/api/admin";
-  static const chatBase = "http://127.0.0.1:5000/api/chat";
-  static const analyticsBase = "http://127.0.0.1:5000/api/analytics";
+  static const String _base = AppConfig.baseUrl;
+
+  static const authBase = "$_base/api/auth";
+  static const candidateBase = "$_base/api/candidate";
+  static const adminBase = "$_base/api/admin";
+  static const aiBase = "$_base/api/ai";
+  static const chatbotBase = "$_base/api/chatbot";
+  static const hmBase = "$_base/api/admin";
+  static const chatBase = "$_base/api/chat";
+  static const analyticsBase = "$_base/api/analytics";
 
   // NEW: Offer management base URL (matches your Flask blueprint)
-  static const offerBase = "http://127.0.0.1:5000/api/offer";
+  static const offerBase = "$_base/api/offer";
 
   // WebSocket URL (for real-time chat)
-  static const webSocketUrl =
-      "ws://127.0.0.1:5000"; // Use wss:// for production with SSL
+  static final webSocketUrl =
+      "ws://${AppConfig.baseUrl.replaceFirst('http://', '').replaceFirst('https://', '')}"; // Use wss:// for production with SSL
 
   // ------------------- Auth -------------------
   static const register = "$authBase/register";

@@ -2,9 +2,10 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/hm_models.dart';
 import '../services/auth_service.dart';
+import '../utils/api_endpoints.dart';
 
 class HMService {
-  static const String baseUrl = 'http://127.0.0.1:5000/api/admin';
+  static const String baseUrl = ApiEndpoints.adminBase;
 
   Future<HMDashboardData> getDashboardData(String token) async {
     final response = await http.get(

@@ -20,6 +20,7 @@ import 'jobs_applied_page.dart';
 import 'saved_application_screen.dart';
 import '../../services/auth_service.dart';
 import '../../screens/auth/login_screen.dart';
+import '../../utils/api_endpoints.dart';
 import 'offers_screen.dart';
 
 class CandidateDashboard extends StatefulWidget {
@@ -78,7 +79,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
   String _profileImageUrl = "";
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  final String apiBase = ApiEndpoints.candidateBase;
 
   @override
   void initState() {
@@ -360,7 +361,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
 
     try {
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/ai/chat"),
+        Uri.parse("${ApiEndpoints.aiBase}/chat"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer ${widget.token}",
@@ -405,7 +406,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     _safeSetState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/ai/parse_cv"),
+        Uri.parse("${ApiEndpoints.aiBase}/parse_cv"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer ${widget.token}",

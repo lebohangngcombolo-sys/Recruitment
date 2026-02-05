@@ -12,6 +12,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 
 // ------------------- API Base URL -------------------
 
@@ -80,7 +81,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
   List<dynamic> documents = [];
 
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  final String apiBase = ApiEndpoints.candidateBase;
 
   @override
   void initState() {

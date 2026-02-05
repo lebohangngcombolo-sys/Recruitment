@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 import '../candidate/job_details_page.dart';
 import '../candidate/assessment_page.dart';
 
@@ -31,7 +32,7 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
 
     try {
       final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/candidate/applications/drafts"),
+        Uri.parse("${ApiEndpoints.candidateBase}/applications/drafts"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../../utils/api_endpoints.dart';
 import '../../services/auth_service.dart';
 
 class UserManagementScreen extends StatefulWidget {
@@ -34,7 +35,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       if (token == null) return;
 
       final response = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/users"),
+        Uri.parse("${ApiEndpoints.adminBase}/users"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -160,8 +161,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               throw Exception("Token not found");
 
                             final response = await http.post(
-                              Uri.parse(
-                                  "http://127.0.0.1:5000/api/auth/admin-enroll"),
+                              Uri.parse("${ApiEndpoints.authBase}/admin-enroll"),
                               headers: {
                                 "Content-Type": "application/json",
                                 "Authorization": "Bearer $token",
@@ -276,8 +276,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               throw Exception("User ID not found");
 
                             final response = await http.put(
-                              Uri.parse(
-                                  "http://127.0.0.1:5000/api/admin/users/$userId"),
+                              Uri.parse("${ApiEndpoints.adminBase}/users/$userId"),
                               headers: {
                                 "Content-Type": "application/json",
                                 "Authorization": "Bearer $token",

@@ -24,6 +24,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../../utils/api_endpoints.dart';
 import '../../providers/theme_provider.dart';
 import '../auth/login_screen.dart';
 import 'pipeline_page.dart';
@@ -121,7 +122,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       final token = await AuthService.getAccessToken();
 
       final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/recent-activities"),
+        Uri.parse("${ApiEndpoints.adminBase}/recent-activities"),
         headers: {"Authorization": "Bearer $token"},
       );
 
@@ -153,7 +154,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     try {
       final token = await AuthService.getAccessToken();
       final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/powerbi/status"),
+        Uri.parse("${ApiEndpoints.adminBase}/powerbi/status"),
         headers: {"Authorization": "Bearer $token"},
       );
 

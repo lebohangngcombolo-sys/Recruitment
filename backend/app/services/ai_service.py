@@ -14,6 +14,8 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+from flask import current_app
+
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_URL = os.environ.get(
     "OPENROUTER_URL", "https://openrouter.ai/api/v1/chat/completions"
@@ -30,8 +32,13 @@ class AIService:
         retries: int = 3,
         backoff: int = 5,
     ):
-        self.api_key = api_key or OPENROUTER_API_KEY
-        self.model = model or DEFAULT_MODEL
+        if current_app:
+            self.api_key = api_key or current_app.config.get("OPENROUTER_API_KEY") or OPENROUTER_API_KEY
+            self.model = model or current_app.config.get("OPENROUTER_MODEL") or DEFAULT_MODEL
+        else:
+            self.api_key = api_key or OPENROUTER_API_KEY
+            self.model = model or DEFAULT_MODEL
+        
         self.timeout = timeout
         self.retries = retries
         self.backoff = backoff

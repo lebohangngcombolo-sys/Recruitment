@@ -2,12 +2,13 @@ import os
 import re
 import logging
 import subprocess
-from dotenv import load_dotenv
+from flask import current_app
 from openai import OpenAI
 from app.models import Requisition
 from cloudinary.uploader import upload as cloudinary_upload
 import spacy
 from sentence_transformers import SentenceTransformer, util
+from dotenv import load_dotenv
 
 # ----------------------------
 # Environment & Logging Setup
@@ -22,14 +23,15 @@ logger = logging.getLogger(__name__)
 class HybridResumeAnalyzer:
     def __init__(self):
         # --- Online AI client ---
-        api_key = os.getenv("OPENROUTER_API_KEY")
+        api_key = current_app.config.get("OPENROUTER_API_KEY")
         self.openai_client = None
         if api_key:
             try:
+                backend_url = current_app.config.get("BACKEND_URL", "http://localhost:5000")
                 self.openai_client = OpenAI(
                     base_url="https://openrouter.ai/api/v1",
                     api_key=api_key,
-                    default_headers={"HTTP-Referer": "http://localhost:5000"}
+                    default_headers={"HTTP-Referer": backend_url}
                 )
                 logger.info("OpenRouter client initialized.")
             except Exception as e:

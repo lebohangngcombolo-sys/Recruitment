@@ -14,9 +14,14 @@ class Config:
     
     # MongoDB
     MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/recruitment_cv')
+    MONGO_DB_NAME = os.getenv('MONGO_DB_NAME', 'khono_recruit')
     
     # Redis
-    #REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+    REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+    REDIS_HOST = os.getenv('REDIS_HOST')
+    REDIS_PORT = os.getenv('REDIS_PORT')
+    REDIS_PASSWORD = os.getenv('REDIS_PASSWORD')
+    REDIS_DB = os.getenv('REDIS_DB', '0')
     
     # JWT
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
@@ -68,6 +73,19 @@ class Config:
     GOOGLE_CALENDAR_TOKEN_PATH = os.getenv('GOOGLE_CALENDAR_TOKEN_PATH', 'token.pickle')
     GOOGLE_CALENDAR_DEFAULT_DURATION = int(os.getenv('GOOGLE_CALENDAR_DEFAULT_DURATION', '60'))  # minutes
     GOOGLE_CALENDAR_TIMEZONE = os.getenv('GOOGLE_CALENDAR_TIMEZONE', 'UTC')
+
+    # AI APIs
+    GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+    OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
+    OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', 'openai/gpt-4o-mini')
+    DEEPSEEK_API_KEY = os.getenv('DEEPSEEK_API_KEY')
+
+    # Security & Limits
+    ENABLE_SECURITY_DEBUG_LOGS = os.getenv('ENABLE_SECURITY_DEBUG_LOGS', 'False').lower() == 'true'
+    UPLOAD_MAX_SIZE_MB = int(os.getenv('UPLOAD_MAX_SIZE_MB', '10'))
+    
+    # URLs
+    BACKEND_URL = os.getenv('BACKEND_URL', 'http://localhost:5000')
 
     
 class DevelopmentConfig(Config):

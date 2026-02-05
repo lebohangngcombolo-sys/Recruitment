@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import '../../utils/api_endpoints.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/custom_textfield2.dart';
 import '../../widgets/custom_button.dart';
@@ -75,7 +76,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
 
     try {
       final res = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/auth/reset-password"),
+        Uri.parse(ApiEndpoints.resetPassword),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'token': token,

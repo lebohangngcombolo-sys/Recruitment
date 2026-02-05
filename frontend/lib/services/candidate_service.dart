@@ -21,7 +21,7 @@ class CandidateService {
   static Future<List<Map<String, dynamic>>> getAvailableJobs(
       String token) async {
     final response = await http.get(
-      Uri.parse("http://127.0.0.1:5000/api/candidate/jobs"),
+      Uri.parse(ApiEndpoints.getAvailableJobs),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',

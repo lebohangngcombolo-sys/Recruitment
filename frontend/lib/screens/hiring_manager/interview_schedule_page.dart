@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 import '../../providers/theme_provider.dart';
 
 class ScheduleInterviewPage extends StatefulWidget {
@@ -35,7 +36,7 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
   Future<void> fetchApplications() async {
     try {
       final res = await AuthService.authorizedGet(
-          "http://127.0.0.1:5000/api/admin/applications?candidate_id=${widget.candidateId}");
+          "${ApiEndpoints.adminBase}/applications?candidate_id=${widget.candidateId}");
       if (res.statusCode == 200) {
         setState(() => applications = json.decode(res.body));
       } else {
@@ -94,7 +95,7 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
 
     try {
       final res = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/admin/interviews"),
+        Uri.parse("${ApiEndpoints.adminBase}/interviews"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",

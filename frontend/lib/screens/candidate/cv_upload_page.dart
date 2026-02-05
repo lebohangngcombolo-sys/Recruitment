@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 import 'assessments_results_screen.dart';
 
 class CVUploadScreen extends StatefulWidget {
@@ -77,7 +78,7 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
 
     try {
       final uri = Uri.parse(
-          'http://127.0.0.1:5000/api/candidate/upload_resume/${widget.applicationId}');
+          '${ApiEndpoints.candidateBase}/upload_resume/${widget.applicationId}');
 
       final request = http.MultipartRequest('POST', uri);
       request.headers['Authorization'] = 'Bearer $token';
