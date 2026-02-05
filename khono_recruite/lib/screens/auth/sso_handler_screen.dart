@@ -1,4 +1,4 @@
-import 'dart:html' as html;
+import 'package:web/web.dart' as web;
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
@@ -43,7 +43,7 @@ class _SsoRedirectHandlerState extends State<SsoRedirectHandler> {
       await storage.write(
           key: 'enrollment_completed', value: enrollmentCompleted);
 
-      html.window.history.replaceState(null, 'Dashboard', '/');
+      web.window.history.replaceState(null, 'Dashboard', '/');
 
       if (dashboard != null && dashboard.isNotEmpty) {
         GoRouter.of(context).go(dashboard);

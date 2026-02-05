@@ -335,38 +335,42 @@ class _AssessmentPageState extends State<AssessmentPage> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Column(
-                        children: List.generate(options.length, (i) {
-                          final optionLabel = ["A", "B", "C", "D"][i];
-                          final optionText = options[i];
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: _primaryDark.withValues(alpha: 0.5),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: _accentRed.withValues(alpha: 0.2),
+                      RadioGroup<String>(
+                        groupValue: answers[index],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setState(() {
+                              answers[index] = val;
+                            });
+                          }
+                        },
+                        child: Column(
+                          children: List.generate(options.length, (i) {
+                            final optionLabel = ["A", "B", "C", "D"][i];
+                            final optionText = options[i];
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              decoration: BoxDecoration(
+                                color: _primaryDark.withValues(alpha: 0.5),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: _accentRed.withValues(alpha: 0.2),
+                                ),
                               ),
-                            ),
-                            child: RadioListTile<String>(
-                              title: Text(
-                                "$optionLabel. $optionText",
-                                style: TextStyle(color: _textPrimary),
+                              child: RadioListTile<String>(
+                                title: Text(
+                                  "$optionLabel. $optionText",
+                                  style: TextStyle(color: _textPrimary),
+                                ),
+                                value: optionLabel,
+                                activeColor: _accentRed,
+                                tileColor: Colors.transparent,
+                                selectedTileColor:
+                                    _accentRed.withValues(alpha: 0.1),
                               ),
-                              value: optionLabel,
-                              groupValue: answers[index],
-                              onChanged: (val) {
-                                setState(() {
-                                  answers[index] = val!;
-                                });
-                              },
-                              activeColor: _accentRed,
-                              tileColor: Colors.transparent,
-                              selectedTileColor:
-                                  _accentRed.withValues(alpha: 0.1),
-                            ),
-                          );
-                        }),
+                            );
+                          }),
+                        ),
                       ),
                     ],
                   ),

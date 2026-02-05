@@ -261,7 +261,7 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                             const Duration(milliseconds: 200),
                                         transform: isHovered
                                             ? (Matrix4.identity()
-                                              ..translate(0, -8, 0))
+                                              ..translateByDouble(0, -8, 0, 1))
                                             : Matrix4.identity(),
                                         width: cardWidth,
                                         decoration: BoxDecoration(

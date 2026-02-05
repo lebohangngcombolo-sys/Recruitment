@@ -23,12 +23,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   List<Map<String, dynamic>> _offersByCategory = [];
   Map<String, dynamic> _skillsFreq = {};
   Map<String, dynamic> _expDist = {};
-  Map<String, dynamic> _cvScore = {};
-  Map<String, dynamic> _assessmentScore = {};
   List<Map<String, dynamic>> _appsPerReq = [];
   List<Map<String, dynamic>> _assessmentTrend = [];
-  List<Map<String, dynamic>> _interviewScheduled = [];
-  List<Map<String, dynamic>> _cvDrop = [];
 
   String? _error;
 
@@ -63,16 +59,10 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
           (results[1] as List).map((e) => Map<String, dynamic>.from(e)));
       _skillsFreq = Map<String, dynamic>.from(results[2] as Map);
       _expDist = Map<String, dynamic>.from(results[3] as Map);
-      _cvScore = Map<String, dynamic>.from(results[4] as Map);
-      _assessmentScore = Map<String, dynamic>.from(results[5] as Map);
       _appsPerReq = List<Map<String, dynamic>>.from(
           (results[6] as List).map((e) => Map<String, dynamic>.from(e)));
       _assessmentTrend = List<Map<String, dynamic>>.from(
           (results[7] as List).map((e) => Map<String, dynamic>.from(e)));
-      _interviewScheduled = List<Map<String, dynamic>>.from(
-          (results[8] as List).map((e) => Map<String, dynamic>.from(e)));
-      _cvDrop = List<Map<String, dynamic>>.from(
-          (results[9] as List).map((e) => Map<String, dynamic>.from(e)));
     } catch (e, st) {
       _error = e.toString();
       debugPrint('Analytics load error: $e\n$st');

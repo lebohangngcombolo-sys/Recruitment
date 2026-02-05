@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../../models/hm_models.dart';
 import '../../../constants/app_colors.dart';
+import 'candidate_detail_screen.dart';
+import 'interview_schedule_page.dart';
 
 class CandidateProfileDialog extends StatelessWidget {
   final CandidateData candidate;
@@ -206,13 +208,22 @@ class CandidateProfileDialog extends StatelessWidget {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      // TODO: Implement view full profile
                       Navigator.of(context).pop();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => CandidateDetailScreen(
+                            candidateId: candidate.id,
+                            applicationId: 0, // Should be passed if available
+                          ),
+                        ),
+                      );
                     },
                     icon: const Icon(Icons.person, size: 16),
                     label: const Text('View Full Profile'),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryRed.withValues(alpha: 0.1),
+                      backgroundColor:
+                          AppColors.primaryRed.withValues(alpha: 0.1),
                       foregroundColor: AppColors.primaryRed,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -223,8 +234,15 @@ class CandidateProfileDialog extends StatelessWidget {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      // TODO: Implement schedule interview
                       Navigator.of(context).pop();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ScheduleInterviewPage(
+                            candidateId: candidate.id,
+                          ),
+                        ),
+                      );
                     },
                     icon: const Icon(Icons.calendar_today, size: 16),
                     label: const Text('Schedule Interview'),
