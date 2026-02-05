@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import '../../services/auth_service.dart';
@@ -212,7 +213,13 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                       ),
                       child: IconButton(
                         icon: Icon(Icons.arrow_back, color: Colors.black87),
-                        onPressed: () => Navigator.of(context).pop(),
+                        onPressed: () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go('/candidate-dashboard?token=${widget.token}');
+                          }
+                        },
                       ),
                     ),
                     SizedBox(width: 16),

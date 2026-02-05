@@ -1,14 +1,24 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../../services/auth_service.dart';
 import '../../widgets/custom_button.dart';
-import '../../widgets/custom_textfield2.dart';
+import '../../widgets/custom_textfield.dart';
 import '../../providers/theme_provider.dart';
-import 'verification_screen.dart';
-import 'login_screen.dart';
+
+/// Hides the scrollbar while keeping scroll behavior (e.g. for auth screens).
+class _NoScrollbarScrollBehavior extends ScrollBehavior {
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) =>
+      child;
+}
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -123,13 +133,9 @@ class _RegisterScreenState extends State<RegisterScreen>
       return;
     }
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => VerificationScreen(
-          email: emailController.text.trim(),
-        ),
-      ),
+    if (!context.mounted) return;
+    context.go(
+      '/verify-email?email=${Uri.encodeComponent(emailController.text.trim())}',
     );
   }
 
@@ -151,46 +157,28 @@ class _RegisterScreenState extends State<RegisterScreen>
             ),
           ),
 
-          // Logos
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Image.asset(
-                    "assets/images/logo2.png",
-                    width: 300,
-                    height: 120,
-                  ),
-                  Image.asset(
-                    "assets/images/logo.png",
-                    width: 300,
-                    height: 120,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Main Content
+          // Main Content - scroll fills screen so scroll works from anywhere
           Center(
-            child: SingleChildScrollView(
-              child: MouseRegion(
-                onEnter: (_) => kIsWeb ? _animationController.forward() : null,
-                onExit: (_) => kIsWeb ? _animationController.reverse() : null,
-                child: ScaleTransition(
-                  scale: _scaleAnimation,
-                  child: Container(
-                    width: size.width > 800 ? 400 : size.width * 0.9,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 32),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(height: 16),
+            child: SizedBox.expand(
+              child: ScrollConfiguration(
+                behavior: _NoScrollbarScrollBehavior(),
+                child: SingleChildScrollView(
+                  child: Center(
+                    child: MouseRegion(
+                      onEnter: (_) => kIsWeb ? _animationController.forward() : null,
+                      onExit: (_) => kIsWeb ? _animationController.reverse() : null,
+                      child: ScaleTransition(
+                        scale: _scaleAnimation,
+                        child: Container(
+                          width: size.width > 800 ? 400 : size.width * 0.9,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 32),
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const SizedBox(height: 16),
                           Text(
                             "GET STARTED",
                             style: GoogleFonts.poppins(
@@ -216,33 +204,39 @@ class _RegisterScreenState extends State<RegisterScreen>
                             ),
                           ),
                           const SizedBox(height: 24),
-                          // Text Fields with transparent background
+                          // Text fields: same style as login (white background, grey border)
                           CustomTextField(
                             label: "First Name",
                             controller: firstNameController,
-                            backgroundColor:
-                                Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
-                            textColor: Color(0xFFC10D00), // #c10d00
-                            borderColor: Color(0xFFC10D00), // #c10d00 stroke
+                            backgroundColor: Colors.white,
+                            textColor: Colors.black,
+                            borderColor: Colors.grey.shade300,
+                            labelColor: Colors.white,
+                            margin: EdgeInsets.zero,
+                            textInputAction: TextInputAction.next,
                           ),
                           const SizedBox(height: 12),
                           CustomTextField(
                             label: "Last Name",
                             controller: lastNameController,
-                            backgroundColor:
-                                Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
-                            textColor: Color(0xFFC10D00), // #c10d00
-                            borderColor: Color(0xFFC10D00), // #c10d00 stroke
+                            backgroundColor: Colors.white,
+                            textColor: Colors.black,
+                            borderColor: Colors.grey.shade300,
+                            labelColor: Colors.white,
+                            margin: EdgeInsets.zero,
+                            textInputAction: TextInputAction.next,
                           ),
                           const SizedBox(height: 12),
                           CustomTextField(
                             label: "Email",
                             controller: emailController,
                             inputType: TextInputType.emailAddress,
-                            backgroundColor:
-                                Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
-                            textColor: Color(0xFFC10D00), // #c10d00
-                            borderColor: Color(0xFFC10D00), // #c10d00 stroke
+                            backgroundColor: Colors.white,
+                            textColor: Colors.black,
+                            borderColor: Colors.grey.shade300,
+                            labelColor: Colors.white,
+                            margin: EdgeInsets.zero,
+                            textInputAction: TextInputAction.next,
                           ),
                           const SizedBox(height: 12),
 
@@ -252,16 +246,19 @@ class _RegisterScreenState extends State<RegisterScreen>
                             controller: passwordController,
                             inputType: TextInputType.visiblePassword,
                             obscureText: _obscurePassword,
-                            backgroundColor:
-                                Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
-                            textColor: Color(0xFFC10D00), // #c10d00
-                            borderColor: Color(0xFFC10D00), // #c10d00 stroke
+                            backgroundColor: Colors.white,
+                            textColor: Colors.black,
+                            borderColor: Colors.grey.shade300,
+                            labelColor: Colors.white,
+                            margin: EdgeInsets.zero,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => register(),
                             suffixIcon: IconButton(
                               icon: Icon(
                                 _obscurePassword
                                     ? Icons.visibility_off
                                     : Icons.visibility,
-                                color: Color(0xFFC10D00), // #c10d00
+                                color: Colors.grey.shade600,
                               ),
                               onPressed: () {
                                 setState(() {
@@ -291,8 +288,9 @@ class _RegisterScreenState extends State<RegisterScreen>
                                   const SizedBox(width: 8),
                                   Text(
                                     passwordStrength,
-                                    style:
-                                        TextStyle(color: passwordStrengthColor),
+                                    style: GoogleFonts.poppins(
+                                        color: passwordStrengthColor,
+                                        fontSize: 12),
                                   ),
                                 ],
                               ),
@@ -322,18 +320,12 @@ class _RegisterScreenState extends State<RegisterScreen>
                                 ),
                               ),
                               GestureDetector(
-                                onTap: () {
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const LoginScreen(),
-                                    ),
-                                  );
-                                },
+                                onTap: () => context.go('/login'),
                                 child: Text(
                                   "Login",
                                   style: GoogleFonts.poppins(
-                                    color: Colors.redAccent,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
                               ),
@@ -352,11 +344,42 @@ class _RegisterScreenState extends State<RegisterScreen>
                             onPressed: () => themeProvider.toggleTheme(),
                           ),
 
-                          const SizedBox(height: 16),
-                        ],
+                                const SizedBox(height: 16),
+                              ],
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
+                ),
+              ),
+            ),
+          ),
+
+          // Top bar on top so back arrow and logo receive taps
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back,
+                          color: Colors.white, size: 28),
+                      onPressed: () => context.go('/'),
+                    ),
+                    const SizedBox(width: 12),
+                    GestureDetector(
+                      onTap: () => context.go('/'),
+                      child: Image.asset(
+                        "assets/icons/khono.png",
+                        height: 40,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

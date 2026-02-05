@@ -1,6 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart' show File;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -316,9 +317,9 @@ class AuthService {
       });
 
       // --------------------
-      // Optional CV upload
+      // Optional CV upload (fromPath not supported on web)
       // --------------------
-      if (cvFile != null) {
+      if (cvFile != null && !kIsWeb) {
         request.files.add(
           await http.MultipartFile.fromPath('cv', cvFile.path),
         );

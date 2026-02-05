@@ -7,9 +7,13 @@ class CustomTextField extends StatelessWidget {
   final bool obscureText;
   final Color backgroundColor;
   final Color textColor;
+  final Color? labelColor;
   final Color borderColor;
   final Widget? suffixIcon;
   final String? Function(String?)? validator;
+  final void Function(String)? onChanged;
+  final void Function(String)? onFieldSubmitted;
+  final TextInputAction? textInputAction;
 
   const CustomTextField({
     Key? key,
@@ -19,9 +23,13 @@ class CustomTextField extends StatelessWidget {
     this.obscureText = false,
     this.backgroundColor = Colors.transparent,
     this.textColor = Colors.black,
+    this.labelColor,
     this.borderColor = Colors.grey,
     this.suffixIcon,
     this.validator,
+    this.onChanged,
+    this.onFieldSubmitted,
+    this.textInputAction,
   }) : super(key: key);
 
   @override
@@ -33,7 +41,8 @@ class CustomTextField extends StatelessWidget {
       style: TextStyle(color: textColor),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: textColor.withValues(alpha: 0.7)),
+        labelStyle: TextStyle(
+            color: labelColor ?? textColor.withValues(alpha: 0.7)),
         filled: true,
         fillColor: backgroundColor,
         contentPadding:
@@ -64,6 +73,9 @@ class CustomTextField extends StatelessWidget {
         suffixIcon: suffixIcon,
       ),
       validator: validator,
+      onChanged: onChanged,
+      onFieldSubmitted: onFieldSubmitted,
+      textInputAction: textInputAction,
     );
   }
 }
