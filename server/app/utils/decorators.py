@@ -1,5 +1,6 @@
 from functools import wraps
 from flask import jsonify, request, current_app
+from werkzeug.exceptions import HTTPException
 from flask_jwt_extended import verify_jwt_in_request, get_jwt, get_jwt_identity, decode_token
 from app.models import User
 import logging
@@ -84,6 +85,8 @@ def role_required(*roles):
                     "your_role": token_role or db_role
                 }), 403
 
+            except HTTPException:
+                raise
             except Exception as e:
                 logging.error(f"Role decorator exception: {e}", exc_info=True)
                 return jsonify({"error": "Invalid or expired token", "details": str(e)}), 401

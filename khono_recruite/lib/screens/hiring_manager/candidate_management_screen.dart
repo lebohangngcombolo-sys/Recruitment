@@ -28,6 +28,15 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
   }
 
   Future<void> fetchShortlist() async {
+    if (widget.jobId <= 0) {
+      setState(() {
+        loading = false;
+        errorMessage = "Select a job to view shortlisted candidates.";
+        candidates = [];
+      });
+      return;
+    }
+
     setState(() {
       loading = true;
       errorMessage = null;

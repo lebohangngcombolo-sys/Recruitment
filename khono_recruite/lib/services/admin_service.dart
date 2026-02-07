@@ -1,7 +1,29 @@
-import 'dart:convert';
+import 'dart:convert' as convert;
 import 'package:http/http.dart' as http;
 import '../utils/api_endpoints.dart';
 import 'auth_service.dart';
+
+class _SafeJson {
+  const _SafeJson();
+
+  dynamic decode(String body) {
+    try {
+      return convert.jsonDecode(body);
+    } catch (_) {
+      final trimmed = body.trimLeft();
+      if (trimmed.startsWith('[')) {
+        return [];
+      }
+      return {};
+    }
+  }
+
+  String encode(Object? value) => convert.jsonEncode(value);
+}
+
+const json = _SafeJson();
+dynamic jsonDecode(String body) => json.decode(body);
+String jsonEncode(Object? value) => convert.jsonEncode(value);
 
 class AdminService {
   final Map<String, String> headers = {'Content-Type': 'application/json'};
@@ -218,7 +240,16 @@ class AdminService {
       Uri.parse(ApiEndpoints.adminJobs),
       headers: {...headers, 'Authorization': 'Bearer $token'},
     );
-    if (res.statusCode == 200) return json.decode(res.body);
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      if (data is List) {
+        return data;
+      }
+      if (data is Map<String, dynamic>) {
+        return List<dynamic>.from(data['jobs'] ?? []);
+      }
+      return [];
+    }
     throw Exception('Failed to load jobs: ${res.body}');
   }
 

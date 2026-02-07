@@ -5,7 +5,6 @@ from app.models import User, Requisition, Candidate, Application, AssessmentResu
 from datetime import datetime, timedelta
 from app.utils.decorators import role_required
 from app.services.email_service import EmailService
-from app.services.audit_service import AuditService
 from app.services.audit2 import AuditService
 from flask_cors import cross_origin
 from sqlalchemy import func, and_, or_
@@ -669,9 +668,19 @@ def shortlist_candidates(job_id):
         assessment_score = app.assessment_score or 0
 
         try:
+            weightings = job.weightings or {
+                "cv": 60,
+                "assessment": 40,
+                "interview": 0,
+                "references": 0
+            }
+            interview_score = app.interview_feedback_score or 0
+            references_score = 0
             overall = (
-                (cv_score * job.weightings.get("cv", 60) / 100) +
-                (assessment_score * job.weightings.get("assessment", 40) / 100)
+                (cv_score * weightings.get("cv", 0) / 100) +
+                (assessment_score * weightings.get("assessment", 0) / 100) +
+                (interview_score * weightings.get("interview", 0) / 100) +
+                (references_score * weightings.get("references", 0) / 100)
             )
         except Exception:
             overall = 0

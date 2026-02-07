@@ -64,7 +64,11 @@ class AuthService:
         token = jwt.encode(payload, current_app.config['JWT_SECRET_KEY'], algorithm='HS256')
         if isinstance(token, bytes):
             token = token.decode('utf-8')
-        redis_client.setex(f"password_reset:{token}", 3600, user_id)
+        try:
+            redis_client.setex(f"password_reset:{token}", 3600, user_id)
+        except Exception as e:
+            current_app.logger.error(f"Redis error storing password reset token: {e}", exc_info=True)
+            raise RuntimeError("Password reset temporarily unavailable")
         return token
 
     @staticmethod
@@ -80,9 +84,15 @@ class AuthService:
             redis_client.delete(f"password_reset:{token}")
             return int(user_id)
         except jwt.ExpiredSignatureError:
-            redis_client.delete(f"password_reset:{token}")
+            try:
+                redis_client.delete(f"password_reset:{token}")
+            except Exception:
+                pass
             return None
         except jwt.InvalidTokenError:
+            return None
+        except Exception as e:
+            current_app.logger.error(f"Redis error verifying password reset token: {e}", exc_info=True)
             return None
 
     @staticmethod

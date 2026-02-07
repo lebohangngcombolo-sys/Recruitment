@@ -105,10 +105,12 @@ def create_requisition_helper(
     required_skills=None,
     min_experience=None,
     location=None,
+    company=None,
     seniority_level=None,
     status='draft',
     weightings=None,
-    knockout_rules=None
+    knockout_rules=None,
+    employment_type="full_time"
 ):
     """
     Creates a new requisition, ensuring it has a valid assessment_pack_id.
@@ -121,14 +123,21 @@ def create_requisition_helper(
         created_by=created_by,
         department=department,
         description=description,
+        company=company,
         requirements=requirements,
         required_skills=required_skills or [],
         min_experience=min_experience,
         location=location,
         seniority_level=seniority_level,
         status=status,
-        weightings=weightings or {},
+        weightings=weightings or {
+            "cv": 60,
+            "assessment": 40,
+            "interview": 0,
+            "references": 0
+        },
         knockout_rules=knockout_rules or [],
+        employment_type=employment_type,
         assessment_pack_id=assessment_pack.id
     )
     db.session.add(requisition)

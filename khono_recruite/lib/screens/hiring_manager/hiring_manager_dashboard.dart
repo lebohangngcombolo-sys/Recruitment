@@ -237,17 +237,19 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     setState(() => loadingStats = true);
     try {
       final counts = await admin.getDashboardCounts();
-      final token = await AuthService.getAccessToken();
-
-      final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/recent-activities"),
-        headers: {"Authorization": "Bearer $token"},
-      );
+      final role = await AuthService.getRole();
 
       List<String> activities = [];
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        activities = List<String>.from(data["recent_activities"] ?? []);
+      if (role == "admin") {
+        final token = await AuthService.getAccessToken();
+        final res = await http.get(
+          Uri.parse("http://127.0.0.1:5000/api/admin/recent-activities"),
+          headers: {"Authorization": "Bearer $token"},
+        );
+        if (res.statusCode == 200) {
+          final data = json.decode(res.body);
+          activities = List<String>.from(data["recent_activities"] ?? []);
+        }
       }
 
       setState(() {
@@ -268,6 +270,12 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   Future<void> fetchAudits({int page = 1}) async {
     setState(() => loadingAudits = true);
     try {
+      final role = await AuthService.getRole();
+      if (role != "admin") {
+        setState(() => loadingAudits = false);
+        return;
+      }
+
       final token = await AuthService.getAccessToken();
       final queryParams = {
         "page": page.toString(),
@@ -655,125 +663,133 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                             ),
                             const SizedBox(width: 16),
 
-                            Row(
-                              children: [
-                                // ---------- Theme Toggle Switch ----------
-                                Row(
+                            Flexible(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(
-                                      themeProvider.isDarkMode
-                                          ? Icons.dark_mode
-                                          : Icons.light_mode,
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.amber
-                                          : Colors.grey.shade700,
-                                      size: 20,
+                                    // ---------- Theme Toggle Switch ----------
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          themeProvider.isDarkMode
+                                              ? Icons.dark_mode
+                                              : Icons.light_mode,
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.amber
+                                              : Colors.grey.shade700,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Switch(
+                                          value: themeProvider.isDarkMode,
+                                          onChanged: (value) {
+                                            themeProvider.toggleTheme();
+                                          },
+                                          activeThumbColor: Colors.redAccent,
+                                          inactiveTrackColor:
+                                              Colors.grey.shade400,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(width: 12),
+
+                                    // ---------- Analytics Icon ----------
+                                    IconButton(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                              builder: (context) =>
+                                                  RecruitmentPipelinePage(
+                                                      token: widget.token)),
+                                        );
+                                      },
+                                      icon: Image.asset(
+                                        // Changed from Icon to Image.asset
+                                        'assets/icons/data-analytics.png',
+                                        width: 24,
+                                        height: 24,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                      tooltip: "Analytics Dashboard",
                                     ),
                                     const SizedBox(width: 8),
-                                    Switch(
-                                      value: themeProvider.isDarkMode,
-                                      onChanged: (value) {
-                                        themeProvider.toggleTheme();
+
+                                    // ---------- Team Collaboration Icon ----------
+                                    IconButton(
+                                      onPressed: () => setState(() =>
+                                          currentScreen = "team_collaboration"),
+                                      icon: Image.asset(
+                                        // Changed from Icon to Image.asset
+                                        'assets/icons/teamC.png',
+                                        width: 34,
+                                        height: 34,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                      tooltip: "Team Collaboration",
+                                    ),
+                                    const SizedBox(width: 8),
+
+                                    TextButton.icon(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                              builder: (context) =>
+                                                  AdminOfferListScreen()),
+                                        );
                                       },
-                                      activeThumbColor: Colors.redAccent,
-                                      inactiveTrackColor: Colors.grey.shade400,
+                                      icon: Image.asset(
+                                        'assets/icons/add.png',
+                                        width: 30,
+                                        height: 30,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                      label: Text(
+                                        "Create",
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.white
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    IconButton(
+                                      onPressed: () => setState(() =>
+                                          currentScreen = "notifications"),
+                                      icon: Image.asset(
+                                        // Changed from Icon to Image.asset
+                                        'assets/icons/notification.png',
+                                        width: 45,
+                                        height: 45,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    GestureDetector(
+                                      onTap: () {
+                                        context.push(
+                                            '/profile?token=${widget.token}');
+                                      },
+                                      child: CircleAvatar(
+                                        radius: 18,
+                                        backgroundColor: Colors.grey.shade200,
+                                        backgroundImage:
+                                            _getProfileImageProvider(),
+                                        child: null,
+                                      ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(width: 12),
-
-                                // ---------- Analytics Icon ----------
-                                IconButton(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) =>
-                                              RecruitmentPipelinePage(
-                                                  token: widget.token)),
-                                    );
-                                  },
-                                  icon: Image.asset(
-                                    // Changed from Icon to Image.asset
-                                    'assets/icons/data-analytics.png',
-                                    width: 24,
-                                    height: 24,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                  tooltip: "Analytics Dashboard",
-                                ),
-                                const SizedBox(width: 8),
-
-                                // ---------- Team Collaboration Icon ----------
-                                IconButton(
-                                  onPressed: () => setState(() =>
-                                      currentScreen = "team_collaboration"),
-                                  icon: Image.asset(
-                                    // Changed from Icon to Image.asset
-                                    'assets/icons/teamC.png',
-                                    width: 34,
-                                    height: 34,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                  tooltip: "Team Collaboration",
-                                ),
-                                const SizedBox(width: 8),
-
-                                TextButton.icon(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) =>
-                                              AdminOfferListScreen()),
-                                    );
-                                  },
-                                  icon: Image.asset(
-                                    'assets/icons/add.png',
-                                    width: 30,
-                                    height: 30,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                  label: Text(
-                                    "Create",
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                IconButton(
-                                  onPressed: () => setState(
-                                      () => currentScreen = "notifications"),
-                                  icon: Image.asset(
-                                    // Changed from Icon to Image.asset
-                                    'assets/icons/notification.png',
-                                    width: 45,
-                                    height: 45,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                GestureDetector(
-                                  onTap: () {
-                                    context
-                                        .push('/profile?token=${widget.token}');
-                                  },
-                                  child: CircleAvatar(
-                                    radius: 18,
-                                    backgroundColor: Colors.grey.shade200,
-                                    backgroundImage: _getProfileImageProvider(),
-                                    child: null,
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
                           ],
                         ),
