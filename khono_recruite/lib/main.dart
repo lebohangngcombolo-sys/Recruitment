@@ -4,17 +4,27 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart'; // ⚡ Web URL strategy
 
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/register_screen.dart';
 import 'screens/candidate/candidate_dashboard.dart';
+import 'screens/candidate/find_talent_page.dart';
+import 'screens/candidate/job_details_page.dart';
 import 'screens/enrollment/enrollment_screen.dart';
 import 'screens/admin/admin_dashboard.dart';
 import 'screens/hiring_manager/hiring_manager_dashboard.dart';
 import 'screens/landing_page/landing_page.dart';
+import 'screens/about_us_page.dart';
+import 'screens/contact_page.dart';
 import 'screens/auth/reset_password.dart';
 import 'screens/admin/profile_page.dart';
 import 'screens/auth/oath_callback_screen.dart';
 import 'screens/auth/mfa_verification_screen.dart';
 import 'screens/auth/sso_handler_screen.dart';
+import 'screens/auth/verification_screen.dart';
+import 'screens/auth/forgot_password_screen.dart';
+import 'screens/auth/sso_enterprise_screen.dart';
 import 'screens/hr/hr_dashboard.dart';
+import 'screens/hiring_manager/pipeline_page.dart';
+import 'screens/hiring_manager/offer_list_screen.dart';
 
 import 'providers/theme_provider.dart';
 import 'utils/theme_utils.dart';
@@ -44,6 +54,47 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/login',
       builder: (context, state) => const LoginScreen(),
+    ),
+    GoRoute(
+      path: '/forgot-password',
+      builder: (context, state) => const ForgotPasswordScreen(),
+    ),
+    GoRoute(
+      path: '/sso-enterprise',
+      builder: (context, state) => const SsoEnterpriseScreen(),
+    ),
+    GoRoute(
+      path: '/register',
+      builder: (context, state) => const RegisterScreen(),
+    ),
+    GoRoute(
+      path: '/verify-email',
+      builder: (context, state) {
+        final email = state.uri.queryParameters['email'] ?? '';
+        return VerificationScreen(email: email);
+      },
+    ),
+    GoRoute(
+      path: '/find-talent',
+      builder: (context, state) => const FindTalentPage(),
+    ),
+    GoRoute(
+      path: '/about-us',
+      builder: (context, state) => const AboutUsPage(),
+    ),
+    GoRoute(
+      path: '/contact',
+      builder: (context, state) => const ContactPage(),
+    ),
+    GoRoute(
+      path: '/job-details',
+      builder: (context, state) {
+        final job = state.extra as Map<String, dynamic>?;
+        if (job == null) {
+          return const LandingPage();
+        }
+        return JobDetailsPage(job: job);
+      },
     ),
     GoRoute(
       path: '/mfa-verification',
@@ -91,11 +142,23 @@ final GoRouter _router = GoRouter(
       },
     ),
     GoRoute(
-        path: '/hiring-manager-dashboard',
-        builder: (context, state) {
-          final token = state.uri.queryParameters['token'] ?? '';
-          return HMMainDashboard(token: token);
-        }),
+      path: '/hiring-manager-dashboard',
+      builder: (context, state) {
+        final token = state.uri.queryParameters['token'] ?? '';
+        return HMMainDashboard(token: token);
+      },
+    ),
+    GoRoute(
+      path: '/hiring-manager-pipeline',
+      builder: (context, state) {
+        final token = state.uri.queryParameters['token'] ?? '';
+        return RecruitmentPipelinePage(token: token);
+      },
+    ),
+    GoRoute(
+      path: '/hiring-manager-offers',
+      builder: (context, state) => const AdminOfferListScreen(),
+    ),
     // ✅ Add this new route
     GoRoute(
       path: '/hr-dashboard',

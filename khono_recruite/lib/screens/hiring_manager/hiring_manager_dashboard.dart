@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import '../../services/admin_service.dart';
@@ -20,8 +19,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 import '../auth/login_screen.dart';
@@ -178,7 +177,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   Future<void> _pickProfileImage() async {
     final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
-      if (kIsWeb) _profileImageBytes = await pickedFile.readAsBytes();
+      if (kIsWeb) {
+        _profileImageBytes = await pickedFile.readAsBytes();
+      }
       setState(() => _profileImage = pickedFile);
       await uploadProfileImage();
     }
@@ -361,8 +362,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     });
   }
 
-  bool _isLoggingOut = false;
-
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -483,6 +482,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                         context.push(
                                             '/profile?token=${widget.token}');
                                       },
+                                      onLongPress: _pickProfileImage,
                                       child: CircleAvatar(
                                         radius: 18,
                                         backgroundColor: Colors.grey.shade200,
@@ -514,6 +514,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                       context.push(
                                           '/profile?token=${widget.token}');
                                     },
+                                    onLongPress: _pickProfileImage,
                                     child: CircleAvatar(
                                       radius: 18,
                                       backgroundColor: Colors.grey.shade200,
@@ -779,6 +780,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                         context.push(
                                             '/profile?token=${widget.token}');
                                       },
+                                      onLongPress: _pickProfileImage,
                                       child: CircleAvatar(
                                         radius: 18,
                                         backgroundColor: Colors.grey.shade200,
@@ -1913,33 +1915,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       ),
     );
   }
-}
-
-// Data classes for charts
-class _DepartmentData {
-  final String department;
-  final int count;
-  final Color color;
-  _DepartmentData(this.department, this.count, this.color);
-}
-
-class _HistogramData {
-  final String jobRole;
-  final int candidateCount;
-  _HistogramData(this.jobRole, this.candidateCount);
-}
-
-class _InterviewData {
-  final String status;
-  final int count;
-  _InterviewData(this.status, this.count);
-}
-
-class _CvReviewData {
-  final String week;
-  final int reviewsCompleted;
-  final int reviewsPending;
-  _CvReviewData(this.week, this.reviewsCompleted, this.reviewsPending);
 }
 
 class StackedLineData {

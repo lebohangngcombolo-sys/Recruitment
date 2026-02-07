@@ -26,10 +26,11 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   // Enrollment-style Theme Colors
   final Color _primaryDark = Colors.transparent; // Background
-  final Color _cardDark = Colors.black.withOpacity(0.55); // Card background
+  final Color _cardDark =
+      Colors.black.withValues(alpha: 0.55); // Card background
   final Color _accentRed = const Color(0xFFC10D00); // Main red
   final Color _textPrimary = Colors.white; // Main text
-  final Color _boxFillColor = const Color(0xFFF2F2F2).withOpacity(0.2);
+  final Color _boxFillColor = const Color(0xFFF2F2F2).withValues(alpha: 0.2);
 
   @override
   void initState() {
@@ -203,7 +204,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
           ),
         ),
         Container(
-          color: Colors.black.withOpacity(0.4),
+          color: Colors.black.withValues(alpha: 0.4),
         ),
         child,
       ],
@@ -281,145 +282,146 @@ class _AssessmentPageState extends State<AssessmentPage> {
                   itemCount:
                       questions.length + 2, // ✅ Added 1 more for Save & Exit
                   itemBuilder: (context, index) {
-              if (index == questions.length) {
-                // Submit button
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: submitting ? null : submitAssessment,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _accentRed,
-                        foregroundColor: _textPrimary,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: submitting
-                          ? SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                color: _textPrimary,
-                                strokeWidth: 2,
+                    if (index == questions.length) {
+                      // Submit button
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: submitting ? null : submitAssessment,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _accentRed,
+                              foregroundColor: _textPrimary,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                            )
-                          : Text(
-                              "Submit Assessment",
+                            ),
+                            child: submitting
+                                ? SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      color: _textPrimary,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(
+                                    "Submit Assessment",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _textPrimary,
+                                      fontFamily: 'Poppins',
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      );
+                    } else if (index == questions.length + 1) {
+                      // ✅ New Save & Exit button
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: saveDraftAndExit,
+                            icon: Icon(Icons.save, color: _accentRed),
+                            label: Text(
+                              "Save & Exit",
+                              style: TextStyle(
+                                color: _accentRed,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: _accentRed, width: 1.5),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    final q = questions[index];
+                    final String questionText =
+                        q['question'] ?? "Question not available";
+                    final List options = q['options'] ?? [];
+
+                    return Container(
+                      margin: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _cardDark,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _accentRed.withValues(alpha: 0.6),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Q${index + 1}: $questionText",
                               style: TextStyle(
                                 fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.bold,
                                 color: _textPrimary,
                                 fontFamily: 'Poppins',
                               ),
                             ),
-                    ),
-                  ),
-                );
-              } else if (index == questions.length + 1) {
-                // ✅ New Save & Exit button
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: saveDraftAndExit,
-                      icon: Icon(Icons.save, color: _accentRed),
-                      label: Text(
-                        "Save & Exit",
-                        style: TextStyle(
-                          color: _accentRed,
-                          fontFamily: 'Poppins',
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: _accentRed, width: 1.5),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }
-
-              final q = questions[index];
-              final String questionText =
-                  q['question'] ?? "Question not available";
-              final List options = q['options'] ?? [];
-
-              return Container(
-                margin: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: _cardDark,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: _accentRed.withOpacity(0.6)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Q${index + 1}: $questionText",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: _textPrimary,
-                          fontFamily: 'Poppins',
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Column(
-                        children: List.generate(options.length, (i) {
-                          final optionLabel = ["A", "B", "C", "D"][i];
-                          final optionText = options[i];
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: _boxFillColor,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: _accentRed.withOpacity(0.4),
-                              ),
-                            ),
-                            child: RadioListTile<String>(
-                              title: Text(
-                                "$optionLabel. $optionText",
-                                style: TextStyle(
-                                  color: _textPrimary,
-                                  fontFamily: 'Poppins',
-                                ),
-                              ),
-                              value: optionLabel,
-                              groupValue: answers[
-                                  index], // already prefilled from draft
-                              onChanged: (val) {
+                            const SizedBox(height: 12),
+                            RadioGroup<String>(
+                              groupValue: answers[index],
+                              onChanged: (value) {
+                                if (value == null) return;
                                 setState(() {
-                                  answers[index] = val!;
+                                  answers[index] = value;
                                 });
                               },
-                              activeColor: _accentRed,
-                              tileColor: Colors.transparent,
-                              selectedTileColor: _accentRed.withOpacity(0.1),
+                              child: Column(
+                                children: List.generate(options.length, (i) {
+                                  final optionLabel = ["A", "B", "C", "D"][i];
+                                  final optionText = options[i];
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    decoration: BoxDecoration(
+                                      color: _boxFillColor,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: _accentRed.withValues(alpha: 0.4),
+                                      ),
+                                    ),
+                                    child: RadioListTile<String>(
+                                      title: Text(
+                                        "$optionLabel. $optionText",
+                                        style: TextStyle(
+                                          color: _textPrimary,
+                                          fontFamily: 'Poppins',
+                                        ),
+                                      ),
+                                      value: optionLabel,
+                                    ),
+                                  );
+                                }),
+                              ),
                             ),
-                          );
-                        }),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
-                ),
-              );
+                    );
                   },
                 ),
               ),

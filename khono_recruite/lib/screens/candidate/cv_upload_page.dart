@@ -153,7 +153,8 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
 
         if (streamedResponse.statusCode == 202) {
           final analysisIdRaw = resp['analysis_id'];
-          final analysisId = analysisIdRaw is num ? analysisIdRaw.toInt() : null;
+          final analysisId =
+              analysisIdRaw is num ? analysisIdRaw.toInt() : null;
           if (analysisId != null) {
             await _pollAnalysisStatus(analysisId);
           }
@@ -324,8 +325,8 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
                               Expanded(
                                 child: OutlinedButton.icon(
                                   onPressed: _pickFile,
-                                  icon:
-                                      Icon(Icons.folder_open, color: _accentRed),
+                                  icon: Icon(Icons.folder_open,
+                                      color: _accentRed),
                                   label: Text(
                                     "Select File",
                                     style: TextStyle(
@@ -362,8 +363,8 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
                             decoration: BoxDecoration(
                               color: _boxFillColor,
                               borderRadius: BorderRadius.circular(12),
-                              border:
-                                  Border.all(color: _accentRed.withOpacity(0.4)),
+                              border: Border.all(
+                                  color: _accentRed.withOpacity(0.4)),
                             ),
                             child: TextField(
                               controller: resumeTextController,

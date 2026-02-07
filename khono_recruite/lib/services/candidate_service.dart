@@ -25,11 +25,11 @@ class CandidateService {
     return jsonDecode(response.body);
   }
 
-  // ----------------- GET AVAILABLE JOBS -----------------
+  // ----------------- GET AVAILABLE JOBS (authenticated) -----------------
   static Future<List<Map<String, dynamic>>> getAvailableJobs(
       String token) async {
     final response = await http.get(
-      Uri.parse("http://127.0.0.1:5000/api/candidate/jobs"),
+      Uri.parse(ApiEndpoints.getAvailableJobs),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
@@ -51,6 +51,36 @@ class CandidateService {
       throw Exception('Invalid jobs response');
     } else {
       throw Exception('Failed to fetch jobs: ${response.statusCode}');
+    }
+  }
+
+  // ----------------- GET PUBLIC JOBS (no auth) -----------------
+  static Future<List<Map<String, dynamic>>> getPublicJobs() async {
+    final response = await http.get(
+      Uri.parse(ApiEndpoints.getPublicJobs),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final decoded = _safeJsonDecode(response.body);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map<Map<String, dynamic>>(
+                (item) => Map<String, dynamic>.from(item))
+            .toList();
+      }
+      if (decoded is Map<String, dynamic>) {
+        final jobs = decoded['jobs'] ?? decoded['data'];
+        if (jobs is List) {
+          return List<Map<String, dynamic>>.from(jobs);
+        }
+      }
+      throw Exception('Invalid public jobs response');
+    } else {
+      throw Exception('Failed to fetch public jobs: ${response.statusCode}');
     }
   }
 

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import '../../services/auth_service.dart';
@@ -138,7 +139,7 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
               child: Container(
                 padding: EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.9),
+                  color: Colors.white.withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Column(
@@ -191,7 +192,7 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.black.withOpacity(0.7),
+                      Colors.black.withValues(alpha: 0.7),
                       Colors.transparent,
                     ],
                   ),
@@ -200,11 +201,11 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                   children: [
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
+                        color: Colors.white.withValues(alpha: 0.9),
                         borderRadius: BorderRadius.circular(30),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
+                            color: Colors.black.withValues(alpha: 0.2),
                             blurRadius: 8,
                             offset: Offset(0, 2),
                           ),
@@ -212,7 +213,13 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                       ),
                       child: IconButton(
                         icon: Icon(Icons.arrow_back, color: Colors.black87),
-                        onPressed: () => Navigator.of(context).pop(),
+                        onPressed: () {
+                          if (context.canPop()) {
+                            context.pop();
+                          } else {
+                            context.go('/candidate-dashboard?token=${widget.token}');
+                          }
+                        },
                       ),
                     ),
                     SizedBox(width: 16),
@@ -234,11 +241,11 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                           padding: EdgeInsets.all(24),
                           margin: EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.9),
+                            color: Colors.white.withValues(alpha: 0.9),
                             borderRadius: BorderRadius.circular(20),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
+                                color: Colors.black.withValues(alpha: 0.1),
                                 blurRadius: 20,
                                 offset: Offset(0, 10),
                               ),
@@ -288,12 +295,12 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                               borderRadius: BorderRadius.circular(16),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.15),
+                                  color: Colors.black.withValues(alpha: 0.15),
                                   blurRadius: 20,
                                   offset: Offset(0, 8),
                                 ),
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
+                                  color: Colors.black.withValues(alpha: 0.1),
                                   blurRadius: 10,
                                   offset: Offset(0, 2),
                                 ),
@@ -303,11 +310,11 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.9),
+                                  color: Colors.white.withValues(alpha: 0.9),
                                   border: Border.all(
                                     color:
                                         const Color.fromARGB(255, 112, 16, 16)
-                                            .withOpacity(0.3),
+                                            .withValues(alpha: 0.3),
                                     width: 1,
                                   ),
                                 ),
@@ -324,7 +331,7 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                                             decoration: BoxDecoration(
                                               color: const Color.fromARGB(
                                                       255, 112, 16, 16)
-                                                  .withOpacity(0.1),
+                                                  .withValues(alpha: 0.1),
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                             ),
@@ -427,7 +434,7 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                                             elevation: 2,
                                             shadowColor: const Color.fromARGB(
                                                     255, 112, 16, 16)
-                                                .withOpacity(0.3),
+                                                .withValues(alpha: 0.3),
                                           ),
                                         ),
                                       ),

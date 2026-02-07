@@ -320,38 +320,49 @@ def init_auth_routes(app):
 
     # ------------------- REGISTER -------------------
     @app.route('/api/auth/register', methods=['POST'])
-    @limiter.limit("5 per minute")  # Add this line - stricter for registration
+    @limiter.limit("5 per minute")
     def register():
         try:
-            data = request.get_json()
+            data = request.get_json(silent=True)
+            if not data:
+                return jsonify({'error': 'Invalid or missing JSON body'}), 400
+
             email = data.get('email')
             password = data.get('password')
-            first_name = data.get('first_name')
-            last_name = data.get('last_name')
-            role = data.get('role', 'candidate')
-            
+
+            # Require only email + password
+            if not email or not password:
+                return jsonify({'error': 'Email and password are required'}), 400
+
+            email = email.strip().lower()
+
             # ---------------- Password Validation ----------------
             valid_password, errors = validator.validate(password)
-
             if not valid_password:
                 return jsonify({"errors": errors}), 400
             # -----------------------------------------------------
 
-            if role not in ROLE_DASHBOARD_MAP:
-                return jsonify({"error": "Invalid role"}), 400
-            if not all([email, password, first_name, last_name]):
-                return jsonify({'error': 'Missing required fields'}), 400
-
-            email = email.strip().lower()
-            if User.query.filter(db.func.lower(User.email) == email).first():
+            # Create user (role is forced internally)
+            try:
+                user = AuthService.create_user(email=email, password=password)
+            except ValueError:
                 return jsonify({'error': 'User already exists'}), 409
 
-            user = AuthService.create_user(email, password, first_name, last_name, role)
-
-            code = f"{secrets.randbelow(1000000):06d}"
+            # Generate verification code
+            code = f"{secrets.randbelow(1_000_000):06d}"
             expires_at = datetime.utcnow() + timedelta(minutes=30)
-            VerificationCode.query.filter_by(email=email, is_used=False).delete()
-            verification_code = VerificationCode(email=email, code=code, expires_at=expires_at)
+
+            VerificationCode.query.filter_by(
+                email=email,
+                is_used=False
+            ).delete()
+
+            verification_code = VerificationCode(
+                email=email,
+                code=code,
+                expires_at=expires_at
+            )
+
             db.session.add(verification_code)
             db.session.commit()
 
@@ -359,13 +370,15 @@ def init_auth_routes(app):
             AuditService.log(user_id=user.id, action="register")
 
             return jsonify({
-                'message': 'User registered successfully. Please check your email for verification code.',
-                'user_id': user.id
+                'message': 'User registered successfully. Please check your email for verification code.'
             }), 201
 
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f'Registration error: {str(e)}', exc_info=True)
+            current_app.logger.error(
+                f'Registration error: {str(e)}',
+                exc_info=True
+            )
             return jsonify({'error': 'Internal server error'}), 500
 
     # ------------------- VERIFY EMAIL -------------------

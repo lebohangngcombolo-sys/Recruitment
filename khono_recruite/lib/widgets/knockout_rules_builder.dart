@@ -48,7 +48,7 @@ class KnockoutRulesBuilder extends StatelessWidget {
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            value: ruleType,
+                            initialValue: ruleType,
                             items: _ruleTypes
                                 .map((type) => DropdownMenuItem(
                                       value: type,
@@ -85,7 +85,7 @@ class KnockoutRulesBuilder extends StatelessWidget {
                       children: [
                         Expanded(
                           child: DropdownButtonFormField<String>(
-                            value: ruleOperator,
+                            initialValue: ruleOperator,
                             items: _operators
                                 .map((op) => DropdownMenuItem(
                                       value: op,

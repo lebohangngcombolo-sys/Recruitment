@@ -331,14 +331,14 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            AppColors.primaryRed.withOpacity(0.9),
+            AppColors.primaryRed.withValues(alpha: 0.9),
             const Color(0xFFEF4444),
           ],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryRed.withOpacity(0.3),
+            color: AppColors.primaryRed.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -350,7 +350,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Center(
@@ -374,7 +374,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                 Text(
                   'Connect, communicate, and collaborate in real-time',
                   style: GoogleFonts.inter(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 13,
                   ),
                 ),
@@ -384,7 +384,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -431,7 +431,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 20,
                 ),
               ],
@@ -489,7 +489,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -578,7 +578,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        AppColors.primaryRed.withOpacity(0.8),
+                        AppColors.primaryRed.withValues(alpha: 0.8),
                         const Color(0xFFEF4444),
                       ],
                       begin: Alignment.topLeft,
@@ -653,7 +653,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: AppColors.primaryRed.withOpacity(0.1),
+                  color: AppColors.primaryRed.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
@@ -704,7 +704,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -770,9 +770,9 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           width: 110, // Fixed width to prevent overflow
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.2)),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
           ),
           child: Center(
             child: Text(
@@ -802,7 +802,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 20,
               offset: const Offset(0, 4),
             ),
@@ -845,7 +845,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
+                      color: Colors.blue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
@@ -921,7 +921,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
+                        color: Colors.blue.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -1033,7 +1033,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -1323,7 +1323,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -1451,7 +1451,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               borderRadius: BorderRadius.circular(25),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -1612,7 +1612,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -1743,7 +1743,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -1838,272 +1838,6 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
             onPressed: () => Navigator.pop(context),
             child: Text('Close',
                 style: GoogleFonts.inter(color: AppColors.primaryRed)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showNoteOptions(SharedNote note) {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor:
-          themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(Icons.edit, color: AppColors.primaryRed),
-              title: Text('Edit Note',
-                  style: GoogleFonts.inter(
-                    color:
-                        themeProvider.isDarkMode ? Colors.white : Colors.black,
-                  )),
-              onTap: () {
-                Navigator.pop(context);
-                _editSharedNote(note);
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.delete, color: AppColors.primaryRed),
-              title: Text('Delete Note',
-                  style: GoogleFonts.inter(
-                    color:
-                        themeProvider.isDarkMode ? Colors.white : Colors.black,
-                  )),
-              onTap: () {
-                Navigator.pop(context);
-                _deleteSharedNote(note);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _editSharedNote(SharedNote note) {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    final titleController = TextEditingController(text: note.title);
-    final contentController = TextEditingController(text: note.content);
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor:
-            themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
-        title: Text('Edit Shared Note',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-            )),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: InputDecoration(
-                labelText: 'Title',
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                labelStyle: GoogleFonts.inter(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.black,
-                ),
-              ),
-              style: GoogleFonts.inter(
-                color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: contentController,
-              decoration: InputDecoration(
-                labelText: 'Content',
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                labelStyle: GoogleFonts.inter(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.black,
-                ),
-              ),
-              maxLines: 4,
-              style: GoogleFonts.inter(
-                color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel',
-                style: GoogleFonts.inter(
-                    color: themeProvider.isDarkMode
-                        ? Colors.grey.shade400
-                        : AppColors.textGrey)),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ElevatedButton(
-              onPressed: () async {
-                if (titleController.text.trim().isEmpty ||
-                    contentController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Please fill in both title and content',
-                          style: GoogleFonts.inter()),
-                      backgroundColor: AppColors.primaryRed,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  );
-                  return;
-                }
-
-                try {
-                  await _apiService.updateNote(note.id, {
-                    'title': titleController.text.trim(),
-                    'content': contentController.text.trim(),
-                  });
-
-                  Navigator.pop(context);
-                  await _loadTeamData(); // Refresh the notes list
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Shared note updated successfully',
-                          style: GoogleFonts.inter()),
-                      backgroundColor: Colors.green,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to update note: $e',
-                          style: GoogleFonts.inter()),
-                      backgroundColor: AppColors.primaryRed,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryRed,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: Text('Update',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _deleteSharedNote(SharedNote note) {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor:
-            themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
-        title: Text('Delete Note',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-            )),
-        content: Text('Are you sure you want to delete "${note.title}"?',
-            style: GoogleFonts.inter(
-              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-            )),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel',
-                style: GoogleFonts.inter(
-                    color: themeProvider.isDarkMode
-                        ? Colors.grey.shade400
-                        : AppColors.textGrey)),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ElevatedButton(
-              onPressed: () async {
-                try {
-                  await _apiService.deleteNote(note.id);
-                  Navigator.pop(context);
-                  await _loadTeamData(); // Refresh the notes list
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Note deleted successfully',
-                          style: GoogleFonts.inter()),
-                      backgroundColor: Colors.green,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  );
-                } catch (e) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to delete note: $e',
-                          style: GoogleFonts.inter()),
-                      backgroundColor: AppColors.primaryRed,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryRed,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: Text('Delete',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-            ),
           ),
         ],
       ),

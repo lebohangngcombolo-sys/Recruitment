@@ -242,8 +242,9 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
         final data = _safeJsonDecode(res.body);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  data is Map ? (data["error"] ?? "Failed to save draft") : "Failed to save draft")),
+              content: Text(data is Map
+                  ? (data["error"] ?? "Failed to save draft")
+                  : "Failed to save draft")),
         );
       }
     } catch (e) {
@@ -300,8 +301,9 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  data is Map ? (data["error"] ?? "Apply failed") : "Apply failed")),
+              content: Text(data is Map
+                  ? (data["error"] ?? "Apply failed")
+                  : "Apply failed")),
         );
       }
     } catch (e) {
@@ -454,9 +456,9 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Colors.black.withOpacity(0.6),
+                            Colors.black.withValues(alpha: 0.6),
                             Colors.transparent,
-                            Colors.black.withOpacity(0.3),
+                            Colors.black.withValues(alpha: 0.3),
                           ],
                         ),
                       ),
@@ -472,15 +474,15 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                               color: _accentRed.withOpacity(0.6), width: 1.5),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
+                              color: Colors.black.withValues(alpha: 0.2),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
                           ],
                         ),
                         child: IconButton(
-                          icon: const Icon(Icons.arrow_back,
-                              color: Colors.white),
+                          icon:
+                              const Icon(Icons.arrow_back, color: Colors.white),
                           onPressed: () => Navigator.of(context).pop(),
                         ),
                       ),
@@ -504,7 +506,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                           Text(
                             "${widget.job["company"] ?? ""} • ${widget.job["location"] ?? ""}",
                             style: GoogleFonts.poppins(
-                              color: Colors.white.withOpacity(0.9),
+                              color: Colors.white.withValues(alpha: 0.9),
                               fontSize: 18,
                             ),
                           ),
@@ -556,8 +558,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                                   CrossAxisAlignment.start,
                                               children: [
                                                 Icon(Icons.circle,
-                                                    size: 8,
-                                                    color: _accentRed),
+                                                    size: 8, color: _accentRed),
                                                 const SizedBox(width: 12),
                                                 Expanded(
                                                   child: Text(
@@ -785,8 +786,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                                   },
                                                   style:
                                                       ElevatedButton.styleFrom(
-                                                    backgroundColor:
-                                                        _accentRed,
+                                                    backgroundColor: _accentRed,
                                                     foregroundColor:
                                                         Colors.white,
                                                     padding: const EdgeInsets
@@ -834,8 +834,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                                   onPressed: saveDraftAndExit,
                                                   style:
                                                       OutlinedButton.styleFrom(
-                                                    foregroundColor:
-                                                        _accentRed,
+                                                    foregroundColor: _accentRed,
                                                     side: BorderSide(
                                                         color: _accentRed,
                                                         width: 1.5),
@@ -876,8 +875,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                                       _loadCandidateProfile,
                                                   style:
                                                       OutlinedButton.styleFrom(
-                                                    foregroundColor:
-                                                        _accentRed,
+                                                    foregroundColor: _accentRed,
                                                     side: BorderSide(
                                                         color: _accentRed,
                                                         width: 1.5),

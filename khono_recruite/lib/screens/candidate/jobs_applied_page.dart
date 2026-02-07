@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../services/candidate_service.dart';
 
 class JobsAppliedPage extends StatefulWidget {
@@ -52,7 +53,13 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.black87),
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/candidate-dashboard?token=${widget.token}');
+                      }
+                    },
                   ),
                   const SizedBox(width: 16),
                   const Text(
@@ -190,7 +197,8 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF991A1A).withOpacity(0.1),
+                            color:
+                                const Color(0xFF991A1A).withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Icon(
@@ -355,22 +363,22 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
 
     switch (status.toLowerCase()) {
       case 'accepted':
-        backgroundColor = Colors.green.withOpacity(0.1);
+        backgroundColor = Colors.green.withValues(alpha: 0.1);
         textColor = Colors.green;
         icon = Icons.check_circle;
         break;
       case 'rejected':
-        backgroundColor = Colors.red.withOpacity(0.1);
+        backgroundColor = Colors.red.withValues(alpha: 0.1);
         textColor = Colors.red;
         icon = Icons.cancel;
         break;
       case 'interview':
-        backgroundColor = Colors.orange.withOpacity(0.1);
+        backgroundColor = Colors.orange.withValues(alpha: 0.1);
         textColor = Colors.orange;
         icon = Icons.video_call;
         break;
       default:
-        backgroundColor = Colors.blue.withOpacity(0.1);
+        backgroundColor = Colors.blue.withValues(alpha: 0.1);
         textColor = Colors.blue;
         icon = Icons.pending;
     }
@@ -380,7 +388,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: textColor.withOpacity(0.3)),
+        border: Border.all(color: textColor.withValues(alpha: 0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

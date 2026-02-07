@@ -606,7 +606,7 @@ class _JobFormDialogState extends State<JobFormDialog>
                             ),
                             const SizedBox(height: 16),
                             DropdownButtonFormField<String>(
-                              value: salaryPeriod,
+                              initialValue: salaryPeriod,
                               decoration: const InputDecoration(
                                 labelText: "Salary Period",
                               ),
