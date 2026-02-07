@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:go_router/go_router.dart';
 import 'dart:ui';
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
@@ -19,8 +20,8 @@ import '../../screens/candidate/user_profile_page.dart';
 import 'jobs_applied_page.dart';
 import 'saved_application_screen.dart';
 import '../../services/auth_service.dart';
-import '../../screens/auth/login_screen.dart';
 import 'offers_screen.dart';
+import '../auth/login_screen.dart';
 
 class CandidateDashboard extends StatefulWidget {
   final String token;
@@ -39,6 +40,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   int _currentTab = 0;
   final List<String> _jobTypes = ['Featured', 'Full Time', 'Part Time'];
   final Color primaryColor = Color(0xFF991A1A);
+  final Color strokeColor = Color(0xFFC10D00); // New stroke color
+  final Color fillColor =
+      Color(0xFFf2f2f2).withValues(alpha: 0.2); // Fill with 20% opacity
 
   // Your existing data states
   List<Map<String, dynamic>> availableJobs = [];
@@ -54,7 +58,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   String _selectedRoleFilter = 'All Roles';
   String _selectedPlaceFilter = 'All Locations';
   String _selectedJobTypeFilter = 'All Types';
-  String _selectedDateFilter = 'Any Time';
   final TextEditingController _searchController = TextEditingController();
 
   // Your existing chatbot state
@@ -71,19 +74,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   bool _isDisposed = false;
   final PageController _pageController = PageController();
 
-  final Color _primaryDark = const Color(0xFF0A0F2D);
-  final Color _secondaryDark = const Color(0xFF1A1F37);
-  final Color _accentRed = const Color(0xFFE53935);
-  final Color _accentRedLight = const Color(0xFFEF5350);
-  final Color _cardDark = const Color(0xFF252A42);
-  final Color _textPrimary = Colors.white;
-  final Color _textSecondary = const Color(0xFFA8B2C9);
-  final Color _successColor = const Color(0xFF2E8B57);
-
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
   String _profileImageUrl = "";
-  final ImagePicker _picker = ImagePicker();
   final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
   @override
@@ -176,18 +169,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       }
     } catch (e) {
       debugPrint("Error fetching profile image: $e");
-    }
-  }
-
-  // ---------- Pick new profile picture ----------
-  Future<void> _pickProfileImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-
-    if (pickedFile != null) {
-      if (kIsWeb) _profileImageBytes = await pickedFile.readAsBytes();
-
-      setState(() => _profileImage = pickedFile);
-      await uploadProfileImage();
     }
   }
 
@@ -393,14 +374,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return ['All Jobs', ...titles];
   }
 
-  List<String> get _roles {
-    final roles = availableJobs
-        .map((job) => job['role']?.toString() ?? 'General')
-        .toSet()
-        .toList();
-    return ['All Roles', ...roles];
-  }
-
   List<String> get _locations {
     final locations = availableJobs
         .map((job) => job['location']?.toString() ?? 'Remote')
@@ -501,12 +474,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         return BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Dialog(
-            backgroundColor: Colors.white.withOpacity(0.95),
+            backgroundColor: Colors.white.withValues(alpha: 0.95),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
-              side: BorderSide(color: primaryColor.withOpacity(0.5), width: 1),
+              side: BorderSide(
+                  color: primaryColor.withValues(alpha: 0.5), width: 1),
             ),
-            child: Padding(
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+              ),
               padding: const EdgeInsets.all(20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -525,10 +502,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text("Cancel",
-                            style: GoogleFonts.poppins(color: Colors.black54)),
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: Text("Cancel",
+                              style:
+                                  GoogleFonts.poppins(color: Colors.black54)),
+                        ),
                       ),
                       const SizedBox(width: 10),
                       Container(
@@ -542,7 +525,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                         ),
                         child: TextButton(
                           onPressed: () {
-                            Navigator.of(context).pop();
                             _performLogout(context);
                           },
                           child: Text("Logout",
@@ -563,15 +545,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   void _performLogout(BuildContext context) async {
-    Navigator.of(context).pop();
+    // Don't use Navigator.pop() here - with GoRouter it pops the route and empties the stack.
+    // context.go('/login') will replace the route and dismiss the dialog.
     await AuthService.logout();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (Route<dynamic> route) => false,
-        );
-      }
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      context.go('/login');
     });
   }
 
@@ -585,8 +565,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Text(
         title,
-        style: TextStyle(
-          color: color ?? (isActive ? primaryColor : Colors.black87),
+        style: GoogleFonts.poppins(
+          color: color ?? (isActive ? Colors.white : Colors.white70),
           fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
         ),
       ),
@@ -622,14 +602,24 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 ))
             .toList(),
         SizedBox(height: 32),
-        Center(
-          child: ElevatedButton(
-            onPressed: () {
-              // Navigate to full jobs list
-              _safeSetState(() => _currentTab = 1);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: primaryColor),
-            child: Text('Browse More Jobs'),
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Center(
+            child: ElevatedButton(
+              onPressed: () {
+                _safeSetState(() => _currentTab = 1);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: strokeColor,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              child: Text('Browse More Jobs',
+                  style: GoogleFonts.poppins(color: Colors.white)),
+            ),
           ),
         ),
       ],
@@ -702,13 +692,19 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       String salary, Map<String, dynamic> job) {
     return Card(
       margin: EdgeInsets.symmetric(vertical: 8),
-      child: Padding(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+        ),
         padding: EdgeInsets.all(16),
         child: Row(
           children: [
             CircleAvatar(
               radius: 40,
-              backgroundColor: primaryColor.withOpacity(0.1),
+              backgroundColor: primaryColor.withValues(alpha: 0.1),
               backgroundImage: job['company_logo'] != null
                   ? NetworkImage(job['company_logo'])
                   : null,
@@ -723,7 +719,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 children: [
                   Text(
                     title,
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: GoogleFonts.poppins(
+                        fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   SizedBox(height: 8),
                   Wrap(
@@ -736,7 +733,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                           Icon(Icons.location_on,
                               size: 16, color: primaryColor),
                           SizedBox(width: 4),
-                          Text(location),
+                          Text(location, style: GoogleFonts.poppins()),
                         ],
                       ),
                       Row(
@@ -744,7 +741,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                         children: [
                           Icon(Icons.schedule, size: 16, color: primaryColor),
                           SizedBox(width: 4),
-                          Text(type),
+                          Text(type, style: GoogleFonts.poppins()),
                         ],
                       ),
                       Row(
@@ -753,7 +750,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                           Icon(Icons.monetization_on,
                               size: 16, color: primaryColor),
                           SizedBox(width: 4),
-                          Text(salary),
+                          Text(salary, style: GoogleFonts.poppins()),
                         ],
                       ),
                     ],
@@ -765,32 +762,45 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               children: [
                 Row(
                   children: [
-                    IconButton(
-                      icon: Icon(Icons.favorite_border, color: primaryColor),
-                      onPressed: () {
-                        // Handle save job functionality
-                        _saveJob(job);
-                      },
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: IconButton(
+                        icon: Icon(Icons.favorite_border, color: primaryColor),
+                        onPressed: () {
+                          _saveJob(job);
+                        },
+                      ),
                     ),
-                    ElevatedButton(
-                      onPressed: () {
-                        // Navigate to job details
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => JobDetailsPage(job: job)),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor),
-                      child: Text('Apply Now'),
+                    SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => JobDetailsPage(job: job)),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        child: Text('Apply Now', style: GoogleFonts.poppins()),
+                      ),
                     ),
                   ],
                 ),
                 SizedBox(height: 8),
                 Text(
                   'Date Line: ${job['deadline'] ?? '01 Jan, 2045'}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
                 ),
               ],
             ),
@@ -801,10 +811,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   void _saveJob(Map<String, dynamic> job) {
-    // Implement save job functionality
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Job saved to favorites'),
+        content: Text('Job saved to favorites', style: GoogleFonts.poppins()),
         backgroundColor: primaryColor,
       ),
     );
@@ -813,7 +822,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   // Updated search functionality
   Widget _buildSearchSection() {
     return Container(
-      color: primaryColor,
+      decoration: BoxDecoration(),
       padding: EdgeInsets.all(35),
       child: Container(
         constraints: BoxConstraints(maxWidth: 1200),
@@ -821,536 +830,155 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           children: [
             Expanded(
               flex: 5,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _searchController,
-                      onChanged: (value) => setState(() {}),
-                      decoration: InputDecoration(
-                        hintText: 'Keyword',
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderSide: BorderSide.none,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: strokeColor, width: 1),
+                          color: fillColor,
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (value) => setState(() {}),
+                          style: GoogleFonts.poppins(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Keyword',
+                            hintStyle: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold),
+                            filled: false,
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide.none,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: DropdownButtonFormField(
-                      isExpanded: true,
-                      initialValue: _selectedJobFilter,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderSide: BorderSide.none,
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: strokeColor, width: 1),
+                          color: fillColor,
+                        ),
+                        child: DropdownButtonFormField(
+                          style: GoogleFonts.poppins(color: Colors.white),
+                          dropdownColor: Colors.black,
+                          icon:
+                              Icon(Icons.arrow_drop_down, color: Colors.white),
+                          iconEnabledColor: Colors.white,
+                          iconDisabledColor: Colors.white,
+                          iconSize: 24,
+                          decoration: InputDecoration(
+                            filled: false,
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide.none,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            hintText: 'All Jobs',
+                            hintStyle: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold),
+                          ),
+                          items: _jobTitles
+                              .map((category) => DropdownMenuItem(
+                                    value: category,
+                                    child: Text(category,
+                                        style: GoogleFonts.poppins(
+                                            color: Colors.white)),
+                                  ))
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => _selectedJobFilter = value!),
                         ),
                       ),
-                      items: _jobTitles
-                          .map((category) => DropdownMenuItem(
-                                value: category,
-                                child: Text(
-                                  category,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ))
-                          .toList(),
-                      onChanged: (value) =>
-                          setState(() => _selectedJobFilter = value!),
                     ),
-                  ),
-                  SizedBox(width: 16),
-                  Expanded(
-                    child: DropdownButtonFormField(
-                      isExpanded: true,
-                      initialValue: _selectedPlaceFilter,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.white,
-                        border: OutlineInputBorder(
-                          borderSide: BorderSide.none,
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: strokeColor, width: 1),
+                          color: fillColor,
+                        ),
+                        child: DropdownButtonFormField(
+                          style: GoogleFonts.poppins(color: Colors.white),
+                          dropdownColor: Colors.black,
+                          icon:
+                              Icon(Icons.arrow_drop_down, color: Colors.white),
+                          iconEnabledColor: Colors.white,
+                          iconDisabledColor: Colors.white,
+                          iconSize: 24,
+                          decoration: InputDecoration(
+                            filled: false,
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide.none,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            hintText: 'All Locations',
+                            hintStyle: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold),
+                          ),
+                          items: _locations
+                              .map((location) => DropdownMenuItem(
+                                    value: location,
+                                    child: Text(location,
+                                        style: GoogleFonts.poppins(
+                                            color: Colors.white)),
+                                  ))
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => _selectedPlaceFilter = value!),
                         ),
                       ),
-                      items: _locations
-                          .map((location) => DropdownMenuItem(
-                                value: location,
-                                child: Text(
-                                  location,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ))
-                          .toList(),
-                      onChanged: (value) =>
-                          setState(() => _selectedPlaceFilter = value!),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             SizedBox(width: 16),
             Expanded(
               flex: 1,
-              child: ElevatedButton(
-                onPressed: () {
-                  // Trigger search with current filters
-                  setState(() {});
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey[800],
-                  padding: EdgeInsets.symmetric(vertical: 16),
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: strokeColor, width: 1),
+                  color: fillColor,
                 ),
-                child: Text('Search'),
+                child: ElevatedButton(
+                  onPressed: () {
+                    setState(() {});
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  child: Text('Search',
+                      style: GoogleFonts.poppins(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    super.build(context);
-
-    return Scaffold(
-      body: Stack(
-        children: [
-          CustomScrollView(
-            slivers: [
-              // App Bar - Updated with real data
-              SliverAppBar(
-                backgroundColor: Colors.white,
-                elevation: 2,
-                title: Image.asset(
-                  'assets/icons/khono.png',
-                  height: 40,
-                  fit: BoxFit.contain,
-                ),
-                actions: [
-                  _buildNavItem('Home', isActive: _currentTab == 0),
-                  GestureDetector(
-                    onTap: () {
-                      // Navigate to the Assessments Results page
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => AssessmentResultsPage(
-                                token: _accessToken ?? widget.token)),
-                      );
-                    },
-                    child: _buildNavItem(
-                      'Assessments Results',
-                      color: const Color.fromARGB(255, 116, 20, 13),
-                    ),
-                  ),
-
-                  PopupMenuButton<String>(
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        child: Text(
-                          'Saved Applications',
-                          style: TextStyle(
-                              color: const Color.fromARGB(255, 116, 20, 13)),
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => SavedApplicationsScreen(
-                                  token: _accessToken ?? widget.token),
-                            ),
-                          );
-                        },
-                      ),
-                      PopupMenuItem(
-                        child: Text(
-                          'Applied jobs',
-                          style: TextStyle(
-                              color: const Color.fromARGB(255, 116, 20, 13)),
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => JobsAppliedPage(
-                                  token: _accessToken ?? widget.token),
-                            ),
-                          );
-                        },
-                      ),
-                      // New Offers option
-                      PopupMenuItem(
-                        child: Text(
-                          'Offers',
-                          style: TextStyle(
-                              color: const Color.fromARGB(255, 116, 20, 13)),
-                        ),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  CandidateOffersScreen(), // create this screen
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: [
-                          Text(
-                            'Application',
-                            style: TextStyle(
-                                color: const Color.fromARGB(255, 116, 20, 13)),
-                          ),
-                          Icon(
-                            Icons.arrow_drop_down,
-                            color: const Color.fromARGB(255, 116, 20, 13),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  TextButton.icon(
-                    onPressed: () => _showLogoutConfirmation(context),
-                    icon: const Icon(
-                      Icons.logout,
-                      color: const Color.fromARGB(255, 114, 21, 15),
-                    ),
-                    label: const Text('Log Out'),
-                  ),
-
-                  // Notifications Bell Icon - Updated with real data
-                  Stack(
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          Icons.notifications, // or Icons.notifications_active
-                          color: const Color.fromARGB(
-                              255, 114, 21, 15), // 👈 makes the bell red
-                        ),
-                        onPressed: () {
-                          // Show notifications
-                          if (notifications.isNotEmpty) {
-                            // Navigate to notifications page or show dialog
-                            _showNotificationsDialog();
-                          }
-                        },
-                      ),
-                      if (notifications.isNotEmpty)
-                        Positioned(
-                          right: 8,
-                          top: 8,
-                          child: Container(
-                            padding: EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: primaryColor,
-                              shape: BoxShape.circle,
-                            ),
-                            constraints:
-                                BoxConstraints(minWidth: 16, minHeight: 16),
-                            child: Text(
-                              notifications.length.toString(),
-                              style:
-                                  TextStyle(color: Colors.white, fontSize: 10),
-                              textAlign: TextAlign.center,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  SizedBox(width: 8),
-                  // Profile Placeholder Icon - Updated with real data
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => ProfilePage(
-                                token: _accessToken ?? widget.token)),
-                      );
-                    },
-                    child: CircleAvatar(
-                      radius: 18,
-                      backgroundColor: Colors.grey.shade200,
-                      backgroundImage: _getProfileImageProvider(),
-                      child: null,
-                    ),
-                  ),
-                  SizedBox(width: 16),
-                ],
-              ),
-
-              // Carousel Section
-              SliverToBoxAdapter(
-                child: Container(
-                  height: 500,
-                  child: PageView(
-                    children: [
-                      _buildCarouselItem(
-                        'Find the Perfect Job You Deserve',
-                        'Discover opportunities tailored to your skills and ambitions. We help you connect with roles that offer growth, purpose, and long-term success.',
-                      ),
-                      _buildCarouselItem(
-                        'Find the Best Startup Role That Fits You',
-                        'Join innovative teams where your ideas matter. Explore startup positions that match your strengths and give you the freedom to make a real impact.',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Search Section - Updated with real functionality
-              SliverToBoxAdapter(child: _buildSearchSection()),
-
-              // Rest of your UI remains the same...
-              // Categories Section
-              SliverToBoxAdapter(
-                child: Container(
-                  padding: EdgeInsets.all(32),
-                  child: Column(
-                    children: [
-                      Text(
-                        'Explore By Category',
-                        style: TextStyle(
-                            fontSize: 32, fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 32),
-                      GridView.count(
-                        shrinkWrap: true,
-                        physics: NeverScrollableScrollPhysics(),
-                        crossAxisCount: 4,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
-                        children: [
-                          _buildCategoryItem(Icons.mark_email_read, 'Marketing',
-                              '123 Vacancy'),
-                          _buildCategoryItem(Icons.headset_mic,
-                              'Customer Service', '123 Vacancy'),
-                          _buildCategoryItem(
-                              Icons.people, 'Human Resource', '123 Vacancy'),
-                          _buildCategoryItem(Icons.assignment,
-                              'Project Management', '123 Vacancy'),
-                          _buildCategoryItem(Icons.trending_up,
-                              'Business Development', '123 Vacancy'),
-                          _buildCategoryItem(Icons.handshake,
-                              'Sales & Communication', '123 Vacancy'),
-                          _buildCategoryItem(Icons.school,
-                              'Teaching & Education', '123 Vacancy'),
-                          _buildCategoryItem(Icons.design_services,
-                              'Design & Creative', '123 Vacancy'),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // About Section
-              SliverToBoxAdapter(
-                child: Container(
-                  padding: EdgeInsets.all(32),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: GridView.count(
-                          shrinkWrap: true,
-                          physics: NeverScrollableScrollPhysics(),
-                          crossAxisCount: 2,
-                          children: [
-                            Image.asset('assets/images/collaggge.jpg',
-                                fit: BoxFit.cover),
-                            Image.asset('assets/images/Mosa.jpg',
-                                fit: BoxFit.cover),
-                            Image.asset('assets/images/office.jpg',
-                                fit: BoxFit.cover),
-                            Image.asset('assets/images/thato.png',
-                                fit: BoxFit.cover),
-                          ],
-                        ),
-                      ),
-                      Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.all(32),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'We Help To Get The Best Job And Find A Talent',
-                                style: TextStyle(
-                                    fontSize: 32, fontWeight: FontWeight.bold),
-                              ),
-                              SizedBox(height: 16),
-                              Text(
-                                'We connect ambitious professionals with opportunities that match their skills, goals, and passion. '
-                                'Whether you\'re building your dream career or searching for exceptional talent, our smart matching '
-                                'system and expert guidance make the journey faster, easier, and more impactful.',
-                                style: TextStyle(fontSize: 16),
-                              ),
-                              SizedBox(height: 16),
-                              _buildFeatureItem(
-                                  'Smart AI-powered job matching to save you time'),
-                              _buildFeatureItem(
-                                  'Verified talent profiles for confident hiring decisions'),
-                              _buildFeatureItem(
-                                  'Personalized guidance to help you stand out and grow'),
-                              SizedBox(height: 16),
-                              ElevatedButton(
-                                onPressed: () {},
-                                style: ElevatedButton.styleFrom(
-                                    backgroundColor: primaryColor),
-                                child: Text('Read More'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Jobs Section - Updated with real data
-              SliverToBoxAdapter(
-                child: Container(
-                  padding: EdgeInsets.all(32),
-                  child: Column(
-                    children: [
-                      Text(
-                        'Job Listing',
-                        style: TextStyle(
-                            fontSize: 32, fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 32),
-                      DefaultTabController(
-                        length: 3,
-                        child: Column(
-                          children: [
-                            TabBar(
-                              labelColor: primaryColor,
-                              indicatorColor: primaryColor,
-                              onTap: (index) =>
-                                  _safeSetState(() => _currentTab = index),
-                              tabs: _jobTypes
-                                  .map((type) => Tab(child: Text(type)))
-                                  .toList(),
-                            ),
-                            SizedBox(height: 32),
-                            Container(
-                              height: 600,
-                              child: TabBarView(
-                                children: _jobTypes
-                                    .map((type) => _buildJobList())
-                                    .toList(),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Testimonials Section
-              SliverToBoxAdapter(
-                child: Container(
-                  padding: EdgeInsets.all(32),
-                  child: Column(
-                    children: [
-                      Text(
-                        'Our Clients Say!!!',
-                        style: TextStyle(
-                            fontSize: 32, fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 32),
-                      Container(
-                        height: 220,
-                        child: ListView(
-                          scrollDirection: Axis.horizontal,
-                          children: [
-                            _buildTestimonialItem(),
-                            _buildTestimonialItem(),
-                            _buildTestimonialItem(),
-                            _buildTestimonialItem(),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Footer
-              SliverToBoxAdapter(
-                child: Container(
-                  width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 60, vertical: 40),
-                  color: const Color(0xFF111111),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Image.asset('assets/images/logo3.png',
-                          width: 220, height: 120, fit: BoxFit.contain),
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _socialIcon('assets/icons/Instagram1.png',
-                              'https://www.instagram.com/yourprofile'),
-                          _socialIcon('assets/icons/x1.png',
-                              'https://x.com/yourprofile'),
-                          _socialIcon('assets/icons/Linkedin1.png',
-                              'https://www.linkedin.com/in/yourprofile'),
-                          _socialIcon('assets/icons/facebook1.png',
-                              'https://www.facebook.com/yourprofile'),
-                          _socialIcon('assets/icons/YouTube1.png',
-                              'https://www.youtube.com/yourchannel'),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        "© 2025 Khonology. All rights reserved.",
-                        style: GoogleFonts.poppins(
-                            color: Colors.white54, fontSize: 12),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          // ===== LUXURY CHATBOT PANEL =====
-          if (chatbotOpen)
-            Positioned(
-              right: 20,
-              bottom: 80,
-              child: _buildLuxuryChatbotPanel(),
-            ),
-        ],
-      ),
-
-      // Floating Chatbot Icon
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _safeSetState(() => chatbotOpen = !chatbotOpen),
-        backgroundColor: primaryColor,
-        child: Image.asset(
-          'assets/icons/Chatbot_Red.png',
-          width: 30,
-          height: 30,
-          color: Colors.white,
         ),
       ),
     );
@@ -1362,36 +990,32 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       height: 500,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color.fromARGB(255, 254, 254, 254),
+        color: Colors.black.withAlpha(230),
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withAlpha(76)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black12,
-            blurRadius: 8,
-            offset: Offset(0, 4),
+            color: Colors.black.withValues(alpha: 0.8),
+            blurRadius: 20,
+            offset: Offset(0, 10),
           ),
         ],
       ),
       child: Column(
         children: [
-          // ===== HEADER =====
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [_accentRed, _accentRedLight],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Image.asset(
                   'assets/icons/Chatbot_Red.png',
                   width: 20,
                   height: 20,
-                  color: _primaryDark,
+                  color: Colors.white,
                 ),
               ),
               const SizedBox(width: 8),
@@ -1399,72 +1023,81 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 "Career AI Assistant",
                 style: GoogleFonts.poppins(
                   fontWeight: FontWeight.bold,
-                  color: _textPrimary,
+                  color: Colors.white,
                   fontSize: 14,
                 ),
               ),
               const Spacer(),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Colors.white.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: IconButton(
                   onPressed: () => _safeSetState(() => chatbotOpen = false),
-                  icon: Icon(Icons.close, color: _textPrimary, size: 16),
+                  icon: Icon(Icons.close, color: Colors.white, size: 16),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-
-          // ===== MODE SWITCHER =====
           Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Colors.black.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: _accentRed.withOpacity(0.2)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
                 Expanded(
-                  child: TextButton(
-                    onPressed: () => _safeSetState(() => cvParserMode = false),
-                    style: TextButton.styleFrom(
-                      backgroundColor: !cvParserMode
-                          ? _accentRed.withOpacity(0.2)
-                          : Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(
-                      "Career Chat",
-                      style: GoogleFonts.poppins(
-                        color: !cvParserMode ? _accentRed : _textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                    child: TextButton(
+                      onPressed: () =>
+                          _safeSetState(() => cvParserMode = false),
+                      style: TextButton.styleFrom(
+                        backgroundColor: !cvParserMode
+                            ? Colors.white.withValues(alpha: 0.2)
+                            : Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      child: Text(
+                        "Career Chat",
+                        style: GoogleFonts.poppins(
+                          color: !cvParserMode ? Colors.white : Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
                 ),
                 Expanded(
-                  child: TextButton(
-                    onPressed: () => _safeSetState(() => cvParserMode = true),
-                    style: TextButton.styleFrom(
-                      backgroundColor: cvParserMode
-                          ? _accentRed.withOpacity(0.2)
-                          : Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Text(
-                      "CV Analysis",
-                      style: GoogleFonts.poppins(
-                        color: cvParserMode ? _accentRed : _textSecondary,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
+                    child: TextButton(
+                      onPressed: () => _safeSetState(() => cvParserMode = true),
+                      style: TextButton.styleFrom(
+                        backgroundColor: cvParserMode
+                            ? Colors.white.withValues(alpha: 0.2)
+                            : Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                      ),
+                      child: Text(
+                        "CV Analysis",
+                        style: GoogleFonts.poppins(
+                          color: cvParserMode ? Colors.white : Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
@@ -1473,8 +1106,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             ),
           ),
           const SizedBox(height: 12),
-
-          // ===== CONTENT AREA =====
           Expanded(
             child: cvParserMode
                 ? _buildLuxuryCVParserTab()
@@ -1498,23 +1129,18 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 child: Container(
                   decoration: BoxDecoration(
                     color: msg['text']!.startsWith('You:')
-                        ? _accentRed.withOpacity(0.2)
-                        : const Color.fromARGB(255, 149, 15, 15),
+                        ? Colors.white.withValues(alpha: 0.2)
+                        : Colors.black.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 4,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.1)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(8),
                     child: Text(
                       msg['text'] ?? "",
                       style: GoogleFonts.poppins(
-                        color: _textPrimary,
+                        color: Colors.white,
                         fontSize: 12,
                       ),
                     ),
@@ -1525,30 +1151,33 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           ),
         ),
         if (_isLoading)
-          LinearProgressIndicator(color: _accentRed.withOpacity(0.7)),
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: LinearProgressIndicator(
+              color: Colors.white.withValues(alpha: 0.7),
+              backgroundColor: Colors.black.withValues(alpha: 0.3),
+            ),
+          ),
         const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Colors.black.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(8),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.2)),
                 ),
                 child: TextField(
                   controller: messageController,
-                  style: GoogleFonts.poppins(color: _textPrimary, fontSize: 12),
+                  style: GoogleFonts.poppins(color: Colors.white, fontSize: 12),
                   decoration: InputDecoration(
                     hintText: "Ask about career advice...",
                     hintStyle: GoogleFonts.poppins(
-                        color: _textSecondary, fontSize: 12),
+                        color: Colors.white54, fontSize: 12),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 10),
@@ -1559,12 +1188,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             const SizedBox(width: 8),
             Container(
               decoration: BoxDecoration(
-                color: _accentRed.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
               ),
               child: IconButton(
                 onPressed: sendMessage,
-                icon: Icon(Icons.send, color: _accentRed, size: 16),
+                icon: Icon(Icons.send, color: Colors.white, size: 16),
               ),
             ),
           ],
@@ -1583,34 +1213,26 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Job Description Label
               Text(
                 "Job Description",
-                style: GoogleFonts.poppins(color: Colors.black, fontSize: 12),
+                style: GoogleFonts.poppins(color: Colors.white, fontSize: 12),
               ),
               const SizedBox(height: 6),
-
-              // Job Description Input
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Colors.black.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(8),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.2)),
                 ),
                 child: TextField(
                   controller: jobDescController,
                   maxLines: 3,
-                  style: GoogleFonts.poppins(color: Colors.black, fontSize: 12),
+                  style: GoogleFonts.poppins(color: Colors.white, fontSize: 12),
                   decoration: InputDecoration(
                     hintText: "Paste position requirements here...",
                     hintStyle: GoogleFonts.poppins(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.white54,
                       fontSize: 12,
                     ),
                     border: InputBorder.none,
@@ -1619,35 +1241,26 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 ),
               ),
               const SizedBox(height: 12),
-
-              // Professional CV Label
               Text(
                 "Professional CV",
-                style: GoogleFonts.poppins(color: Colors.black, fontSize: 12),
+                style: GoogleFonts.poppins(color: Colors.white, fontSize: 12),
               ),
               const SizedBox(height: 6),
-
-              // CV Input
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: Colors.black.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(8),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.black12,
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.2)),
                 ),
                 child: TextField(
                   controller: cvController,
                   maxLines: 4,
-                  style: GoogleFonts.poppins(color: Colors.black, fontSize: 12),
+                  style: GoogleFonts.poppins(color: Colors.white, fontSize: 12),
                   decoration: InputDecoration(
                     hintText: "Paste your professional CV here...",
                     hintStyle: GoogleFonts.poppins(
-                      color: Colors.black.withOpacity(0.5),
+                      color: Colors.white54,
                       fontSize: 12,
                     ),
                     border: InputBorder.none,
@@ -1656,23 +1269,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 ),
               ),
               const SizedBox(height: 12),
-
-              // Upload Button Row
               Row(
                 children: [
                   Container(
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Colors.black.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(8),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 4,
-                          offset: Offset(0, 2),
-                        ),
-                      ],
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.2)),
                     ),
-                    child: ElevatedButton.icon(
+                    child: TextButton.icon(
                       onPressed: () async {
                         final result = await FilePicker.platform.pickFiles(
                           type: FileType.custom,
@@ -1683,15 +1289,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                         }
                       },
                       icon: const Icon(Icons.upload_file,
-                          size: 14, color: Colors.black),
+                          size: 14, color: Colors.white),
                       label: Text(
                         "Upload Resume",
                         style: GoogleFonts.poppins(
-                            fontSize: 11, color: Colors.black),
+                            fontSize: 11, color: Colors.white),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        foregroundColor: Colors.black,
+                      style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 6),
                       ),
@@ -1699,22 +1303,30 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                   ),
                   const SizedBox(width: 8),
                   if (uploadedResume != null)
-                    Text(
-                      uploadedResume!.name,
-                      style: GoogleFonts.poppins(
-                          color: Colors.black.withOpacity(0.5), fontSize: 10),
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Text(
+                          uploadedResume!.name,
+                          style: GoogleFonts.poppins(
+                              color: Colors.white54, fontSize: 10),
+                        ),
+                      ),
                     ),
                 ],
               ),
               const SizedBox(height: 12),
-
-              // Analyze Button
               Container(
                 decoration: BoxDecoration(
-                  color: _accentRed.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: 0.3)),
                 ),
-                child: ElevatedButton(
+                child: TextButton(
                   onPressed: _isParsing
                       ? null
                       : () async {
@@ -1725,9 +1337,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                           await analyzeCV();
                           setState(() => _isParsing = false);
                         },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    foregroundColor: Colors.black,
+                  style: TextButton.styleFrom(
                     minimumSize: const Size(double.infinity, 40),
                   ),
                   child: _isParsing
@@ -1737,40 +1347,36 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.black),
+                                AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
                       : Text(
                           "Analyze CV Compatibility",
                           style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.black),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                          ),
                         ),
                 ),
               ),
               const SizedBox(height: 12),
-
-              // CV Analysis Result
               if (cvAnalysisResult != null)
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Colors.black.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(8),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 4,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.2)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
                     child: Text(
                       jsonEncode(cvAnalysisResult),
                       style: GoogleFonts.poppins(
-                          color: Colors.black, fontSize: 10),
+                        color: Colors.white,
+                        fontSize: 10,
+                      ),
                     ),
                   ),
                 ),
@@ -1784,108 +1390,186 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   void _showNotificationsDialog() {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Notifications'),
-        content: Container(
-          width: double.maxFinite,
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: notifications.length,
-            itemBuilder: (context, index) {
-              final notif = notifications[index];
-              return ListTile(
-                leading: Icon(Icons.notifications, color: primaryColor),
-                title: Text(notif['title'] ?? 'Notification'),
-                subtitle: Text(notif['message'] ?? ''),
-              );
-            },
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
+                ),
+                padding: EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Icon(Icons.notifications, color: primaryColor),
+                    SizedBox(width: 8),
+                    Text('Notifications',
+                        style: GoogleFonts.poppins(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              Container(
+                width: double.maxFinite,
+                height: 300,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: notifications.length,
+                  itemBuilder: (context, index) {
+                    final notif = notifications[index];
+                    return Container(
+                      decoration: BoxDecoration(),
+                      child: ListTile(
+                        leading: Icon(Icons.notifications, color: primaryColor),
+                        title: Text(notif['title'] ?? 'Notification',
+                            style: GoogleFonts.poppins()),
+                        subtitle: Text(notif['message'] ?? '',
+                            style: GoogleFonts.poppins()),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(20),
+                    bottomRight: Radius.circular(20),
+                  ),
+                ),
+                padding: EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: Text('Close', style: GoogleFonts.poppins()),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('Close'),
-          ),
-        ],
       ),
     );
   }
 
-  // Keep all your existing UI helper methods exactly the same...
   Widget _buildCarouselItem(String title, String description) {
-    return Stack(
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage('assets/images/Nathi_design_3.png'),
-              fit: BoxFit.cover,
-            ),
-          ),
-        ),
-        Container(
-          color: Colors.black54,
-          padding: EdgeInsets.all(32),
-          child: Center(
-            child: Container(
-              constraints: BoxConstraints(maxWidth: 800),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: EdgeInsets.all(32),
+      child: Center(
+        child: Container(
+          constraints: BoxConstraints(maxWidth: 800),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontSize: 48,
+                    fontWeight: FontWeight.bold),
+              ),
+              SizedBox(height: 16),
+              Text(description,
+                  style:
+                      GoogleFonts.poppins(color: Colors.white, fontSize: 18)),
+              SizedBox(height: 32),
+              Row(
                 children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 48,
-                        fontWeight: FontWeight.bold),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: strokeColor, width: 1),
+                      color: fillColor,
+                    ),
+                    child: ElevatedButton(
+                      onPressed: () {},
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                      child: Text('Search A Job',
+                          style: GoogleFonts.poppins(color: Colors.white)),
+                    ),
                   ),
-                  SizedBox(height: 16),
-                  Text(description,
-                      style: TextStyle(color: Colors.white, fontSize: 18)),
-                  SizedBox(height: 32),
-                  Row(
-                    children: [
-                      ElevatedButton(
-                        onPressed: () {},
-                        style: ElevatedButton.styleFrom(
-                            backgroundColor: primaryColor),
-                        child: Text('Search A Job'),
+                  SizedBox(width: 16),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: strokeColor, width: 1),
+                      color: fillColor,
+                    ),
+                    child: OutlinedButton(
+                      onPressed: () {},
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: BorderSide.none,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
-                      SizedBox(width: 16),
-                      OutlinedButton(
-                        onPressed: () {},
-                        style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.white,
-                            side: BorderSide(color: Colors.white)),
-                        child: Text('Find A Talent'),
-                      ),
-                    ],
+                      child: Text('Find A Talent',
+                          style: GoogleFonts.poppins(color: Colors.white)),
+                    ),
                   ),
                 ],
               ),
-            ),
+            ],
           ),
         ),
-      ],
+      ),
     );
   }
 
   Widget _buildCategoryItem(IconData icon, String title, String vacancies) {
     return Card(
+      color: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: strokeColor, width: 1),
+      ),
       child: InkWell(
         onTap: () {},
         child: Container(
           padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            color: fillColor,
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 48, color: primaryColor),
+              Icon(icon, size: 48, color: Colors.white),
               SizedBox(height: 16),
               Text(title,
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white)),
               SizedBox(height: 8),
-              Text(vacancies, style: TextStyle(color: Colors.grey)),
+              Text(vacancies,
+                  style: GoogleFonts.poppins(color: Colors.white70)),
             ],
           ),
         ),
@@ -1900,7 +1584,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         children: [
           Icon(Icons.check, color: primaryColor),
           SizedBox(width: 8),
-          Text(text),
+          Text(text, style: GoogleFonts.poppins(color: Colors.white)),
         ],
       ),
     );
@@ -1912,17 +1596,21 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       margin: EdgeInsets.all(8),
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-          color: Colors.grey[100], borderRadius: BorderRadius.circular(8)),
+        color: fillColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: strokeColor, width: 1),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.format_quote, size: 32, color: primaryColor),
+          Icon(Icons.format_quote, size: 32, color: Colors.white),
           SizedBox(height: 16),
           Expanded(
             child: Text(
               'This platform has completely transformed the way I prepare for interviews. The feedback is clear, practical, and actually helps me improve. Highly recommended!',
-              style: TextStyle(fontStyle: FontStyle.italic),
+              style: GoogleFonts.poppins(
+                  fontStyle: FontStyle.italic, color: Colors.white),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1931,16 +1619,19 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           Row(
             children: [
               CircleAvatar(
-                  radius: 25,
-                  backgroundColor: primaryColor,
-                  child: Icon(Icons.person, color: Colors.white)),
+                radius: 25,
+                backgroundColor: strokeColor,
+                child: Icon(Icons.person, color: Colors.white),
+              ),
               SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Client Name',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  Text('Profession', style: TextStyle(color: Colors.grey)),
+                      style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.bold, color: Colors.white)),
+                  Text('Profession',
+                      style: GoogleFonts.poppins(color: Colors.white70)),
                 ],
               ),
             ],
@@ -1960,8 +1651,588 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             await launchUrl(uri);
           }
         },
-        child:
-            Image.asset(assetPath, width: 32, height: 32, fit: BoxFit.contain),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.2),
+            shape: BoxShape.circle,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Image.asset(assetPath,
+                width: 24, height: 24, fit: BoxFit.contain),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+
+    return Theme(
+      data: Theme.of(context).copyWith(
+        textTheme: GoogleFonts.poppinsTextTheme(Theme.of(context).textTheme),
+      ),
+      child: Scaffold(
+        body: Stack(
+          children: [
+            // Fixed background that fills the entire screen
+            Positioned.fill(
+              child: Image.asset(
+                'assets/images/dark.png',
+                fit: BoxFit.cover,
+              ),
+            ),
+
+            // Main content with transparent background
+            Positioned.fill(
+              child: CustomScrollView(
+                slivers: [
+                  // App Bar - Updated with real data
+                  SliverAppBar(
+                    backgroundColor: Colors.transparent,
+                    elevation: 2,
+                    leading: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: () {
+                        if (context.canPop()) {
+                          context.pop();
+                        } else {
+                          context.go('/');
+                        }
+                      },
+                    ),
+                    title: GestureDetector(
+                      onTap: () => context.go('/'),
+                      child: Image.asset(
+                        'assets/icons/khono.png',
+                        height: 40,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                    actions: [
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child:
+                            _buildNavItem('Home', isActive: _currentTab == 0),
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) => AssessmentResultsPage(
+                                      token: widget.token)),
+                            );
+                          },
+                          child: _buildNavItem(
+                            'Assessments Results',
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: PopupMenuButton<String>(
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              child: Text(
+                                'Saved Applications',
+                                style: GoogleFonts.poppins(color: Colors.black),
+                              ),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => SavedApplicationsScreen(
+                                        token: widget.token),
+                                  ),
+                                );
+                              },
+                            ),
+                            PopupMenuItem(
+                              child: Text(
+                                'Applied jobs',
+                                style: GoogleFonts.poppins(color: Colors.black),
+                              ),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        JobsAppliedPage(token: widget.token),
+                                  ),
+                                );
+                              },
+                            ),
+                            PopupMenuItem(
+                              child: Text(
+                                'Offers',
+                                style: GoogleFonts.poppins(color: Colors.black),
+                              ),
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => CandidateOffersScreen(),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              children: [
+                                Text(
+                                  'Application',
+                                  style:
+                                      GoogleFonts.poppins(color: Colors.white),
+                                ),
+                                Icon(
+                                  Icons.arrow_drop_down,
+                                  color: Colors.white,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: TextButton.icon(
+                          onPressed: () => _showLogoutConfirmation(context),
+                          icon: const Icon(
+                            Icons.logout,
+                            color: Colors.white,
+                          ),
+                          label: Text('Log Out',
+                              style: GoogleFonts.poppins(color: Colors.white)),
+                        ),
+                      ),
+
+                      // Notifications Bell Icon
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Stack(
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                Icons.notifications,
+                                color: Colors.white,
+                              ),
+                              onPressed: () {
+                                if (notifications.isNotEmpty) {
+                                  _showNotificationsDialog();
+                                }
+                              },
+                            ),
+                            if (notifications.isNotEmpty)
+                              Positioned(
+                                right: 8,
+                                top: 8,
+                                child: Container(
+                                  padding: EdgeInsets.all(2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  constraints: BoxConstraints(
+                                      minWidth: 16, minHeight: 16),
+                                  child: Text(
+                                    notifications.length.toString(),
+                                    style: GoogleFonts.poppins(
+                                        color: Colors.white, fontSize: 10),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      // Profile Placeholder Icon
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                        child: GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (_) =>
+                                      ProfilePage(token: widget.token)),
+                            );
+                          },
+                          child: CircleAvatar(
+                            radius: 20,
+                            backgroundColor: Colors.grey.shade200,
+                            backgroundImage: _getProfileImageProvider(),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 16),
+                    ],
+                  ),
+
+                  // Carousel Section
+                  SliverToBoxAdapter(
+                    child: Container(
+                      height: 500,
+                      decoration: BoxDecoration(),
+                      child: PageView(
+                        children: [
+                          _buildCarouselItem(
+                            'Find the Perfect Job You Deserve',
+                            'Discover opportunities tailored to your skills and ambitions. We help you connect with roles that offer growth, purpose, and long-term success.',
+                          ),
+                          _buildCarouselItem(
+                            'Find the Best Startup Role That Fits You',
+                            'Join innovative teams where your ideas matter. Explore startup positions that match your strengths and give you the freedom to make a real impact.',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Search Section
+                  SliverToBoxAdapter(
+                    child: _buildSearchSection(),
+                  ),
+
+                  // Categories Section
+                  SliverToBoxAdapter(
+                    child: Container(
+                      decoration: BoxDecoration(),
+                      padding: EdgeInsets.all(32),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Explore By Category',
+                            style: GoogleFonts.poppins(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white),
+                          ),
+                          SizedBox(height: 32),
+                          GridView.count(
+                            shrinkWrap: true,
+                            physics: NeverScrollableScrollPhysics(),
+                            crossAxisCount: 4,
+                            crossAxisSpacing: 16,
+                            mainAxisSpacing: 16,
+                            children: [
+                              _buildCategoryItem(Icons.mark_email_read,
+                                  'Marketing', '123 Vacancy'),
+                              _buildCategoryItem(Icons.headset_mic,
+                                  'Customer Service', '123 Vacancy'),
+                              _buildCategoryItem(Icons.people, 'Human Resource',
+                                  '123 Vacancy'),
+                              _buildCategoryItem(Icons.assignment,
+                                  'Project Management', '123 Vacancy'),
+                              _buildCategoryItem(Icons.trending_up,
+                                  'Business Development', '123 Vacancy'),
+                              _buildCategoryItem(Icons.handshake,
+                                  'Sales & Communication', '123 Vacancy'),
+                              _buildCategoryItem(Icons.school,
+                                  'Teaching & Education', '123 Vacancy'),
+                              _buildCategoryItem(Icons.design_services,
+                                  'Design & Creative', '123 Vacancy'),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // About Section
+                  SliverToBoxAdapter(
+                    child: Container(
+                      decoration: BoxDecoration(),
+                      padding: EdgeInsets.all(32),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: GridView.count(
+                                shrinkWrap: true,
+                                physics: NeverScrollableScrollPhysics(),
+                                crossAxisCount: 2,
+                                children: [
+                                  Image.asset('assets/images/collaggge.jpg',
+                                      fit: BoxFit.cover),
+                                  Image.asset('assets/images/Mosa.jpg',
+                                      fit: BoxFit.cover),
+                                  Image.asset('assets/images/office.jpg',
+                                      fit: BoxFit.cover),
+                                  Image.asset('assets/images/thato.png',
+                                      fit: BoxFit.cover),
+                                ],
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 16),
+                          Expanded(
+                            flex: 1,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Padding(
+                                padding: EdgeInsets.all(32),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'We Help To Get The Best Job And Find A Talent',
+                                      style: GoogleFonts.poppins(
+                                          fontSize: 32,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white),
+                                    ),
+                                    SizedBox(height: 16),
+                                    Text(
+                                      'We connect ambitious professionals with opportunities that match their skills, goals, and passion. '
+                                      'Whether you\'re building your dream career or searching for exceptional talent, our smart matching '
+                                      'system and expert guidance make the journey faster, easier, and more impactful.',
+                                      style: GoogleFonts.poppins(
+                                          fontSize: 16, color: Colors.white),
+                                    ),
+                                    SizedBox(height: 16),
+                                    _buildFeatureItem(
+                                        'Smart AI-powered job matching to save you time'),
+                                    _buildFeatureItem(
+                                        'Verified talent profiles for confident hiring decisions'),
+                                    _buildFeatureItem(
+                                        'Personalized guidance to help you stand out and grow'),
+                                    SizedBox(height: 16),
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: ElevatedButton(
+                                        onPressed: () {},
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: strokeColor,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(4),
+                                          ),
+                                        ),
+                                        child: Text('Read More',
+                                            style: GoogleFonts.poppins(
+                                                color: Colors.white)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Jobs Section
+                  SliverToBoxAdapter(
+                    child: Container(
+                      decoration: BoxDecoration(),
+                      padding: EdgeInsets.all(32),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Job Listing',
+                            style: GoogleFonts.poppins(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white),
+                          ),
+                          SizedBox(height: 32),
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: DefaultTabController(
+                              length: 3,
+                              child: Column(
+                                children: [
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: TabBar(
+                                      labelStyle: GoogleFonts.poppins(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold),
+                                      unselectedLabelStyle: GoogleFonts.poppins(
+                                          color: Colors.white),
+                                      labelColor: Colors.white,
+                                      unselectedLabelColor: Colors.white,
+                                      indicatorColor: primaryColor,
+                                      onTap: (index) => _safeSetState(
+                                          () => _currentTab = index),
+                                      tabs: _jobTypes
+                                          .map((type) => Tab(
+                                              child: Text(type,
+                                                  style: GoogleFonts.poppins(
+                                                      color: Colors.white))))
+                                          .toList(),
+                                    ),
+                                  ),
+                                  SizedBox(height: 32),
+                                  Container(
+                                    height: 600,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: TabBarView(
+                                      children: _jobTypes
+                                          .map((type) => _buildJobList())
+                                          .toList(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Testimonials Section
+                  SliverToBoxAdapter(
+                    child: Container(
+                      decoration: BoxDecoration(),
+                      padding: EdgeInsets.all(32),
+                      child: Column(
+                        children: [
+                          Text(
+                            'Our Clients Say!!!',
+                            style: GoogleFonts.poppins(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white),
+                          ),
+                          SizedBox(height: 32),
+                          Container(
+                            height: 220,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: ListView(
+                              scrollDirection: Axis.horizontal,
+                              children: [
+                                _buildTestimonialItem(),
+                                _buildTestimonialItem(),
+                                _buildTestimonialItem(),
+                                _buildTestimonialItem(),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Footer
+                  SliverToBoxAdapter(
+                    child: Container(
+                      decoration: BoxDecoration(),
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 60, vertical: 40),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Image.asset('assets/images/logo3.png',
+                              width: 220, height: 120, fit: BoxFit.contain),
+                          const SizedBox(height: 20),
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                _socialIcon('assets/icons/Instagram1.png',
+                                    'https://www.instagram.com/yourprofile'),
+                                _socialIcon('assets/icons/x1.png',
+                                    'https://x.com/yourprofile'),
+                                _socialIcon('assets/icons/Linkedin1.png',
+                                    'https://www.linkedin.com/in/yourprofile'),
+                                _socialIcon('assets/icons/facebook1.png',
+                                    'https://www.facebook.com/yourprofile'),
+                                _socialIcon('assets/icons/YouTube1.png',
+                                    'https://www.youtube.com/yourchannel'),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          Text(
+                            "© 2025 Khonology. All rights reserved.",
+                            style: GoogleFonts.poppins(
+                                color: Colors.white54, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // ===== LUXURY CHATBOT PANEL =====
+            if (chatbotOpen)
+              Positioned(
+                right: 20,
+                bottom: 80,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: _buildLuxuryChatbotPanel(),
+                ),
+              ),
+          ],
+        ),
+
+        // Floating Chatbot Icon
+        floatingActionButton: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(30),
+          ),
+          child: FloatingActionButton(
+            onPressed: () => _safeSetState(() => chatbotOpen = !chatbotOpen),
+            backgroundColor: primaryColor,
+            child: Image.asset(
+              'assets/icons/Chatbot_Red.png',
+              width: 30,
+              height: 30,
+              color: Colors.white,
+            ),
+          ),
+        ),
       ),
     );
   }

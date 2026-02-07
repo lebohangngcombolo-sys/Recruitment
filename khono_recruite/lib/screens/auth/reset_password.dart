@@ -4,10 +4,10 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/custom_textfield2.dart';
 import '../../widgets/custom_button.dart';
-import 'package:go_router/go_router.dart';
 
 class ResetPasswordPage extends StatefulWidget {
   final String? token;
@@ -24,6 +24,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
   final TextEditingController confirmPasswordController =
       TextEditingController();
   bool loading = false;
+  bool _obscureNewPassword = true;
+  bool _obscureConfirmPassword = true;
   String? token;
 
   late AnimationController _animationController;
@@ -133,17 +135,23 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
             ),
           ),
 
-          // Two logos
+          // Top bar: back arrow + logo only
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Image.asset("assets/images/logo2.png",
-                      width: size.width > 600 ? 200 : 120),
-                  Image.asset("assets/images/logo.png",
-                      width: size.width > 600 ? 200 : 120),
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back,
+                        color: Colors.white, size: 28),
+                    onPressed: () => context.go('/login'),
+                  ),
+                  const SizedBox(width: 12),
+                  Image.asset(
+                    "assets/icons/khono.png",
+                    height: 40,
+                    fit: BoxFit.contain,
+                  ),
                 ],
               ),
             ),
@@ -162,9 +170,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                     padding: const EdgeInsets.symmetric(
                         horizontal: 24, vertical: 32),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.08),
+                      color: Colors.white.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.2)),
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(18),
@@ -197,13 +206,28 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                             ),
                             const SizedBox(height: 24),
 
-                            // Password fields
+                            // Password fields (white)
                             CustomTextField(
                               label: "New Password",
                               controller: newPasswordController,
                               inputType: TextInputType.visiblePassword,
-                              textColor: Colors.white,
-                              backgroundColor: Colors.transparent,
+                              obscureText: _obscureNewPassword,
+                              textColor: Colors.black,
+                              backgroundColor: Colors.white,
+                              borderColor: Colors.grey.shade300,
+                              labelColor: Colors.white,
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscureNewPassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  color: Colors.grey.shade600,
+                                ),
+                                onPressed: () {
+                                  setState(() => _obscureNewPassword =
+                                      !_obscureNewPassword);
+                                },
+                              ),
                             ),
                             const SizedBox(height: 12),
 
@@ -211,8 +235,23 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                               label: "Confirm Password",
                               controller: confirmPasswordController,
                               inputType: TextInputType.visiblePassword,
-                              textColor: Colors.white,
-                              backgroundColor: Colors.transparent,
+                              obscureText: _obscureConfirmPassword,
+                              textColor: Colors.black,
+                              backgroundColor: Colors.white,
+                              borderColor: Colors.grey.shade300,
+                              labelColor: Colors.white,
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscureConfirmPassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  color: Colors.grey.shade600,
+                                ),
+                                onPressed: () {
+                                  setState(() => _obscureConfirmPassword =
+                                      !_obscureConfirmPassword);
+                                },
+                              ),
                             ),
 
                             const SizedBox(height: 24),

@@ -114,10 +114,10 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
             color: isDark ? Colors.white : Colors.black87,
           ),
         ),
-        backgroundColor:
-            (isDark ? const Color(0xFF14131E) : Colors.white).withOpacity(0.95),
+        backgroundColor: (isDark ? const Color(0xFF14131E) : Colors.white)
+            .withValues(alpha: 0.95),
         elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.1),
+        shadowColor: Colors.black.withValues(alpha: 0.1),
         iconTheme: IconThemeData(
           color: isDark ? Colors.white : Colors.black87,
         ),
@@ -149,11 +149,11 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
                   color: (isDark ? const Color(0xFF14131E) : Colors.white)
-                      .withOpacity(0.9),
+                      .withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
+                      color: Colors.black.withValues(alpha: 0.08),
                       blurRadius: 15,
                       offset: const Offset(0, 5),
                     ),
@@ -202,26 +202,26 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                     end: Alignment.bottomCenter,
                     colors: isDark
                         ? [
-                            Color(0xFF1E1B2E).withOpacity(0.8),
-                            Color(0xFF14131E).withOpacity(0.9),
+                            Color(0xFF1E1B2E).withValues(alpha: 0.8),
+                            Color(0xFF14131E).withValues(alpha: 0.9),
                           ]
                         : [
-                            Colors.white.withOpacity(0.9),
-                            Colors.grey.shade50.withOpacity(0.9),
+                            Colors.white.withValues(alpha: 0.9),
+                            Colors.grey.shade50.withValues(alpha: 0.9),
                           ],
                   ),
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 20,
                       offset: const Offset(0, 8),
                     ),
                   ],
                   border: Border.all(
                     color: isDark
-                        ? Colors.white.withOpacity(0.1)
-                        : Colors.black.withOpacity(0.05),
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : Colors.black.withValues(alpha: 0.05),
                   ),
                 ),
                 child: loading
@@ -246,7 +246,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppColors.primaryRed.withOpacity(0.1),
+            color: AppColors.primaryRed.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
           child: Icon(icon, color: AppColors.primaryRed, size: 20),
@@ -283,7 +283,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
             child: CircularProgressIndicator(
               strokeWidth: 3,
               color: primaryRed,
-              backgroundColor: primaryRed.withOpacity(0.2),
+              backgroundColor: primaryRed.withValues(alpha: 0.2),
             ),
           ),
           const SizedBox(height: 20),
@@ -305,7 +305,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: Colors.red.shade50.withOpacity(0.9),
+          color: Colors.red.shade50.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.red.shade200),
         ),
@@ -433,26 +433,26 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
               end: Alignment.bottomRight,
               colors: isDark
                   ? [
-                      Color(0xFF1E1B2E).withOpacity(0.8),
-                      Color(0xFF14131E).withOpacity(0.9),
+                      Color(0xFF1E1B2E).withValues(alpha: 0.8),
+                      Color(0xFF14131E).withValues(alpha: 0.9),
                     ]
                   : [
-                      Colors.white.withOpacity(0.95),
-                      Colors.grey.shade50.withOpacity(0.95),
+                      Colors.white.withValues(alpha: 0.95),
+                      Colors.grey.shade50.withValues(alpha: 0.95),
                     ],
             ),
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
+                color: Colors.black.withValues(alpha: 0.08),
                 blurRadius: 15,
                 offset: const Offset(0, 6),
               ),
             ],
             border: Border.all(
               color: isDark
-                  ? Colors.white.withOpacity(0.1)
-                  : Colors.black.withOpacity(0.05),
+                  ? Colors.white.withValues(alpha: 0.1)
+                  : Colors.black.withValues(alpha: 0.05),
             ),
           ),
           child: Row(
@@ -464,8 +464,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: rank <= 3
-                      ? primaryRed.withOpacity(0.9)
-                      : Colors.grey.withOpacity(0.3),
+                      ? primaryRed.withValues(alpha: 0.9)
+                      : Colors.grey.withValues(alpha: 0.3),
                   shape: BoxShape.circle,
                 ),
                 child: Text(
@@ -489,8 +489,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      primaryRed.withOpacity(0.2),
-                      primaryRed.withOpacity(0.3),
+                      primaryRed.withValues(alpha: 0.2),
+                      primaryRed.withValues(alpha: 0.3),
                     ],
                   ),
                   shape: BoxShape.circle,
@@ -565,9 +565,9 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.1),
+                  color: statusColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: statusColor.withOpacity(0.3)),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,

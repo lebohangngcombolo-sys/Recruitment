@@ -54,7 +54,7 @@ class JobService:
             # Ensure job.id is assigned before logging activity
             db.session.flush()
             
-            # Log activity
+            # Log activity (job.id is now set)
             JobService._log_activity(
                 action="CREATE",
                 job_id=job.id,

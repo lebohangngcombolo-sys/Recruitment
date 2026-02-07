@@ -71,25 +71,24 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             ),
           ),
 
-          // ---------- Back Arrow ----------
+          // Top bar: back arrow + logo only
           SafeArea(
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: IconButton(
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.4),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: const Icon(Icons.arrow_back,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back,
                         color: Colors.white, size: 28),
+                    onPressed: () => Navigator.pop(context),
                   ),
-                  onPressed: () => Navigator.pop(context),
-                ),
+                  const SizedBox(width: 12),
+                  Image.asset(
+                    "assets/icons/khono.png",
+                    height: 40,
+                    fit: BoxFit.contain,
+                  ),
+                ],
               ),
             ),
           ),
@@ -110,18 +109,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const SizedBox(height: 16),
-                        // Icon
-                        Container(
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.lock_reset,
-                            size: 32,
-                            color: Colors.white,
-                          ),
+                        const Icon(
+                          Icons.lock_reset,
+                          size: 40,
+                          color: Colors.white,
                         ),
                         const SizedBox(height: 16),
                         Text(
@@ -154,10 +145,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           label: "Email",
                           controller: emailController,
                           inputType: TextInputType.emailAddress,
-                          textColor: Colors.white,
-                          backgroundColor: Colors.transparent,
-                          borderColor: Colors.white.withOpacity(0.3),
-                          focusedBorderColor: Colors.white,
+                          backgroundColor: Colors.white,
+                          textColor: Colors.black,
+                          borderColor: Colors.grey.shade300,
+                          labelColor: Colors.white,
                           borderRadius: 15,
                           borderWidth: 1,
                           focusedBorderWidth: 1.5,
@@ -203,7 +194,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: IconButton(
@@ -228,7 +219,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
           if (loading)
             Container(
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withValues(alpha: 0.5),
               child: const Center(
                 child: CircularProgressIndicator(
                   color: Colors.white,

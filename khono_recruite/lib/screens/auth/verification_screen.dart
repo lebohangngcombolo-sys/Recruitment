@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/custom_button.dart';
-import '../../widgets/six_digit_code_field.dart'; // Import the custom widget
+import '../../widgets/six_digit_code_field.dart';
 import '../../providers/theme_provider.dart';
-import '../enrollment/enrollment_screen.dart';
 
 class VerificationScreen extends StatefulWidget {
   final String email;
@@ -78,12 +78,9 @@ class _VerificationScreenState extends State<VerificationScreen>
         SnackBar(content: Text(response['error'])),
       );
     } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => EnrollmentScreen(token: response['access_token']),
-        ),
-      );
+      if (!context.mounted) return;
+      final token = response['access_token'] as String? ?? '';
+      context.go('/enrollment?token=${Uri.encodeComponent(token)}');
     }
   }
 
@@ -105,27 +102,25 @@ class _VerificationScreenState extends State<VerificationScreen>
             ),
           ),
 
-          // ---------- Top Left Logo ----------
-          Positioned(
-            top: 40,
-            left: 24,
-            child: Image.asset(
-              'assets/images/logo2.png', // Replace with your left logo path
-              width: 300,
-              height: 120,
-              fit: BoxFit.contain,
-            ),
-          ),
-
-          // ---------- Top Right Logo ----------
-          Positioned(
-            top: 40,
-            right: 24,
-            child: Image.asset(
-              'assets/images/logo.png', // Replace with your right logo path
-              width: 300,
-              height: 120,
-              fit: BoxFit.contain,
+          // Top bar: back arrow + logo only
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back,
+                        color: Colors.white, size: 28),
+                    onPressed: () => context.canPop() ? context.pop() : context.go('/register'),
+                  ),
+                  const SizedBox(width: 12),
+                  Image.asset(
+                    "assets/icons/khono.png",
+                    height: 40,
+                    fit: BoxFit.contain,
+                  ),
+                ],
+              ),
             ),
           ),
 
@@ -146,18 +141,10 @@ class _VerificationScreenState extends State<VerificationScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const SizedBox(height: 16),
-                        // Modern header with icon
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.verified_user_outlined,
-                            size: 28,
-                            color: Colors.white,
-                          ),
+                        const Icon(
+                          Icons.verified_user_outlined,
+                          size: 36,
+                          color: Colors.white,
                         ),
                         const SizedBox(height: 16),
                         const Text(
@@ -196,7 +183,7 @@ class _VerificationScreenState extends State<VerificationScreen>
                                   "Enter verification code",
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: Colors.white70,
+                                    color: Colors.white,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -205,6 +192,7 @@ class _VerificationScreenState extends State<VerificationScreen>
                               SixDigitCodeField(
                                 onCodeChanged: _onCodeChanged,
                                 onCodeCompleted: _onCodeCompleted,
+                                onSubmit: verify,
                                 autoFocus: true,
                               ),
                             ],
@@ -234,7 +222,7 @@ class _VerificationScreenState extends State<VerificationScreen>
                               Text(
                                 "Didn't receive code? ",
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.7),
+                                  color: Colors.white.withValues(alpha: 0.7),
                                   fontSize: 13,
                                 ),
                               ),
@@ -266,7 +254,7 @@ class _VerificationScreenState extends State<VerificationScreen>
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: IconButton(
@@ -290,7 +278,7 @@ class _VerificationScreenState extends State<VerificationScreen>
 
           if (loading)
             Container(
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withValues(alpha: 0.5),
               child: const Center(
                 child: CircularProgressIndicator(
                   color: Colors.white,
