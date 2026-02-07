@@ -939,7 +939,7 @@ class _ProfilePageState extends State<ProfilePage>
             // Full-background image
             Positioned.fill(
               child: Image.asset(
-                "assets/images/background.jpg",
+                themeProvider.backgroundImage,
                 fit: BoxFit.cover,
               ),
             ),

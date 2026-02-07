@@ -35,6 +35,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   @override
   bool get wantKeepAlive => true;
 
+  String? _accessToken;
   int _currentTab = 0;
   final List<String> _jobTypes = ['Featured', 'Full Time', 'Part Time'];
   final Color primaryColor = Color(0xFF991A1A);
@@ -120,16 +121,33 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   void _initializeData() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadInitialData();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadInitialData();
     });
   }
 
-  void _loadInitialData() {
+  Future<void> _loadInitialData() async {
+    final token = await _resolveToken();
+    if (!mounted) return;
+
+    if (token == null || token.isEmpty) {
+      debugPrint("Missing auth token. Redirecting to login.");
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+      return;
+    }
+
+    _safeSetState(() => _accessToken = token);
     fetchAvailableJobs();
     fetchApplications();
     fetchNotifications();
     fetchCandidateProfile();
+  }
+
+  Future<String?> _resolveToken() async {
+    if (widget.token.isNotEmpty) return widget.token;
+    return await AuthService.getAccessToken();
   }
 
   void _safeRefreshData() {
@@ -139,10 +157,12 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   // ---------- Fetch profile image ----------
   Future<void> fetchProfileImage() async {
     try {
+      final token = _accessToken ?? widget.token;
+      if (token.isEmpty) return;
       final profileRes = await http.get(
         Uri.parse("$apiBase/profile"),
         headers: {
-          'Authorization': 'Bearer ${widget.token}',
+          'Authorization': 'Bearer $token',
           'Content-Type': 'application/json'
         },
       );
@@ -237,7 +257,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
 
     _safeSetState(() => loadingJobs = true);
     try {
-      final jobs = await CandidateService.getAvailableJobs(widget.token);
+      final token = _accessToken ?? widget.token;
+      if (token.isEmpty) {
+        throw Exception("Missing auth token");
+      }
+      final jobs = await CandidateService.getAvailableJobs(token);
       if (!mounted) return;
 
       _safeSetState(() {
@@ -259,7 +283,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
 
     _safeSetState(() => loadingApplications = true);
     try {
-      final data = await CandidateService.getApplications(widget.token);
+      final token = _accessToken ?? widget.token;
+      if (token.isEmpty) {
+        throw Exception("Missing auth token");
+      }
+      final data = await CandidateService.getApplications(token);
       if (!mounted) return;
 
       _safeSetState(() {
@@ -281,7 +309,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
 
     _safeSetState(() => loadingNotifications = true);
     try {
-      final data = await CandidateService.getNotifications(widget.token);
+      final token = _accessToken ?? widget.token;
+      if (token.isEmpty) {
+        throw Exception("Missing auth token");
+      }
+      final data = await CandidateService.getNotifications(token);
       if (!mounted) return;
 
       _safeSetState(() {
@@ -302,7 +334,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     if (!mounted) return;
 
     try {
-      final data = await CandidateService.getProfile(widget.token);
+      final token = _accessToken ?? widget.token;
+      if (token.isEmpty) {
+        throw Exception("Missing auth token");
+      }
+      final data = await CandidateService.getProfile(token);
       if (!mounted) return;
 
       _safeSetState(() => candidateProfile = data);
@@ -559,9 +595,20 @@ class _CandidateDashboardState extends State<CandidateDashboard>
 
   // Updated to use real job data
   Widget _buildJobList() {
-    final jobsToShow = _currentTab == 0
-        ? _filteredJobs.take(5).toList() // Featured - show first 5
-        : _filteredJobs;
+    var jobsToShow = _filteredJobs;
+    if (_currentTab == 1) {
+      jobsToShow = jobsToShow
+          .where((job) => job['employment_type'] == 'full_time')
+          .toList();
+    } else if (_currentTab == 2) {
+      jobsToShow = jobsToShow
+          .where((job) => job['employment_type'] == 'part_time')
+          .toList();
+    }
+
+    if (_currentTab == 0) {
+      jobsToShow = jobsToShow.take(5).toList(); // Featured - show first 5
+    }
 
     return ListView(
       children: [
@@ -569,8 +616,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             .map((job) => _buildJobItem(
                   job['title'] ?? 'Position',
                   job['location'] ?? 'Location',
-                  job['type'] ?? 'Type',
-                  job['salary'] ?? 'Salary',
+                  _formatEmploymentType(job['employment_type'] ?? job['type']),
+                  _formatSalary(job),
                   job, // Pass the full job object
                 ))
             .toList(),
@@ -587,6 +634,67 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         ),
       ],
     );
+  }
+
+  String _formatSalary(Map<String, dynamic> job) {
+    final currency = (job['salary_currency']?.toString().isNotEmpty ?? false)
+        ? job['salary_currency'].toString()
+        : 'ZAR';
+    final symbol = _currencySymbol(currency);
+    final min = (job['salary_min'] is num) ? job['salary_min'] as num : null;
+    final max = (job['salary_max'] is num) ? job['salary_max'] as num : null;
+    final period = _formatSalaryPeriod(job['salary_period']);
+
+    if (min == null && max == null) {
+      return "Salary not specified";
+    }
+
+    final minText = min != null ? _formatNumber(min) : null;
+    final maxText = max != null ? _formatNumber(max) : null;
+
+    if (minText != null && maxText != null) {
+      return "$symbol$minText - $symbol$maxText$period";
+    }
+    if (minText != null) {
+      return "$symbol$minText$period";
+    }
+    return "$symbol$maxText$period";
+  }
+
+  String _formatNumber(num value) {
+    final rounded = value.toDouble();
+    return rounded % 1 == 0
+        ? rounded.toStringAsFixed(0)
+        : rounded.toStringAsFixed(2);
+  }
+
+  String _currencySymbol(String currency) {
+    final code = currency.toUpperCase();
+    if (code == 'ZAR') return 'R';
+    if (code == 'USD') return '\$';
+    if (code == 'EUR') return '€';
+    if (code == 'GBP') return '£';
+    return '$code ';
+  }
+
+  String _formatSalaryPeriod(dynamic period) {
+    final value = period?.toString().toLowerCase();
+    if (value == 'yearly') {
+      return ' per year';
+    }
+    if (value == 'monthly') {
+      return ' per month';
+    }
+    return '';
+  }
+
+  String _formatEmploymentType(dynamic type) {
+    final value = type?.toString().toLowerCase();
+    if (value == 'full_time') return 'Full Time';
+    if (value == 'part_time') return 'Part Time';
+    if (value == 'contract') return 'Contract';
+    if (value == 'internship') return 'Internship';
+    return type?.toString() ?? 'Type';
   }
 
   // Updated to handle real job data
@@ -642,7 +750,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.attach_money,
+                          Icon(Icons.monetization_on,
                               size: 16, color: primaryColor),
                           SizedBox(width: 4),
                           Text(salary),
@@ -733,6 +841,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                   SizedBox(width: 16),
                   Expanded(
                     child: DropdownButtonFormField(
+                      isExpanded: true,
                       initialValue: _selectedJobFilter,
                       decoration: InputDecoration(
                         filled: true,
@@ -745,7 +854,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       items: _jobTitles
                           .map((category) => DropdownMenuItem(
                                 value: category,
-                                child: Text(category),
+                                child: Text(
+                                  category,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ))
                           .toList(),
                       onChanged: (value) =>
@@ -755,6 +868,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                   SizedBox(width: 16),
                   Expanded(
                     child: DropdownButtonFormField(
+                      isExpanded: true,
                       initialValue: _selectedPlaceFilter,
                       decoration: InputDecoration(
                         filled: true,
@@ -767,7 +881,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       items: _locations
                           .map((location) => DropdownMenuItem(
                                 value: location,
-                                child: Text(location),
+                                child: Text(
+                                  location,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ))
                           .toList(),
                       onChanged: (value) =>
@@ -824,8 +942,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (_) =>
-                                AssessmentResultsPage(token: widget.token)),
+                            builder: (_) => AssessmentResultsPage(
+                                token: _accessToken ?? widget.token)),
                       );
                     },
                     child: _buildNavItem(
@@ -846,8 +964,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  SavedApplicationsScreen(token: widget.token),
+                              builder: (_) => SavedApplicationsScreen(
+                                  token: _accessToken ?? widget.token),
                             ),
                           );
                         },
@@ -862,8 +980,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) =>
-                                  JobsAppliedPage(token: widget.token),
+                              builder: (_) => JobsAppliedPage(
+                                  token: _accessToken ?? widget.token),
                             ),
                           );
                         },
@@ -959,7 +1077,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (_) => ProfilePage(token: widget.token)),
+                            builder: (_) => ProfilePage(
+                                token: _accessToken ?? widget.token)),
                       );
                     },
                     child: CircleAvatar(

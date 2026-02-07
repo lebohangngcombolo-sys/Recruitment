@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import '../../services/auth_service.dart';
 import 'assessment_page.dart';
+import '../../widgets/application_flow_stepper.dart';
 
 class JobDetailsPage extends StatefulWidget {
   final Map<String, dynamic> job;
@@ -31,16 +32,12 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
   final TextEditingController portfolioController = TextEditingController();
   final TextEditingController coverLetterController = TextEditingController();
 
-  // Theme Colors
-  final Color _primaryDark = Colors.white; // Background
-  final Color _cardDark = Colors.white; // Card background
-  final Color _accentRed = Color(0xFFE53935); // Main red
-  final Color _accentPurple = Color(0xFFD32F2F); // Dark red
-  final Color _accentBlue = Color(0xFFEF5350); // Light red
-  final Color _accentGreen = Color(0xFF43A047); // Success
-  final Color _textPrimary = Colors.black; // Main text
-  final Color _textSecondary = Colors.redAccent; // Secondary text
-  final Color _surfaceOverlay = Colors.red.withOpacity(0.1); // subtle overlay
+  // Enrollment-style Theme Colors
+  final Color _cardDark = Colors.black.withOpacity(0.55); // Card background
+  final Color _accentRed = const Color(0xFFC10D00); // Main red
+  final Color _textPrimary = Colors.white; // Main text
+  final Color _textSecondary = Colors.grey.shade300; // Secondary text
+  final Color _enrollmentFieldFill = const Color(0xFFF2F2F2).withOpacity(0.2);
 
   @override
   void initState() {
@@ -204,6 +201,13 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     if (applicationId == null) return;
 
     final token = await AuthService.getAccessToken();
+    if (token == null || token.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please log in to save your draft.")),
+      );
+      return;
+    }
     try {
       final payload = {
         "draft_data": {
@@ -235,9 +239,11 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
 
         Navigator.pop(context, true); // send "refresh" to dashboard
       } else {
-        final data = json.decode(res.body);
+        final data = _safeJsonDecode(res.body);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data["error"] ?? "Failed to save draft")),
+          SnackBar(
+              content: Text(
+                  data is Map ? (data["error"] ?? "Failed to save draft") : "Failed to save draft")),
         );
       }
     } catch (e) {
@@ -251,6 +257,14 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     if (!_formKey.currentState!.validate()) return;
 
     final token = await AuthService.getAccessToken();
+    if (token == null || token.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please log in to apply.")),
+      );
+      return;
+    }
+    if (!mounted) return;
     setState(() => submitting = true);
 
     try {
@@ -270,7 +284,11 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
       );
 
       if (res.statusCode == 201) {
-        final data = json.decode(res.body);
+        final data = _safeJsonDecode(res.body);
+        if (data is! Map) {
+          throw Exception("Invalid apply response");
+        }
+        if (!mounted) return;
         setState(() {
           applicationId = data["application_id"];
         });
@@ -278,17 +296,91 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
           const SnackBar(content: Text("Applied successfully!")),
         );
       } else {
-        final data = json.decode(res.body);
+        final data = _safeJsonDecode(res.body);
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data["error"] ?? "Apply failed")),
+          SnackBar(
+              content: Text(
+                  data is Map ? (data["error"] ?? "Apply failed") : "Apply failed")),
         );
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
+      if (!mounted) return;
       setState(() => submitting = false);
     }
+  }
+
+  dynamic _safeJsonDecode(String body) {
+    try {
+      return json.decode(body);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _formatSalary(Map<String, dynamic> job) {
+    final currency = (job['salary_currency']?.toString().isNotEmpty ?? false)
+        ? job['salary_currency'].toString()
+        : 'ZAR';
+    final symbol = _currencySymbol(currency);
+    final min = (job['salary_min'] is num) ? job['salary_min'] as num : null;
+    final max = (job['salary_max'] is num) ? job['salary_max'] as num : null;
+    final period = _formatSalaryPeriod(job['salary_period']);
+
+    if (min == null && max == null) {
+      return "Salary not specified";
+    }
+
+    final minText = min != null ? _formatNumber(min) : null;
+    final maxText = max != null ? _formatNumber(max) : null;
+
+    if (minText != null && maxText != null) {
+      return "$symbol$minText - $symbol$maxText$period";
+    }
+    if (minText != null) {
+      return "$symbol$minText$period";
+    }
+    return "$symbol$maxText$period";
+  }
+
+  String _formatNumber(num value) {
+    final rounded = value.toDouble();
+    return rounded % 1 == 0
+        ? rounded.toStringAsFixed(0)
+        : rounded.toStringAsFixed(2);
+  }
+
+  String _currencySymbol(String currency) {
+    final code = currency.toUpperCase();
+    if (code == 'ZAR') return 'R';
+    if (code == 'USD') return '\$';
+    if (code == 'EUR') return '€';
+    if (code == 'GBP') return '£';
+    return '$code ';
+  }
+
+  String _formatSalaryPeriod(dynamic period) {
+    final value = period?.toString().toLowerCase();
+    if (value == 'yearly') {
+      return ' per year';
+    }
+    if (value == 'monthly') {
+      return ' per month';
+    }
+    return '';
+  }
+
+  String _formatEmploymentType(dynamic type) {
+    final value = type?.toString().toLowerCase();
+    if (value == 'full_time') return 'Full Time';
+    if (value == 'part_time') return 'Part Time';
+    if (value == 'contract') return 'Contract';
+    if (value == 'internship') return 'Internship';
+    return type?.toString() ?? 'Full Time';
   }
 
   @override
@@ -312,6 +404,15 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
         ? List<String>.from(qualifications)
         : ["Qualification 1", "Qualification 2", "Qualification 3"];
 
+    final rawWeightings = widget.job["weightings"];
+    final Map<String, dynamic> weightings = (rawWeightings is Map)
+        ? Map<String, dynamic>.from(rawWeightings)
+        : {"cv": 60, "assessment": 40, "interview": 0, "references": 0};
+
+    final rawRules = widget.job["knockout_rules"];
+    final List<dynamic> rules =
+        (rawRules is List) ? List<dynamic>.from(rawRules) : [];
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
@@ -325,9 +426,18 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
               ),
             ),
           ),
+          Container(
+            color: Colors.black.withOpacity(0.4),
+          ),
           SingleChildScrollView(
             child: Column(
               children: [
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: ApplicationFlowStepper(currentStep: 0),
+                ),
+                const SizedBox(height: 12),
                 // Banner - UNCHANGED
                 Stack(
                   children: [
@@ -356,8 +466,10 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                       left: 16,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.black.withOpacity(0.6),
                           borderRadius: BorderRadius.circular(30),
+                          border: Border.all(
+                              color: _accentRed.withOpacity(0.6), width: 1.5),
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withOpacity(0.2),
@@ -368,7 +480,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                         ),
                         child: IconButton(
                           icon: const Icon(Icons.arrow_back,
-                              color: Colors.black87),
+                              color: Colors.white),
                           onPressed: () => Navigator.of(context).pop(),
                         ),
                       ),
@@ -418,7 +530,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                 _buildEnhancedCard(
                                   Icons.description_outlined,
                                   "Job Description",
-                                  Colors.blue,
+                                  _accentRed,
                                   [
                                     Text(
                                       widget.job["description"] ??
@@ -434,7 +546,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                 _buildEnhancedCard(
                                   Icons.checklist_outlined,
                                   "Responsibilities",
-                                  Colors.green,
+                                  _accentRed,
                                   responsibilitiesList
                                       .map((r) => Padding(
                                             padding: const EdgeInsets.symmetric(
@@ -445,7 +557,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                               children: [
                                                 Icon(Icons.circle,
                                                     size: 8,
-                                                    color: Colors.green),
+                                                    color: _accentRed),
                                                 const SizedBox(width: 12),
                                                 Expanded(
                                                   child: Text(
@@ -464,7 +576,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                 _buildEnhancedCard(
                                   Icons.school_outlined,
                                   "Qualifications",
-                                  Colors.orange,
+                                  _accentRed,
                                   qualificationsList
                                       .map((q) => Padding(
                                             padding: const EdgeInsets.symmetric(
@@ -475,7 +587,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                               children: [
                                                 Icon(Icons.verified,
                                                     size: 16,
-                                                    color: Colors.orange),
+                                                    color: _accentRed),
                                                 const SizedBox(width: 12),
                                                 Expanded(
                                                   child: Text(
@@ -492,9 +604,72 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                       .toList(),
                                 ),
                                 _buildEnhancedCard(
+                                  Icons.tune_outlined,
+                                  "Evaluation Criteria",
+                                  _accentRed,
+                                  [
+                                    Text(
+                                      "Weightings - CV: ${weightings['cv'] ?? 60}%, "
+                                      "Assessment: ${weightings['assessment'] ?? 40}%, "
+                                      "Interview: ${weightings['interview'] ?? 0}%, "
+                                      "References: ${weightings['references'] ?? 0}%",
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        color: _textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    if (rules.isEmpty)
+                                      Text(
+                                        "No knockout rules configured.",
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 13,
+                                          color: _textPrimary,
+                                        ),
+                                      )
+                                    else
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: rules.map((rule) {
+                                          if (rule is Map<String, dynamic>) {
+                                            final type = rule["type"] ?? "rule";
+                                            final field =
+                                                rule["field"] ?? "field";
+                                            final operator =
+                                                rule["operator"] ?? "==";
+                                            final value = rule["value"] ?? "";
+                                            return Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      vertical: 4),
+                                              child: Text(
+                                                "- $type: $field $operator $value",
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 13,
+                                                  color: _textPrimary,
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 4),
+                                            child: Text(
+                                              "- $rule",
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 13,
+                                                color: _textPrimary,
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
+                                      ),
+                                  ],
+                                ),
+                                _buildEnrollmentCard(
                                   Icons.work_outline,
                                   "Apply For This Job",
-                                  _accentRed,
                                   [
                                     if (loadingProfile)
                                       Center(
@@ -509,31 +684,27 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                         key: _formKey,
                                         child: Column(
                                           children: [
-                                            _buildEnhancedTextField(
+                                            _buildEnrollmentTextField(
                                               controller: fullNameController,
                                               label: "Full Name",
                                               icon: Icons.person_outline,
                                             ),
-                                            const SizedBox(height: 16),
-                                            _buildEnhancedTextField(
+                                            _buildEnrollmentTextField(
                                               controller: phoneController,
                                               label: "Phone Number",
                                               icon: Icons.phone_outlined,
                                             ),
-                                            const SizedBox(height: 16),
-                                            _buildEnhancedTextField(
+                                            _buildEnrollmentTextField(
                                               controller: portfolioController,
                                               label: "Portfolio Link",
                                               icon: Icons.link_outlined,
                                             ),
-                                            const SizedBox(height: 16),
-                                            _buildEnhancedTextField(
+                                            _buildEnrollmentTextField(
                                               controller: coverLetterController,
                                               label: "Cover Letter",
                                               icon: Icons.article_outlined,
                                               maxLines: 5,
                                             ),
-                                            const SizedBox(height: 24),
                                             // Submit Application Button
                                             SizedBox(
                                               width: double.infinity,
@@ -543,7 +714,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                                     : applyJob,
                                                 style: ElevatedButton.styleFrom(
                                                   backgroundColor: _accentRed,
-                                                  foregroundColor: _textPrimary,
+                                                  foregroundColor: Colors.white,
                                                   padding: const EdgeInsets
                                                       .symmetric(vertical: 16),
                                                   shape: RoundedRectangleBorder(
@@ -560,7 +731,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                                         child:
                                                             CircularProgressIndicator(
                                                           strokeWidth: 2,
-                                                          color: _textPrimary,
+                                                          color: Colors.white,
                                                         ),
                                                       )
                                                     : Row(
@@ -571,17 +742,21 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                                           Icon(
                                                               Icons
                                                                   .send_outlined,
-                                                              size: 20),
+                                                              size: 20,
+                                                              color:
+                                                                  Colors.white),
                                                           const SizedBox(
                                                               width: 8),
                                                           Text(
-                                                            "Submit Application",
+                                                            "Proceed With Application",
                                                             style: GoogleFonts
                                                                 .poppins(
                                                               fontWeight:
                                                                   FontWeight
                                                                       .w600,
                                                               fontSize: 16,
+                                                              color:
+                                                                  Colors.white,
                                                             ),
                                                           ),
                                                         ],
@@ -611,9 +786,9 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                                   style:
                                                       ElevatedButton.styleFrom(
                                                     backgroundColor:
-                                                        Colors.deepPurpleAccent,
+                                                        _accentRed,
                                                     foregroundColor:
-                                                        _textPrimary,
+                                                        Colors.white,
                                                     padding: const EdgeInsets
                                                         .symmetric(
                                                         vertical: 16),
@@ -631,7 +806,8 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                                             .center,
                                                     children: [
                                                       Icon(Icons.quiz_outlined,
-                                                          size: 20),
+                                                          size: 20,
+                                                          color: Colors.white),
                                                       const SizedBox(width: 8),
                                                       Text(
                                                         "Take Assessment",
@@ -640,6 +816,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                                           fontWeight:
                                                               FontWeight.w600,
                                                           fontSize: 16,
+                                                          color: Colors.white,
                                                         ),
                                                       ),
                                                     ],
@@ -653,13 +830,15 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                               const SizedBox(height: 16),
                                               SizedBox(
                                                 width: double.infinity,
-                                                child: ElevatedButton(
+                                                child: OutlinedButton.icon(
                                                   onPressed: saveDraftAndExit,
                                                   style:
-                                                      ElevatedButton.styleFrom(
-                                                    backgroundColor: _cardDark,
+                                                      OutlinedButton.styleFrom(
                                                     foregroundColor:
-                                                        _textPrimary,
+                                                        _accentRed,
+                                                    side: BorderSide(
+                                                        color: _accentRed,
+                                                        width: 1.5),
                                                     padding: const EdgeInsets
                                                         .symmetric(
                                                         vertical: 16),
@@ -669,27 +848,20 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                                           BorderRadius.circular(
                                                               12),
                                                     ),
-                                                    elevation: 2,
                                                   ),
-                                                  child: Row(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment
-                                                            .center,
-                                                    children: [
-                                                      const Icon(
-                                                          Icons.save_outlined,
-                                                          size: 20),
-                                                      const SizedBox(width: 8),
-                                                      Text(
-                                                        "Save & Exit",
-                                                        style:
-                                                            GoogleFonts.poppins(
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          fontSize: 16,
-                                                        ),
-                                                      ),
-                                                    ],
+                                                  icon: Icon(
+                                                    Icons.save_outlined,
+                                                    size: 20,
+                                                    color: _accentRed,
+                                                  ),
+                                                  label: Text(
+                                                    "Save & Exit",
+                                                    style: GoogleFonts.poppins(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      fontSize: 16,
+                                                      color: _accentRed,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
@@ -699,15 +871,16 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                               const SizedBox(height: 16),
                                               SizedBox(
                                                 width: double.infinity,
-                                                child: ElevatedButton(
+                                                child: OutlinedButton(
                                                   onPressed:
                                                       _loadCandidateProfile,
                                                   style:
-                                                      ElevatedButton.styleFrom(
-                                                    backgroundColor:
-                                                        Colors.blue.shade600,
+                                                      OutlinedButton.styleFrom(
                                                     foregroundColor:
-                                                        _textPrimary,
+                                                        _accentRed,
+                                                    side: BorderSide(
+                                                        color: _accentRed,
+                                                        width: 1.5),
                                                     padding: const EdgeInsets
                                                         .symmetric(
                                                         vertical: 12),
@@ -718,8 +891,14 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                                               12),
                                                     ),
                                                   ),
-                                                  child: const Text(
-                                                      "Reload Profile Data"),
+                                                  child: Text(
+                                                    "Reload Profile Data",
+                                                    style: GoogleFonts.poppins(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: _accentRed,
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
                                             ],
@@ -741,7 +920,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                 _buildEnhancedCard(
                                   Icons.assignment_outlined,
                                   "Job Summary",
-                                  Colors.purple,
+                                  _accentRed,
                                   [
                                     _buildSummaryRow(
                                         Icons.calendar_today_outlined,
@@ -756,12 +935,13 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                     _buildSummaryRow(
                                         Icons.schedule_outlined,
                                         "Job Nature",
-                                        widget.job["type"] ?? "Full Time"),
+                                        _formatEmploymentType(
+                                            widget.job["employment_type"] ??
+                                                widget.job["type"])),
                                     _buildSummaryRow(
                                         Icons.attach_money_outlined,
                                         "Salary",
-                                        widget.job["salary"] ??
-                                            "\$123 - \$456"),
+                                        _formatSalary(widget.job)),
                                     _buildSummaryRow(
                                         Icons.location_on_outlined,
                                         "Location",
@@ -772,7 +952,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                 _buildEnhancedCard(
                                   Icons.business_outlined,
                                   "Company Details",
-                                  Colors.teal,
+                                  _accentRed,
                                   [
                                     Text(
                                       widget.job["company_details"] ??
@@ -809,21 +989,16 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: _cardDark.withOpacity(0.9),
+        color: _cardDark,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
-            blurRadius: 25,
+            blurRadius: 20,
             offset: const Offset(0, 8),
           ),
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
         ],
-        border: Border.all(color: _accentRed.withOpacity(0.3), width: 1),
+        border: Border.all(color: _accentRed.withOpacity(0.6), width: 1.5),
       ),
       child: Padding(
         padding: const EdgeInsets.all(24.0),
@@ -835,10 +1010,10 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.2),
+                    color: _accentRed.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(icon, color: color, size: 24),
+                  child: Icon(icon, color: _accentRed, size: 24),
                 ),
                 const SizedBox(width: 12),
                 Text(
@@ -859,13 +1034,63 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     );
   }
 
+  Widget _buildEnrollmentCard(
+      IconData icon, String title, List<Widget> children) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.55),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _accentRed.withOpacity(0.6), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _accentRed.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: _accentRed, size: 24),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...children,
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildSummaryRow(IconData icon, String title, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 20, color: _textSecondary),
+          Icon(icon, size: 20, color: _accentRed),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -895,38 +1120,72 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     );
   }
 
-  Widget _buildEnhancedTextField({
+  Widget _buildEnrollmentTextField({
     required TextEditingController controller,
     required String label,
     required IconData icon,
     int maxLines = 1,
   }) {
-    return TextFormField(
-      controller: controller,
-      maxLines: maxLines,
-      style: GoogleFonts.poppins(fontSize: 14, color: _textPrimary),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: GoogleFonts.poppins(color: _textSecondary),
-        prefixIcon: Icon(icon, color: _textSecondary),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: _accentRed.withOpacity(0.3)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            fontFamily: 'Poppins',
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: _accentRed.withOpacity(0.3)),
+        const SizedBox(height: 10),
+        Container(
+          decoration: BoxDecoration(
+            color: _enrollmentFieldFill,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _accentRed,
+              width: 1.5,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: TextFormField(
+            controller: controller,
+            maxLines: maxLines,
+            style: const TextStyle(
+              fontSize: 16,
+              color: Colors.white,
+              fontWeight: FontWeight.w500,
+              fontFamily: 'Poppins',
+            ),
+            validator: (val) => val == null || val.isEmpty ? "Required" : null,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.transparent,
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              prefixIcon: Container(
+                margin: const EdgeInsets.only(left: 12, right: 8),
+                child: Icon(
+                  icon,
+                  color: _accentRed,
+                  size: 22,
+                ),
+              ),
+            ),
+          ),
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: _accentRed, width: 2),
-        ),
-        filled: true,
-        fillColor: _primaryDark.withOpacity(0.5),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      ),
-      validator: (val) => val == null || val.isEmpty ? "Required" : null,
+        const SizedBox(height: 24),
+      ],
     );
   }
 
@@ -958,7 +1217,10 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: _primaryDark,
+        color: _cardDark,
+        border: Border(
+          top: BorderSide(color: _accentRed.withOpacity(0.6), width: 1.5),
+        ),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 50),
       child: Column(

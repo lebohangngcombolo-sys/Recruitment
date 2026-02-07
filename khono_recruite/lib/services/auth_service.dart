@@ -408,8 +408,19 @@ class AuthService {
   }
 
   // ----------------- AUTHORIZED REQUEST HELPERS -----------------
+  static http.Response _missingTokenResponse() {
+    return http.Response(
+      jsonEncode({"error": "Missing access token"}),
+      401,
+      headers: {"Content-Type": "application/json"},
+    );
+  }
+
   static Future<http.Response> authorizedGet(String url) async {
     final token = await getAccessToken();
+    if (token == null || token.isEmpty) {
+      return _missingTokenResponse();
+    }
     return http.get(
       Uri.parse(url),
       headers: {
@@ -422,6 +433,9 @@ class AuthService {
   static Future<http.Response> authorizedPost(
       String url, Map<String, dynamic> body) async {
     final token = await getAccessToken();
+    if (token == null || token.isEmpty) {
+      return _missingTokenResponse();
+    }
     return http.post(
       Uri.parse(url),
       headers: {
@@ -435,6 +449,9 @@ class AuthService {
   static Future<http.Response> authorizedPut(
       String url, Map<String, dynamic> data) async {
     final token = await getAccessToken();
+    if (token == null || token.isEmpty) {
+      return _missingTokenResponse();
+    }
     return http.put(
       Uri.parse(url),
       headers: {
@@ -447,6 +464,9 @@ class AuthService {
 
   static Future<http.Response> authorizedDelete(String url) async {
     final token = await getAccessToken();
+    if (token == null || token.isEmpty) {
+      return _missingTokenResponse();
+    }
     return http.delete(
       Uri.parse(url),
       headers: {
