@@ -108,7 +108,7 @@ services:
       - key: DEEPSEEK_API_KEY
         sync: false
 
-  - type: static
+  - type: static_site
     name: recruitment-web
     rootDir: khono_recruite
     buildCommand: bash render_build.sh
