@@ -14,6 +14,9 @@ def make_celery(app_name=__name__):
         redis_url = broker_env or redis_env or "redis://localhost:6379/0"
     backend = os.getenv("CELERY_RESULT_BACKEND", redis_url)
     celery = Celery(app_name, broker=redis_url, backend=backend)
+    task_always_eager = os.getenv("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true"
+    task_eager_propagates = os.getenv("CELERY_TASK_EAGER_PROPAGATES", "true").lower() == "true"
+
     celery.conf.update(
         task_acks_late=True,
         worker_prefetch_multiplier=1,
@@ -22,6 +25,8 @@ def make_celery(app_name=__name__):
         accept_content=["json"],
         timezone="UTC",
         enable_utc=True,
+        task_always_eager=task_always_eager,
+        task_eager_propagates=task_eager_propagates,
     )
     if redis_url.startswith("rediss://") or backend.startswith("rediss://"):
         ssl_opts = {"ssl_cert_reqs": ssl.CERT_REQUIRED}
