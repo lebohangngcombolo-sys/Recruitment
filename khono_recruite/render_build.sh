@@ -22,6 +22,11 @@ print(f"{data['base_url']}/{archive}")
 PY
 )"
 
+# strip any stray carriage returns that can break curl on linux shells
+DOWNLOAD_URL="$(echo "${DOWNLOAD_URL}" | tr -d '\r')"
+
+echo "Downloading Flutter from: ${DOWNLOAD_URL}"
+
   curl -fsSL "${DOWNLOAD_URL}" -o "${ARCHIVE_PATH}"
   mkdir -p "${FLUTTER_DIR}"
   tar -xf "${ARCHIVE_PATH}" -C "${FLUTTER_DIR}" --strip-components=1
