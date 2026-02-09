@@ -230,7 +230,7 @@ class ContactPage extends StatelessWidget {
                               'https://x.com/yourprofile',
                             ),
                             _socialIcon(
-                              'assets/icons/Linkedin.png',
+                              'assets/icons/LinkedIn.png',
                               'https://www.linkedin.com/in/yourprofile',
                             ),
                             _socialIcon(
