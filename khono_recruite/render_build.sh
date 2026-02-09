@@ -9,8 +9,8 @@ FLUTTER_DIR="${WORKDIR}/.flutter"
 ARCHIVE_PATH="/tmp/flutter.tar.xz"
 
 if [ ! -d "${FLUTTER_DIR}" ]; then
-  # Fetch the Flutter archive URL and ensure we only keep the final non-empty line
-  DOWNLOAD_URL="$(python3 - <<'PY'
+  # Fetch the Flutter archive URL into a temporary variable
+  DOWNLOAD_OUTPUT="$(python3 - <<'PY'
 import json, urllib.request
 url = "https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json"
 data = json.load(urllib.request.urlopen(url))
@@ -19,10 +19,10 @@ release = next(r for r in data["releases"] if r["hash"] == stable_hash)
 archive = release["archive"]
 print(f"{data['base_url']}/{archive}")
 PY
-  | awk 'NF{last=$0} END{print last}')"
+  )"
 
-  # strip any stray carriage returns that can break curl on linux shells
-  DOWNLOAD_URL="$(echo "${DOWNLOAD_URL}" | tr -d '\r')"
+  # Extract the final non-empty line (guard against extraneous logs), trim CRs
+  DOWNLOAD_URL="$(echo "${DOWNLOAD_OUTPUT}" | awk 'NF{last=$0} END{print last}' | tr -d '\r')"
 
   echo "Downloading Flutter from: ${DOWNLOAD_URL}"
 
