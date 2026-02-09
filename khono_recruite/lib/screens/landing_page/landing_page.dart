@@ -48,13 +48,12 @@ class _LandingPageState extends State<LandingPage>
   ];
 
   /// Explore By Category uses only real API jobs (no mock data).
-  static List<Map<String, dynamic>> get _categoryMockJobs => [];
 
   final Color primaryColor = Color(0xFF991A1A);
   final Color strokeColor = Color(0xFFC10D00); // Accent (e.g. backgrounds)
   final Color borderColor = Colors.white; // Borders for inputs, buttons, cards
   final Color fillColor =
-      Color(0xFFf2f2f2).withOpacity(0.2); // Fill with 20% opacity
+      Color(0xFFf2f2f2).withValues(alpha: 0.2); // Fill with 20% opacity
 
   // Your existing data states
   List<Map<String, dynamic>> availableJobs = [];
@@ -546,11 +545,11 @@ class _LandingPageState extends State<LandingPage>
         return BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Dialog(
-            backgroundColor: Colors.white.withOpacity(0.95),
+            backgroundColor: Colors.white.withValues(alpha: 0.95),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
               side: BorderSide(
-                  color: primaryColor.withOpacity(0.5), width: 1),
+                  color: primaryColor.withValues(alpha: 0.5), width: 1),
             ),
             child: Container(
               decoration: BoxDecoration(
@@ -645,7 +644,7 @@ class _LandingPageState extends State<LandingPage>
       String salary, Map<String, dynamic> job) {
     return Card(
       margin: EdgeInsets.symmetric(vertical: 8),
-      color: Colors.white.withOpacity(0.06),
+      color: Colors.white.withValues(alpha: 0.06),
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -660,7 +659,7 @@ class _LandingPageState extends State<LandingPage>
           children: [
             CircleAvatar(
               radius: 40,
-              backgroundColor: primaryColor.withOpacity(0.2),
+              backgroundColor: primaryColor.withValues(alpha: 0.2),
               backgroundImage: job['company_logo'] != null
                   ? NetworkImage(job['company_logo'])
                   : null,
@@ -839,7 +838,7 @@ class _LandingPageState extends State<LandingPage>
                             ),
                           ),
                           child: DropdownButtonFormField<String>(
-                            value: _selectedJobFilter == 'All Jobs'
+                            initialValue: _selectedJobFilter == 'All Jobs'
                                 ? null
                                 : _selectedJobFilter,
                             style: GoogleFonts.poppins(
@@ -905,7 +904,7 @@ class _LandingPageState extends State<LandingPage>
                             ),
                           ),
                           child: DropdownButtonFormField<String>(
-                            value: _selectedPlaceFilter == 'All Locations'
+                            initialValue: _selectedPlaceFilter == 'All Locations'
                                 ? null
                                 : _selectedPlaceFilter,
                             style: GoogleFonts.poppins(
@@ -996,7 +995,7 @@ class _LandingPageState extends State<LandingPage>
         border: Border.all(color: Colors.white.withAlpha(76)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.8),
+            color: Colors.black.withValues(alpha: 0.8),
             blurRadius: 20,
             offset: Offset(0, 10),
           ),
@@ -1009,7 +1008,7 @@ class _LandingPageState extends State<LandingPage>
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Image.asset(
@@ -1031,7 +1030,7 @@ class _LandingPageState extends State<LandingPage>
               const Spacer(),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: IconButton(
@@ -1044,9 +1043,9 @@ class _LandingPageState extends State<LandingPage>
           const SizedBox(height: 12),
           Container(
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.white.withOpacity(0.2)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
             ),
             child: Row(
               children: [
@@ -1060,7 +1059,7 @@ class _LandingPageState extends State<LandingPage>
                           _safeSetState(() => cvParserMode = false),
                       style: TextButton.styleFrom(
                         backgroundColor: !cvParserMode
-                            ? Colors.white.withOpacity(0.2)
+                            ? Colors.white.withValues(alpha: 0.2)
                             : Colors.transparent,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
@@ -1086,7 +1085,7 @@ class _LandingPageState extends State<LandingPage>
                       onPressed: () => _safeSetState(() => cvParserMode = true),
                       style: TextButton.styleFrom(
                         backgroundColor: cvParserMode
-                            ? Colors.white.withOpacity(0.2)
+                            ? Colors.white.withValues(alpha: 0.2)
                             : Colors.transparent,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
@@ -1130,11 +1129,11 @@ class _LandingPageState extends State<LandingPage>
                 child: Container(
                   decoration: BoxDecoration(
                     color: msg['text']!.startsWith('You:')
-                        ? Colors.white.withOpacity(0.2)
-                        : Colors.black.withOpacity(0.5),
+                        ? Colors.white.withValues(alpha: 0.2)
+                        : Colors.black.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(8),
                     border:
-                        Border.all(color: Colors.white.withOpacity(0.1)),
+                        Border.all(color: Colors.white.withValues(alpha: 0.1)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(8),
@@ -1157,8 +1156,8 @@ class _LandingPageState extends State<LandingPage>
               borderRadius: BorderRadius.circular(4),
             ),
             child: LinearProgressIndicator(
-              color: Colors.white.withOpacity(0.7),
-              backgroundColor: Colors.black.withOpacity(0.3),
+              color: Colors.white.withValues(alpha: 0.7),
+              backgroundColor: Colors.black.withValues(alpha: 0.3),
             ),
           ),
         const SizedBox(height: 8),
@@ -1167,10 +1166,10 @@ class _LandingPageState extends State<LandingPage>
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
+                  color: Colors.black.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(8),
                   border:
-                      Border.all(color: Colors.white.withOpacity(0.2)),
+                      Border.all(color: Colors.white.withValues(alpha: 0.2)),
                 ),
                 child: TextField(
                   controller: messageController,
@@ -1189,9 +1188,9 @@ class _LandingPageState extends State<LandingPage>
             const SizedBox(width: 8),
             Container(
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.white.withOpacity(0.3)),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
               ),
               child: IconButton(
                 onPressed: sendMessage,
@@ -1221,10 +1220,10 @@ class _LandingPageState extends State<LandingPage>
               const SizedBox(height: 6),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
+                  color: Colors.black.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(8),
                   border:
-                      Border.all(color: Colors.white.withOpacity(0.2)),
+                      Border.all(color: Colors.white.withValues(alpha: 0.2)),
                 ),
                 child: TextField(
                   controller: jobDescController,
@@ -1249,10 +1248,10 @@ class _LandingPageState extends State<LandingPage>
               const SizedBox(height: 6),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.3),
+                  color: Colors.black.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(8),
                   border:
-                      Border.all(color: Colors.white.withOpacity(0.2)),
+                      Border.all(color: Colors.white.withValues(alpha: 0.2)),
                 ),
                 child: TextField(
                   controller: cvController,
@@ -1274,10 +1273,10 @@ class _LandingPageState extends State<LandingPage>
                 children: [
                   Container(
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.3),
+                      color: Colors.black.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                          color: Colors.white.withOpacity(0.2)),
+                          color: Colors.white.withValues(alpha: 0.2)),
                     ),
                     child: TextButton.icon(
                       onPressed: () async {
@@ -1322,10 +1321,10 @@ class _LandingPageState extends State<LandingPage>
               const SizedBox(height: 12),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(8),
                   border:
-                      Border.all(color: Colors.white.withOpacity(0.3)),
+                      Border.all(color: Colors.white.withValues(alpha: 0.3)),
                 ),
                 child: TextButton(
                   onPressed: _isParsing
@@ -1365,10 +1364,10 @@ class _LandingPageState extends State<LandingPage>
               if (cvAnalysisResult != null)
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.5),
+                    color: Colors.black.withValues(alpha: 0.5),
                     borderRadius: BorderRadius.circular(8),
                     border:
-                        Border.all(color: Colors.white.withOpacity(0.2)),
+                        Border.all(color: Colors.white.withValues(alpha: 0.2)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
@@ -1501,7 +1500,7 @@ class _LandingPageState extends State<LandingPage>
                       backgroundColor: strokeColor,
                       foregroundColor: Colors.white,
                       elevation: 2,
-                      shadowColor: Colors.black.withOpacity(0.25),
+                      shadowColor: Colors.black.withValues(alpha: 0.25),
                       padding: EdgeInsets.symmetric(horizontal: 28, vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -1520,7 +1519,7 @@ class _LandingPageState extends State<LandingPage>
                       backgroundColor: strokeColor,
                       foregroundColor: Colors.white,
                       elevation: 2,
-                      shadowColor: Colors.black.withOpacity(0.25),
+                      shadowColor: Colors.black.withValues(alpha: 0.25),
                       padding: EdgeInsets.symmetric(horizontal: 28, vertical: 16),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -1567,7 +1566,7 @@ class _LandingPageState extends State<LandingPage>
         },
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.2),
+            color: Colors.white.withValues(alpha: 0.2),
             shape: BoxShape.circle,
           ),
           child: Padding(
@@ -1657,7 +1656,7 @@ class _LandingPageState extends State<LandingPage>
                           onTap: () => _showLogoutConfirmation(context),
                           child: CircleAvatar(
                             radius: 18,
-                            backgroundColor: primaryColor.withOpacity(0.3),
+                            backgroundColor: primaryColor.withValues(alpha: 0.3),
                             backgroundImage: _getProfileImageProvider() as ImageProvider?,
                             child: _profileImage == null && _profileImageUrl.isEmpty
                                 ? Icon(Icons.person, color: Colors.white70, size: 20)
@@ -1672,7 +1671,7 @@ class _LandingPageState extends State<LandingPage>
                             backgroundColor: strokeColor,
                             foregroundColor: Colors.white,
                             elevation: 2,
-                            shadowColor: Colors.black.withOpacity(0.25),
+                            shadowColor: Colors.black.withValues(alpha: 0.25),
                             padding: EdgeInsets.symmetric(
                                 horizontal: 24, vertical: 12),
                             shape: RoundedRectangleBorder(
@@ -1792,7 +1791,7 @@ class _LandingPageState extends State<LandingPage>
                                   color: Colors.white54,
                                   size: 22),
                               filled: true,
-                              fillColor: Colors.white.withOpacity(0.06),
+                              fillColor: Colors.white.withValues(alpha: 0.06),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide.none,
@@ -1830,7 +1829,7 @@ class _LandingPageState extends State<LandingPage>
                                       _categoryCurrentPage = 0;
                                     }),
                                     backgroundColor: Color(0xFF1e1212),
-                                    selectedColor: primaryColor.withOpacity(0.6),
+                                    selectedColor: primaryColor.withValues(alpha: 0.6),
                                     checkmarkColor: Colors.white,
                                     side: BorderSide(
                                         color: isSelected
@@ -1851,7 +1850,7 @@ class _LandingPageState extends State<LandingPage>
                                   padding: EdgeInsets.symmetric(
                                       vertical: 48, horizontal: 24),
                                   decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.03),
+                                    color: Colors.white.withValues(alpha: 0.03),
                                     borderRadius: BorderRadius.circular(16),
                                   ),
                                   child: Column(

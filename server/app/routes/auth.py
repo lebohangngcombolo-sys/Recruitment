@@ -439,14 +439,14 @@ def init_auth_routes(app):
             if not user or not AuthService.verify_password(password, user.password):
                 return jsonify({'error': 'Invalid credentials'}), 401
 
-            # ---- Handle unverified user ----
-            if not user.is_verified:
-                AuditService.log(user_id=user.id, action="login_attempt_unverified")
-                return jsonify({
-                    'message': 'Please verify your email before continuing.',
-                    'redirect': '/verify-email',
-                    'verified': False
-                }), 403
+            # # ---- Handle unverified user ----
+            # # if not user.is_verified:
+            # #     AuditService.log(user_id=user.id, action="login_attempt_unverified")
+            # #     return jsonify({
+            # #         'message': 'Please verify your email before continuing.',
+            # #         'redirect': '/verify-email',
+            # #         'verified': False
+            #     }), 403
 
             # 🆕 MFA CHECK - If MFA enabled, return MFA session token instead of final tokens
             if user.mfa_enabled:

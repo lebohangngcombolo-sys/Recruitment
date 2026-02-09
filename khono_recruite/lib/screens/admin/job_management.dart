@@ -1427,7 +1427,7 @@ class _JobFormDialogState extends State<JobFormDialog>
                             ),
                             const SizedBox(height: 16),
                             DropdownButtonFormField<String>(
-                              value: employmentType,
+                              initialValue: employmentType,
                               decoration: const InputDecoration(
                                 labelText: "Employment Type",
                                 border: OutlineInputBorder(),

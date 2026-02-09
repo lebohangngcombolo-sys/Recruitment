@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io' show File;
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -1479,206 +1478,6 @@ class _ProfilePageState extends State<ProfilePage>
             ],
           ),
           const SizedBox(height: 24),
-
-          // Personal Information Card
-          _modernCard(
-            "Personal Information",
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _infoRow("Full Name", fullNameController.text),
-                _infoRow("Email", emailController.text),
-                _infoRow("Phone", phoneController.text),
-                _infoRow("Location", locationController.text),
-                _infoRow("Nationality", nationalityController.text),
-                _infoRow("Title", titleController.text),
-                if (bioController.text.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    "Bio",
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.grey.shade700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    bioController.text,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: themeProvider.isDarkMode
-                          ? Colors.grey.shade400
-                          : Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            headerColor: Colors.blue.withValues(alpha: 0.1),
-          ),
-
-          // Education & Skills Card
-          _modernCard(
-            "Education & Skills",
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (degreeController.text.isNotEmpty)
-                  _infoRow("Degree", degreeController.text),
-                if (institutionController.text.isNotEmpty)
-                  _infoRow("Institution", institutionController.text),
-                if (graduationYearController.text.isNotEmpty)
-                  _infoRow("Graduation Year", graduationYearController.text),
-                if (skillsController.text.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    "Skills",
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.grey.shade700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: skillsController.text.split(',').map((skill) {
-                      final trimmedSkill = skill.trim();
-                      if (trimmedSkill.isEmpty) return const SizedBox.shrink();
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          trimmedSkill,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: Colors.redAccent,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ],
-            ),
-            headerColor: Colors.green.withValues(alpha: 0.1),
-          ),
-
-          // Online Profiles Card
-          if (linkedinController.text.isNotEmpty ||
-              githubController.text.isNotEmpty ||
-              portfolioController.text.isNotEmpty)
-            _modernCard(
-              "Online Profiles",
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (linkedinController.text.isNotEmpty)
-                    _linkRow("LinkedIn", linkedinController.text,
-                        Icons.work_outline),
-                  if (githubController.text.isNotEmpty)
-                    _linkRow("GitHub", githubController.text, Icons.code),
-                  if (portfolioController.text.isNotEmpty)
-                    _linkRow(
-                        "Portfolio", portfolioController.text, Icons.public),
-                ],
-              ),
-              headerColor: Colors.purple.withValues(alpha: 0.1),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoRow(String label, String value) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    if (value.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: themeProvider.isDarkMode
-                    ? Colors.white
-                    : Colors.grey.shade700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              value,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: themeProvider.isDarkMode
-                    ? Colors.grey.shade400
-                    : Colors.grey.shade600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _linkRow(String label, String value, IconData icon) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.redAccent, size: 18),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: themeProvider.isDarkMode
-                    ? Colors.white
-                    : Colors.grey.shade700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                final uri = Uri.tryParse(value) ?? Uri();
-                launchUrl(uri, mode: LaunchMode.externalApplication);
-              },
-              child: Text(
-                value,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: Colors.blue.shade600,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -1733,62 +1532,167 @@ class _ProfilePageState extends State<ProfilePage>
             "Personal Information",
             Column(
               children: [
-                GestureDetector(
-                  onTap: _pickProfileImage,
-                  child: Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: 50,
-                        backgroundImage: _getProfileImageProvider(),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 2,
+                // Profile picture and basic info
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: _pickProfileImage,
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 50,
+                            backgroundImage: _getProfileImageProvider(),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                             ),
                           ),
-                          child: const Icon(
-                            Icons.camera_alt,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Hiring Manager",
+                            style: GoogleFonts.poppins(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.white
+                                  : Colors.grey.shade800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            emailController.text.isNotEmpty
+                                ? emailController.text
+                                : "hiring@example.com",
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.grey.shade400
+                                  : Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 30),
+
+                // Two-column form layout
+                Row(
+                  children: [
+                    // Left column
+                    Expanded(
+                      child: Column(
+                        children: [
+                          CustomTextField(
+                            label: "First Name",
+                            controller: fullNameController,
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Surname",
+                            controller: TextEditingController(text: "Radebe"),
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Email Address",
+                            controller: emailController,
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Phone Number",
+                            controller: phoneController,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    // Right column
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _buildDepartmentDropdown(),
+                          const SizedBox(height: 16),
+                          _buildDesignationDropdown(),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Preferred Name",
+                            controller: TextEditingController(
+                                text: "Nathii Nathi SGOOD"),
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Manager",
+                            controller: TextEditingController(
+                                text: "Gladness Mulaudzi"),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 30),
+
+                // Version info
+                Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Text(
+                    "Ver. 2026.02.BA1_SIT",
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: themeProvider.isDarkMode
+                          ? Colors.grey.shade500
+                          : Colors.grey.shade400,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),
-                CustomTextField(
-                    label: "Full Name", controller: fullNameController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Email", controller: emailController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Phone", controller: phoneController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Gender", controller: genderController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Date of Birth", controller: dobController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Nationality", controller: nationalityController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "ID Number", controller: idNumberController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Bio", controller: bioController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Location", controller: locationController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Title", controller: titleController),
+
+                // Save button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: updateProfile,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      "Save Profile",
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -2154,6 +2058,122 @@ class _ProfilePageState extends State<ProfilePage>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDepartmentDropdown() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final departments = [
+      'Finance',
+      'Human Resources',
+      'Information Technology',
+      'Marketing',
+      'Sales',
+      'Operations',
+      'Engineering',
+      'Other',
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: themeProvider.isDarkMode
+              ? Colors.grey.shade600
+              : Colors.grey.shade300,
+        ),
+      ),
+      child: DropdownButtonFormField<String>(
+        initialValue: 'Finance',
+        decoration: InputDecoration(
+          labelText: 'Department',
+          labelStyle: GoogleFonts.inter(
+            color: themeProvider.isDarkMode
+                ? Colors.grey.shade400
+                : Colors.grey.shade600,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+        ),
+        dropdownColor:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        style: GoogleFonts.inter(
+          color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+        ),
+        items: departments.map((String department) {
+          return DropdownMenuItem<String>(
+            value: department,
+            child: Text(department),
+          );
+        }).toList(),
+        onChanged: (String? newValue) {
+          // Handle department change
+        },
+      ),
+    );
+  }
+
+  Widget _buildDesignationDropdown() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final designations = [
+      'Business Analyst',
+      'Software Engineer',
+      'Project Manager',
+      'HR Manager',
+      'Marketing Specialist',
+      'Sales Executive',
+      'CEO',
+      'CTO',
+      'CFO',
+      'Other',
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: themeProvider.isDarkMode
+              ? Colors.grey.shade600
+              : Colors.grey.shade300,
+        ),
+      ),
+      child: DropdownButtonFormField<String>(
+        initialValue: 'Business Analyst',
+        decoration: InputDecoration(
+          labelText: 'Designation',
+          labelStyle: GoogleFonts.inter(
+            color: themeProvider.isDarkMode
+                ? Colors.grey.shade400
+                : Colors.grey.shade600,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+        ),
+        dropdownColor:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        style: GoogleFonts.inter(
+          color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+        ),
+        items: designations.map((String designation) {
+          return DropdownMenuItem<String>(
+            value: designation,
+            child: Text(designation),
+          );
+        }).toList(),
+        onChanged: (String? newValue) {
+          // Handle designation change
+        },
       ),
     );
   }

@@ -5,19 +5,12 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart';
-import '../hiring_manager/hiring_manager_dashboard.dart';
 
 import '../../services/auth_service.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../providers/theme_provider.dart';
-import 'register_screen.dart';
-import 'forgot_password_screen.dart';
-import '../candidate/candidate_dashboard.dart';
-import '../enrollment/enrollment_screen.dart';
-import '../admin/admin_dashboard.dart';
 import 'mfa_verification_screen.dart'; // 🆕 Import MFA screen
-import 'sso_enterprise_screen.dart'; // 🆕 Import SSO Enterprise screen
-import '../hr/hr_dashboard.dart';
+// 🆕 Import SSO Enterprise screen
 
 /// Hides the scrollbar while keeping scroll behavior (e.g. for auth screens).
 class _NoScrollbarScrollBehavior extends ScrollBehavior {

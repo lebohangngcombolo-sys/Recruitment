@@ -1,7 +1,8 @@
+// ignore_for_file: deprecated_member_use
+
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io' show File;
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -12,7 +13,7 @@ import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
 
 // ------------------- API Base URL -------------------
-const String candidateBase = "http://127.0.0.1:5000/api/candidate";
+const String candidateBase = "http://127.0.0.1:5001/api/candidate";
 
 class ProfilePage extends StatefulWidget {
   final String token;
@@ -45,6 +46,10 @@ class _ProfilePageState extends State<ProfilePage>
   final TextEditingController bioController = TextEditingController();
   final TextEditingController locationController = TextEditingController();
   final TextEditingController titleController = TextEditingController();
+  final TextEditingController departmentController = TextEditingController();
+  final TextEditingController designationController = TextEditingController();
+  final TextEditingController preferredNameController = TextEditingController();
+  final TextEditingController managerController = TextEditingController();
 
   // Candidate fields
   final TextEditingController degreeController = TextEditingController();
@@ -84,7 +89,7 @@ class _ProfilePageState extends State<ProfilePage>
   int _backupCodesRemaining = 0;
 
   List<dynamic> documents = [];
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  final String apiBase = "http://127.0.0.1:5001/api/candidate";
 
   // Add these helper methods in the _ProfilePageState class (around line 150, after the state variables):
 
@@ -120,6 +125,32 @@ class _ProfilePageState extends State<ProfilePage>
         {'value': 'other', 'label': 'Other'}
       ];
 
+  List<Map<String, String>> get departmentOptions => [
+        {'value': '', 'label': 'Select Department'},
+        {'value': 'finance', 'label': 'Finance'},
+        {'value': 'hr', 'label': 'Human Resources'},
+        {'value': 'it', 'label': 'Information Technology'},
+        {'value': 'marketing', 'label': 'Marketing'},
+        {'value': 'sales', 'label': 'Sales'},
+        {'value': 'operations', 'label': 'Operations'},
+        {'value': 'engineering', 'label': 'Engineering'},
+        {'value': 'other', 'label': 'Other'},
+      ];
+
+  List<Map<String, String>> get designationOptions => [
+        {'value': '', 'label': 'Select Designation'},
+        {'value': 'business_analyst', 'label': 'Business Analyst'},
+        {'value': 'software_engineer', 'label': 'Software Engineer'},
+        {'value': 'project_manager', 'label': 'Project Manager'},
+        {'value': 'hr_manager', 'label': 'HR Manager'},
+        {'value': 'marketing_specialist', 'label': 'Marketing Specialist'},
+        {'value': 'sales_executive', 'label': 'Sales Executive'},
+        {'value': 'ceo', 'label': 'CEO'},
+        {'value': 'cto', 'label': 'CTO'},
+        {'value': 'cfo', 'label': 'CFO'},
+        {'value': 'other', 'label': 'Other'},
+      ];
+
   // Helper method to get value from stored data
   String? _getValueFromStoredData(
       String? storedValue, List<Map<String, String>> options) {
@@ -134,6 +165,132 @@ class _ProfilePageState extends State<ProfilePage>
           option['value'] == lowerValue) {
         return option['value'];
       }
+
+      // ignore: unused_element
+      Widget _buildProfileHeader() {
+        return Column(
+          children: [
+            Stack(
+              children: [
+                Container(
+                  width: 140,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.redAccent.withOpacity(0.7),
+                      width: 4,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 10,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(70),
+                    child: Image(
+                      image: _getProfileImageProvider(),
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.person,
+                          color: Colors.grey.shade400,
+                          size: 70,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.redAccent.withOpacity(0.4),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 3,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              fullNameController.text.isNotEmpty
+                  ? fullNameController.text
+                  : "Your Name",
+              style: GoogleFonts.poppins(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              titleController.text.isNotEmpty
+                  ? titleController.text
+                  : "Your Title",
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                color: Colors.white70,
+              ),
+            ),
+            const SizedBox(height: 15),
+            if (_mfaEnabled)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.verified_user,
+                        color: Colors.greenAccent, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      "2FA Enabled",
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: Colors.greenAccent,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 30),
+          ],
+        );
+      }
+
+      // Profile Summary Tab
     }
 
     // If no exact match, try partial match
@@ -880,11 +1037,12 @@ class _ProfilePageState extends State<ProfilePage>
     return const AssetImage("assets/images/profile_placeholder.png");
   }
 
-  Widget _modernCard(String title, Widget child) {
+  Widget _modernCard(String title, Widget child,
+      {Color? cardColor, Color? textColor}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor ?? Colors.white.withOpacity(0.5), // Translucent white
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -909,7 +1067,7 @@ class _ProfilePageState extends State<ProfilePage>
                   style: GoogleFonts.poppins(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black,
+                    color: textColor ?? Colors.black,
                   ),
                 ),
               ],
@@ -935,7 +1093,7 @@ class _ProfilePageState extends State<ProfilePage>
             // Full-background image
             Positioned.fill(
               child: Image.asset(
-                "assets/images/background.jpg",
+                "assets/images/dark.png",
                 fit: BoxFit.cover,
               ),
             ),
@@ -1002,123 +1160,7 @@ class _ProfilePageState extends State<ProfilePage>
                   ),
                   child: Column(
                     children: [
-                      // Profile Section (transparent background)
-                      Column(
-                        children: [
-                          Stack(
-                            children: [
-                              Container(
-                                width: 100,
-                                height: 100,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.3),
-                                    width: 2,
-                                  ),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(50),
-                                  child: Image(
-                                    image: _getProfileImageProvider(),
-                                    fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            Container(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.1),
-                                      child: Icon(
-                                        Icons.person,
-                                        color:
-                                            Colors.white.withValues(alpha: 0.3),
-                                        size: 40,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: GestureDetector(
-                                  onTap: _pickProfileImage,
-                                  child: Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      color: Colors.redAccent
-                                          .withValues(alpha: 0.8),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 2,
-                                      ),
-                                    ),
-                                    child: const Icon(
-                                      Icons.edit,
-                                      color: Colors.white,
-                                      size: 14,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            fullNameController.text.isNotEmpty
-                                ? fullNameController.text
-                                : "Your Name",
-                            style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            titleController.text.isNotEmpty
-                                ? titleController.text
-                                : "Your Title",
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              color: Colors.white70,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          if (_mfaEnabled) ...[
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.verified,
-                                      color: Colors.greenAccent, size: 12),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    "2FA Enabled",
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      color: Colors.greenAccent,
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 40),
                       // Navigation buttons
-                      _sidebarButton("Profile", Icons.person_outline_rounded),
                       _sidebarButton("Settings", Icons.settings_outlined),
                       _sidebarButton("2FA", Icons.security_outlined),
                       _sidebarButton(
@@ -1216,11 +1258,29 @@ class _ProfilePageState extends State<ProfilePage>
             ? _buildProfileSummary()
             : _buildProfileForm();
       case "Settings":
-        return _buildSettingsTab();
-      case "2FA":
         return _build2FATab();
       case "Reset Password":
-        return _buildResetPasswordTab();
+        return Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Text(
+                "Reset Password",
+                style: GoogleFonts.poppins(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                "Password reset functionality coming soon.",
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        );
       default:
         return _buildProfileSummary();
     }
@@ -1721,7 +1781,8 @@ class _ProfilePageState extends State<ProfilePage>
                       ),
                     ],
                   ),
-                  child: Icon(Icons.arrow_back, color: Colors.redAccent),
+                  child: Icon(Icons.arrow_back,
+                      color: Colors.white), // Changed to white
                 ),
               ),
               const SizedBox(width: 12),
@@ -1730,7 +1791,7 @@ class _ProfilePageState extends State<ProfilePage>
                 style: GoogleFonts.poppins(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
-                  color: Colors.black,
+                  color: Colors.white, // Changed to white
                 ),
               ),
               const Spacer(),
@@ -1766,230 +1827,13 @@ class _ProfilePageState extends State<ProfilePage>
             ),
           ),
           const SizedBox(height: 30),
-
-          // Personal Information Card
-          _modernCard(
-            "Personal Information",
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _infoRow("Full Name", fullNameController.text),
-                _infoRow("Email", emailController.text),
-                _infoRow("Phone", phoneController.text),
-                _infoRow("Location", locationController.text),
-                _infoRow("Nationality", nationalityController.text),
-                _infoRow("Title", titleController.text),
-                if (bioController.text.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Divider(color: Colors.grey.shade100),
-                  const SizedBox(height: 16),
-                  Text(
-                    "Bio",
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    bioController.text,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: Colors.black54,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          // Education & Skills Card
-          _modernCard(
-            "Education & Skills",
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (degreeController.text.isNotEmpty)
-                  _infoRow("Degree", degreeController.text),
-                if (institutionController.text.isNotEmpty)
-                  _infoRow("Institution", institutionController.text),
-                if (graduationYearController.text.isNotEmpty)
-                  _infoRow("Graduation Year", graduationYearController.text),
-                if (skillsController.text.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  Divider(color: Colors.grey.shade100),
-                  const SizedBox(height: 16),
-                  Text(
-                    "Skills",
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: skillsController.text.split(',').map((skill) {
-                      final trimmedSkill = skill.trim();
-                      if (trimmedSkill.isEmpty) return const SizedBox.shrink();
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          trimmedSkill,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: Colors.redAccent,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          // Online Profiles Card
-          if (linkedinController.text.isNotEmpty ||
-              githubController.text.isNotEmpty ||
-              portfolioController.text.isNotEmpty)
-            _modernCard(
-              "Online Profiles",
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (linkedinController.text.isNotEmpty)
-                    _linkRow("LinkedIn", linkedinController.text,
-                        Icons.work_outline),
-                  if (githubController.text.isNotEmpty)
-                    _linkRow("GitHub", githubController.text, Icons.code),
-                  if (portfolioController.text.isNotEmpty)
-                    _linkRow(
-                        "Portfolio", portfolioController.text, Icons.public),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoRow(String label, String value) {
-    if (value.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 140,
-            child: Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: Colors.black54,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _linkRow(String label, String value, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.redAccent, size: 20),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-          const SizedBox(width: 20),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                final uri = Uri.tryParse(value) ?? Uri();
-                launchUrl(uri, mode: LaunchMode.externalApplication);
-              },
-              child: Text(
-                value,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: Colors.blue.shade600,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
 
   // Profile Form
-  // Profile Form - Fixed dropdown values
   Widget _buildProfileForm() {
-    // Define dropdown options - Use unique values
-    final List<Map<String, String>> genderOptions = [
-      {'value': '', 'label': 'Select Gender'},
-      {'value': 'male', 'label': 'Male'},
-      {'value': 'female', 'label': 'Female'},
-      {'value': 'other', 'label': 'Other'},
-      {'value': 'prefer_not_to_say', 'label': 'Prefer not to say'}
-    ];
-
-    final List<Map<String, String>> nationalityOptions = [
-      {'value': '', 'label': 'Select Nationality'},
-      {'value': 'south_african', 'label': 'South African'},
-      {'value': 'tanzanian', 'label': 'Tanzanian'},
-      {'value': 'ugandan', 'label': 'Ugandan'},
-      {'value': 'rwandan', 'label': 'Rwandan'},
-      {'value': 'burundian', 'label': 'Burundian'},
-      {'value': 'south_sudanese', 'label': 'South Sudanese'},
-      {'value': 'other', 'label': 'Other'}
-    ];
-
-    final List<Map<String, String>> titleOptions = [
-      {'value': '', 'label': 'Select Title'},
-      {'value': 'mr', 'label': 'Mr.'},
-      {'value': 'mrs', 'label': 'Mrs.'},
-      {'value': 'ms', 'label': 'Ms.'},
-      {'value': 'miss', 'label': 'Miss'},
-      {'value': 'dr', 'label': 'Dr.'},
-      {'value': 'prof', 'label': 'Prof.'},
-      {'value': 'eng', 'label': 'Eng.'},
-      {'value': 'other', 'label': 'Other'}
-    ];
-
     return SingleChildScrollView(
       child: Column(
         children: [
@@ -2087,988 +1931,147 @@ class _ProfilePageState extends State<ProfilePage>
             ),
           ),
 
-          // Profile Picture Section
-          _modernCard(
-            "Profile Picture",
-            Column(
-              children: [
-                GestureDetector(
-                  onTap: _pickProfileImage,
-                  child: Stack(
-                    children: [
-                      Container(
-                        width: 140,
-                        height: 140,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.redAccent.withValues(alpha: 0.1),
-                              Colors.redAccent.withValues(alpha: 0.3),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          border: Border.all(
-                            color: Colors.redAccent.withValues(alpha: 0.3),
-                            width: 3,
-                          ),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(70),
-                          child: Image(
-                            image: _getProfileImageProvider(),
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.person,
-                                color: Colors.grey.shade400,
-                                size: 50,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 8,
-                        right: 8,
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.redAccent.withValues(alpha: 0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 3,
-                            ),
-                          ),
-                          child: const Icon(
-                            Icons.camera_alt_rounded,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  "Tap the camera icon to update your profile photo",
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w400,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-
           // Personal Information
           _modernCard(
             "Personal Information",
             Column(
               children: [
-                // Title dropdown
-                _buildStyledDropdown(
-                  label: "Title",
-                  value: _selectedTitle?.toLowerCase(),
-                  options: titleOptions,
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedTitle = newValue == '' ? null : newValue;
-                      titleController.text = titleOptions.firstWhere(
-                        (opt) => opt['value'] == newValue,
-                        orElse: () => {'label': '', 'value': ''},
-                      )['label']!;
-                    });
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                CustomTextField(
-                  label: "Full Name",
-                  controller: fullNameController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
-                ),
-                const SizedBox(height: 20),
-
-                CustomTextField(
-                  label: "Email",
-                  controller: emailController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  prefixIcon: Icon(Icons.email_outlined, size: 20),
-                ),
-                const SizedBox(height: 20),
-
-                CustomTextField(
-                  label: "Phone",
-                  controller: phoneController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  prefixIcon: Icon(Icons.phone_outlined, size: 20),
-                  inputType: TextInputType.phone,
-                ),
-                const SizedBox(height: 20),
-
-                // Gender dropdown
-                _buildStyledDropdown(
-                  label: "Gender",
-                  value: _selectedGender?.toLowerCase(),
-                  options: genderOptions,
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedGender = newValue == '' ? null : newValue;
-                      genderController.text = genderOptions.firstWhere(
-                        (opt) => opt['value'] == newValue,
-                        orElse: () => {'label': '', 'value': ''},
-                      )['label']!;
-                    });
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // Date of Birth
-                _buildDatePickerField(),
-                const SizedBox(height: 20),
-
-                // Nationality dropdown
-                _buildStyledDropdown(
-                  label: "Nationality",
-                  value: _selectedNationality?.toLowerCase(),
-                  options: nationalityOptions,
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedNationality = newValue == '' ? null : newValue;
-                      nationalityController.text =
-                          nationalityOptions.firstWhere(
-                        (opt) => opt['value'] == newValue,
-                        orElse: () => {'label': '', 'value': ''},
-                      )['label']!;
-                    });
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                CustomTextField(
-                  label: "ID Number",
-                  controller: idNumberController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  prefixIcon: Icon(Icons.badge_outlined, size: 20),
-                ),
-                const SizedBox(height: 20),
-
-                CustomTextField(
-                  label: "Bio",
-                  controller: bioController,
-                  maxLines: 4,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  hintText: "Tell us about yourself...",
-                  prefixIcon: Icon(Icons.description_outlined, size: 20),
-                ),
-                const SizedBox(height: 20),
-
-                CustomTextField(
-                  label: "Location",
-                  controller: locationController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  prefixIcon: Icon(Icons.location_on_outlined, size: 20),
-                  hintText: "City, Country",
-                ),
-              ],
-            ),
-          ),
-
-          // Education Section
-          _modernCard(
-            "Education",
-            Column(
-              children: [
-                ..._educationControllers.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final controller = entry.value;
-                  return Container(
-                    margin: EdgeInsets.only(
-                      bottom:
-                          index == _educationControllers.length - 1 ? 0 : 20,
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: CustomTextField(
-                            label: index == 0
-                                ? "Education"
-                                : "Additional Education",
-                            controller: controller,
-                            maxLines: 2,
-                            backgroundColor: Colors.transparent,
-                            borderColor: Colors.grey.shade300,
-                            focusedBorderColor: Colors.redAccent,
-                            borderRadius: 12,
-                            borderWidth: 1.5,
-                            focusedBorderWidth: 2,
-                            textColor: Colors.black87,
-                            labelColor: Colors.grey.shade700,
-                            hintColor: Colors.grey.shade500,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 16,
-                            ),
-                            hintText:
-                                "e.g., BSc Computer Science at University (2020)",
-                            prefixIcon: Icon(
-                              Icons.school_outlined,
-                              size: 20,
-                              color: index == 0
-                                  ? Colors.redAccent
-                                  : Colors.grey.shade600,
-                            ),
+                // Profile picture and basic info
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: _pickProfileImage,
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 50,
+                            backgroundImage: _getProfileImageProvider(),
                           ),
-                        ),
-                        if (_educationControllers.length > 1)
-                          Container(
-                            margin: const EdgeInsets.only(left: 12),
-                            child: IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _educationControllers.removeAt(index);
-                                });
-                              },
-                              icon: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color:
-                                      Colors.redAccent.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(10),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
                                 ),
-                                child: Icon(
-                                  Icons.remove_rounded,
-                                  color: Colors.redAccent,
-                                  size: 18,
-                                ),
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                color: Colors.white,
+                                size: 20,
                               ),
                             ),
                           ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-
-                // Add more education button
-                Container(
-                  margin: const EdgeInsets.only(top: 10),
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _educationControllers.add(TextEditingController());
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor: Colors.redAccent,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: Colors.redAccent.withValues(alpha: 0.3),
-                          width: 1.5,
-                        ),
-                      ),
-                    ),
-                    icon: Icon(
-                      Icons.add_circle_outline_rounded,
-                      color: Colors.redAccent,
-                      size: 20,
-                    ),
-                    label: Text(
-                      "Add Another Education",
-                      style: GoogleFonts.inter(
-                        color: Colors.redAccent,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Skills Section
-          _modernCard(
-            "Skills",
-            Column(
-              children: [
-                CustomTextField(
-                  label: "Skills (comma separated)",
-                  controller: skillsController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  hintText: "e.g., Python, Flutter, React, Project Management",
-                  prefixIcon: Icon(Icons.code_outlined, size: 20),
-                  maxLines: 3,
-                ),
-              ],
-            ),
-          ),
-
-          // Work Experience Section
-          _modernCard(
-            "Work Experience",
-            Column(
-              children: [
-                CustomTextField(
-                  label: "Job Title",
-                  controller: jobTitleController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  prefixIcon: Icon(Icons.work_outline_rounded, size: 20),
-                ),
-                const SizedBox(height: 20),
-
-                Row(
-                  children: [
-                    Expanded(
-                      child: CustomTextField(
-                        label: "Company",
-                        controller: companyController,
-                        backgroundColor: Colors.transparent,
-                        borderColor: Colors.grey.shade300,
-                        focusedBorderColor: Colors.redAccent,
-                        borderRadius: 12,
-                        borderWidth: 1.5,
-                        focusedBorderWidth: 2,
-                        textColor: Colors.black87,
-                        labelColor: Colors.grey.shade700,
-                        hintColor: Colors.grey.shade500,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
-                        ),
-                        prefixIcon: Icon(Icons.business_outlined, size: 20),
+                        ],
                       ),
                     ),
                     const SizedBox(width: 20),
                     Expanded(
-                      child: CustomTextField(
-                        label: "Years of Experience",
-                        controller: yearsOfExpController,
-                        backgroundColor: Colors.transparent,
-                        borderColor: Colors.grey.shade300,
-                        focusedBorderColor: Colors.redAccent,
-                        borderRadius: 12,
-                        borderWidth: 1.5,
-                        focusedBorderWidth: 2,
-                        textColor: Colors.black87,
-                        labelColor: Colors.grey.shade700,
-                        hintColor: Colors.grey.shade500,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
-                        ),
-                        prefixIcon: Icon(Icons.timeline_outlined, size: 20),
-                        inputType: TextInputType.number,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Candidate",
+                            style: GoogleFonts.poppins(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            emailController.text.isNotEmpty
+                                ? emailController.text
+                                : "candidate@example.com",
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 30),
 
-                // Dynamic work experience entries
-                ..._workExpControllers.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final controller = entry.value;
-                  return Container(
-                    margin: EdgeInsets.only(
-                      bottom: index == _workExpControllers.length - 1 ? 0 : 20,
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: CustomTextField(
-                            label: index == 0
-                                ? "Work Experience Details"
-                                : "Additional Experience",
-                            controller: controller,
-                            maxLines: 3,
-                            backgroundColor: Colors.transparent,
-                            borderColor: Colors.grey.shade300,
-                            focusedBorderColor: Colors.redAccent,
-                            borderRadius: 12,
-                            borderWidth: 1.5,
-                            focusedBorderWidth: 2,
-                            textColor: Colors.black87,
-                            labelColor: Colors.grey.shade700,
-                            hintColor: Colors.grey.shade500,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 16,
-                            ),
-                            hintText:
-                                "Describe your responsibilities and achievements...",
-                            prefixIcon: Icon(
-                              Icons.description_outlined,
-                              size: 20,
-                              color: index == 0
-                                  ? Colors.redAccent
-                                  : Colors.grey.shade600,
-                            ),
+                // Two-column form layout
+                Row(
+                  children: [
+                    // Left column
+                    Expanded(
+                      child: Column(
+                        children: [
+                          CustomTextField(
+                            label: "First Name",
+                            controller: fullNameController,
                           ),
-                        ),
-                        if (_workExpControllers.length > 1)
-                          Container(
-                            margin: const EdgeInsets.only(left: 12),
-                            child: IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _workExpControllers.removeAt(index);
-                                });
-                              },
-                              icon: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color:
-                                      Colors.redAccent.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Icon(
-                                  Icons.remove_rounded,
-                                  color: Colors.redAccent,
-                                  size: 18,
-                                ),
-                              ),
-                            ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Surname",
+                            controller: TextEditingController(text: ""),
                           ),
-                      ],
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Email Address",
+                            controller: emailController,
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Phone Number",
+                            controller: phoneController,
+                          ),
+                        ],
+                      ),
                     ),
-                  );
-                }).toList(),
+                    const SizedBox(width: 20),
+                    // Right column
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _buildDepartmentDropdown(),
+                          const SizedBox(height: 16),
+                          _buildDesignationDropdown(),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Preferred Name",
+                            controller: preferredNameController,
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Manager",
+                            controller: managerController,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 30),
 
-                // Add more experience button
-                Container(
-                  margin: const EdgeInsets.only(top: 10),
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _workExpControllers.add(TextEditingController());
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor: Colors.redAccent,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: Colors.redAccent.withValues(alpha: 0.3),
-                          width: 1.5,
-                        ),
-                      ),
-                    ),
-                    icon: Icon(
-                      Icons.add_circle_outline_rounded,
-                      color: Colors.redAccent,
-                      size: 20,
-                    ),
-                    label: Text(
-                      "Add Another Experience",
-                      style: GoogleFonts.inter(
-                        color: Colors.redAccent,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Online Profiles Section
-          _modernCard(
-            "Online Profiles",
-            Column(
-              children: [
-                CustomTextField(
-                  label: "LinkedIn",
-                  controller: linkedinController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  hintText: "https://linkedin.com/in/yourprofile",
-                  prefixIcon: Icon(Icons.link_outlined, size: 20),
-                ),
-                const SizedBox(height: 20),
-                CustomTextField(
-                  label: "GitHub",
-                  controller: githubController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  hintText: "https://github.com/yourusername",
-                  prefixIcon: Icon(Icons.code_outlined, size: 20),
-                ),
-                const SizedBox(height: 20),
-                CustomTextField(
-                  label: "Portfolio",
-                  controller: portfolioController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  hintText: "https://yourportfolio.com",
-                  prefixIcon: Icon(Icons.public_outlined, size: 20),
-                ),
-              ],
-            ),
-          ),
-
-          // Save Button Section
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 40),
-            child: Column(
-              children: [
-                ElevatedButton(
-                  onPressed: updateProfile,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 40,
-                      vertical: 18,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    elevation: 0,
-                    shadowColor: Colors.redAccent.withValues(alpha: 0.4),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.save_rounded, size: 20),
-                      const SizedBox(width: 10),
-                      Text(
-                        "Save All Changes",
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () => setState(() => showProfileSummary = true),
+                // Version info
+                Align(
+                  alignment: Alignment.bottomLeft,
                   child: Text(
-                    "Cancel",
+                    "Ver. 2026.02.BA1_SIT",
                     style: GoogleFonts.inter(
-                      color: Colors.grey.shade600,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                      fontSize: 12,
+                      color: Colors.grey.shade400,
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-// Helper method for styled dropdown
-  Widget _buildStyledDropdown({
-    required String label,
-    required String? value,
-    required List<Map<String, String>> options,
-    required Function(String?) onChanged,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey.shade700,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Colors.grey.shade300,
-              width: 1.5,
-            ),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<String>(
-              value: value,
-              isExpanded: true,
-              items: options.map((Map<String, String> option) {
-                return DropdownMenuItem<String>(
-                  value: option['value'],
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      option['label']!,
-                      style: GoogleFonts.inter(
-                        color: option['value']!.isEmpty
-                            ? Colors.grey.shade500
-                            : Colors.black87,
-                        fontSize: 15,
-                        fontWeight: option['value']!.isEmpty
-                            ? FontWeight.w400
-                            : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                );
-              }).toList(),
-              onChanged: onChanged,
-              hint: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  'Select $label',
-                  style: GoogleFonts.inter(
-                    color: Colors.grey.shade500,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w400,
-                  ),
-                ),
-              ),
-              icon: Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: Icon(
-                  Icons.arrow_drop_down_rounded,
-                  color: Colors.grey.shade600,
-                  size: 24,
-                ),
-              ),
-              dropdownColor: Colors.white,
-              elevation: 4,
-              borderRadius: BorderRadius.circular(12),
-              style: GoogleFonts.inter(
-                color: Colors.black87,
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-// Helper method for date picker field
-  Widget _buildDatePickerField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Date of Birth",
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey.shade700,
-          ),
-        ),
-        const SizedBox(height: 8),
-        GestureDetector(
-          onTap: () async {
-            final DateTime? picked = await showDatePicker(
-              context: context,
-              initialDate: _selectedDate ??
-                  DateTime.now().subtract(const Duration(days: 365 * 18)),
-              firstDate: DateTime(1900),
-              lastDate: DateTime.now().subtract(const Duration(days: 365 * 16)),
-              builder: (context, child) {
-                return Theme(
-                  data: ThemeData.light().copyWith(
-                    colorScheme: ColorScheme.light(
-                      primary: Colors.redAccent,
-                      onPrimary: Colors.white,
-                      surface: Colors.white,
-                    ),
-                    dialogTheme: DialogThemeData(backgroundColor: Colors.white),
-                  ),
-                  child: child!,
-                );
-              },
-            );
-            if (picked != null) {
-              setState(() {
-                _selectedDate = picked;
-                dobController.text = DateFormat('yyyy-MM-dd').format(picked);
-              });
-            }
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Colors.grey.shade300,
-                width: 1.5,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.calendar_today_rounded,
-                  color: Colors.grey.shade600,
-                  size: 20,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    _selectedDate != null
-                        ? DateFormat('MMMM dd, yyyy').format(_selectedDate!)
-                        : 'Select Date',
-                    style: GoogleFonts.inter(
-                      color: _selectedDate != null
-                          ? Colors.black87
-                          : Colors.grey.shade500,
-                      fontSize: 15,
-                      fontWeight: _selectedDate != null
-                          ? FontWeight.w500
-                          : FontWeight.w400,
-                    ),
-                  ),
-                ),
-                Icon(
-                  Icons.arrow_drop_down_rounded,
-                  color: Colors.grey.shade600,
-                  size: 24,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // Settings Tab
-  Widget _buildSettingsTab() {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Settings",
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: Colors.black,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Manage your account preferences",
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: Colors.black54,
-            ),
-          ),
-          const SizedBox(height: 30),
-          _modernCard(
-            "Preferences",
-            Column(
-              children: [
-                _settingsSwitch(
-                  "Dark Mode",
-                  "Enable dark theme",
-                  Icons.dark_mode_outlined,
-                  darkMode,
-                  (v) => setState(() => darkMode = v),
-                ),
-                _settingsSwitch(
-                  "Notifications",
-                  "Receive push notifications",
-                  Icons.notifications_outlined,
-                  notificationsEnabled,
-                  (v) => setState(() => notificationsEnabled = v),
-                ),
-                _settingsSwitch(
-                  "Job Alerts",
-                  "Get notified about new jobs",
-                  Icons.work_outline,
-                  jobAlertsEnabled,
-                  (v) => setState(() => jobAlertsEnabled = v),
-                ),
-                _settingsSwitch(
-                  "Profile Visibility",
-                  "Make your profile visible to employers",
-                  Icons.visibility_outlined,
-                  profileVisible,
-                  (v) => setState(() => profileVisible = v),
-                ),
-                _settingsSwitch(
-                  "Enrollment Completed",
-                  "Mark enrollment as completed",
-                  Icons.check_circle_outline,
-                  enrollmentCompleted,
-                  (v) => setState(() => enrollmentCompleted = v),
                 ),
                 const SizedBox(height: 20),
+
+                // Save button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: updateSettings,
+                    onPressed: updateProfile,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.redAccent,
                       foregroundColor: Colors.white,
@@ -3076,12 +2079,11 @@ class _ProfilePageState extends State<ProfilePage>
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      elevation: 0,
                     ),
                     child: Text(
-                      "Save Settings",
+                      "Save Profile",
                       style: GoogleFonts.inter(
-                        fontSize: 15,
+                        fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -3095,197 +2097,104 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  Widget _settingsSwitch(String title, String subtitle, IconData icon,
-      bool value, Function(bool) onChanged) {
+  Widget _buildDepartmentDropdown() {
+    final departments = [
+      'Finance',
+      'Human Resources',
+      'Information Technology',
+      'Marketing',
+      'Sales',
+      'Operations',
+      'Engineering',
+      'Other',
+    ];
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.redAccent.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: Colors.redAccent, size: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.grey.shade300,
+        ),
+      ),
+      child: DropdownButtonFormField<String>(
+        value: 'Finance',
+        decoration: InputDecoration(
+          labelText: 'Department',
+          labelStyle: GoogleFonts.inter(
+            color: Colors.grey.shade600,
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: Colors.black54,
-                  ),
-                ),
-              ],
-            ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
           ),
-          Switch.adaptive(
-            value: value,
-            onChanged: onChanged,
-            activeTrackColor: Colors.redAccent.withValues(alpha: 0.3),
-            thumbColor: WidgetStateProperty.resolveWith((states) {
-              return states.contains(WidgetState.selected)
-                  ? Colors.redAccent
-                  : Colors.grey;
-            }),
-          ),
-        ],
+        ),
+        dropdownColor: Colors.white,
+        style: GoogleFonts.inter(
+          color: Colors.black87,
+        ),
+        items: departments.map((String department) {
+          return DropdownMenuItem<String>(
+            value: department,
+            child: Text(department),
+          );
+        }).toList(),
+        onChanged: (String? newValue) {
+          // Handle department change
+        },
       ),
     );
   }
 
-  // Reset Password Tab
-  Widget _buildResetPasswordTab() {
-    final TextEditingController currentPassword = TextEditingController();
-    final TextEditingController newPassword = TextEditingController();
-    final TextEditingController confirmPassword = TextEditingController();
-    bool isLoading = false;
+  Widget _buildDesignationDropdown() {
+    final designations = [
+      'Business Analyst',
+      'Software Engineer',
+      'Project Manager',
+      'HR Manager',
+      'Marketing Specialist',
+      'Sales Executive',
+      'CEO',
+      'CTO',
+      'CFO',
+      'Other',
+    ];
 
-    Future<void> changePassword() async {
-      if (newPassword.text != confirmPassword.text) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("New passwords do not match")),
-        );
-        return;
-      }
-
-      setState(() => isLoading = true);
-
-      try {
-        final response = await http.post(
-          Uri.parse("$candidateBase/settings/change_password"),
-          headers: {
-            "Authorization": "Bearer ${widget.token}",
-            "Content-Type": "application/json",
-          },
-          body: jsonEncode({
-            "current_password": currentPassword.text,
-            "new_password": newPassword.text,
-          }),
-        );
-
-        final data = jsonDecode(response.body);
-
-        if (response.statusCode == 200 && data["success"] == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Password updated successfully")),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.grey.shade300,
+        ),
+      ),
+      child: DropdownButtonFormField<String>(
+        value: 'Business Analyst',
+        decoration: InputDecoration(
+          labelText: 'Designation',
+          labelStyle: GoogleFonts.inter(
+            color: Colors.grey.shade600,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+        ),
+        dropdownColor: Colors.white,
+        style: GoogleFonts.inter(
+          color: Colors.black87,
+        ),
+        items: designations.map((String designation) {
+          return DropdownMenuItem<String>(
+            value: designation,
+            child: Text(designation),
           );
-          currentPassword.clear();
-          newPassword.clear();
-          confirmPassword.clear();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text(data["message"] ?? "Failed to update password")),
-          );
-        }
-      } catch (e) {
-        debugPrint("Password change error: $e");
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Error changing password. Please try again.")),
-        );
-      } finally {
-        setState(() => isLoading = false);
-      }
-    }
-
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Reset Password",
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: Colors.black,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Change your account password",
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: Colors.black54,
-            ),
-          ),
-          const SizedBox(height: 30),
-          _modernCard(
-            "Change Password",
-            Column(
-              children: [
-                CustomTextField(
-                  label: "Current Password",
-                  controller: currentPassword,
-                  obscureText: true,
-                  textColor: Colors.black,
-                ),
-                const SizedBox(height: 20),
-                CustomTextField(
-                  label: "New Password",
-                  controller: newPassword,
-                  obscureText: true,
-                  textColor: Colors.black,
-                ),
-                const SizedBox(height: 20),
-                CustomTextField(
-                  label: "Confirm New Password",
-                  controller: confirmPassword,
-                  obscureText: true,
-                  textColor: Colors.black,
-                ),
-                const SizedBox(height: 30),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: isLoading ? null : changePassword,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color.fromARGB(255, 208, 32, 51),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 18),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : Text(
-                            "Reset Password",
-                            style: GoogleFonts.inter(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        }).toList(),
+        onChanged: (String? newValue) {
+          // Handle designation change
+        },
       ),
     );
   }
