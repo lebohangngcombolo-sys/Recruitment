@@ -75,7 +75,7 @@ flutter:
     - assets/images/simba.jpg
     - assets/images/team5.jpg
     - assets/images/final.jpg
-    - assets/icons/Linkedin1.png
+    # - assets/icons/Linkedin1.png (removed — file missing and causing web build failure)
     - assets/icons/Linkedin.png
     - assets/icons/Instagram1.png
     - assets/icons/Instagram.png
