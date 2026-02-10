@@ -6,8 +6,9 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from app.models import Requisition
 from cloudinary.uploader import upload as cloudinary_upload
-import spacy
-from sentence_transformers import SentenceTransformer, util
+
+# Lazy import heavy NLP libraries to avoid loading them at app startup
+
 
 # ----------------------------
 # Environment & Logging Setup
@@ -38,13 +39,19 @@ class HybridResumeAnalyzer:
         # --- Offline NLP ---
         self.nlp = self._load_spacy_model("en_core_web_sm")
 
-        # --- Offline embeddings ---
+        # --- Offline embeddings (lazy import) ---
+        self.embed_model = None
+        self.embed_util = None
         try:
+            # import locally to avoid heavy imports during app start
+            from sentence_transformers import SentenceTransformer, util as st_util
             self.embed_model = SentenceTransformer('all-MiniLM-L6-v2')
+            self.embed_util = st_util
             logger.info("SentenceTransformer embedding model loaded.")
         except Exception as e:
             logger.error(f"Failed to load embedding model: {e}")
             self.embed_model = None
+            self.embed_util = None
 
     # ----------------------------
     # Private Methods
@@ -52,11 +59,16 @@ class HybridResumeAnalyzer:
     def _load_spacy_model(self, model_name):
         """Load spaCy model, download if not found."""
         try:
+            import spacy
             return spacy.load(model_name)
         except OSError:
             logger.info(f"{model_name} not found. Downloading...")
             subprocess.run(["python", "-m", "spacy", "download", model_name], check=True)
+            import spacy
             return spacy.load(model_name)
+        except Exception as e:
+            logger.error(f"Failed to load spaCy model {model_name}: {e}")
+            return None
 
     def _parse_openrouter_response(self, text):
         """Parse OpenRouter AI response for score, missing skills, suggestions."""
@@ -142,18 +154,31 @@ Suggestions:
     def analyse_offline_embedding(self, resume_content, job_description):
         """Offline embedding-based NLP analysis."""
         # --- Keyword extraction ---
-        resume_doc = self.nlp(resume_content.lower())
-        job_doc = self.nlp(job_description.lower())
+        if self.nlp:
+            resume_doc = self.nlp(resume_content.lower())
+            job_doc = self.nlp(job_description.lower())
 
-        resume_skills = set(token.lemma_ for token in resume_doc if token.pos_ in ["NOUN", "PROPN", "VERB", "ADJ"])
-        job_skills = set(token.lemma_ for token in job_doc if token.pos_ in ["NOUN", "PROPN", "VERB", "ADJ"])
+            resume_skills = set(token.lemma_ for token in resume_doc if token.pos_ in ["NOUN", "PROPN", "VERB", "ADJ"])
+            job_skills = set(token.lemma_ for token in job_doc if token.pos_ in ["NOUN", "PROPN", "VERB", "ADJ"])
+        else:
+            # fallback simple tokenization
+            resume_tokens = re.findall(r"\w+", resume_content.lower())
+            job_tokens = re.findall(r"\w+", job_description.lower())
+            resume_skills = set(resume_tokens)
+            job_skills = set(job_tokens)
         missing_skills = list(job_skills - resume_skills)
 
         # --- Embedding similarity ---
-        if self.embed_model:
-            embeddings = self.embed_model.encode([resume_content, job_description], convert_to_tensor=True)
-            similarity_score = float(util.cos_sim(embeddings[0], embeddings[1]).item())
-            match_score = int(similarity_score * 100)
+        if self.embed_model and self.embed_util:
+            try:
+                embeddings = self.embed_model.encode([resume_content, job_description], convert_to_tensor=True)
+                similarity_score = float(self.embed_util.cos_sim(embeddings[0], embeddings[1]).item())
+                match_score = int(similarity_score * 100)
+            except Exception as e:
+                logger.error(f"Embedding similarity computation failed: {e}")
+                total_skills = len(job_skills)
+                matched_skills = total_skills - len(missing_skills)
+                match_score = int((matched_skills / total_skills) * 100) if total_skills else 0
         else:
             # fallback to keyword match if embeddings fail
             total_skills = len(job_skills)
