@@ -205,19 +205,52 @@ def upload_resume(application_id):
 
         file = request.files["resume"]
 
+        import os
+        import tempfile
+        from app.services.advanced_ocr_service import AdvancedOCRService
+
+        filename = (file.filename or "").strip()
+        if not filename:
+            return jsonify({"error": "No file selected"}), 400
+
+        _, ext = os.path.splitext(filename)
+        ext = (ext or "").lower().lstrip(".")
+
+        ocr_service = AdvancedOCRService()
+        if ext and ext not in ocr_service.SUPPORTED_EXTENSIONS:
+            return jsonify({
+                "error": f"Unsupported file type: .{ext}",
+                "supported_types": sorted(list(ocr_service.SUPPORTED_EXTENSIONS)),
+            }), 400
+
+        # Save to temp file for OCR / text extraction
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}" if ext else "") as tmp:
+            temp_path = tmp.name
+        try:
+            file.save(temp_path)
+            ocr_result = ocr_service.extract_text_with_metadata(temp_path, ext or "")
+            resume_text = (ocr_result.get("text") or "").strip()
+        finally:
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+
+        # Reset stream so Cloudinary upload can read the file content
+        try:
+            file.stream.seek(0)
+        except Exception:
+            pass
+
         # --- Upload to Cloudinary ---
         resume_url = HybridResumeAnalyzer.upload_cv(file)
         if not resume_url:
             return jsonify({"error": "Failed to upload resume"}), 500
 
-        # --- Extract PDF text if needed ---
-        resume_text = request.form.get("resume_text", "")
-        if not resume_text and file.filename.lower().endswith(".pdf"):
-            file.stream.seek(0)
-            pdf_doc = fitz.open(stream=file.stream.read(), filetype="pdf")
-            resume_text = ""
-            for page in pdf_doc:
-                resume_text += page.get_text()
+        # If client provided resume_text explicitly, prefer that.
+        client_resume_text = (request.form.get("resume_text", "") or "").strip()
+        if client_resume_text:
+            resume_text = client_resume_text
 
         # --- Queue analysis (non-blocking) ---
         application.resume_url = resume_url
@@ -228,7 +261,14 @@ def upload_resume(application_id):
             candidate_id=candidate.id,
             job_description=job.description or "",
             cv_text=resume_text or "",
-            result={},
+            result={
+                "extraction_metadata": {
+                    "extraction_method": ocr_result.get("extraction_method"),
+                    "confidence": ocr_result.get("confidence"),
+                    "pages": ocr_result.get("pages"),
+                    "has_scanned_content": ocr_result.get("has_scanned_content"),
+                }
+            },
             status="pending"
         )
         db.session.add(cv_analysis)

@@ -387,7 +387,7 @@ class Application(db.Model):
     overall_score = db.Column(db.Float, default=0)
     scoring_breakdown = db.Column(JSON, default={})
     knockout_rule_violations = db.Column(JSON, default=[])
-    recommendation = db.Column(db.String(50))
+    recommendation = db.Column(db.String(500))
     assessed_date = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_saved_screen = db.Column(db.String(50))
@@ -918,7 +918,7 @@ class UserPresence(db.Model):
     socket_id = db.Column(db.String(100), nullable=True)
     
     # Relationship
-    user = db.relationship('User', backref=db.backref('user_presence', uselist=False))
+    user = db.relationship('User', backref=db.backref('user_presence', uselist=False, overlaps="presence"))
 
     
     def to_dict(self):
