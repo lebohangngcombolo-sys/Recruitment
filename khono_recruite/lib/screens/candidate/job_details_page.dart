@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
@@ -365,7 +366,13 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                         child: IconButton(
                           icon: const Icon(Icons.arrow_back,
                               color: Colors.black87),
-                          onPressed: () => Navigator.of(context).pop(),
+                          onPressed: () {
+                            if (context.canPop()) {
+                              context.pop();
+                            } else {
+                              context.go('/');
+                            }
+                          },
                         ),
                       ),
                     ),

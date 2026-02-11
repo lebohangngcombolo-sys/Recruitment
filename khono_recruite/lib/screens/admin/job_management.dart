@@ -1171,9 +1171,23 @@ class _JobFormDialogState extends State<JobFormDialog>
   String category = "";
   final skillsController = TextEditingController();
   final minExpController = TextEditingController();
+  // Listing fields (shown on landing page explore section)
+  String company = "";
+  String location = "";
+  String employmentType = "Full Time";
+  final salaryRangeController = TextEditingController();
+  final applicationDeadlineController = TextEditingController();
+  final bannerController = TextEditingController();
   List<Map<String, dynamic>> questions = [];
   late TabController _tabController;
   final AdminService admin = AdminService();
+  static const List<String> employmentTypes = [
+    "Full Time",
+    "Part Time",
+    "Contract",
+    "Remote",
+    "Internship",
+  ];
 
   @override
   void initState() {
@@ -1189,6 +1203,17 @@ class _JobFormDialogState extends State<JobFormDialog>
         (widget.job?['qualifications'] ?? []).join(", ");
     companyDetails = widget.job?['company_details'] ?? '';
     category = widget.job?['category'] ?? '';
+    company = widget.job?['company']?.toString() ?? '';
+    location = widget.job?['location']?.toString() ?? '';
+    employmentType = widget.job?['employment_type']?.toString() ??
+        widget.job?['type']?.toString() ??
+        "Full Time";
+    if (!employmentTypes.contains(employmentType)) employmentType = "Full Time";
+    salaryRangeController.text =
+        widget.job?['salary_range']?.toString() ?? widget.job?['salary']?.toString() ?? '';
+    final deadline = widget.job?['application_deadline'] ?? widget.job?['deadline'];
+    applicationDeadlineController.text = deadline?.toString() ?? '';
+    bannerController.text = widget.job?['banner']?.toString() ?? widget.job?['company_logo']?.toString() ?? '';
 
     if (widget.job != null &&
         widget.job!['assessment_pack'] != null &&
@@ -1232,17 +1257,25 @@ class _JobFormDialogState extends State<JobFormDialog>
         .where((e) => e.isNotEmpty)
         .toList();
 
+    final deadlineStr = applicationDeadlineController.text.trim();
     final jobData = {
-      'title': title,
-      'description': description,
-      'job_summary': jobSummary,
+      'title': title.trim(),
+      'description': description.trim(),
+      'job_summary': jobSummary.trim(),
       'responsibilities': responsibilities,
       'qualifications': qualifications,
-      'company_details': companyDetails,
-      'category': category,
+      'company_details': companyDetails.trim(),
+      'category': category.trim(),
       'required_skills': skills,
-      'min_experience': double.tryParse(minExpController.text) ?? 0,
+      'min_experience': double.tryParse(minExpController.text.toString().trim()) ?? 0,
+      'vacancy': 1,
       'weightings': {'cv': 60, 'assessment': 40},
+      'company': company.trim(),
+      'location': location.trim(),
+      'employment_type': employmentType,
+      'salary_range': salaryRangeController.text.trim(),
+      'application_deadline': deadlineStr.isEmpty ? null : deadlineStr,
+      'banner': bannerController.text.trim().isEmpty ? null : bannerController.text.trim(),
       'assessment_pack': {
         'questions': questions.map((q) {
           return {
@@ -1274,8 +1307,10 @@ class _JobFormDialogState extends State<JobFormDialog>
       widget.onSaved();
       Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error saving job: $e")));
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error saving job: $msg")),
+      );
     }
   }
 
@@ -1375,6 +1410,54 @@ class _JobFormDialogState extends State<JobFormDialog>
                               initialValue: category,
                               hintText: "Engineering, Marketing...",
                               onChanged: (v) => category = v,
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Company (listing)",
+                              initialValue: company,
+                              hintText: "Company name shown on job cards",
+                              onChanged: (v) => company = v,
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Location",
+                              initialValue: location,
+                              hintText: "e.g. Johannesburg, Cape Town, Remote",
+                              onChanged: (v) => location = v,
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              value: employmentType,
+                              decoration: const InputDecoration(
+                                labelText: "Employment Type",
+                                border: OutlineInputBorder(),
+                              ),
+                              items: employmentTypes
+                                  .map((e) => DropdownMenuItem(
+                                        value: e,
+                                        child: Text(e),
+                                      ))
+                                  .toList(),
+                              onChanged: (v) =>
+                                  setState(() => employmentType = v ?? "Full Time"),
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Salary Range",
+                              controller: salaryRangeController,
+                              hintText: "e.g. R850k - R1.2m",
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Application Deadline",
+                              controller: applicationDeadlineController,
+                              hintText: "YYYY-MM-DD (e.g. 2025-03-15)",
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Company Logo URL (optional)",
+                              controller: bannerController,
+                              hintText: "Image URL for job card",
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(

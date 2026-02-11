@@ -18,6 +18,27 @@ from app.schemas.job_schemas import (
 )
 
 
+def _normalize_application_deadline(value):
+    """Parse date string into ISO format for Marshmallow, or return None. Accepts YYYY-MM-DD, DD Mon YYYY, etc."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%dT%H:%M:%S")
+    s = (value if isinstance(value, str) else str(value)).strip()
+    if not s or s.lower() in ("null", "none"):
+        return None
+    # Already ISO date or datetime
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return s if len(s) > 10 else f"{s}T00:00:00"
+    # Try common formats (use full string; some formats need more than 10 chars)
+    for fmt in ("%d %b %Y", "%d %B %Y", "%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d", "%d-%m-%Y", "%b %d %Y", "%B %d %Y"):
+        try:
+            dt = datetime.strptime(s[:50].strip(), fmt)
+            return dt.strftime("%Y-%m-%dT00:00:00")
+        except ValueError:
+            continue
+    return None
+
 
 
 
@@ -264,11 +285,21 @@ def create_job():
     """Create a new job posting"""
     try:
         data = request.get_json()
-        
+        if data is None:
+            return jsonify({
+                "error": "Invalid request",
+                "details": {"_schema": ["Request body must be valid JSON"]}
+            }), 400
+
+        # Normalize application_deadline: accept any common date format, output ISO for schema
+        raw_deadline = data.get("application_deadline")
+        data["application_deadline"] = _normalize_application_deadline(raw_deadline)
+
         # Validate input using schema
         try:
             validated_data = job_create_schema.load(data)
         except ValidationError as e:
+            current_app.logger.warning(f"Job create validation failed: {e.messages}")
             return jsonify({
                 "error": "Validation failed",
                 "details": e.messages
@@ -304,7 +335,13 @@ def update_job(job_id):
     """Update a job posting (partial updates allowed)"""
     try:
         data = request.get_json()
-        
+        if data is None:
+            return jsonify({"error": "Invalid request", "details": {"_schema": ["Request body must be valid JSON"]}}), 400
+
+        # Normalize application_deadline for schema
+        if "application_deadline" in data:
+            data["application_deadline"] = _normalize_application_deadline(data["application_deadline"])
+
         # Validate update data
         try:
             validated_data = job_update_schema.load(data, partial=True)

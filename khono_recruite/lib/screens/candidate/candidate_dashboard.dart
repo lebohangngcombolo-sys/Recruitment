@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:go_router/go_router.dart';
 import 'dart:ui';
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
@@ -15,7 +16,6 @@ import '../../screens/candidate/user_profile_page.dart';
 import 'jobs_applied_page.dart';
 import 'saved_application_screen.dart';
 import '../../services/auth_service.dart';
-import '../../screens/auth/login_screen.dart';
 import 'offers_screen.dart';
 
 class CandidateDashboard extends StatefulWidget {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import '../../../services/candidate_service.dart';
 
 class JobsAppliedPage extends StatefulWidget {
@@ -52,7 +53,13 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back, color: Colors.black87),
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () {
+                      if (context.canPop()) {
+                        context.pop();
+                      } else {
+                        context.go('/candidate-dashboard?token=${widget.token}');
+                      }
+                    },
                   ),
                   const SizedBox(width: 16),
                   const Text(

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 class CustomTextField extends StatelessWidget {
   final String label;
   final TextEditingController controller;
+  final TextEditingController controller;
   final TextInputType inputType;
   final bool obscureText;
   final Color backgroundColor;
@@ -13,7 +14,9 @@ class CustomTextField extends StatelessWidget {
 
   const CustomTextField({
     Key? key,
+    Key? key,
     required this.label,
+    required this.controller,
     required this.controller,
     this.inputType = TextInputType.text,
     this.obscureText = false,

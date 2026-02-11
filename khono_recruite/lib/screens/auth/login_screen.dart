@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:url_launcher/url_launcher.dart';
@@ -18,6 +20,17 @@ import 'mfa_verification_screen.dart'; // 🆕 Import MFA screen
 import 'sso_enterprise_screen.dart'; // 🆕 Import SSO Enterprise screen
 import '../hr/hr_dashboard.dart';
 
+/// Hides the scrollbar while keeping scroll behavior (e.g. for auth screens).
+class _NoScrollbarScrollBehavior extends ScrollBehavior {
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) =>
+      child;
+}
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -30,6 +43,7 @@ class _LoginScreenState extends State<LoginScreen>
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool loading = false;
+  bool _obscurePassword = true;
 
   // 🆕 MFA state variables - PROPERLY TYPED
   String? _mfaSessionToken;
@@ -206,40 +220,26 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   // ------------------- NAVIGATION HELPER -------------------
+  // Use GoRouter (context.go) so we don't trigger Navigator._debugLocked.
+  // Defer to next frame so navigation runs after current build completes.
   void _navigateToDashboard({
     required String token,
     required String role,
     required String dashboard,
   }) {
-    if (role == "admin") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => AdminDAshboard(token: token)),
-      );
-    } else if (role == "hiring_manager") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => HMMainDashboard(token: token)),
-      );
-    }
-
-    // 🆕 NEW HR ROLE SUPPORT
-    else if (role == "hr") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => HRDashboard(token: token)),
-      );
-    } else if (role == "candidate" && dashboard == "/enrollment") {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => EnrollmentScreen(token: token)),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => CandidateDashboard(token: token)),
-      );
-    }
+    final encodedToken = Uri.encodeComponent(token);
+    final path = switch (role) {
+      "admin" => '/admin-dashboard?token=$encodedToken',
+      "hiring_manager" => '/hiring-manager-dashboard?token=$encodedToken',
+      "hr" => '/hr-dashboard?token=$encodedToken',
+      "candidate" when dashboard == "/enrollment" =>
+        '/enrollment?token=$encodedToken',
+      _ => '/candidate-dashboard?token=$encodedToken',
+    };
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) return;
+      context.go(path);
+    });
   }
 
   @override
@@ -271,29 +271,7 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
 
-          // Logos at top-left and top-right
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Image.asset(
-                    "assets/images/logo2.png",
-                    width: 300,
-                    height: 120,
-                  ),
-                  Image.asset(
-                    "assets/images/logo.png",
-                    width: 300,
-                    height: 120,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Centered Content - Glass container removed
+          // Centered Content - scroll fills screen so scroll works from anywhere
           Center(
             child: SingleChildScrollView(
               child: MouseRegion(
@@ -312,6 +290,7 @@ class _LoginScreenState extends State<LoginScreen>
                         Text(
                           "WELCOME BACK",
                           style: GoogleFonts.poppins(
+                          style: GoogleFonts.poppins(
                             fontSize: 32,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
@@ -325,7 +304,13 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
                         const SizedBox(height: 24),
                         Text(
+                        Text(
                           "Login",
+                          style: GoogleFonts.poppins(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                           style: GoogleFonts.poppins(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -372,12 +357,15 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
                         const SizedBox(height: 20),
                         // Updated Login Button - Medium size and C10D00 color
+                        // Updated Login Button - Medium size and C10D00 color
                         SizedBox(
                           width: 200, // Medium width
                           height: 44, // Medium height
                           child: ElevatedButton(
                             onPressed: loading ? null : _login,
                             style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  const Color(0xFFC10D00), // C10D00 background
                               backgroundColor:
                                   const Color(0xFFC10D00), // C10D00 background
                               foregroundColor: Colors.white, // White text
@@ -396,7 +384,12 @@ class _LoginScreenState extends State<LoginScreen>
                                     ),
                                   )
                                 : Text(
+                                : Text(
                                     "LOGIN",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                     style: GoogleFonts.poppins(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
@@ -406,21 +399,18 @@ class _LoginScreenState extends State<LoginScreen>
                         ),
                         const SizedBox(height: 16),
                         // 🆕 Enterprise SSO Button - White with C10D00 text and icon
+                        // 🆕 Enterprise SSO Button - White with C10D00 text and icon
                         SizedBox(
                           width: 200, // Same medium width as login button
                           height: 44, // Same medium height as login button
                           child: ElevatedButton(
                             onPressed: loading
                                 ? null
-                                : () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const SsoEnterpriseScreen(),
-                                      ),
-                                    ),
+                                : () => context.push('/sso-enterprise'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white, // White background
+                              foregroundColor:
+                                  const Color(0xFFC10D00), // C10D00 text
                               foregroundColor:
                                   const Color(0xFFC10D00), // C10D00 text
                               shape: RoundedRectangleBorder(
@@ -428,16 +418,20 @@ class _LoginScreenState extends State<LoginScreen>
                               elevation: 5,
                             ),
                             child: Row(
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(
                                   Icons.business,
                                   size: 18,
                                   color: const Color(0xFFC10D00), // C10D00 icon
+                                  color: const Color(0xFFC10D00), // C10D00 icon
                                 ),
+                                const SizedBox(width: 8),
                                 const SizedBox(width: 8),
                                 Text(
                                   "Enterprise SSO",
+                                  style: GoogleFonts.poppins(
                                   style: GoogleFonts.poppins(
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,
@@ -464,9 +458,23 @@ class _LoginScreenState extends State<LoginScreen>
                                   fontSize: 14,
                                 ),
                               ),
+                                    color:
+                                        Colors.white.withValues(alpha: 0.4))),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: Text(
+                                "Or login with",
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white70,
+                                  fontSize: 14,
+                                ),
+                              ),
                             ),
                             Expanded(
                                 child: Divider(
+                                    color:
+                                        Colors.white.withValues(alpha: 0.4))),
                                     color:
                                         Colors.white.withValues(alpha: 0.4))),
                           ],
@@ -494,6 +502,12 @@ class _LoginScreenState extends State<LoginScreen>
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
+                            Text(
+                              "Don't have an account? ",
+                              style: GoogleFonts.poppins(
+                                color: Colors.white70,
+                              ),
+                            ),
                             Text(
                               "Don't have an account? ",
                               style: GoogleFonts.poppins(
@@ -531,9 +545,40 @@ class _LoginScreenState extends State<LoginScreen>
                               : () => themeProvider.toggleTheme(),
                         ),
                         const SizedBox(height: 16),
-                      ],
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
+                ),
+              ),
+            ),
+          ),
+
+          // Top bar on top so back arrow and logo receive taps
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back,
+                          color: Colors.white, size: 28),
+                      onPressed: () => context.go('/'),
+                    ),
+                    const SizedBox(width: 12),
+                    GestureDetector(
+                      onTap: () => context.go('/'),
+                      child: Image.asset(
+                        "assets/icons/khono.png",
+                        height: 40,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
