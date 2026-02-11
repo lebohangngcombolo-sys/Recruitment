@@ -1,13 +1,24 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+
 import '../../services/auth_service.dart';
 import '../../widgets/custom_button.dart';
-import '../../widgets/custom_textfield2.dart';
+import '../../widgets/custom_textfield.dart';
 import '../../providers/theme_provider.dart';
-import 'verification_screen.dart';
-import 'login_screen.dart';
+
+/// Hides the scrollbar while keeping scroll behavior (e.g. for auth screens).
+class _NoScrollbarScrollBehavior extends ScrollBehavior {
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) =>
+      child;
+}
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -19,12 +30,17 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
+
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController firstNameController = TextEditingController();
   final TextEditingController lastNameController = TextEditingController();
-  bool _obscurePassword = true; // <<< NEW
+
+  bool _obscurePassword = true;
   bool loading = false;
+
+  String passwordStrength = '';
+  Color passwordStrengthColor = Colors.red;
 
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
@@ -39,6 +55,7 @@ class _RegisterScreenState extends State<RegisterScreen>
       lowerBound: 0.95,
       upperBound: 1.0,
     );
+
     _scaleAnimation =
         CurvedAnimation(parent: _animationController, curve: Curves.easeOut);
   }
@@ -53,7 +70,36 @@ class _RegisterScreenState extends State<RegisterScreen>
     super.dispose();
   }
 
-  void register() async {
+  void checkPasswordStrength(String password) {
+    if (password.isEmpty) {
+      passwordStrength = '';
+      passwordStrengthColor = Colors.red;
+    } else if (password.length < 6) {
+      passwordStrength = 'Weak';
+      passwordStrengthColor = Colors.red;
+    } else {
+      int strengthPoints = 0;
+      if (RegExp(r'[A-Z]').hasMatch(password)) strengthPoints++;
+      if (RegExp(r'[a-z]').hasMatch(password)) strengthPoints++;
+      if (RegExp(r'[0-9]').hasMatch(password)) strengthPoints++;
+      if (RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password))
+        strengthPoints++;
+
+      if (strengthPoints <= 2) {
+        passwordStrength = 'Weak';
+        passwordStrengthColor = Colors.red;
+      } else if (strengthPoints == 3) {
+        passwordStrength = 'Medium';
+        passwordStrengthColor = Colors.orange;
+      } else {
+        passwordStrength = 'Strong';
+        passwordStrengthColor = Colors.green;
+      }
+    }
+    setState(() {});
+  }
+
+  Future<void> register() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => loading = true);
@@ -84,17 +130,12 @@ class _RegisterScreenState extends State<RegisterScreen>
           ),
         ),
       );
-      return; // Do NOT navigate
+      return;
     }
 
-    // SUCCESS: Only navigate on 201
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => VerificationScreen(
-          email: emailController.text.trim(),
-        ),
-      ),
+    if (!context.mounted) return;
+    context.go(
+      '/verify-email?email=${Uri.encodeComponent(emailController.text.trim())}',
     );
   }
 
@@ -106,7 +147,7 @@ class _RegisterScreenState extends State<RegisterScreen>
     return Scaffold(
       body: Stack(
         children: [
-          // Background Image
+          // Background
           Container(
             decoration: const BoxDecoration(
               image: DecorationImage(
@@ -116,172 +157,201 @@ class _RegisterScreenState extends State<RegisterScreen>
             ),
           ),
 
-          // Logos at top-left and top-right
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Image.asset(
-                    "assets/images/logo2.png",
-                    width: 300,
-                    height: 120,
-                  ),
-                  Image.asset(
-                    "assets/images/logo.png",
-                    width: 300,
-                    height: 120,
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Centered Content - Glass container removed
+          // Main Content - scroll fills screen so scroll works from anywhere
           Center(
-            child: SingleChildScrollView(
-              child: MouseRegion(
-                onEnter: (_) => kIsWeb ? _animationController.forward() : null,
-                onExit: (_) => kIsWeb ? _animationController.reverse() : null,
-                child: ScaleTransition(
-                  scale: _scaleAnimation,
-                  child: Container(
-                    width: size.width > 800 ? 400 : size.width * 0.9,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 32),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(height: 16),
-                          Text(
-                            "GET STARTED",
-                            style: GoogleFonts.poppins(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              shadows: [
-                                Shadow(
-                                    color: Colors.black26,
-                                    blurRadius: 4,
-                                    offset: Offset(2, 2))
+            child: SizedBox.expand(
+              child: ScrollConfiguration(
+                behavior: _NoScrollbarScrollBehavior(),
+                child: SingleChildScrollView(
+                  child: Center(
+                    child: MouseRegion(
+                      onEnter: (_) =>
+                          kIsWeb ? _animationController.forward() : null,
+                      onExit: (_) =>
+                          kIsWeb ? _animationController.reverse() : null,
+                      child: ScaleTransition(
+                        scale: _scaleAnimation,
+                        child: Container(
+                          width: size.width > 800 ? 400 : size.width * 0.9,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 32),
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const SizedBox(height: 16),
+                                Text(
+                                  "GET STARTED",
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    shadows: [
+                                      Shadow(
+                                        color: Colors.black26,
+                                        blurRadius: 4,
+                                        offset: Offset(2, 2),
+                                      )
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                Text(
+                                  "Register Account",
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                // Text fields: same style as login (white background, grey border)
+                                CustomTextField(
+                                  label: "First Name",
+                                  controller: firstNameController,
+                                  backgroundColor: Colors.white,
+                                  textColor: Colors.black,
+                                  borderColor: Colors.grey.shade300,
+                                  labelColor: Colors.white,
+                                  margin: EdgeInsets.zero,
+                                  textInputAction: TextInputAction.next,
+                                ),
+                                const SizedBox(height: 12),
+                                CustomTextField(
+                                  label: "Last Name",
+                                  controller: lastNameController,
+                                  backgroundColor: Colors.white,
+                                  textColor: Colors.black,
+                                  borderColor: Colors.grey.shade300,
+                                  labelColor: Colors.white,
+                                  margin: EdgeInsets.zero,
+                                  textInputAction: TextInputAction.next,
+                                ),
+                                const SizedBox(height: 12),
+                                CustomTextField(
+                                  label: "Email",
+                                  controller: emailController,
+                                  inputType: TextInputType.emailAddress,
+                                  backgroundColor: Colors.white,
+                                  textColor: Colors.black,
+                                  borderColor: Colors.grey.shade300,
+                                  labelColor: Colors.white,
+                                  margin: EdgeInsets.zero,
+                                  textInputAction: TextInputAction.next,
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Password
+                                CustomTextField(
+                                  label: "Password",
+                                  controller: passwordController,
+                                  inputType: TextInputType.visiblePassword,
+                                  obscureText: _obscurePassword,
+                                  backgroundColor: Colors.white,
+                                  textColor: Colors.black,
+                                  borderColor: Colors.grey.shade300,
+                                  labelColor: Colors.white,
+                                  margin: EdgeInsets.zero,
+                                  textInputAction: TextInputAction.done,
+                                  onSubmitted: (_) => register(),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_off
+                                          : Icons.visibility,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _obscurePassword = !_obscurePassword;
+                                      });
+                                    },
+                                  ),
+                                  onChanged: checkPasswordStrength,
+                                ),
+
+                                // Password strength indicator
+                                if (passwordStrength.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                        top: 4.0, bottom: 12),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Container(
+                                            height: 6,
+                                            decoration: BoxDecoration(
+                                              color: passwordStrengthColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(3),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          passwordStrength,
+                                          style: GoogleFonts.poppins(
+                                              color: passwordStrengthColor,
+                                              fontSize: 12),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                const SizedBox(height: 20),
+
+                                // Register Button
+                                SizedBox(
+                                  width: 200,
+                                  height: 44,
+                                  child: CustomButton(
+                                    text: "Register",
+                                    onPressed: loading ? null : register,
+                                  ),
+                                ),
+
+                                const SizedBox(height: 24),
+
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      "Already have an account? ",
+                                      style: GoogleFonts.poppins(
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () => context.go('/login'),
+                                      child: Text(
+                                        "Login",
+                                        style: GoogleFonts.poppins(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 12),
+
+                                IconButton(
+                                  icon: Icon(
+                                    themeProvider.isDarkMode
+                                        ? Icons.light_mode
+                                        : Icons.dark_mode,
+                                    color: Colors.white,
+                                  ),
+                                  onPressed: () => themeProvider.toggleTheme(),
+                                ),
+
+                                const SizedBox(height: 16),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 24),
-                          Text(
-                            "Register Account",
-                            style: GoogleFonts.poppins(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          // Text Fields with transparent background
-                          CustomTextField(
-                            label: "First Name",
-                            controller: firstNameController,
-                            backgroundColor:
-                                Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
-                            textColor: Color(0xFFC10D00), // #c10d00
-                            borderColor: Color(0xFFC10D00), // #c10d00 stroke
-                          ),
-                          const SizedBox(height: 12),
-                          CustomTextField(
-                            label: "Last Name",
-                            controller: lastNameController,
-                            backgroundColor:
-                                Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
-                            textColor: Color(0xFFC10D00), // #c10d00
-                            borderColor: Color(0xFFC10D00), // #c10d00 stroke
-                          ),
-                          const SizedBox(height: 12),
-                          CustomTextField(
-                            label: "Email",
-                            controller: emailController,
-                            inputType: TextInputType.emailAddress,
-                            backgroundColor:
-                                Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
-                            textColor: Color(0xFFC10D00), // #c10d00
-                            borderColor: Color(0xFFC10D00), // #c10d00 stroke
-                          ),
-                          const SizedBox(height: 12),
-                          CustomTextField(
-                            label: "Password",
-                            controller: passwordController,
-                            inputType: TextInputType.visiblePassword,
-                            obscureText: _obscurePassword,
-                            backgroundColor:
-                                Color(0x33f2f2f2), // #f2f2f2 with 20% opacity
-                            textColor: Color(0xFFC10D00), // #c10d00
-                            borderColor: Color(0xFFC10D00), // #c10d00 stroke
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                                color: Color(0xFFC10D00), // #c10d00
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
-                            ),
-                          ),
-
-                          const SizedBox(height: 20),
-                          // Medium sized button
-                          SizedBox(
-                            width: 200, // Medium width
-                            height: 44, // Medium height
-                            child: CustomButton(
-                              text: "Register",
-                              onPressed: register,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                "Already have an account? ",
-                                style: GoogleFonts.poppins(
-                                  color: Colors.white70,
-                                ),
-                              ),
-                              GestureDetector(
-                                onTap: () {
-                                  Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (_) => const LoginScreen()),
-                                  );
-                                },
-                                child: Text(
-                                  "Login",
-                                  style: GoogleFonts.poppins(
-                                    color: Colors.redAccent,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          IconButton(
-                            icon: Icon(
-                              themeProvider.isDarkMode
-                                  ? Icons.light_mode
-                                  : Icons.dark_mode,
-                              color: Colors.white,
-                            ),
-                            onPressed: () => themeProvider.toggleTheme(),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -290,8 +360,39 @@ class _RegisterScreenState extends State<RegisterScreen>
             ),
           ),
 
+          // Top bar on top so back arrow and logo receive taps
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back,
+                          color: Colors.white, size: 28),
+                      onPressed: () => context.go('/'),
+                    ),
+                    const SizedBox(width: 12),
+                    GestureDetector(
+                      onTap: () => context.go('/'),
+                      child: Image.asset(
+                        "assets/icons/khono.png",
+                        height: 40,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
           if (loading)
-            const Center(child: CircularProgressIndicator(color: Colors.white)),
+            const Center(
+              child: CircularProgressIndicator(color: Colors.white),
+            ),
         ],
       ),
     );

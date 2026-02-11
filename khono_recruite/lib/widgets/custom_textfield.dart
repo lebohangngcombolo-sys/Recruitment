@@ -17,7 +17,7 @@ class CustomTextField extends StatelessWidget {
   final Color? labelColor;
   final Color? hintColor;
   final Color? iconColor;
-  final bool obscureText;
+  final bool? obscureText;
   final bool enabled;
   final bool readOnly;
   final bool showCursor;
@@ -61,7 +61,7 @@ class CustomTextField extends StatelessWidget {
     this.labelColor,
     this.hintColor,
     this.iconColor,
-    this.obscureText = false,
+    this.obscureText,
     this.enabled = true,
     this.readOnly = false,
     this.showCursor = true,
@@ -159,7 +159,7 @@ class CustomTextField extends StatelessWidget {
             readOnly: readOnly,
             showCursor: showCursor,
             enabled: enabled,
-            obscureText: obscureText,
+            obscureText: obscureText ?? false,
             onChanged: onChanged,
             onFieldSubmitted: onSubmitted,
             validator: validator,
@@ -168,9 +168,9 @@ class CustomTextField extends StatelessWidget {
             enableInteractiveSelection: enableInteractiveSelection,
             textCapitalization: textCapitalization,
             style: TextStyle(
-              color: textColor ?? defaultTextColor,
+              color: (textColor ?? defaultTextColor).withValues(alpha: 1.0),
               fontSize: 16,
-              fontWeight: FontWeight.w400,
+              fontWeight: FontWeight.w500,
               height: 1.4,
             ),
             decoration: InputDecoration(

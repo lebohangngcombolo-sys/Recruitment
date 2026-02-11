@@ -9,7 +9,6 @@ import 'cv_reviews_screen.dart';
 import 'notifications_screen.dart';
 import 'job_management.dart';
 import 'interviews_list_screen.dart';
-import 'offer_list_screen.dart';
 import 'hm_analytics_page.dart';
 import 'hm_team_collaboration_page.dart';
 import 'package:http/http.dart' as http;
@@ -24,7 +23,6 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 import '../auth/login_screen.dart';
-import 'pipeline_page.dart';
 
 class HMMainDashboard extends StatefulWidget {
   final String token;
@@ -646,12 +644,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                 // ---------- Analytics Icon ----------
                                 IconButton(
                                   onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) =>
-                                              RecruitmentPipelinePage(
-                                                  token: widget.token)),
+                                    context.push(
+                                      '/hiring-manager-pipeline?token=${Uri.encodeComponent(widget.token)}',
                                     );
                                   },
                                   icon: Image.asset(
@@ -720,12 +714,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
                                 TextButton.icon(
                                   onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) =>
-                                              AdminOfferListScreen()),
-                                    );
+                                    context.push('/hiring-manager-offers');
                                   },
                                   icon: Image.asset(
                                     'assets/icons/add.png',

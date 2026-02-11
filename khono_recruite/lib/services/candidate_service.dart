@@ -17,11 +17,11 @@ class CandidateService {
     return jsonDecode(response.body);
   }
 
-  // ----------------- GET AVAILABLE JOBS -----------------
+  // ----------------- GET AVAILABLE JOBS (authenticated) -----------------
   static Future<List<Map<String, dynamic>>> getAvailableJobs(
       String token) async {
     final response = await http.get(
-      Uri.parse("http://127.0.0.1:5000/api/candidate/jobs"),
+      Uri.parse(ApiEndpoints.getAvailableJobs),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
@@ -30,7 +30,23 @@ class CandidateService {
 
     if (response.statusCode == 200) {
       final List<dynamic> data = jsonDecode(response.body);
-      // Cast each item to Map<String, dynamic>
+      return data
+          .map<Map<String, dynamic>>((item) => Map<String, dynamic>.from(item))
+          .toList();
+    } else {
+      throw Exception('Failed to fetch jobs: ${response.statusCode}');
+    }
+  }
+
+  // ----------------- GET PUBLIC JOBS (no auth, for explore category) -----------------
+  static Future<List<Map<String, dynamic>>> getPublicJobs() async {
+    final response = await http.get(
+      Uri.parse(ApiEndpoints.getPublicJobs),
+      headers: {'Content-Type': 'application/json'},
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = jsonDecode(response.body);
       return data
           .map<Map<String, dynamic>>((item) => Map<String, dynamic>.from(item))
           .toList();

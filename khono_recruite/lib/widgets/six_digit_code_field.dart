@@ -3,12 +3,14 @@ import 'package:flutter/material.dart';
 class SixDigitCodeField extends StatefulWidget {
   final ValueChanged<String> onCodeChanged;
   final ValueChanged<String> onCodeCompleted;
+  final VoidCallback? onSubmit;
   final bool autoFocus;
 
   const SixDigitCodeField({
     super.key,
     required this.onCodeChanged,
     required this.onCodeCompleted,
+    this.onSubmit,
     this.autoFocus = false,
   });
 
@@ -115,7 +117,7 @@ class _SixDigitCodeFieldState extends State<SixDigitCodeField> {
         style: const TextStyle(
           fontSize: 22,
           fontWeight: FontWeight.bold,
-          color: Colors.red, // Changed to red
+          color: Colors.black,
         ),
         decoration: const InputDecoration(
           counterText: '',
@@ -124,6 +126,7 @@ class _SixDigitCodeFieldState extends State<SixDigitCodeField> {
           filled: false, // Ensure no fill color
         ),
         onChanged: (value) => _handleInput(value, index),
+        onSubmitted: index == 5 ? (_) => widget.onSubmit?.call() : null,
         onTap: () {
           // Select all text when tapped
           _controllers[index].selection = TextSelection(

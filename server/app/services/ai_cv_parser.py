@@ -2,12 +2,20 @@
 import logging
 import re
 from typing import Dict, Any
-from .cv_parser_service import HybridResumeAnalyzer
 import pdfplumber
 import docx
 
 logger = logging.getLogger(__name__)
-analyzer = HybridResumeAnalyzer()  # Singleton instance
+
+_analyzer = None
+
+def _get_analyzer():
+    """Lazy-load HybridResumeAnalyzer so app starts without loading spaCy/SentenceTransformer."""
+    global _analyzer
+    if _analyzer is None:
+        from .cv_parser_service import HybridResumeAnalyzer
+        _analyzer = HybridResumeAnalyzer()
+    return _analyzer
 
 class AIParser:
 
@@ -26,7 +34,7 @@ class AIParser:
 
             # Step 1: Try AI parsing
             try:
-                parsed_data = analyzer.analyse(resume_content=cv_text, job_id=job_id)
+                parsed_data = _get_analyzer().analyse(resume_content=cv_text, job_id=job_id)
             except Exception as e:
                 logger.warning(f"AI parsing failed: {e}")
                 parsed_data = {}

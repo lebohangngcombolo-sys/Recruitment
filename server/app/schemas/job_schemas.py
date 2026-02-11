@@ -75,6 +75,14 @@ class JobBaseSchema(Schema):
         validate=Range(min=1)
     )
 
+    # Display fields for job listing
+    location = fields.Str(allow_none=True, load_default="", dump_default="")
+    employment_type = fields.Str(allow_none=True, load_default="Full Time", dump_default="Full Time")
+    salary_range = fields.Str(allow_none=True, load_default="", dump_default="")
+    application_deadline = fields.DateTime(allow_none=True, load_default=None)
+    company = fields.Str(allow_none=True, load_default="", dump_default="")
+    banner = fields.Str(allow_none=True)
+
     class Meta:
         unknown = EXCLUDE
 
@@ -113,6 +121,12 @@ class JobUpdateSchema(Schema):
     assessment_pack = fields.Dict()
     vacancy = fields.Int(validate=Range(min=1))
     is_active = fields.Bool()
+    location = fields.Str(allow_none=True)
+    employment_type = fields.Str(allow_none=True)
+    salary_range = fields.Str(allow_none=True)
+    application_deadline = fields.DateTime(allow_none=True)
+    company = fields.Str(allow_none=True)
+    banner = fields.Str(allow_none=True)
 
     class Meta:
         unknown = EXCLUDE

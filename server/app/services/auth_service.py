@@ -7,6 +7,8 @@ from datetime import datetime, timedelta
 from app.extensions import redis_client
 import pyotp
 from flask_jwt_extended import create_access_token, create_refresh_token
+from sqlalchemy.exc import IntegrityError
+
 import secrets
 import string
 import logging
@@ -27,23 +29,28 @@ class AuthService:
         return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
 
     @staticmethod
-    def create_user(email: str, password: str, first_name: str, last_name: str, role: str = 'candidate') -> User:
-        """Create a new user and save to DB."""
-        hashed_password = AuthService.hash_password(password)
+    def create_user(email: str, password: str) -> User:
+        """Create a candidate user using email + password only."""
         user = User(
             email=email.strip().lower(),
-            password=hashed_password,      # ✅ correct column
-            role=role,
-            profile={"first_name": first_name, "last_name": last_name}  # store names in JSON
+            password=AuthService.hash_password(password),
+            role='candidate',
+            profile={}
         )
+
         try:
             db.session.add(user)
             db.session.commit()
-        except Exception as e:
+            return user
+        except IntegrityError:
             db.session.rollback()
-            current_app.logger.error(f'Failed to create user: {str(e)}', exc_info=True)
-            raise e
-        return user
+            raise ValueError("Email already exists")
+        except Exception:
+            db.session.rollback()
+            logger.exception("Failed to create user")
+            raise
+
+
 
     @staticmethod
     def validate_user_credentials(email: str, password: str):

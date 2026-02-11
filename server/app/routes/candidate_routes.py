@@ -80,39 +80,49 @@ def apply_job(job_id):
         return jsonify({"error": "Internal server error"}), 500
 
 
+def _job_list_item(job):
+    """Build a single job item for Flutter explore listing (shared by candidate and public APIs)."""
+    deadline_str = ""
+    if getattr(job, "application_deadline", None) and job.application_deadline:
+        deadline_str = job.application_deadline.strftime("%d %b %Y")
+    return {
+        "id": job.id,
+        "title": job.title or "",
+        "company": getattr(job, "company", None) or "",
+        "location": getattr(job, "location", None) or "Remote",
+        "type": getattr(job, "employment_type", None) or "Full Time",
+        "salary": getattr(job, "salary_range", None) or "",
+        "deadline": deadline_str,
+        "company_logo": getattr(job, "banner", None),
+        "role": job.category or "",
+        "description": job.description or "",
+        "responsibilities": job.responsibilities or [],
+        "qualifications": job.qualifications or [],
+        "required_skills": job.required_skills or [],
+        "min_experience": job.min_experience or 0,
+        "company_details": job.company_details or "",
+        "published_on": job.published_on.strftime("%d %b, %Y") if job.published_on else "",
+        "vacancy": job.vacancy or 1,
+        "created_by": job.created_by,
+    }
+
+
 # ----------------- GET AVAILABLE JOBS -----------------
 @candidate_bp.route("/jobs", methods=["GET"])
 @role_required(["candidate"])
 def get_available_jobs():
     try:
-        # Get the candidate's user ID from JWT
         user_id = get_jwt_identity()
 
-        jobs = Requisition.query.all()
-        result = []
+        jobs = Requisition.query.filter(
+            Requisition.is_active == True,
+            Requisition.deleted_at == None
+        ).order_by(Requisition.published_on.desc()).all()
 
-        for job in jobs:
-            result.append({
-                "id": job.id,
-                "title": job.title or "",
-                "description": job.description or "",
-                "responsibilities": job.responsibilities or [],
-                "qualifications": job.qualifications or [],
-                "required_skills": job.required_skills or [],
-                "min_experience": job.min_experience or 0,
-                "knockout_rules": job.knockout_rules or [],
-                "weightings": job.weightings or {"cv": 60, "assessment": 40},
-                "assessment_pack": job.assessment_pack or {"questions": []},
-                "company_details": job.company_details or "",
-                "category": job.category or "",
-                "published_on": job.published_on.strftime("%d %b, %Y") if job.published_on else "",
-                "vacancy": str(job.vacancy or 0),
-                "created_by": job.created_by
-            })
+        result = [_job_list_item(job) for job in jobs]
 
-        # Audit log (candidate viewed jobs)
         AuditService.record_action(
-            admin_id=user_id,          # user_id is the candidate ID
+            admin_id=user_id,
             action="Candidate Viewed Available Jobs",
             target_user_id=user_id,
             details="Retrieved list of available jobs"
