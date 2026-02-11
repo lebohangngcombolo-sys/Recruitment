@@ -522,7 +522,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     ),
                                   ),
                                 ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 6),
                               if (!sidebarCollapsed)
                                 ElevatedButton.icon(
                                   onPressed: () =>
@@ -939,7 +939,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text("Welcome Back, Admin",
                 style: TextStyle(
                     fontFamily: 'Poppins',
@@ -948,7 +948,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     color: themeProvider.isDarkMode
                         ? Colors.white
                         : const Color.fromARGB(225, 20, 19, 30))),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
 
             // KPI Cards
             // Instead of SizedBox with fixed height, use:
@@ -991,7 +991,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             const SizedBox(height: 24),
             LayoutBuilder(builder: (context, constraints) {
               int crossAxisCount = constraints.maxWidth > 900 ? 2 : 1;
-              double aspectRatio = constraints.maxWidth > 900 ? 3.2 : 2.8;
+              double aspectRatio = constraints.maxWidth > 900 ? 3.8 : 3.4;
               return GridView.count(
                 crossAxisCount: crossAxisCount,
                 shrinkWrap: true,
@@ -1030,7 +1030,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -1091,7 +1091,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Flexible(
             child: loadingChartData
                 ? Center(
@@ -1140,7 +1140,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Text(
                               'Data will appear here once available',
                               style: TextStyle(
@@ -1209,7 +1209,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -1276,7 +1276,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Flexible(
             child: loadingChartData
                 ? Center(
@@ -1325,7 +1325,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Text(
                               'Trend data will appear here once available',
                               style: TextStyle(
@@ -1395,7 +1395,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -1438,7 +1438,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   color: themeProvider.isDarkMode
                       ? Colors.white
                       : Colors.black87)),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Flexible(
             child: loadingChartData
                 ? Center(
@@ -1488,7 +1488,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: 6),
                             Text(
                               'Diversity metrics will appear here once available',
                               style: TextStyle(
@@ -1598,7 +1598,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -1715,7 +1715,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -1833,7 +1833,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -1943,13 +1943,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     DateTime.now().day.toString(),
                     style: const TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 48,
+                      fontSize: 36,
                       fontWeight: FontWeight.w800,
                       color: Colors.blueAccent,
                       height: 1.0,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Text(
                     DateFormat('MMMM yyyy').format(DateTime.now()),
                     style: TextStyle(
@@ -1975,7 +1975,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
     return Container(
       width: 200,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2025,7 +2025,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             count.toString(),
             style: TextStyle(
