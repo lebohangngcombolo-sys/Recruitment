@@ -991,25 +991,94 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             const SizedBox(height: 24),
             LayoutBuilder(builder: (context, constraints) {
               int crossAxisCount = constraints.maxWidth > 900 ? 2 : 1;
-              double aspectRatio = constraints.maxWidth > 900 ? 3.8 : 3.4;
-              return GridView.count(
-                crossAxisCount: crossAxisCount,
-                shrinkWrap: true,
-                childAspectRatio: aspectRatio,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                physics: const NeverScrollableScrollPhysics(),
+              return Column(
                 children: [
-                  stylishBarChartCard("Candidate Pipeline", candidatePipeline,
-                      const Color.fromARGB(255, 193, 13, 0)),
-                  stylishLineChartCard("Time to Fill Trend", timeToFill,
-                      const Color.fromARGB(255, 193, 13, 0)),
-                  stylishDualDonutCard(
-                      "Diversity Metrics", genderMetrics, ethnicityMetrics),
-                  stylishBarChartCard("Source Performance", sourceMetrics,
-                      const Color.fromARGB(255, 193, 13, 0)),
-                  stylishTeamCollaborationCard("Team Collaboration", []),
-                  modernCalendarCard(),
+                  // Row 1
+                  if (crossAxisCount == 2)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                            child: stylishBarChartCard(
+                                "Candidate Pipeline",
+                                candidatePipeline,
+                                const Color.fromARGB(255, 193, 13, 0))),
+                        const SizedBox(width: 16),
+                        Expanded(
+                            child: stylishLineChartCard(
+                                "Time to Fill Trend",
+                                timeToFill,
+                                const Color.fromARGB(255, 193, 13, 0))),
+                      ],
+                    )
+                  else
+                    Column(
+                      children: [
+                        stylishBarChartCard(
+                            "Candidate Pipeline",
+                            candidatePipeline,
+                            const Color.fromARGB(255, 193, 13, 0)),
+                        const SizedBox(height: 16),
+                        stylishLineChartCard("Time to Fill Trend", timeToFill,
+                            const Color.fromARGB(255, 193, 13, 0)),
+                      ],
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // Row 2
+                  if (crossAxisCount == 2)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                            child: stylishDualDonutCard("Diversity Metrics",
+                                genderMetrics, ethnicityMetrics)),
+                        const SizedBox(width: 16),
+                        Expanded(
+                            child: stylishBarChartCard(
+                                "Source Performance",
+                                sourceMetrics,
+                                const Color.fromARGB(255, 193, 13, 0))),
+                      ],
+                    )
+                  else
+                    Column(
+                      children: [
+                        stylishDualDonutCard("Diversity Metrics", genderMetrics,
+                            ethnicityMetrics),
+                        const SizedBox(height: 16),
+                        stylishBarChartCard("Source Performance", sourceMetrics,
+                            const Color.fromARGB(255, 193, 13, 0)),
+                      ],
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // Row 3
+                  if (crossAxisCount == 2)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                            child: stylishTeamCollaborationCard(
+                                "Team Collaboration", [])),
+                        const SizedBox(width: 16),
+                        Expanded(child: modernCalendarCard()),
+                      ],
+                    )
+                  else
+                    Column(
+                      children: [
+                        stylishTeamCollaborationCard("Team Collaboration", []),
+                        const SizedBox(height: 16),
+                        modernCalendarCard(),
+                      ],
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // Activities card (always full width)
                   stylishActivitiesCard(recentActivities),
                 ],
               );
@@ -1030,6 +1099,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
+      height: 200,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
@@ -1209,6 +1279,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
+      height: 200,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
@@ -1395,6 +1466,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
+      height: 200,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
@@ -1598,6 +1670,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
+      height: 200,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
@@ -1715,6 +1788,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
+      height: 200,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
@@ -1833,6 +1907,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
+      height: 200,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
