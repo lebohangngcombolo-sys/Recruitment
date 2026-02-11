@@ -57,13 +57,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   late final AnimationController _sidebarAnimController;
   late final Animation<double> _sidebarWidthAnimation;
 
-  // --- Team Collaboration mock data (previously audits) ---
-  List<String> teamMessages = [
-    "John: Completed the candidate screening.",
-    "Mary: Scheduled interviews for next week.",
-    "Alex: Uploaded new CVs to review.",
-    "Lisa: Updated job descriptions.",
-  ];
+  // --- Chart Data ---
+  List<_ChartData> candidatePipelineData = [];
+  List<_ChartData> timeToFillData = [];
+  List<_ChartData> genderData = [];
+  List<_ChartData> ethnicityData = [];
+  List<_ChartData> sourcePerformanceData = [];
+  bool loadingChartData = true;
 
   // Power BI status
   bool powerBIConnected = false;
@@ -107,6 +107,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     fetchPowerBIStatus();
     fetchAudits(page: 1);
     fetchProfileImage();
+    fetchChartData();
 
     _statusTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       fetchPowerBIStatus();
@@ -127,6 +128,22 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     _statusTimer?.cancel();
     auditSearchController.dispose();
     super.dispose();
+  }
+
+  // ---------- Chart Data Methods ----------
+  Future<void> fetchChartData() async {
+    setState(() => loadingChartData = true);
+    try {
+      // TODO: Implement actual API calls for chart data
+      // For now, keeping empty to remove mock data
+
+      setState(() {
+        loadingChartData = false;
+      });
+    } catch (e) {
+      setState(() => loadingChartData = false);
+      debugPrint("Error fetching chart data: $e");
+    }
   }
 
   // ---------- Profile Image Methods ----------
@@ -903,43 +920,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       },
     ];
 
-    final candidatePipeline = [
-      _ChartData("Applied", 48),
-      _ChartData("Screened", 34),
-      _ChartData("Interviewed", 22),
-      _ChartData("Offers", 9),
-      _ChartData("Hires", 5),
-    ];
+    // Data will be fetched from API
+    final List<_ChartData> candidatePipeline = candidatePipelineData;
 
-    final timeToFill = [
-      _ChartData("Jan", 35),
-      _ChartData("Feb", 32),
-      _ChartData("Mar", 30),
-      _ChartData("Apr", 28),
-      _ChartData("May", 27),
-      _ChartData("Jun", 25),
-    ];
+    // Data will be fetched from API
+    final List<_ChartData> timeToFill = timeToFillData;
 
-    final genderData = [
-      _ChartData("Female", 52),
-      _ChartData("Male", 45),
-      _ChartData("Non-binary", 3),
-    ];
+    // Data will be fetched from API
+    final List<_ChartData> genderMetrics = genderData;
+    final List<_ChartData> ethnicityMetrics = ethnicityData;
 
-    final ethnicityData = [
-      _ChartData("Black", 38),
-      _ChartData("White", 32),
-      _ChartData("Indian", 15),
-      _ChartData("Coloured", 10),
-      _ChartData("Other", 5),
-    ];
-
-    final sourcePerformance = [
-      _ChartData("LinkedIn", 40),
-      _ChartData("Referral", 25),
-      _ChartData("Job Boards", 20),
-      _ChartData("Career Site", 15),
-    ];
+    // Data will be fetched from API
+    final List<_ChartData> sourceMetrics = sourcePerformanceData;
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -1013,11 +1005,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   stylishLineChartCard("Time to Fill Trend", timeToFill,
                       const Color.fromARGB(255, 193, 13, 0)),
                   stylishDualDonutCard(
-                      "Diversity Metrics", genderData, ethnicityData),
-                  stylishBarChartCard("Source Performance", sourcePerformance,
+                      "Diversity Metrics", genderMetrics, ethnicityMetrics),
+                  stylishBarChartCard("Source Performance", sourceMetrics,
                       const Color.fromARGB(255, 193, 13, 0)),
-                  stylishTeamCollaborationCard(
-                      "Team Collaboration", teamMessages),
+                  stylishTeamCollaborationCard("Team Collaboration", []),
                   modernCalendarCard(),
                   stylishActivitiesCard(recentActivities),
                 ],
@@ -1031,7 +1022,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   Widget teamCollaborationWidget() {
-    return stylishTeamCollaborationCard("Team Collaboration", teamMessages);
+    return stylishTeamCollaborationCard("Team Collaboration", []);
   }
 
   // ---------------- Stylish Chart Cards ----------------
@@ -1101,50 +1092,111 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: SfCartesianChart(
-              margin: EdgeInsets.zero,
-              plotAreaBorderWidth: 0,
-              primaryXAxis: CategoryAxis(
-                majorGridLines: const MajorGridLines(width: 0),
-                axisLine: const AxisLine(width: 0),
-                labelStyle: TextStyle(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade700,
-                  fontFamily: 'Poppins',
-                ),
-              ),
-              primaryYAxis: NumericAxis(
-                majorGridLines: const MajorGridLines(width: 0),
-                axisLine: const AxisLine(width: 0),
-                labelStyle: TextStyle(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade700,
-                  fontFamily: 'Poppins',
-                ),
-              ),
-              series: <ColumnSeries<_ChartData, String>>[
-                ColumnSeries<_ChartData, String>(
-                  dataSource: data,
-                  xValueMapper: (d, _) => d.label,
-                  yValueMapper: (d, _) => d.value,
-                  color: color,
-                  width: 0.6,
-                  borderRadius: BorderRadius.circular(4),
-                  dataLabelSettings: DataLabelSettings(
-                    isVisible: true,
-                    textStyle: TextStyle(
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.black87,
-                      fontFamily: 'Poppins',
-                      fontSize: 10,
+            child: loadingChartData
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(color),
+                          strokeWidth: 3,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Loading data...',
+                          style: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.white70
+                                : Colors.grey.shade600,
+                            fontFamily: 'Poppins',
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                )
-              ],
-            ),
+                  )
+                : data.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.bar_chart_outlined,
+                              size: 48,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.white24
+                                  : Colors.grey.shade300,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No data available',
+                              style: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white54
+                                    : Colors.grey.shade500,
+                                fontFamily: 'Poppins',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Data will appear here once available',
+                              style: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white38
+                                    : Colors.grey.shade400,
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : SfCartesianChart(
+                        margin: EdgeInsets.zero,
+                        plotAreaBorderWidth: 0,
+                        primaryXAxis: CategoryAxis(
+                          majorGridLines: const MajorGridLines(width: 0),
+                          axisLine: const AxisLine(width: 0),
+                          labelStyle: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade700,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        primaryYAxis: NumericAxis(
+                          majorGridLines: const MajorGridLines(width: 0),
+                          axisLine: const AxisLine(width: 0),
+                          labelStyle: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade700,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        series: <ColumnSeries<_ChartData, String>>[
+                          ColumnSeries<_ChartData, String>(
+                            dataSource: data,
+                            xValueMapper: (d, _) => d.label,
+                            yValueMapper: (d, _) => d.value,
+                            color: color,
+                            width: 0.6,
+                            borderRadius: BorderRadius.circular(4),
+                            dataLabelSettings: DataLabelSettings(
+                              isVisible: true,
+                              textStyle: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white
+                                    : Colors.black87,
+                                fontFamily: 'Poppins',
+                                fontSize: 10,
+                              ),
+                            ),
+                          )
+                        ],
+                      ),
           ),
         ],
       ),
@@ -1224,50 +1276,112 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           ),
           const SizedBox(height: 16),
           Expanded(
-            child: SfCartesianChart(
-              margin: EdgeInsets.zero,
-              plotAreaBorderWidth: 0,
-              primaryXAxis: CategoryAxis(
-                majorGridLines: const MajorGridLines(width: 0),
-                axisLine: const AxisLine(width: 0),
-                labelStyle: TextStyle(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade700,
-                  fontFamily: 'Poppins',
-                ),
-              ),
-              primaryYAxis: NumericAxis(
-                majorGridLines: const MajorGridLines(width: 0),
-                axisLine: const AxisLine(width: 0),
-                labelStyle: TextStyle(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade700,
-                  fontFamily: 'Poppins',
-                ),
-              ),
-              series: <SplineSeries<_ChartData, String>>[
-                SplineSeries<_ChartData, String>(
-                  dataSource: data,
-                  xValueMapper: (d, _) => d.label,
-                  yValueMapper: (d, _) => d.value,
-                  color: color,
-                  width: 3,
-                  markerSettings: const MarkerSettings(isVisible: true),
-                  dataLabelSettings: DataLabelSettings(
-                    isVisible: true,
-                    textStyle: TextStyle(
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.black87,
-                      fontFamily: 'Poppins',
-                      fontSize: 10,
+            child: loadingChartData
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(color),
+                          strokeWidth: 3,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Loading data...',
+                          style: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.white70
+                                : Colors.grey.shade600,
+                            fontFamily: 'Poppins',
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                )
-              ],
-            ),
+                  )
+                : data.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.show_chart,
+                              size: 48,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.white24
+                                  : Colors.grey.shade300,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No data available',
+                              style: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white54
+                                    : Colors.grey.shade500,
+                                fontFamily: 'Poppins',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Trend data will appear here once available',
+                              style: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white38
+                                    : Colors.grey.shade400,
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : SfCartesianChart(
+                        margin: EdgeInsets.zero,
+                        plotAreaBorderWidth: 0,
+                        primaryXAxis: CategoryAxis(
+                          majorGridLines: const MajorGridLines(width: 0),
+                          axisLine: const AxisLine(width: 0),
+                          labelStyle: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade700,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        primaryYAxis: NumericAxis(
+                          majorGridLines: const MajorGridLines(width: 0),
+                          axisLine: const AxisLine(width: 0),
+                          labelStyle: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade700,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        series: <SplineSeries<_ChartData, String>>[
+                          SplineSeries<_ChartData, String>(
+                            dataSource: data,
+                            xValueMapper: (d, _) => d.label,
+                            yValueMapper: (d, _) => d.value,
+                            color: color,
+                            width: 3,
+                            markerSettings:
+                                const MarkerSettings(isVisible: true),
+                            dataLabelSettings: DataLabelSettings(
+                              isVisible: true,
+                              textStyle: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white
+                                    : Colors.black87,
+                                fontFamily: 'Poppins',
+                                fontSize: 10,
+                              ),
+                            ),
+                          )
+                        ],
+                      ),
           ),
         ],
       ),
@@ -1323,88 +1437,154 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                       : Colors.black87)),
           const SizedBox(height: 16),
           Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: SfCircularChart(
-                    margin: EdgeInsets.zero,
-                    title: ChartTitle(
-                        text: "Gender",
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
+            child: loadingChartData
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.purple),
+                          strokeWidth: 3,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Loading diversity data...',
+                          style: TextStyle(
                             color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 12)),
-                    legend: Legend(
-                        isVisible: true,
-                        textStyle: TextStyle(
+                                ? Colors.white70
+                                : Colors.grey.shade600,
                             fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 10)),
-                    series: <DoughnutSeries<_ChartData, String>>[
-                      DoughnutSeries<_ChartData, String>(
-                        dataSource: data1,
-                        xValueMapper: (d, _) => d.label,
-                        yValueMapper: (d, _) => d.value,
-                        innerRadius: '70%',
-                        dataLabelSettings: DataLabelSettings(
-                          isVisible: true,
-                          textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 10,
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
+                            fontSize: 14,
                           ),
                         ),
-                      )
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: SfCircularChart(
-                    margin: EdgeInsets.zero,
-                    title: ChartTitle(
-                        text: "Ethnicity",
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 12)),
-                    legend: Legend(
-                        isVisible: true,
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 10)),
-                    series: <DoughnutSeries<_ChartData, String>>[
-                      DoughnutSeries<_ChartData, String>(
-                        dataSource: data2,
-                        xValueMapper: (d, _) => d.label,
-                        yValueMapper: (d, _) => d.value,
-                        innerRadius: '70%',
-                        dataLabelSettings: DataLabelSettings(
-                          isVisible: true,
-                          textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 10,
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                          ),
+                      ],
+                    ),
+                  )
+                : data1.isEmpty && data2.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.donut_large_outlined,
+                              size: 48,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.white24
+                                  : Colors.grey.shade300,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No diversity data available',
+                              style: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white54
+                                    : Colors.grey.shade500,
+                                fontFamily: 'Poppins',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Diversity metrics will appear here once available',
+                              style: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white38
+                                    : Colors.grey.shade400,
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
                       )
-                    ],
-                  ),
-                ),
-              ],
-            ),
+                    : Row(
+                        children: [
+                          Expanded(
+                            child: SfCircularChart(
+                              margin: EdgeInsets.zero,
+                              title: ChartTitle(
+                                  text: "Gender",
+                                  textStyle: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      fontSize: 12)),
+                              legend: Legend(
+                                  isVisible: true,
+                                  textStyle: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      fontSize: 10)),
+                              series: <DoughnutSeries<_ChartData, String>>[
+                                DoughnutSeries<_ChartData, String>(
+                                  dataSource: data1.isEmpty
+                                      ? [_ChartData("No Data", 1)]
+                                      : data1,
+                                  xValueMapper: (d, _) => d.label,
+                                  yValueMapper: (d, _) => d.value,
+                                  innerRadius: '70%',
+                                  dataLabelSettings: DataLabelSettings(
+                                    isVisible: true,
+                                    textStyle: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 10,
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                )
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: SfCircularChart(
+                              margin: EdgeInsets.zero,
+                              title: ChartTitle(
+                                  text: "Ethnicity",
+                                  textStyle: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      fontSize: 12)),
+                              legend: Legend(
+                                  isVisible: true,
+                                  textStyle: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      fontSize: 10)),
+                              series: <DoughnutSeries<_ChartData, String>>[
+                                DoughnutSeries<_ChartData, String>(
+                                  dataSource: data2.isEmpty
+                                      ? [_ChartData("No Data", 1)]
+                                      : data2,
+                                  xValueMapper: (d, _) => d.label,
+                                  yValueMapper: (d, _) => d.value,
+                                  innerRadius: '70%',
+                                  dataLabelSettings: DataLabelSettings(
+                                    isVisible: true,
+                                    textStyle: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 10,
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                )
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
           ),
         ],
       ),
