@@ -991,7 +991,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             const SizedBox(height: 24),
             LayoutBuilder(builder: (context, constraints) {
               int crossAxisCount = constraints.maxWidth > 900 ? 2 : 1;
-              double aspectRatio = constraints.maxWidth > 900 ? 2.7 : 2.2;
+              double aspectRatio = constraints.maxWidth > 900 ? 2.8 : 2.4;
               return GridView.count(
                 crossAxisCount: crossAxisCount,
                 shrinkWrap: true,
@@ -1063,6 +1063,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1090,8 +1091,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
+          const SizedBox(height: 12),
+          Flexible(
             child: loadingChartData
                 ? Center(
                     child: Column(
@@ -1241,6 +1242,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1274,8 +1276,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
+          const SizedBox(height: 12),
+          Flexible(
             child: loadingChartData
                 ? Center(
                     child: Column(
@@ -1426,6 +1428,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(title,
               style: TextStyle(
@@ -1435,8 +1438,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   color: themeProvider.isDarkMode
                       ? Colors.white
                       : Colors.black87)),
-          const SizedBox(height: 16),
-          Expanded(
+          const SizedBox(height: 12),
+          Flexible(
             child: loadingChartData
                 ? Center(
                     child: Column(
