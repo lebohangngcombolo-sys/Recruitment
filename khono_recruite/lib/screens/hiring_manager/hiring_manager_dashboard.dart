@@ -1907,7 +1907,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      height: 200,
+      height: 220,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
@@ -1993,9 +1993,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Container(
-            height: 140,
+            height: 110,
             decoration: BoxDecoration(
               color: (themeProvider.isDarkMode
                       ? const Color(0xFF14131E)
@@ -2018,7 +2018,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     DateTime.now().day.toString(),
                     style: const TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 36,
+                      fontSize: 28,
                       fontWeight: FontWeight.w800,
                       color: Colors.blueAccent,
                       height: 1.0,
