@@ -522,7 +522,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     ),
                                   ),
                                 ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 8),
                               if (!sidebarCollapsed)
                                 ElevatedButton.icon(
                                   onPressed: () =>
@@ -948,7 +948,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     color: themeProvider.isDarkMode
                         ? Colors.white
                         : const Color.fromARGB(225, 20, 19, 30))),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
 
             // KPI Cards
             // Instead of SizedBox with fixed height, use:
@@ -991,7 +991,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             const SizedBox(height: 24),
             LayoutBuilder(builder: (context, constraints) {
               int crossAxisCount = constraints.maxWidth > 900 ? 2 : 1;
-              double aspectRatio = constraints.maxWidth > 900 ? 2.8 : 2.4;
+              double aspectRatio = constraints.maxWidth > 900 ? 3.2 : 2.8;
               return GridView.count(
                 crossAxisCount: crossAxisCount,
                 shrinkWrap: true,
@@ -1030,7 +1030,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -1072,7 +1072,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 14,
                       color: themeProvider.isDarkMode
                           ? Colors.white
                           : Colors.black87)),
@@ -1091,7 +1091,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Flexible(
             child: loadingChartData
                 ? Center(
@@ -1209,7 +1209,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -1251,7 +1251,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 14,
                       color: themeProvider.isDarkMode
                           ? Colors.white
                           : Colors.black87)),
@@ -1276,7 +1276,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Flexible(
             child: loadingChartData
                 ? Center(
@@ -1395,7 +1395,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -1434,11 +1434,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.bold,
-                  fontSize: 16,
+                  fontSize: 14,
                   color: themeProvider.isDarkMode
                       ? Colors.white
                       : Colors.black87)),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
           Flexible(
             child: loadingChartData
                 ? Center(
@@ -1598,7 +1598,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -1639,7 +1639,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 14,
                       color: themeProvider.isDarkMode
                           ? Colors.white
                           : Colors.black87)),
@@ -1715,7 +1715,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -1833,7 +1833,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -1888,7 +1888,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
-                      fontSize: 16,
+                      fontSize: 14,
                       color: Colors.blueAccent,
                     ),
                   ),
@@ -1954,7 +1954,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     DateFormat('MMMM yyyy').format(DateTime.now()),
                     style: TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 16,
+                      fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: themeProvider.isDarkMode
                           ? Colors.grey.shade300
