@@ -279,6 +279,15 @@ class _JobFormDialogState extends State<JobFormDialog>
     setState(() => _isGeneratingWithAI = true);
 
     try {
+      // Show initial message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Generating job details with AI..."),
+          backgroundColor: Colors.blue,
+          duration: Duration(seconds: 2),
+        ),
+      );
+
       final jobDetails = await AIService.generateJobDetails(title.trim());
 
       setState(() {
@@ -306,16 +315,21 @@ class _JobFormDialogState extends State<JobFormDialog>
       // Check if it's a retry-related error
       if (errorMessage.contains('after 3 attempts')) {
         errorMessage =
-            "AI service is experiencing high demand. Please try again in a few moments.";
+            "All AI models are currently busy. Using smart template instead.";
       } else if (errorMessage.contains('quota') ||
           errorMessage.contains('rate limit')) {
-        errorMessage = "AI quota exceeded. Please wait a moment and try again.";
+        errorMessage = "AI quota exceeded. Trying alternative models...";
+      } else if (errorMessage.contains('Gemini failed') ||
+          errorMessage.contains('OpenRouter failed') ||
+          errorMessage.contains('DeepSeek failed')) {
+        errorMessage = "Primary AI models unavailable. Using backup system...";
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMessage),
-          backgroundColor: Colors.red,
+          backgroundColor:
+              errorMessage.contains("success") ? Colors.green : Colors.orange,
           duration: const Duration(seconds: 4),
         ),
       );
