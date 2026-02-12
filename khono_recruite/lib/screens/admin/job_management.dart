@@ -5,6 +5,7 @@ import '../../widgets/custom_textfield.dart';
 import '../../widgets/search_bar.dart'; // your custom SearchBar
 import '../../widgets/filter_chip.dart'; // your custom FilterChip
 import '../../services/admin_service.dart';
+import '../../services/ai_service.dart';
 import '../../providers/theme_provider.dart';
 
 class JobManagement extends StatefulWidget {
@@ -1181,6 +1182,7 @@ class _JobFormDialogState extends State<JobFormDialog>
   List<Map<String, dynamic>> questions = [];
   late TabController _tabController;
   final AdminService admin = AdminService();
+  bool _isGeneratingWithAI = false;
   static const List<String> employmentTypes = [
     "Full Time",
     "Part Time",
@@ -1238,6 +1240,49 @@ class _JobFormDialogState extends State<JobFormDialog>
         "weight": 1,
       });
     });
+  }
+
+  Future<void> _generateWithAI() async {
+    if (title.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a job title first")),
+      );
+      return;
+    }
+
+    setState(() => _isGeneratingWithAI = true);
+
+    try {
+      final jobDetails = await AIService.generateJobDetails(title.trim());
+
+      setState(() {
+        description = jobDetails['description'] ?? '';
+        responsibilitiesController.text =
+            (jobDetails['responsibilities'] as List?)?.join(', ') ?? '';
+        qualificationsController.text =
+            (jobDetails['qualifications'] as List?)?.join(', ') ?? '';
+        category = jobDetails['category'] ?? '';
+        skillsController.text =
+            (jobDetails['required_skills'] as List?)?.join(', ') ?? '';
+        minExpController.text = jobDetails['min_experience']?.toString() ?? '0';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Job details generated successfully!"),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error generating job details: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() => _isGeneratingWithAI = false);
+    }
   }
 
   Future<void> saveJob() async {
@@ -1364,13 +1409,47 @@ class _JobFormDialogState extends State<JobFormDialog>
                       child: SingleChildScrollView(
                         child: Column(
                           children: [
-                            CustomTextField(
-                              label: "Title",
-                              initialValue: title,
-                              hintText: "Enter job title",
-                              onChanged: (v) => title = v,
-                              validator: (v) =>
-                                  v == null || v.isEmpty ? "Enter title" : null,
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: CustomTextField(
+                                    label: "Title",
+                                    initialValue: title,
+                                    hintText: "Enter job title",
+                                    onChanged: (v) => title = v,
+                                    validator: (v) => v == null || v.isEmpty
+                                        ? "Enter title"
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.blue),
+                                  ),
+                                  child: IconButton(
+                                    icon: _isGeneratingWithAI
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                      Colors.blue),
+                                            ),
+                                          )
+                                        : const Icon(Icons.auto_awesome,
+                                            color: Colors.blue),
+                                    onPressed: _isGeneratingWithAI
+                                        ? null
+                                        : _generateWithAI,
+                                    tooltip: "Generate with AI",
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
