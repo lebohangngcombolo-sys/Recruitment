@@ -16,7 +16,7 @@ from app.services.file_text_extractor import extract_text_from_file
 from app.utils.decorators import role_required
 from datetime import datetime, timedelta
 import secrets
-import jwt  # ← ADD THIS IMPORT
+import jwt  
 from app.utils.enrollment_schema import EnrollmentSchema
 from app.services.enrollment_service import EnrollmentService
 from app.services.ai_parser_service import analyse_resume_gemini
@@ -25,20 +25,12 @@ from marshmallow import ValidationError
 from werkzeug.utils import secure_filename
 import os
 
-
-
-
-
-
-
-
-
 # ------------------- ROLE DASHBOARD MAP -------------------
 ROLE_DASHBOARD_MAP = {
     "admin": "/api/dashboard/admin",
     "hiring_manager": "/api/dashboard/hiring-manager",
     "candidate": "/dashboard/candidate",
-    "hr": "/api/dashboard/hr"   # ← ADDED
+    "hr": "/api/dashboard/hr"   
 }
 
 # OAuth providers config
@@ -65,6 +57,16 @@ OAUTH_PROVIDERS = {
 def init_auth_routes(app):
 
     enrollment_schema = EnrollmentSchema()
+
+    def _email_configured() -> bool:
+        return bool(
+            current_app.config.get("MAIL_USERNAME")
+            and current_app.config.get("MAIL_PASSWORD")
+            and (
+                current_app.config.get("MAIL_DEFAULT_SENDER")
+                or current_app.config.get("MAIL_USERNAME")
+            )
+        )
     # ------------------- Initialize OAuth -------------------
     if not hasattr(app, "oauth_initialized"):
         oauth.init_app(app)
@@ -158,7 +160,7 @@ def init_auth_routes(app):
         
             # Redirect to frontend with tokens
             frontend_redirect = (
-                f"{current_app.config['FRONTEND_URL']}/oauth-callback"  # ← CHANGED THIS LINE
+                f"{current_app.config['FRONTEND_URL']}/oauth-callback"  
                 f"?access_token={access_token}&refresh_token={refresh_token}&role={user.role}"
             )
         
@@ -177,7 +179,7 @@ def init_auth_routes(app):
     # ------------------- LOGOUT -------------------
     @app.route("/api/auth/logout", methods=["POST"])
     @jwt_required()
-    @limiter.limit("20 per minute")  # Add this line
+    @limiter.limit("20 per minute")  
     def logout():
         try:
             response = jsonify({"message": "Successfully logged out"})
@@ -348,6 +350,27 @@ def init_auth_routes(app):
             except ValueError:
                 return jsonify({'error': 'User already exists'}), 409
 
+            if not _email_configured():
+                user.is_verified = True
+                db.session.commit()
+
+                additional_claims = {"role": user.role}
+                access_token = create_access_token(identity=str(user.id), additional_claims=additional_claims)
+                refresh_token = create_refresh_token(identity=str(user.id), additional_claims=additional_claims)
+                dashboard_url = "/enrollment" if user.role == "candidate" and not user.enrollment_completed \
+                    else ROLE_DASHBOARD_MAP.get(user.role, "/dashboard")
+
+                AuditService.log(user_id=user.id, action="register")
+                AuditService.log(user_id=user.id, action="email_verified")
+
+                return jsonify({
+                    'message': 'User registered successfully.',
+                    'access_token': access_token,
+                    'refresh_token': refresh_token,
+                    'user': user.to_dict(),
+                    'dashboard': dashboard_url
+                }), 201
+
             # Generate verification code
             code = f"{secrets.randbelow(1_000_000):06d}"
             expires_at = datetime.utcnow() + timedelta(minutes=30)
@@ -449,12 +472,17 @@ def init_auth_routes(app):
 
             # ---- Handle unverified user ----
             if not user.is_verified:
-                AuditService.log(user_id=user.id, action="login_attempt_unverified")
-                return jsonify({
-                    'message': 'Please verify your email before continuing.',
-                    'redirect': '/verify-email',
-                    'verified': False
-                }), 403
+                if not _email_configured():
+                    user.is_verified = True
+                    db.session.commit()
+                    AuditService.log(user_id=user.id, action="email_verified")
+                else:
+                    AuditService.log(user_id=user.id, action="login_attempt_unverified")
+                    return jsonify({
+                        'message': 'Please verify your email before continuing.',
+                        'redirect': '/verify-email',
+                        'verified': False
+                    }), 403
 
             # 🆕 MFA CHECK - If MFA enabled, return MFA session token instead of final tokens
             if user.mfa_enabled:
