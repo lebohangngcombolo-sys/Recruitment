@@ -2180,7 +2180,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                                     'https://www.instagram.com/yourprofile'),
                                 _socialIcon('assets/icons/x1.png',
                                     'https://x.com/yourprofile'),
-                                _socialIcon('assets/icons/LinkedIn1.png',
+                                _socialIcon('assets/icons/LinkedIn.png',
                                     'https://www.linkedin.com/in/yourprofile'),
                                 _socialIcon('assets/icons/facebook1.png',
                                     'https://www.facebook.com/yourprofile'),
