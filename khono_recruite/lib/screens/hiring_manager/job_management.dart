@@ -287,6 +287,7 @@ class _JobFormDialogState extends State<JobFormDialog>
             (jobDetails['responsibilities'] as List?)?.join(', ') ?? '';
         qualificationsController.text =
             (jobDetails['qualifications'] as List?)?.join(', ') ?? '';
+        companyDetails = jobDetails['company_details'] ?? '';
         category = jobDetails['category'] ?? '';
         skillsController.text =
             (jobDetails['required_skills'] as List?)?.join(', ') ?? '';
@@ -300,10 +301,22 @@ class _JobFormDialogState extends State<JobFormDialog>
         ),
       );
     } catch (e) {
+      String errorMessage = e.toString();
+
+      // Check if it's a retry-related error
+      if (errorMessage.contains('after 3 attempts')) {
+        errorMessage =
+            "AI service is experiencing high demand. Please try again in a few moments.";
+      } else if (errorMessage.contains('quota') ||
+          errorMessage.contains('rate limit')) {
+        errorMessage = "AI quota exceeded. Please wait a moment and try again.";
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Error generating job details: $e"),
+          content: Text(errorMessage),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
         ),
       );
     } finally {
