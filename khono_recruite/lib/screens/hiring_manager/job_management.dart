@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../widgets/custom_button.dart';
@@ -282,6 +284,23 @@ class _JobFormDialogState extends State<JobFormDialog>
         "weight": 1,
       });
     });
+  }
+
+  void _showAIQuestionDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AIQuestionDialog(
+          jobTitle: title,
+          onQuestionsGenerated: (generatedQuestions) {
+            setState(() {
+              questions.clear();
+              questions.addAll(generatedQuestions);
+            });
+          },
+        );
+      },
+    );
   }
 
   Future<void> _generateWithAI() async {
@@ -598,6 +617,37 @@ class _JobFormDialogState extends State<JobFormDialog>
                     padding: const EdgeInsets.all(20),
                     child: Column(
                       children: [
+                        // AI Questions Button
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "Assessment Questions",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white
+                                    : Colors.black87,
+                              ),
+                            ),
+                            Container(
+                              decoration: BoxDecoration(
+                                color: Colors.green.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.green),
+                              ),
+                              child: IconButton(
+                                icon: const Icon(Icons.psychology,
+                                    color: Colors.green),
+                                onPressed: _showAIQuestionDialog,
+                                tooltip: "Generate AI Questions",
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
                         Expanded(
                           child: ListView.builder(
                             itemCount: questions.length,
@@ -610,82 +660,206 @@ class _JobFormDialogState extends State<JobFormDialog>
                                     .withValues(alpha: 0.9),
                                 margin: const EdgeInsets.symmetric(vertical: 8),
                                 child: Padding(
-                                  padding: const EdgeInsets.all(12),
+                                  padding: const EdgeInsets.all(16),
                                   child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      TextFormField(
-                                        decoration: InputDecoration(
-                                          labelText: "Question",
-                                          labelStyle: TextStyle(
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.grey.shade400
-                                                : Colors.black87,
+                                      // Question Header
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue
+                                                  .withValues(alpha: 0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                  color: Colors.blue
+                                                      .withValues(alpha: 0.3)),
+                                            ),
+                                            child: Text(
+                                              "Question ${index + 1}",
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.blue,
+                                              ),
+                                            ),
                                           ),
-                                        ),
+                                          const Spacer(),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 8, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.orange
+                                                  .withValues(alpha: 0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                  color: Colors.orange
+                                                      .withValues(alpha: 0.3)),
+                                            ),
+                                            child: Text(
+                                              "Weight: ${q["weight"] ?? 1}",
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.orange,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+
+                                      // Question Field
+                                      CustomTextField(
+                                        label: "Question",
                                         initialValue: q["question"],
+                                        hintText: "Enter your question here",
+                                        maxLines: 3,
+                                        expands: false,
                                         onChanged: (v) => q["question"] = v,
+                                      ),
+                                      const SizedBox(height: 16),
+
+                                      // Options Section
+                                      Text(
+                                        "Answer Options",
                                         style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
                                           color: themeProvider.isDarkMode
                                               ? Colors.white
                                               : Colors.black87,
                                         ),
                                       ),
+                                      const SizedBox(height: 8),
                                       ...List.generate(4, (i) {
-                                        return TextFormField(
-                                          decoration: InputDecoration(
-                                            labelText: "Option ${i + 1}",
-                                            labelStyle: TextStyle(
-                                              color: themeProvider.isDarkMode
-                                                  ? Colors.grey.shade400
-                                                  : Colors.black87,
-                                            ),
-                                          ),
-                                          initialValue: q["options"][i],
-                                          onChanged: (v) => q["options"][i] = v,
-                                          style: TextStyle(
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.white
-                                                : Colors.black87,
+                                        return Padding(
+                                          padding:
+                                              const EdgeInsets.only(bottom: 12),
+                                          child: Row(
+                                            children: [
+                                              // Option Indicator
+                                              Container(
+                                                width: 32,
+                                                height: 32,
+                                                decoration: BoxDecoration(
+                                                  color: q["answer"] == i
+                                                      ? Colors.green.withValues(
+                                                          alpha: 0.2)
+                                                      : Colors.grey.withValues(
+                                                          alpha: 0.1),
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  border: Border.all(
+                                                    color: q["answer"] == i
+                                                        ? Colors.green
+                                                        : Colors.grey
+                                                            .withValues(
+                                                                alpha: 0.3),
+                                                    width: q["answer"] == i
+                                                        ? 2
+                                                        : 1,
+                                                  ),
+                                                ),
+                                                child: Center(
+                                                  child: Text(
+                                                    String.fromCharCode(
+                                                        65 + i), // A, B, C, D
+                                                    style: TextStyle(
+                                                      fontSize: 14,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: q["answer"] == i
+                                                          ? Colors.green
+                                                          : Colors
+                                                              .grey.shade600,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+
+                                              // Option Field
+                                              Expanded(
+                                                child: CustomTextField(
+                                                  label:
+                                                      "Option ${String.fromCharCode(65 + i)}",
+                                                  initialValue: q["options"][i],
+                                                  hintText:
+                                                      "Enter option ${String.fromCharCode(65 + i)}",
+                                                  maxLines: 2,
+                                                  expands: false,
+                                                  onChanged: (v) =>
+                                                      q["options"][i] = v,
+                                                ),
+                                              ),
+
+                                              // Correct Answer Indicator
+                                              IconButton(
+                                                onPressed: () => setState(
+                                                    () => q["answer"] = i),
+                                                icon: Icon(
+                                                  q["answer"] == i
+                                                      ? Icons.check_circle
+                                                      : Icons
+                                                          .radio_button_unchecked,
+                                                  color: q["answer"] == i
+                                                      ? Colors.green
+                                                      : Colors.grey.shade400,
+                                                ),
+                                                tooltip:
+                                                    "Mark as correct answer",
+                                              ),
+                                            ],
                                           ),
                                         );
                                       }),
-                                      DropdownButton<int>(
-                                        value: q["answer"],
-                                        items: List.generate(
-                                          4,
-                                          (i) => DropdownMenuItem(
-                                            value: i,
-                                            child:
-                                                Text("Correct: Option ${i + 1}",
-                                                    style: TextStyle(
-                                                      color: themeProvider
-                                                              .isDarkMode
-                                                          ? Colors.white
-                                                          : Colors.black87,
-                                                    )),
+
+                                      const SizedBox(height: 16),
+
+                                      // Weight Field
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: CustomTextField(
+                                              label: "Question Weight",
+                                              initialValue:
+                                                  q["weight"].toString(),
+                                              hintText: "Enter weight (1-10)",
+                                              inputType: TextInputType.number,
+                                              onChanged: (v) => q["weight"] =
+                                                  double.tryParse(v) ?? 1,
+                                            ),
                                           ),
-                                        ),
-                                        onChanged: (v) =>
-                                            setState(() => q["answer"] = v!),
-                                      ),
-                                      TextFormField(
-                                        decoration: InputDecoration(
-                                          labelText: "Weight",
-                                          labelStyle: TextStyle(
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.grey.shade400
-                                                : Colors.black87,
+                                          const SizedBox(width: 16),
+                                          Container(
+                                            decoration: BoxDecoration(
+                                              color: Colors.red
+                                                  .withValues(alpha: 0.1),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                  color: Colors.red
+                                                      .withValues(alpha: 0.3)),
+                                            ),
+                                            child: IconButton(
+                                              icon: const Icon(Icons.delete,
+                                                  color: Colors.red),
+                                              onPressed: () {
+                                                setState(() {
+                                                  questions.removeAt(index);
+                                                });
+                                              },
+                                              tooltip: "Delete Question",
+                                            ),
                                           ),
-                                        ),
-                                        initialValue: q["weight"].toString(),
-                                        keyboardType: TextInputType.number,
-                                        onChanged: (v) => q["weight"] =
-                                            double.tryParse(v) ?? 1,
-                                        style: TextStyle(
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -725,6 +899,268 @@ class _JobFormDialogState extends State<JobFormDialog>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// AI Question Generation Dialog
+class AIQuestionDialog extends StatefulWidget {
+  final String jobTitle;
+  final Function(List<Map<String, dynamic>>) onQuestionsGenerated;
+
+  const AIQuestionDialog({
+    super.key,
+    required this.jobTitle,
+    required this.onQuestionsGenerated,
+  });
+
+  @override
+  _AIQuestionDialogState createState() => _AIQuestionDialogState();
+}
+
+class _AIQuestionDialogState extends State<AIQuestionDialog> {
+  final _formKey = GlobalKey<FormState>();
+  String difficulty = 'Medium';
+  int questionCount = 5;
+  bool _isGenerating = false;
+
+  final List<String> difficultyLevels = ['Easy', 'Medium', 'Hard'];
+  final List<int> questionCounts = [3, 5, 8, 10];
+
+  Future<void> _generateQuestions() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isGenerating = true);
+
+    try {
+      final questions = await AIService.generateAssessmentQuestions(
+        jobTitle: widget.jobTitle,
+        difficulty: difficulty,
+        questionCount: questionCount,
+      );
+
+      widget.onQuestionsGenerated(questions);
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Generated $questionCount questions successfully!"),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error generating questions: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() => _isGenerating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
+    return Dialog(
+      insetPadding: const EdgeInsets.all(20),
+      child: Container(
+        width: 450,
+        height: 400,
+        decoration: BoxDecoration(
+          color: (themeProvider.isDarkMode
+                  ? const Color(0xFF14131E)
+                  : Colors.white)
+              .withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    Icon(
+                      Icons.psychology,
+                      color: Colors.green,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        "Generate AI Questions",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: themeProvider.isDarkMode
+                              ? Colors.white
+                              : Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // Job Title Display
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.work, size: 20, color: Colors.grey.shade600),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Job: ${widget.jobTitle}",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: themeProvider.isDarkMode
+                                ? Colors.white
+                                : Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Difficulty Level
+                Text(
+                  "Difficulty Level",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: themeProvider.isDarkMode
+                        ? Colors.white
+                        : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: difficulty,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    filled: true,
+                    fillColor: themeProvider.isDarkMode
+                        ? Colors.grey.shade800
+                        : Colors.grey.shade100,
+                  ),
+                  items: difficultyLevels.map((level) {
+                    return DropdownMenuItem(
+                      value: level,
+                      child: Text(level),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() => difficulty = value!);
+                  },
+                ),
+                const SizedBox(height: 20),
+
+                // Number of Questions
+                Text(
+                  "Number of Questions",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: themeProvider.isDarkMode
+                        ? Colors.white
+                        : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<int>(
+                  value: questionCount,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    filled: true,
+                    fillColor: themeProvider.isDarkMode
+                        ? Colors.grey.shade800
+                        : Colors.grey.shade100,
+                  ),
+                  items: questionCounts.map((count) {
+                    return DropdownMenuItem(
+                      value: count,
+                      child: Text("$count questions"),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() => questionCount = value!);
+                  },
+                ),
+                const Spacer(),
+
+                // Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          "Cancel",
+                          style: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.black54,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _isGenerating ? null : _generateQuestions,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: _isGenerating
+                            ? Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.white),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text("Generating..."),
+                                ],
+                              )
+                            : Text("Generate Questions"),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

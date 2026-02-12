@@ -47,6 +47,26 @@ class AIService {
     return _getFallbackJobDetails(jobTitle);
   }
 
+  static int _determineMinExperience(String jobTitle) {
+    final title = jobTitle.toLowerCase();
+
+    if (title.contains('senior') ||
+        title.contains('lead') ||
+        title.contains('principal')) {
+      return 5;
+    } else if (title.contains('manager') || title.contains('director')) {
+      return 7;
+    } else if (title.contains('junior') ||
+        title.contains('entry') ||
+        title.contains('trainee')) {
+      return 0;
+    } else if (title.contains('intern') || title.contains('internship')) {
+      return 0;
+    } else {
+      return 2; // Default for mid-level positions
+    }
+  }
+
   static Map<String, dynamic> _ensureAllFieldsFilled(
       Map<String, dynamic> jobDetails, String jobTitle) {
     print("Original jobDetails: $jobDetails");
@@ -266,24 +286,359 @@ class AIService {
     return baseSkills;
   }
 
-  static int _determineMinExperience(String jobTitle) {
-    final title = jobTitle.toLowerCase();
+  static Future<List<Map<String, dynamic>>> generateAssessmentQuestions({
+    required String jobTitle,
+    required String difficulty,
+    required int questionCount,
+  }) async {
+    const maxRetries = 2;
+    const baseDelay = Duration(seconds: 1);
 
-    if (title.contains('senior') ||
-        title.contains('lead') ||
-        title.contains('principal')) {
-      return 5;
-    } else if (title.contains('manager') || title.contains('director')) {
-      return 7;
-    } else if (title.contains('junior') ||
-        title.contains('entry') ||
-        title.contains('trainee')) {
-      return 0;
-    } else if (title.contains('intern') || title.contains('internship')) {
-      return 0;
-    } else {
-      return 2; // Default for mid-level positions
+    // Try Gemini first
+    try {
+      final result = await _tryGenerateQuestionsGemini(
+          jobTitle, difficulty, questionCount, maxRetries, baseDelay);
+      return result;
+    } catch (e) {
+      print("Gemini questions failed: $e");
     }
+
+    // Fallback to OpenRouter
+    try {
+      final result = await _tryGenerateQuestionsOpenRouter(
+          jobTitle, difficulty, questionCount, maxRetries, baseDelay);
+      return result;
+    } catch (e) {
+      print("OpenRouter questions failed: $e");
+    }
+
+    // Fallback to DeepSeek
+    try {
+      final result = await _tryGenerateQuestionsDeepSeek(
+          jobTitle, difficulty, questionCount, maxRetries, baseDelay);
+      return result;
+    } catch (e) {
+      print("DeepSeek questions failed: $e");
+    }
+
+    // If all models fail, return fallback questions
+    return _getFallbackAssessmentQuestions(jobTitle, difficulty, questionCount);
+  }
+
+  static Future<List<Map<String, dynamic>>> _tryGenerateQuestionsGemini(
+      String jobTitle,
+      String difficulty,
+      int questionCount,
+      int maxRetries,
+      Duration baseDelay) async {
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        final prompt = '''
+        Generate $questionCount assessment questions for a "$jobTitle" position with $difficulty difficulty level.
+        
+        Return the response in JSON format with this structure:
+        {
+          "questions": [
+            {
+              "question": "Clear, specific question text",
+              "options": ["Option A", "Option B", "Option C", "Option D"],
+              "answer": 2,
+              "weight": 1
+            }
+          ]
+        }
+        
+        Requirements:
+        - Questions should be relevant to the job role
+        - Difficulty level: $difficulty (easy, medium, or hard)
+        - Each question must have exactly 4 options
+        - "answer" field should be the index (0-3) of the correct option
+        - Questions should test practical knowledge and skills
+        - Make questions specific to $jobTitle responsibilities
+        
+        Make sure the response is valid JSON.
+      ''';
+
+        final response =
+            await _generativeModel.generateContent([Content.text(prompt)]);
+        final responseText = response.text?.trim();
+
+        if (responseText == null || responseText.isEmpty) {
+          throw Exception('Empty response from Gemini');
+        }
+
+        // Try to parse JSON response
+        try {
+          final jsonStart = responseText.indexOf('{');
+          final jsonEnd = responseText.lastIndexOf('}') + 1;
+
+          if (jsonStart == -1 || jsonEnd == 0) {
+            throw Exception('No JSON found in Gemini response');
+          }
+
+          final jsonStr = responseText.substring(jsonStart, jsonEnd);
+          final Map<String, dynamic> data = await _parseJson(jsonStr);
+
+          return List<Map<String, dynamic>>.from(data['questions'] ?? []);
+        } catch (e) {
+          throw Exception('Failed to parse Gemini response: $e');
+        }
+      } catch (e) {
+        if (attempt == maxRetries) {
+          throw Exception(
+              'Gemini failed after $maxRetries attempts. Last error: $e');
+        }
+
+        await Future.delayed(baseDelay);
+      }
+    }
+
+    throw Exception('Gemini: Unexpected error');
+  }
+
+  static Future<List<Map<String, dynamic>>> _tryGenerateQuestionsOpenRouter(
+      String jobTitle,
+      String difficulty,
+      int questionCount,
+      int maxRetries,
+      Duration baseDelay) async {
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        final prompt = '''
+        Generate $questionCount assessment questions for a "$jobTitle" position with $difficulty difficulty level.
+        
+        Return the response in JSON format with this structure:
+        {
+          "questions": [
+            {
+              "question": "Clear, specific question text",
+              "options": ["Option A", "Option B", "Option C", "Option D"],
+              "answer": 2,
+              "weight": 1
+            }
+          ]
+        }
+        
+        Requirements:
+        - Questions should be relevant to the job role
+        - Difficulty level: $difficulty (easy, medium, or hard)
+        - Each question must have exactly 4 options
+        - "answer" field should be the index (0-3) of the correct option
+        - Questions should test practical knowledge and skills
+        - Make questions specific to $jobTitle responsibilities
+        
+        Make sure the response is valid JSON.
+      ''';
+
+        final response = await http.post(
+          Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
+          headers: {
+            'Authorization': 'Bearer $_openRouterApiKey',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'model': _openRouterModel,
+            'messages': [
+              {'role': 'user', 'content': prompt}
+            ],
+            'temperature': 0.7,
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final responseText = data['choices'][0]['message']['content']?.trim();
+
+          if (responseText == null || responseText.isEmpty) {
+            throw Exception('Empty response from OpenRouter');
+          }
+
+          final jsonStart = responseText.indexOf('{');
+          final jsonEnd = responseText.lastIndexOf('}') + 1;
+
+          if (jsonStart == -1 || jsonEnd == 0) {
+            throw Exception('No JSON found in OpenRouter response');
+          }
+
+          final jsonStr = responseText.substring(jsonStart, jsonEnd);
+          final Map<String, dynamic> parsedData = await _parseJson(jsonStr);
+
+          return List<Map<String, dynamic>>.from(parsedData['questions'] ?? []);
+        } else {
+          throw Exception('OpenRouter API error: ${response.statusCode}');
+        }
+      } catch (e) {
+        if (attempt == maxRetries) {
+          throw Exception(
+              'OpenRouter failed after $maxRetries attempts. Last error: $e');
+        }
+
+        await Future.delayed(baseDelay);
+      }
+    }
+
+    throw Exception('OpenRouter: Unexpected error');
+  }
+
+  static Future<List<Map<String, dynamic>>> _tryGenerateQuestionsDeepSeek(
+      String jobTitle,
+      String difficulty,
+      int questionCount,
+      int maxRetries,
+      Duration baseDelay) async {
+    for (int attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        final prompt = '''
+        Generate $questionCount assessment questions for a "$jobTitle" position with $difficulty difficulty level.
+        
+        Return the response in JSON format with this structure:
+        {
+          "questions": [
+            {
+              "question": "Clear, specific question text",
+              "options": ["Option A", "Option B", "Option C", "Option D"],
+              "answer": 2,
+              "weight": 1
+            }
+          ]
+        }
+        
+        Requirements:
+        - Questions should be relevant to the job role
+        - Difficulty level: $difficulty (easy, medium, or hard)
+        - Each question must have exactly 4 options
+        - "answer" field should be the index (0-3) of the correct option
+        - Questions should test practical knowledge and skills
+        - Make questions specific to $jobTitle responsibilities
+        
+        Make sure the response is valid JSON.
+      ''';
+
+        final response = await http.post(
+          Uri.parse('https://api.deepseek.com/v1/chat/completions'),
+          headers: {
+            'Authorization': 'Bearer $_deepseekApiKey',
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'model': 'deepseek-chat',
+            'messages': [
+              {'role': 'user', 'content': prompt}
+            ],
+            'temperature': 0.7,
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final responseText = data['choices'][0]['message']['content']?.trim();
+
+          if (responseText == null || responseText.isEmpty) {
+            throw Exception('Empty response from DeepSeek');
+          }
+
+          final jsonStart = responseText.indexOf('{');
+          final jsonEnd = responseText.lastIndexOf('}') + 1;
+
+          if (jsonStart == -1 || jsonEnd == 0) {
+            throw Exception('No JSON found in DeepSeek response');
+          }
+
+          final jsonStr = responseText.substring(jsonStart, jsonEnd);
+          final Map<String, dynamic> parsedData = await _parseJson(jsonStr);
+
+          return List<Map<String, dynamic>>.from(parsedData['questions'] ?? []);
+        } else {
+          throw Exception('DeepSeek API error: ${response.statusCode}');
+        }
+      } catch (e) {
+        if (attempt == maxRetries) {
+          throw Exception(
+              'DeepSeek failed after $maxRetries attempts. Last error: $e');
+        }
+
+        await Future.delayed(baseDelay);
+      }
+    }
+
+    throw Exception('DeepSeek: Unexpected error');
+  }
+
+  static List<Map<String, dynamic>> _getFallbackAssessmentQuestions(
+      String jobTitle, String difficulty, int questionCount) {
+    final List<Map<String, dynamic>> baseQuestions = [
+      {
+        "question":
+            "What is your primary experience level with ${jobTitle.toLowerCase()} responsibilities?",
+        "options": ["Beginner", "Intermediate", "Advanced", "Expert"],
+        "answer": 2,
+        "weight": 1
+      },
+      {
+        "question":
+            "How would you handle a challenging situation in this role?",
+        "options": [
+          "Seek help immediately",
+          "Try to solve it myself",
+          "Research and consult",
+          "Delegate to others"
+        ],
+        "answer": 2,
+        "weight": 1
+      },
+      {
+        "question":
+            "What motivates you most in a ${jobTitle.toLowerCase()} position?",
+        "options": [
+          "Salary",
+          "Learning opportunities",
+          "Team collaboration",
+          "Autonomy"
+        ],
+        "answer": 1,
+        "weight": 1
+      },
+      {
+        "question": "How do you stay updated with industry trends?",
+        "options": [
+          "Social media",
+          "Professional networks",
+          "Courses and certifications",
+          "Word of mouth"
+        ],
+        "answer": 2,
+        "weight": 1
+      },
+      {
+        "question": "What is your approach to problem-solving?",
+        "options": ["Intuitive", "Analytical", "Collaborative", "Experimental"],
+        "answer": 1,
+        "weight": 1
+      }
+    ];
+
+    // Adjust questions based on difficulty
+    if (difficulty.toLowerCase().contains('easy')) {
+      return baseQuestions.take(questionCount.clamp(1, 3)).toList();
+    } else if (difficulty.toLowerCase().contains('hard')) {
+      // Add more complex questions for hard difficulty
+      baseQuestions.addAll([
+        {
+          "question":
+              "Describe a complex project you've managed and the outcome.",
+          "options": [
+            "Successful completion",
+            "Partial success",
+            "Failed but learned",
+            "Ongoing project"
+          ],
+          "answer": 0,
+          "weight": 2
+        }
+      ]);
+    }
+
+    return baseQuestions.take(questionCount).toList();
   }
 
   static Future<Map<String, dynamic>> _tryGemini(
