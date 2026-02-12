@@ -49,15 +49,21 @@ class AIService {
 
   static Map<String, dynamic> _ensureAllFieldsFilled(
       Map<String, dynamic> jobDetails, String jobTitle) {
+    print("Original jobDetails: $jobDetails");
+
     // Ensure description is filled
     if (jobDetails['description'] == null ||
         jobDetails['description'].toString().trim().isEmpty) {
+      print("Description is empty, generating default");
       jobDetails['description'] = _generateDefaultDescription(jobTitle);
+    } else {
+      print("Description found: ${jobDetails['description']}");
     }
 
     // Ensure responsibilities is filled
     if (jobDetails['responsibilities'] == null ||
         (jobDetails['responsibilities'] as List?)?.isEmpty == true) {
+      print("Responsibilities is empty, generating default");
       jobDetails['responsibilities'] =
           _generateDefaultResponsibilities(jobTitle);
     }
@@ -65,24 +71,30 @@ class AIService {
     // Ensure qualifications is filled
     if (jobDetails['qualifications'] == null ||
         (jobDetails['qualifications'] as List?)?.isEmpty == true) {
+      print("Qualifications is empty, generating default");
       jobDetails['qualifications'] = _generateDefaultQualifications(jobTitle);
     }
 
     // Ensure category is filled
     if (jobDetails['category'] == null ||
         jobDetails['category'].toString().trim().isEmpty) {
+      print("Category is empty, determining category");
       jobDetails['category'] = _determineCategory(jobTitle);
+    } else {
+      print("Category found: ${jobDetails['category']}");
     }
 
     // Ensure required_skills is filled
     if (jobDetails['required_skills'] == null ||
         (jobDetails['required_skills'] as List?)?.isEmpty == true) {
+      print("Required skills is empty, generating default");
       jobDetails['required_skills'] = _generateDefaultSkills(jobTitle);
     }
 
     // Ensure min_experience is filled
     if (jobDetails['min_experience'] == null ||
         jobDetails['min_experience'].toString().trim().isEmpty) {
+      print("Min experience is empty, determining");
       jobDetails['min_experience'] =
           _determineMinExperience(jobTitle).toString();
     }
@@ -93,6 +105,7 @@ class AIService {
       jobDetails['company_details'] = ''; // Leave empty as requested
     }
 
+    print("Final jobDetails: $jobDetails");
     return jobDetails;
   }
 
@@ -281,7 +294,7 @@ class AIService {
         Based on the job title "$jobTitle", generate comprehensive job details in JSON format with the following structure:
         {
           "description": "Detailed job description (2-3 paragraphs) that clearly explains the role, its purpose, and what the candidate will be doing day-to-day",
-          "responsibilities": ["List of 5-7 specific, actionable key responsibilities as bullet points"],
+          "responsibilities": ["List of 5-7 specific, actionable key responsibilities as separate string items in the array"],
           "qualifications": ["List of 5-7 required qualifications including education, experience, and specific skills"],
           "company_details": "Professional company overview (2-3 sentences) that describes the company culture, mission, and what makes it an attractive workplace",
           "category": "One of: Engineering, Marketing, Sales, HR, Finance, Operations, Customer Service, Product, Design, Data Science",
@@ -289,9 +302,15 @@ class AIService {
           "min_experience": "Minimum years of experience as a number (0-15+)"
         }
         
+        IMPORTANT FORMATTING INSTRUCTIONS:
+        - Responsibilities MUST be an array of separate strings, each representing one bullet point
+        - Do NOT combine responsibilities into a single paragraph
+        - Each responsibility should be a complete, actionable statement starting with a verb
+        - Example format: ["Lead development projects", "Design scalable solutions", "Mentor junior developers"]
+        
         Guidelines:
         - Make the description compelling and detailed
-        - Responsibilities should be specific and measurable
+        - Responsibilities should be specific, measurable, and formatted as separate bullet points
         - Qualifications should be realistic but selective
         - Company details should be professional and appealing
         - Choose the most appropriate category
@@ -362,7 +381,7 @@ class AIService {
         Based on the job title "$jobTitle", generate comprehensive job details in JSON format with the following structure:
         {
           "description": "Detailed job description (2-3 paragraphs) that clearly explains the role, its purpose, and what the candidate will be doing day-to-day",
-          "responsibilities": ["List of 5-7 specific, actionable key responsibilities as bullet points"],
+          "responsibilities": ["List of 5-7 specific, actionable key responsibilities as separate string items in the array"],
           "qualifications": ["List of 5-7 required qualifications including education, experience, and specific skills"],
           "company_details": "Professional company overview (2-3 sentences) that describes the company culture, mission, and what makes it an attractive workplace",
           "category": "One of: Engineering, Marketing, Sales, HR, Finance, Operations, Customer Service, Product, Design, Data Science",
@@ -370,9 +389,15 @@ class AIService {
           "min_experience": "Minimum years of experience as a number (0-15+)"
         }
         
+        IMPORTANT FORMATTING INSTRUCTIONS:
+        - Responsibilities MUST be an array of separate strings, each representing one bullet point
+        - Do NOT combine responsibilities into a single paragraph
+        - Each responsibility should be a complete, actionable statement starting with a verb
+        - Example format: ["Lead development projects", "Design scalable solutions", "Mentor junior developers"]
+        
         Guidelines:
         - Make the description compelling and detailed
-        - Responsibilities should be specific and measurable
+        - Responsibilities should be specific, measurable, and formatted as separate bullet points
         - Qualifications should be realistic but selective
         - Company details should be professional and appealing
         - Choose the most appropriate category
@@ -447,7 +472,7 @@ class AIService {
         Based on the job title "$jobTitle", generate comprehensive job details in JSON format with the following structure:
         {
           "description": "Detailed job description (2-3 paragraphs) that clearly explains the role, its purpose, and what the candidate will be doing day-to-day",
-          "responsibilities": ["List of 5-7 specific, actionable key responsibilities as bullet points"],
+          "responsibilities": ["List of 5-7 specific, actionable key responsibilities as separate string items in the array"],
           "qualifications": ["List of 5-7 required qualifications including education, experience, and specific skills"],
           "company_details": "Professional company overview (2-3 sentences) that describes the company culture, mission, and what makes it an attractive workplace",
           "category": "One of: Engineering, Marketing, Sales, HR, Finance, Operations, Customer Service, Product, Design, Data Science",
@@ -455,9 +480,15 @@ class AIService {
           "min_experience": "Minimum years of experience as a number (0-15+)"
         }
         
+        IMPORTANT FORMATTING INSTRUCTIONS:
+        - Responsibilities MUST be an array of separate strings, each representing one bullet point
+        - Do NOT combine responsibilities into a single paragraph
+        - Each responsibility should be a complete, actionable statement starting with a verb
+        - Example format: ["Lead development projects", "Design scalable solutions", "Mentor junior developers"]
+        
         Guidelines:
         - Make the description compelling and detailed
-        - Responsibilities should be specific and measurable
+        - Responsibilities should be specific, measurable, and formatted as separate bullet points
         - Qualifications should be realistic but selective
         - Company details should be professional and appealing
         - Choose the most appropriate category

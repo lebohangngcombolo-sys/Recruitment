@@ -227,6 +227,9 @@ class _JobFormDialogState extends State<JobFormDialog>
   String category = "";
   final skillsController = TextEditingController();
   final minExpController = TextEditingController();
+  final descriptionController = TextEditingController();
+  final categoryController = TextEditingController();
+  final companyDetailsController = TextEditingController();
   List<Map<String, dynamic>> questions = [];
   late TabController _tabController;
   final AdminService admin = AdminService();
@@ -237,15 +240,28 @@ class _JobFormDialogState extends State<JobFormDialog>
     super.initState();
     title = widget.job?['title'] ?? '';
     description = widget.job?['description'] ?? '';
-    skillsController.text = (widget.job?['required_skills'] ?? []).join(", ");
+    descriptionController.text = description;
+
+    // Format existing responsibilities as bullet points
+    final existingResponsibilities = widget.job?['responsibilities'] ?? [];
+    responsibilitiesController.text =
+        existingResponsibilities.map((r) => "• $r").join('\n');
+
+    // Format existing qualifications as bullet points
+    final existingQualifications = widget.job?['qualifications'] ?? [];
+    qualificationsController.text =
+        existingQualifications.map((q) => "• $q").join('\n');
+
+    // Format existing skills as bullet points
+    final existingSkills = widget.job?['required_skills'] ?? [];
+    skillsController.text = existingSkills.map((s) => "• $s").join('\n');
+
     minExpController.text = (widget.job?['min_experience'] ?? 0).toString();
     jobSummary = widget.job?['job_summary'] ?? '';
-    responsibilitiesController.text =
-        (widget.job?['responsibilities'] ?? []).join(", ");
-    qualificationsController.text =
-        (widget.job?['qualifications'] ?? []).join(", ");
     companyDetails = widget.job?['company_details'] ?? '';
+    companyDetailsController.text = companyDetails;
     category = widget.job?['category'] ?? '';
+    categoryController.text = category;
 
     if (widget.job != null &&
         widget.job!['assessment_pack'] != null &&
@@ -289,18 +305,38 @@ class _JobFormDialogState extends State<JobFormDialog>
       );
 
       final jobDetails = await AIService.generateJobDetails(title.trim());
+      print("AI Response in job management: $jobDetails");
 
       setState(() {
         description = jobDetails['description'] ?? '';
+        descriptionController.text = description;
+        print("Setting description to: $description");
+
+        // Format responsibilities as bullet points
+        final responsibilities = jobDetails['responsibilities'] as List? ?? [];
         responsibilitiesController.text =
-            (jobDetails['responsibilities'] as List?)?.join(', ') ?? '';
+            responsibilities.map((r) => "• $r").join('\n');
+
+        // Format qualifications as bullet points
+        final qualifications = jobDetails['qualifications'] as List? ?? [];
         qualificationsController.text =
-            (jobDetails['qualifications'] as List?)?.join(', ') ?? '';
+            qualifications.map((q) => "• $q").join('\n');
+
         companyDetails = jobDetails['company_details'] ?? '';
+        companyDetailsController.text = companyDetails;
+
         category = jobDetails['category'] ?? '';
-        skillsController.text =
-            (jobDetails['required_skills'] as List?)?.join(', ') ?? '';
+        categoryController.text = category;
+        print("Setting category to: $category");
+
+        // Format skills as bullet points
+        final skills = jobDetails['required_skills'] as List? ?? [];
+        skillsController.text = skills.map((s) => "• $s").join('\n');
+
         minExpController.text = jobDetails['min_experience']?.toString() ?? '0';
+
+        print(
+            "Final form state - Description: '$description', Category: '$category'");
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -341,21 +377,33 @@ class _JobFormDialogState extends State<JobFormDialog>
   Future<void> saveJob() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final skills = skillsController.text
-        .split(",")
+    final responsibilities = responsibilitiesController.text
+        .split("\n")
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
-        .toList();
-
-    final responsibilities = responsibilitiesController.text
-        .split(",")
-        .map((e) => e.trim())
+        .map((e) => e.startsWith('• ')
+            ? e.substring(2)
+            : e) // Remove bullet point prefix
         .where((e) => e.isNotEmpty)
         .toList();
 
     final qualifications = qualificationsController.text
-        .split(",")
+        .split("\n")
         .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .map((e) => e.startsWith('• ')
+            ? e.substring(2)
+            : e) // Remove bullet point prefix
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    final skills = skillsController.text
+        .split("\n")
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .map((e) => e.startsWith('• ')
+            ? e.substring(2)
+            : e) // Remove bullet point prefix
         .where((e) => e.isNotEmpty)
         .toList();
 
@@ -484,7 +532,7 @@ class _JobFormDialogState extends State<JobFormDialog>
                             const SizedBox(height: 16),
                             CustomTextField(
                               label: "Description",
-                              initialValue: description,
+                              controller: descriptionController,
                               hintText: "Enter job description",
                               maxLines: 5,
                               expands: false,
@@ -512,7 +560,7 @@ class _JobFormDialogState extends State<JobFormDialog>
                             const SizedBox(height: 16),
                             CustomTextField(
                               label: "Company Details",
-                              initialValue: companyDetails,
+                              controller: companyDetailsController,
                               hintText: "About the company",
                               maxLines: 4,
                               expands: false,
@@ -521,7 +569,7 @@ class _JobFormDialogState extends State<JobFormDialog>
                             const SizedBox(height: 16),
                             CustomTextField(
                               label: "Category",
-                              initialValue: category,
+                              controller: categoryController,
                               hintText: "Engineering, Marketing...",
                               onChanged: (v) => category = v,
                             ),
