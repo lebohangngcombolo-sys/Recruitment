@@ -404,7 +404,7 @@ class _JobFormDialogState extends State<JobFormDialog>
       insetPadding: const EdgeInsets.all(20),
       child: Container(
         width: 650,
-        height: 720,
+        height: 800, // Increased height to accommodate expanded fields
         decoration: BoxDecoration(
           color: (themeProvider.isDarkMode
                   ? const Color(0xFF14131E)
@@ -486,7 +486,8 @@ class _JobFormDialogState extends State<JobFormDialog>
                               label: "Description",
                               initialValue: description,
                               hintText: "Enter job description",
-                              maxLines: 4,
+                              maxLines: 5,
+                              expands: false,
                               onChanged: (v) => description = v,
                               validator: (v) => v == null || v.isEmpty
                                   ? "Enter description"
@@ -497,19 +498,24 @@ class _JobFormDialogState extends State<JobFormDialog>
                               label: "Responsibilities",
                               controller: responsibilitiesController,
                               hintText: "Comma separated list",
+                              maxLines: 4,
+                              expands: false,
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
                               label: "Qualifications",
                               controller: qualificationsController,
                               hintText: "Comma separated list",
+                              maxLines: 4,
+                              expands: false,
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
                               label: "Company Details",
                               initialValue: companyDetails,
                               hintText: "About the company",
-                              maxLines: 3,
+                              maxLines: 4,
+                              expands: false,
                               onChanged: (v) => companyDetails = v,
                             ),
                             const SizedBox(height: 16),
@@ -524,6 +530,8 @@ class _JobFormDialogState extends State<JobFormDialog>
                               label: "Required Skills",
                               controller: skillsController,
                               hintText: "Comma separated skills",
+                              maxLines: 3,
+                              expands: false,
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
