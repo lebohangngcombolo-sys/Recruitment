@@ -388,14 +388,6 @@ class _JobFormDialogState extends State<JobFormDialog>
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
-                              label: "Job Summary",
-                              initialValue: jobSummary,
-                              hintText: "Brief job summary",
-                              maxLines: 3,
-                              onChanged: (v) => jobSummary = v,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
                               label: "Responsibilities",
                               controller: responsibilitiesController,
                               hintText: "Comma separated list",
