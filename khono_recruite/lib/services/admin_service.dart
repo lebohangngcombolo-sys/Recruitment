@@ -314,6 +314,73 @@ class AdminService {
     throw Exception('Failed to fetch candidates: ${res.body}');
   }
 
+  Future<Map<String, dynamic>> getCandidatesWithDetails({
+    int page = 1,
+    int perPage = 50,
+    String? search,
+    String? status,
+  }) async {
+    final authHeaders = await _getAuthHeaders();
+
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'per_page': perPage.toString(),
+    };
+
+    if (search != null && search.isNotEmpty) {
+      queryParams['search'] = search;
+    }
+
+    if (status != null && status.isNotEmpty) {
+      queryParams['status'] = status;
+    }
+
+    final uri = Uri.parse('${ApiEndpoints.adminBase}/candidates')
+        .replace(queryParameters: queryParams);
+
+    final res = await http.get(uri, headers: authHeaders);
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    } else {
+      final error = json.decode(res.body);
+      throw Exception(
+          'Failed to fetch candidates with details: ${error['error'] ?? res.body}');
+    }
+  }
+
+  Future<Map<String, dynamic>> getCandidateById(int candidateId) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.get(
+      Uri.parse('${ApiEndpoints.adminBase}/candidates/$candidateId'),
+      headers: authHeaders,
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    } else {
+      final error = json.decode(res.body);
+      throw Exception(
+          'Failed to fetch candidate: ${error['error'] ?? res.body}');
+    }
+  }
+
+  Future<Map<String, dynamic>> getCandidatesAnalytics() async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.get(
+      Uri.parse('${ApiEndpoints.adminBase}/candidates/analytics'),
+      headers: authHeaders,
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    } else {
+      final error = json.decode(res.body);
+      throw Exception(
+          'Failed to fetch candidates analytics: ${error['error'] ?? res.body}');
+    }
+  }
+
   Future<Map<String, dynamic>> getApplication(int applicationId) async {
     final token = await AuthService.getAccessToken();
     final res = await http.get(

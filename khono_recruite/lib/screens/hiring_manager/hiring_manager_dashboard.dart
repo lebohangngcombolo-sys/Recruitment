@@ -77,6 +77,16 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   late final AnimationController _sidebarAnimController;
   late final Animation<double> _sidebarWidthAnimation;
 
+  // --- Candidate Data ---
+  List<Map<String, dynamic>> candidates = [];
+  List<Map<String, dynamic>> recentCandidates = [];
+  Map<String, dynamic> candidateDemographics = {};
+  bool loadingCandidates = true;
+  int candidatePage = 1;
+  int candidatePerPage = 20;
+  String? candidateSearchQuery;
+  String? candidateStatusFilter;
+
   // --- Chart Data ---
   List<_ChartData> candidatePipelineData = [];
   List<_ChartData> timeToFillData = [];
@@ -124,6 +134,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   void initState() {
     super.initState();
     fetchStats();
+    fetchCandidates();
     fetchChartData();
     fetchAudits(page: 1);
     fetchProfileImage();
@@ -136,6 +147,55 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     _sidebarWidthAnimation = Tween<double>(begin: 260, end: 72).animate(
       CurvedAnimation(parent: _sidebarAnimController, curve: Curves.easeInOut),
     );
+  }
+
+  // --- Candidate Data Fetching ---
+  Future<void> fetchCandidates({bool refresh = false}) async {
+    if (refresh) {
+      setState(() {
+        loadingCandidates = true;
+        candidatePage = 1;
+        candidates.clear();
+      });
+    }
+
+    try {
+      final data = await admin.getCandidatesWithDetails(
+        page: candidatePage,
+        perPage: candidatePerPage,
+        search: candidateSearchQuery,
+        status: candidateStatusFilter,
+      );
+
+      setState(() {
+        if (refresh || candidatePage == 1) {
+          candidates = List<Map<String, dynamic>>.from(data['candidates']);
+        } else {
+          candidates
+              .addAll(List<Map<String, dynamic>>.from(data['candidates']));
+        }
+        loadingCandidates = false;
+      });
+    } catch (e) {
+      setState(() {
+        loadingCandidates = false;
+      });
+      _showErrorSnackBar('Failed to fetch candidates: $e');
+    }
+  }
+
+  void _searchCandidates(String query) {
+    setState(() {
+      candidateSearchQuery = query.isEmpty ? null : query;
+    });
+    fetchCandidates(refresh: true);
+  }
+
+  void _filterCandidatesByStatus(String? status) {
+    setState(() {
+      candidateStatusFilter = status;
+    });
+    fetchCandidates(refresh: true);
   }
 
   @override
@@ -285,56 +345,57 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   Future<void> fetchStats() async {
     setState(() => loadingStats = true);
     try {
-      final counts = await admin.getDashboardCounts();
+      final data = await admin.getDashboardCounts();
       final role = await AuthService.getRole();
 
       List<String> activities = [];
       if (role == "admin") {
         final token = await AuthService.getAccessToken();
         final res = await http.get(
-          Uri.parse("http://127.0.0.1:5000/api/admin/recent-activities"),
+          Uri.parse("http://127.0.0.1:5000/api/admin/audits/recent"),
           headers: {"Authorization": "Bearer $token"},
         );
         if (res.statusCode == 200) {
-          final data = json.decode(res.body);
-          activities = List<String>.from(data["recent_activities"] ?? []);
+          final audits = json.decode(res.body) as List;
+          activities =
+              audits.map((a) => a['action']?.toString() ?? '').take(5).toList();
         }
       }
 
       setState(() {
-        jobsCount = counts["jobs"] ?? 0;
-        candidatesCount = counts["candidates"] ?? 0;
-        interviewsCount = counts["interviews"] ?? 0;
-        cvReviewsCount = counts["cv_reviews"] ?? 0;
-        auditsCount = counts["audits"] ?? 0;
+        jobsCount = data['jobs'] ?? 0;
+        candidatesCount = data['candidates'] ?? 0;
+        interviewsCount = data['interviews'] ?? 0;
+        cvReviewsCount = data['cv_reviews'] ?? 0;
+        auditsCount = data['audits'] ?? 0;
 
         // Enhanced metrics
-        activeJobs = counts["active_jobs"] ?? 0;
-        candidatesWithCV = counts["candidates_with_cv"] ?? 0;
-        candidatesWithAssessments = counts["candidates_with_assessments"] ?? 0;
-        completedInterviews = counts["completed_interviews"] ?? 0;
-        scheduledInterviews = counts["scheduled_interviews"] ?? 0;
-        upcomingInterviews = counts["upcoming_interviews"] ?? 0;
-        offeredApplications = counts["offered_applications"] ?? 0;
-        acceptedOffers = counts["accepted_offers"] ?? 0;
+        activeJobs = data['active_jobs'] ?? 0;
+        candidatesWithCV = data['candidates_with_cv'] ?? 0;
+        candidatesWithAssessments = data['candidates_with_assessments'] ?? 0;
+        completedInterviews = data['completed_interviews'] ?? 0;
+        scheduledInterviews = data['scheduled_interviews'] ?? 0;
+        upcomingInterviews = data['upcoming_interviews'] ?? 0;
+        offeredApplications = data['offered_applications'] ?? 0;
+        acceptedOffers = data['accepted_offers'] ?? 0;
+        newApplicationsWeek = data['recent_activity']['new_applications'] ?? 0;
+        newInterviewsWeek = data['recent_activity']['new_interviews'] ?? 0;
 
-        // Application status breakdown
-        applicationStatusBreakdown =
-            counts["application_status_breakdown"] ?? {};
+        applicationStatusBreakdown = data['application_status_breakdown'] ?? {};
 
-        // Recent activity
-        newApplicationsWeek =
-            counts["recent_activity"]?["new_applications"] ?? 0;
-        newInterviewsWeek = counts["recent_activity"]?["new_interviews"] ?? 0;
+        // Enhanced candidate demographics
+        candidateDemographics = data['candidate_demographics'] ?? {};
+        recentCandidates =
+            List<Map<String, dynamic>>.from(data['recent_candidates'] ?? []);
 
         recentActivities = activities;
         loadingStats = false;
       });
     } catch (e) {
-      setState(() => loadingStats = false);
-      debugPrint("Error fetching dashboard stats: $e");
-      _showErrorSnackBar(
-          "Failed to load dashboard statistics. Please try again.");
+      setState(() {
+        loadingStats = false;
+      });
+      _showErrorSnackBar('Failed to fetch dashboard stats: $e');
     }
   }
 
@@ -1245,14 +1306,16 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         "count": offeredApplications,
         "subtitle": "$acceptedOffers accepted",
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/offer.png"
+        "icon":
+            "assets/icons/add.png" // Using existing icon instead of missing offer.png
       },
       {
         "title": "Assessments",
         "count": candidatesWithAssessments,
         "subtitle": "Completed",
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/assessment.png"
+        "icon":
+            "assets/icons/audit.png" // Using existing icon instead of missing assessment.png
       },
     ];
 
@@ -1327,6 +1390,15 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ),
             const SizedBox(height: 24),
+
+            // Enhanced Candidates Section
+            _buildCandidatesSection(themeProvider),
+            const SizedBox(height: 24),
+
+            // Candidate Demographics Section
+            _buildCandidateDemographicsSection(themeProvider),
+            const SizedBox(height: 24),
+
             LayoutBuilder(builder: (context, constraints) {
               int crossAxisCount = constraints.maxWidth > 900 ? 2 : 1;
               return Column(
@@ -2559,6 +2631,631 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         ],
       ),
     );
+  }
+
+  // ---------------- Enhanced Candidates Section ----------------
+  Widget _buildCandidatesSection(ThemeProvider themeProvider) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section Header with Search and Filter
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "Candidates Overview",
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: themeProvider.isDarkMode
+                    ? Colors.white
+                    : const Color.fromARGB(225, 20, 19, 30),
+              ),
+            ),
+            Row(
+              children: [
+                // Status Filter Dropdown
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: (themeProvider.isDarkMode
+                            ? const Color(0xFF14131E)
+                            : Colors.white)
+                        .withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: candidateStatusFilter,
+                      hint: const Text("All Status",
+                          style: TextStyle(fontSize: 12)),
+                      items: [
+                        'all',
+                        'applied',
+                        'reviewed',
+                        'interviewed',
+                        'offered',
+                        'rejected'
+                      ]
+                          .map((status) => DropdownMenuItem(
+                                value: status == 'all' ? null : status,
+                                child: Text(
+                                    status[0].toUpperCase() +
+                                        status.substring(1),
+                                    style: const TextStyle(fontSize: 12)),
+                              ))
+                          .toList(),
+                      onChanged: (value) => _filterCandidatesByStatus(value),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // Search Bar
+                Container(
+                  width: 200,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: (themeProvider.isDarkMode
+                            ? const Color(0xFF14131E)
+                            : Colors.white)
+                        .withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: TextField(
+                    decoration: const InputDecoration(
+                      hintText: "Search candidates...",
+                      hintStyle: TextStyle(fontSize: 12),
+                      prefixIcon: Icon(Icons.search, size: 16),
+                      border: InputBorder.none,
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    ),
+                    style: const TextStyle(fontSize: 12),
+                    onChanged: _searchCandidates,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Candidates Grid
+        if (loadingCandidates)
+          Container(
+            height: 300,
+            child: const Center(
+                child: CircularProgressIndicator(color: Colors.redAccent)),
+          )
+        else if (candidates.isEmpty)
+          Container(
+            height: 200,
+            child: Center(
+              child: Text(
+                "No candidates found",
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: themeProvider.isDarkMode
+                      ? Colors.grey.shade400
+                      : Colors.grey.shade600,
+                ),
+              ),
+            ),
+          )
+        else
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 4,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: 3.0, // Increased from 2.8 to give more height
+            ),
+            itemCount: candidates.take(8).length, // Show first 8 candidates
+            itemBuilder: (context, index) {
+              final candidate = candidates[index];
+              return _buildCandidateCard(candidate, themeProvider);
+            },
+          ),
+
+        const SizedBox(height: 16),
+
+        // View All Candidates Button
+        Center(
+          child: TextButton.icon(
+            onPressed: () => setState(() => currentScreen = "candidates"),
+            icon: const Icon(Icons.people_outline, size: 16),
+            label: const Text("View All Candidates",
+                style: TextStyle(fontSize: 12)),
+            style: TextButton.styleFrom(
+              foregroundColor: const Color.fromARGB(255, 193, 13, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCandidateCard(
+      Map<String, dynamic> candidate, ThemeProvider themeProvider) {
+    final stats = candidate['statistics'] as Map<String, dynamic>? ?? {};
+    final fullName = candidate['full_name']?.toString() ?? 'Unknown';
+    final location = candidate['location']?.toString() ?? '';
+    final title = candidate['title']?.toString() ?? '';
+    final profilePicture = candidate['profile_picture']?.toString();
+    final latestStatus = stats['latest_application_status']?.toString();
+    final totalApplications = stats['total_applications'] ?? 0;
+    final avgScore = (stats['average_cv_score'] ?? 0.0).toDouble();
+
+    Color statusColor = Colors.grey;
+    switch (latestStatus) {
+      case 'applied':
+        statusColor = Colors.blue;
+        break;
+      case 'reviewed':
+        statusColor = Colors.orange;
+        break;
+      case 'interviewed':
+        statusColor = Colors.purple;
+        break;
+      case 'offered':
+        statusColor = Colors.green;
+        break;
+      case 'rejected':
+        statusColor = Colors.red;
+        break;
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color:
+            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
+                .withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(8), // Reduced from 12
+        child: Row(
+          children: [
+            // Profile Picture
+            CircleAvatar(
+              radius: 16, // Reduced from 20
+              backgroundColor: Colors.grey.shade200,
+              backgroundImage: profilePicture?.isNotEmpty == true
+                  ? NetworkImage(profilePicture!)
+                  : null,
+              child: profilePicture?.isEmpty != false
+                  ? Text(
+                      fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
+                      style: TextStyle(
+                        fontSize: 12, // Reduced from 14
+                        fontWeight: FontWeight.bold,
+                        color: themeProvider.isDarkMode
+                            ? Colors.white
+                            : Colors.grey.shade700,
+                      ),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 8), // Reduced from 12
+
+            // Candidate Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min, // Added to prevent overflow
+                children: [
+                  Text(
+                    fullName,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 11, // Reduced from 12
+                      fontWeight: FontWeight.bold,
+                      color: themeProvider.isDarkMode
+                          ? Colors.white
+                          : Colors.black87,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1, // Added to prevent overflow
+                  ),
+                  if (title.isNotEmpty) ...[
+                    const SizedBox(height: 1), // Reduced from 2
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 9, // Reduced from 10
+                        color: themeProvider.isDarkMode
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1, // Added to prevent overflow
+                    ),
+                  ],
+                  if (location.isNotEmpty) ...[
+                    const SizedBox(height: 1), // Reduced from 2
+                    Text(
+                      location,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 9, // Reduced from 10
+                        color: themeProvider.isDarkMode
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1, // Added to prevent overflow
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            // Status and Score
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min, // Added to prevent overflow
+              children: [
+                if (latestStatus != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 4, vertical: 1), // Reduced padding
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8), // Reduced from 10
+                    ),
+                    child: Text(
+                      latestStatus.length > 8
+                          ? '${latestStatus.substring(0, 8)}.'
+                          : latestStatus[0].toUpperCase() +
+                              latestStatus.substring(1),
+                      style: TextStyle(
+                        fontSize: 8, // Reduced from 9
+                        fontWeight: FontWeight.w600,
+                        color: statusColor,
+                      ),
+                    ),
+                  ),
+                if (avgScore > 0) ...[
+                  const SizedBox(height: 2), // Reduced from 4
+                  Text(
+                    "${avgScore.toStringAsFixed(0)}", // Removed decimal for space
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 9, // Reduced from 10
+                      color: themeProvider.isDarkMode
+                          ? Colors.grey.shade400
+                          : Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+                if (totalApplications > 0)
+                  Text(
+                    "$totalApplications", // Shortened text
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 8, // Reduced from 9
+                      color: themeProvider.isDarkMode
+                          ? Colors.grey.shade500
+                          : Colors.grey.shade500,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------------- Candidate Demographics Section ----------------
+  Widget _buildCandidateDemographicsSection(ThemeProvider themeProvider) {
+    if (candidateDemographics.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final genderDistribution =
+        candidateDemographics['gender_distribution'] as Map<String, dynamic>? ??
+            {};
+    final locationDistribution = candidateDemographics['location_distribution']
+            as Map<String, dynamic>? ??
+        {};
+    final topSkills =
+        candidateDemographics['top_skills'] as Map<String, dynamic>? ?? {};
+    final educationDistribution =
+        candidateDemographics['education_distribution']
+                as Map<String, dynamic>? ??
+            {};
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Candidate Demographics & Insights",
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: themeProvider.isDarkMode
+                ? Colors.white
+                : const Color.fromARGB(225, 20, 19, 30),
+          ),
+        ),
+        const SizedBox(height: 16),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            int crossAxisCount = constraints.maxWidth > 1200
+                ? 4
+                : constraints.maxWidth > 800
+                    ? 2
+                    : 1;
+
+            return GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: crossAxisCount,
+              crossAxisSpacing: 12, // Reduced from 16
+              mainAxisSpacing: 12, // Reduced from 16
+              childAspectRatio: crossAxisCount == 4
+                  ? 1.4
+                  : 1.2, // Adjust aspect ratio based on column count
+              children: [
+                // Gender Distribution
+                _buildDemographicCard(
+                  "Gender Distribution",
+                  genderDistribution,
+                  Icons.pie_chart,
+                  themeProvider,
+                ),
+
+                // Top Locations
+                _buildDemographicCard(
+                  "Top Locations",
+                  Map<String, dynamic>.fromEntries(
+                      locationDistribution.entries.take(5)),
+                  Icons.location_on,
+                  themeProvider,
+                ),
+
+                // Top Skills
+                _buildDemographicCard(
+                  "Top Skills",
+                  Map<String, dynamic>.fromEntries(topSkills.entries.take(5)),
+                  Icons.psychology,
+                  themeProvider,
+                ),
+
+                // Education Levels
+                _buildDemographicCard(
+                  "Education Levels",
+                  educationDistribution,
+                  Icons.school,
+                  themeProvider,
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDemographicCard(
+    String title,
+    Map<String, dynamic> data,
+    IconData icon,
+    ThemeProvider themeProvider,
+  ) {
+    if (data.isEmpty) {
+      return Container(
+        decoration: BoxDecoration(
+          color: (themeProvider.isDarkMode
+                  ? const Color(0xFF14131E)
+                  : Colors.white)
+              .withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 32, color: Colors.grey.shade400),
+              const SizedBox(height: 8),
+              Text(
+                title,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: themeProvider.isDarkMode
+                      ? Colors.grey.shade300
+                      : Colors.grey.shade600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "No data available",
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  color: themeProvider.isDarkMode
+                      ? Colors.grey.shade500
+                      : Colors.grey.shade500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Sort data by value (descending)
+    final sortedEntries = data.entries.toList()
+      ..sort((a, b) => (b.value as num).compareTo(a.value as num));
+
+    final total =
+        sortedEntries.fold<int>(0, (sum, entry) => sum + (entry.value as int));
+
+    return Container(
+      decoration: BoxDecoration(
+        color:
+            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
+                .withValues(alpha: 0.9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12), // Reduced from 16
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon,
+                    size: 16,
+                    color: const Color.fromARGB(
+                        255, 193, 13, 0)), // Reduced from 18
+                const SizedBox(width: 6), // Reduced from 8
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 12, // Reduced from 14
+                      fontWeight: FontWeight.bold,
+                      color: themeProvider.isDarkMode
+                          ? Colors.white
+                          : Colors.black87,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8), // Reduced from 12
+
+            // Display top items
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min, // Added to prevent overflow
+                children:
+                    sortedEntries.take(4).toList().asMap().entries.map((entry) {
+                  // Reduced from 5 to 4 items
+                  final index = entry.key;
+                  final item = entry.value;
+                  final label = item.key.toString();
+                  final value = item.value as int;
+                  final percentage = total > 0 ? (value / total * 100) : 0.0;
+
+                  return Padding(
+                    padding: EdgeInsets.only(
+                        bottom: index < 3 ? 6 : 0), // Reduced spacing
+                    child: Row(
+                      children: [
+                        // Colored indicator
+                        Container(
+                          width: 6, // Reduced from 8
+                          height: 6, // Reduced from 8
+                          decoration: BoxDecoration(
+                            color: _getChartColor(index),
+                            borderRadius:
+                                BorderRadius.circular(3), // Reduced from 4
+                          ),
+                        ),
+                        const SizedBox(width: 6), // Reduced from 8
+
+                        // Label
+                        Expanded(
+                          child: Text(
+                            label.length > 12 // Reduced from 15
+                                ? '${label.substring(0, 12)}...'
+                                : label,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 10, // Reduced from 11
+                              color: themeProvider.isDarkMode
+                                  ? Colors.grey.shade300
+                                  : Colors.grey.shade700,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+
+                        // Value and percentage
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize:
+                              MainAxisSize.min, // Added to prevent overflow
+                          children: [
+                            Text(
+                              value.toString(),
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 10, // Reduced from 11
+                                fontWeight: FontWeight.w600,
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white
+                                    : Colors.black87,
+                              ),
+                            ),
+                            Text(
+                              "${percentage.toStringAsFixed(0)}%", // Removed decimal
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 8, // Reduced from 9
+                                color: themeProvider.isDarkMode
+                                    ? Colors.grey.shade500
+                                    : Colors.grey.shade500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _getChartColor(int index) {
+    final colors = [
+      const Color.fromARGB(255, 193, 13, 0), // Red/Accent
+      const Color(0xFF4CAF50), // Green
+      const Color(0xFF2196F3), // Blue
+      const Color(0xFFFF9800), // Orange
+      const Color(0xFF9C27B0), // Purple
+    ];
+    return colors[index % colors.length];
   }
 }
 
