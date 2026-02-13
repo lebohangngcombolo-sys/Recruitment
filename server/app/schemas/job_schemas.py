@@ -1,8 +1,30 @@
 """
 Job/Requisition Schemas for validation
 """
-from marshmallow import Schema, fields, ValidationError, EXCLUDE, validates_schema
+from marshmallow import Schema, fields, ValidationError, EXCLUDE, validates_schema, pre_load
 from marshmallow.validate import Range, Length, OneOf
+
+
+class KnockoutRuleSchema(Schema):
+    """Schema for a single knockout rule."""
+
+    type = fields.Str(
+        required=True,
+        validate=OneOf([
+            "certification",
+            "experience",
+            "skills",
+            "education",
+            "location",
+            "salary",
+        ]),
+    )
+    field = fields.Str(required=True)
+    operator = fields.Str(
+        required=True,
+        validate=OneOf([">=", ">", "==", "!=", "<", "<="]),
+    )
+    value = fields.Raw(required=True)
 
 
 class JobBaseSchema(Schema):
@@ -10,11 +32,50 @@ class JobBaseSchema(Schema):
 
     title = fields.Str(required=True, validate=Length(min=1, max=200))
     description = fields.Str(required=True)
+    company = fields.Str(
+        allow_none=True,
+        load_default="",
+        dump_default=""
+    )
+    location = fields.Str(
+        allow_none=True,
+        load_default="",
+        dump_default=""
+    )
+    salary_min = fields.Float(
+        allow_none=True,
+        load_default=None,
+        dump_default=None,
+        validate=Range(min=0)
+    )
+    salary_max = fields.Float(
+        allow_none=True,
+        load_default=None,
+        dump_default=None,
+        validate=Range(min=0)
+    )
+    salary_currency = fields.Str(
+        allow_none=True,
+        load_default="ZAR",
+        dump_default="ZAR"
+    )
+    salary_period = fields.Str(
+        allow_none=True,
+        load_default="monthly",
+        dump_default="monthly",
+        validate=OneOf(["monthly", "yearly"])
+    )
 
     job_summary = fields.Str(
         allow_none=True,
         load_default="",
         dump_default=""
+    )
+
+    employment_type = fields.Str(
+        load_default="full_time",
+        dump_default="full_time",
+        validate=OneOf(["full_time", "part_time", "contract", "internship"])
     )
 
     responsibilities = fields.List(
@@ -54,14 +115,24 @@ class JobBaseSchema(Schema):
     )
 
     knockout_rules = fields.List(
-        fields.Str(),
+        fields.Nested(KnockoutRuleSchema),
         load_default=list,
         dump_default=list
     )
 
     weightings = fields.Dict(
-        load_default=lambda: {"cv": 60, "assessment": 40},
-        dump_default=lambda: {"cv": 60, "assessment": 40}
+        load_default=lambda: {
+            "cv": 60,
+            "assessment": 40,
+            "interview": 0,
+            "references": 0,
+        },
+        dump_default=lambda: {
+            "cv": 60,
+            "assessment": 40,
+            "interview": 0,
+            "references": 0,
+        }
     )
 
     assessment_pack = fields.Dict(
@@ -86,6 +157,27 @@ class JobBaseSchema(Schema):
     class Meta:
         unknown = EXCLUDE
 
+    @pre_load
+    def normalize_knockout_rules(self, data, **kwargs):
+        rules = data.get("knockout_rules")
+        if isinstance(rules, list) and rules and not isinstance(rules[0], dict):
+            data["knockout_rules"] = [
+                {
+                    "type": "skills",
+                    "field": "skills",
+                    "operator": "==",
+                    "value": str(rule)
+                }
+                for rule in rules
+            ]
+        currency = data.get("salary_currency")
+        if currency is None or (isinstance(currency, str) and not currency.strip()):
+            data["salary_currency"] = "ZAR"
+        period = data.get("salary_period")
+        if period is None or (isinstance(period, str) and not period.strip()):
+            data["salary_period"] = "monthly"
+        return data
+
 
 class JobCreateSchema(JobBaseSchema):
     """Schema for job creation"""
@@ -103,12 +195,33 @@ class JobCreateSchema(JobBaseSchema):
         if not isinstance(assessment_pack["questions"], list):
             raise ValidationError("assessment_pack.questions must be a list")
 
+    @validates_schema
+    def validate_weightings(self, data, **kwargs):
+        weightings = data.get("weightings", {})
+
+        if not isinstance(weightings, dict):
+            raise ValidationError("weightings must be a dictionary")
+
+        for key, value in weightings.items():
+            if not isinstance(value, (int, float)):
+                raise ValidationError(f"weightings[{key}] must be a number")
+
+        total = sum(weightings.values())
+        if abs(total - 100) > 0.001:
+            raise ValidationError("Weightings must sum to 100")
+
 
 class JobUpdateSchema(Schema):
     """Schema for job updates (partial updates allowed)"""
 
     title = fields.Str(validate=Length(min=1, max=200))
     description = fields.Str()
+    company = fields.Str(allow_none=True)
+    location = fields.Str(allow_none=True)
+    salary_min = fields.Float(allow_none=True, validate=Range(min=0))
+    salary_max = fields.Float(allow_none=True, validate=Range(min=0))
+    salary_currency = fields.Str(allow_none=True)
+    salary_period = fields.Str(allow_none=True)
     job_summary = fields.Str(allow_none=True)
     responsibilities = fields.List(fields.Str())
     company_details = fields.Str(allow_none=True)
@@ -116,17 +229,12 @@ class JobUpdateSchema(Schema):
     category = fields.Str(allow_none=True)
     required_skills = fields.List(fields.Str())
     min_experience = fields.Float(validate=Range(min=0))
-    knockout_rules = fields.List(fields.Str())
+    knockout_rules = fields.List(fields.Nested(KnockoutRuleSchema))
     weightings = fields.Dict()
     assessment_pack = fields.Dict()
     vacancy = fields.Int(validate=Range(min=1))
     is_active = fields.Bool()
-    location = fields.Str(allow_none=True)
-    employment_type = fields.Str(allow_none=True)
-    salary_range = fields.Str(allow_none=True)
-    application_deadline = fields.DateTime(allow_none=True)
-    company = fields.Str(allow_none=True)
-    banner = fields.Str(allow_none=True)
+    employment_type = fields.Str()
 
     class Meta:
         unknown = EXCLUDE
@@ -138,6 +246,10 @@ class JobUpdateSchema(Schema):
 
             if not isinstance(weightings, dict):
                 raise ValidationError("weightings must be a dictionary")
+
+            for key, value in weightings.items():
+                if not isinstance(value, (int, float)):
+                    raise ValidationError(f"weightings[{key}] must be a number")
 
             total = sum(weightings.values())
             if abs(total - 100) > 0.001:

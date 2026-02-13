@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use, unused_element, duplicate_ignore, dead_code
 
 import 'dart:convert';
 import 'dart:typed_data';
@@ -9,8 +9,11 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
+import '../../providers/theme_provider.dart';
 
 // ------------------- API Base URL -------------------
 const String candidateBase = "http://127.0.0.1:5001/api/candidate";
@@ -165,132 +168,6 @@ class _ProfilePageState extends State<ProfilePage>
           option['value'] == lowerValue) {
         return option['value'];
       }
-
-      // ignore: unused_element
-      Widget _buildProfileHeader() {
-        return Column(
-          children: [
-            Stack(
-              children: [
-                Container(
-                  width: 140,
-                  height: 140,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.redAccent.withOpacity(0.7),
-                      width: 4,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 10,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(70),
-                    child: Image(
-                      image: _getProfileImageProvider(),
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.person,
-                          color: Colors.grey.shade400,
-                          size: 70,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.redAccent.withOpacity(0.4),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                      border: Border.all(
-                        color: Colors.white,
-                        width: 3,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.camera_alt_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Text(
-              fullNameController.text.isNotEmpty
-                  ? fullNameController.text
-                  : "Your Name",
-              style: GoogleFonts.poppins(
-                fontSize: 28,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              titleController.text.isNotEmpty
-                  ? titleController.text
-                  : "Your Title",
-              style: GoogleFonts.inter(
-                fontSize: 18,
-                color: Colors.white70,
-              ),
-            ),
-            const SizedBox(height: 15),
-            if (_mfaEnabled)
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.verified_user,
-                        color: Colors.greenAccent, size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      "2FA Enabled",
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        color: Colors.greenAccent,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 30),
-          ],
-        );
-      }
-
-      // Profile Summary Tab
     }
 
     // If no exact match, try partial match
@@ -310,6 +187,136 @@ class _ProfilePageState extends State<ProfilePage>
     final option = options.firstWhere((opt) => opt['value'] == value,
         orElse: () => {'label': '', 'value': ''});
     return option['label'] ?? '';
+  }
+
+  // ignore: unused_element
+  Widget _buildProfileHeader() {
+    return Column(
+      children: [
+        Stack(
+          children: [
+            Container(
+              width: 140,
+              height: 140,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.redAccent.withOpacity(0.7),
+                  width: 4,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(70),
+                child: Image(
+                  image: _getProfileImageProvider(),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.person,
+                      color: Colors.grey.shade400,
+                      size: 70,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.redAccent,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.redAccent.withOpacity(0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 3,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.camera_alt_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Text(
+          fullNameController.text.isNotEmpty
+              ? fullNameController.text
+              : "Your Name",
+          style: GoogleFonts.poppins(
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          titleController.text.isNotEmpty ? titleController.text : "Your Title",
+          style: GoogleFonts.inter(
+            fontSize: 18,
+            color: Colors.white70,
+          ),
+        ),
+        const SizedBox(height: 15),
+        if (_mfaEnabled)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.verified_user, color: Colors.greenAccent, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  "2FA Enabled",
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: Colors.greenAccent,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 30),
+      ],
+    );
+  }
+
+  ImageProvider _getProfileImageProvider() {
+    if (_profileImageBytes != null) {
+      return MemoryImage(_profileImageBytes!);
+    } else if (_profileImageUrl.isNotEmpty) {
+      return NetworkImage(_profileImageUrl);
+    } else {
+      return const AssetImage('assets/images/default_profile.png');
+    }
   }
 
   @override
@@ -1028,15 +1035,6 @@ class _ProfilePageState extends State<ProfilePage>
     }
   }
 
-  ImageProvider<Object> _getProfileImageProvider() {
-    if (_profileImage != null) {
-      if (kIsWeb) return MemoryImage(_profileImageBytes!);
-      return FileImage(File(_profileImage!.path));
-    }
-    if (_profileImageUrl.isNotEmpty) return NetworkImage(_profileImageUrl);
-    return const AssetImage("assets/images/profile_placeholder.png");
-  }
-
   Widget _modernCard(String title, Widget child,
       {Color? cardColor, Color? textColor}) {
     return Container(
@@ -1085,6 +1083,7 @@ class _ProfilePageState extends State<ProfilePage>
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
     if (loading) {
       return Scaffold(
         backgroundColor: Colors.transparent,
@@ -1093,7 +1092,7 @@ class _ProfilePageState extends State<ProfilePage>
             // Full-background image
             Positioned.fill(
               child: Image.asset(
-                "assets/images/dark.png",
+                themeProvider.backgroundImage,
                 fit: BoxFit.cover,
               ),
             ),
@@ -1160,6 +1159,121 @@ class _ProfilePageState extends State<ProfilePage>
                   ),
                   child: Column(
                     children: [
+                      // Profile Section (transparent background)
+                      Column(
+                        children: [
+                          Stack(
+                            children: [
+                              Container(
+                                width: 100,
+                                height: 100,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Colors.white.withValues(alpha: 0.3),
+                                    width: 2,
+                                  ),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(50),
+                                  child: Image(
+                                    image: _getProfileImageProvider(),
+                                    fit: BoxFit.cover,
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            Container(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.1),
+                                      child: Icon(
+                                        Icons.person,
+                                        color:
+                                            Colors.white.withValues(alpha: 0.3),
+                                        size: 40,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: GestureDetector(
+                                  onTap: _pickProfileImage,
+                                  child: Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      color: Colors.redAccent
+                                          .withValues(alpha: 0.8),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: const Icon(
+                                      Icons.edit,
+                                      color: Colors.white,
+                                      size: 14,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            fullNameController.text.isNotEmpty
+                                ? fullNameController.text
+                                : "Your Name",
+                            style: GoogleFonts.poppins(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            titleController.text.isNotEmpty
+                                ? titleController.text
+                                : "Your Title",
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              color: Colors.white70,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          if (_mfaEnabled) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.verified,
+                                      color: Colors.greenAccent, size: 12),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    "2FA Enabled",
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: Colors.greenAccent,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 40),
                       // Navigation buttons
                       _sidebarButton("Settings", Icons.settings_outlined),
                       _sidebarButton("2FA", Icons.security_outlined),
@@ -1827,6 +1941,190 @@ class _ProfilePageState extends State<ProfilePage>
             ),
           ),
           const SizedBox(height: 30),
+
+          // Personal Information Card
+          _modernCard(
+            "Personal Information",
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _infoRow("Full Name", fullNameController.text),
+                _infoRow("Email", emailController.text),
+                _infoRow("Phone", phoneController.text),
+                _infoRow("Location", locationController.text),
+                _infoRow("Nationality", nationalityController.text),
+                _infoRow("Title", titleController.text),
+                if (bioController.text.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Divider(color: Colors.grey.shade100),
+                  const SizedBox(height: 16),
+                  Text(
+                    "Bio",
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    bioController.text,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: Colors.black54,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // Education & Skills Card
+          _modernCard(
+            "Education & Skills",
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (degreeController.text.isNotEmpty)
+                  _infoRow("Degree", degreeController.text),
+                if (institutionController.text.isNotEmpty)
+                  _infoRow("Institution", institutionController.text),
+                if (graduationYearController.text.isNotEmpty)
+                  _infoRow("Graduation Year", graduationYearController.text),
+                if (skillsController.text.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Divider(color: Colors.grey.shade100),
+                  const SizedBox(height: 16),
+                  Text(
+                    "Skills",
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: skillsController.text.split(',').map((skill) {
+                      final trimmedSkill = skill.trim();
+                      if (trimmedSkill.isEmpty) return const SizedBox.shrink();
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          trimmedSkill,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // Online Profiles Card
+          if (linkedinController.text.isNotEmpty ||
+              githubController.text.isNotEmpty ||
+              portfolioController.text.isNotEmpty)
+            _modernCard(
+              "Online Profiles",
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (linkedinController.text.isNotEmpty)
+                    _linkRow("LinkedIn", linkedinController.text,
+                        Icons.work_outline),
+                  if (githubController.text.isNotEmpty)
+                    _linkRow("GitHub", githubController.text, Icons.code),
+                  if (portfolioController.text.isNotEmpty)
+                    _linkRow(
+                        "Portfolio", portfolioController.text, Icons.public),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    if (value.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: Colors.black54,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _linkRow(String label, String value, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.redAccent, size: 20),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 80,
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                final uri = Uri.tryParse(value) ?? Uri();
+                launchUrl(uri, mode: LaunchMode.externalApplication);
+              },
+              child: Text(
+                value,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: Colors.blue.shade600,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1931,6 +2229,98 @@ class _ProfilePageState extends State<ProfilePage>
             ),
           ),
 
+          // Profile Picture Section
+          _modernCard(
+            "Profile Picture",
+            Column(
+              children: [
+                GestureDetector(
+                  onTap: _pickProfileImage,
+                  child: Stack(
+                    children: [
+                      Container(
+                        width: 140,
+                        height: 140,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.redAccent.withValues(alpha: 0.1),
+                              Colors.redAccent.withValues(alpha: 0.3),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          border: Border.all(
+                            color: Colors.redAccent.withValues(alpha: 0.3),
+                            width: 3,
+                          ),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(70),
+                          child: Image(
+                            image: _getProfileImageProvider(),
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Container(
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.person,
+                                color: Colors.grey.shade400,
+                                size: 50,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 8,
+                        right: 8,
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.redAccent,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.redAccent.withValues(alpha: 0.4),
+                                blurRadius: 8,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                            border: Border.all(
+                              color: Colors.white,
+                              width: 3,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  "Tap the camera icon to update your profile photo",
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+
           // Personal Information
           _modernCard(
             "Personal Information",
@@ -1947,27 +2337,119 @@ class _ProfilePageState extends State<ProfilePage>
                             radius: 50,
                             backgroundImage: _getProfileImageProvider(),
                           ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.redAccent,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 2,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.camera_alt,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
-                          ),
                         ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Add more education button
+                Container(
+                  margin: const EdgeInsets.only(top: 10),
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _educationControllers.add(TextEditingController());
+                      });
+                    },
+                    icon: const Icon(Icons.add_circle_outline_rounded),
+                    label: const Text("Add Another Education"),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: Colors.redAccent,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: Colors.redAccent.withValues(alpha: 0.3),
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Skills Section
+          _modernCard(
+            "Skills",
+            Column(
+              children: [
+                CustomTextField(
+                  label: "Skills (comma separated)",
+                  controller: skillsController,
+                  backgroundColor: Colors.transparent,
+                  borderColor: Colors.grey.shade300,
+                  focusedBorderColor: Colors.redAccent,
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  focusedBorderWidth: 2,
+                  textColor: Colors.black87,
+                  labelColor: Colors.grey.shade700,
+                  hintColor: Colors.grey.shade500,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
+                  hintText: "e.g., Python, Flutter, React, Project Management",
+                  prefixIcon: Icon(Icons.code_outlined, size: 20),
+                  maxLines: 3,
+                ),
+              ],
+            ),
+          ),
+
+          // Work Experience Section
+          _modernCard(
+            "Work Experience",
+            Column(
+              children: [
+                CustomTextField(
+                  label: "Job Title",
+                  controller: jobTitleController,
+                  backgroundColor: Colors.transparent,
+                  borderColor: Colors.grey.shade300,
+                  focusedBorderColor: Colors.redAccent,
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  focusedBorderWidth: 2,
+                  textColor: Colors.black87,
+                  labelColor: Colors.grey.shade700,
+                  hintColor: Colors.grey.shade500,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
+                  prefixIcon: Icon(Icons.work_outline_rounded, size: 20),
+                ),
+                const SizedBox(height: 20),
+
+                Row(
+                  children: [
+                    Expanded(
+                      child: CustomTextField(
+                        label: "Company",
+                        controller: companyController,
+                        backgroundColor: Colors.transparent,
+                        borderColor: Colors.grey.shade300,
+                        focusedBorderColor: Colors.redAccent,
+                        borderRadius: 12,
+                        borderWidth: 1.5,
+                        focusedBorderWidth: 2,
+                        textColor: Colors.black87,
+                        labelColor: Colors.grey.shade700,
+                        hintColor: Colors.grey.shade500,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
+                        prefixIcon: Icon(Icons.business_outlined, size: 20),
                       ),
                     ),
                     const SizedBox(width: 20),
@@ -2013,11 +2495,6 @@ class _ProfilePageState extends State<ProfilePage>
                           ),
                           const SizedBox(height: 16),
                           CustomTextField(
-                            label: "Surname",
-                            controller: TextEditingController(text: ""),
-                          ),
-                          const SizedBox(height: 16),
-                          CustomTextField(
                             label: "Email Address",
                             controller: emailController,
                           ),
@@ -2054,9 +2531,157 @@ class _ProfilePageState extends State<ProfilePage>
                 ),
                 const SizedBox(height: 30),
 
-                // Version info
-                Align(
-                  alignment: Alignment.bottomLeft,
+                // Add more experience button
+                Container(
+                  margin: const EdgeInsets.only(top: 10),
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _workExpControllers.add(TextEditingController());
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: Colors.redAccent,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: Colors.redAccent.withValues(alpha: 0.3),
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                    icon: Icon(
+                      Icons.add_circle_outline_rounded,
+                      color: Colors.redAccent,
+                      size: 20,
+                    ),
+                    label: Text(
+                      "Add Another Experience",
+                      style: GoogleFonts.inter(
+                        color: Colors.redAccent,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Online Profiles Section
+          _modernCard(
+            "Online Profiles",
+            Column(
+              children: [
+                CustomTextField(
+                  label: "LinkedIn",
+                  controller: linkedinController,
+                  backgroundColor: Colors.transparent,
+                  borderColor: Colors.grey.shade300,
+                  focusedBorderColor: Colors.redAccent,
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  focusedBorderWidth: 2,
+                  textColor: Colors.black87,
+                  labelColor: Colors.grey.shade700,
+                  hintColor: Colors.grey.shade500,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
+                  hintText: "https://linkedin.com/in/yourprofile",
+                  prefixIcon: const Icon(Icons.link_outlined, size: 20),
+                ),
+                const SizedBox(height: 20),
+                CustomTextField(
+                  label: "GitHub",
+                  controller: githubController,
+                  backgroundColor: Colors.transparent,
+                  borderColor: Colors.grey.shade300,
+                  focusedBorderColor: Colors.redAccent,
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  focusedBorderWidth: 2,
+                  textColor: Colors.black87,
+                  labelColor: Colors.grey.shade700,
+                  hintColor: Colors.grey.shade500,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
+                  hintText: "https://github.com/yourusername",
+                  prefixIcon: const Icon(Icons.code_outlined, size: 20),
+                ),
+                const SizedBox(height: 20),
+                CustomTextField(
+                  label: "Portfolio",
+                  controller: portfolioController,
+                  backgroundColor: Colors.transparent,
+                  borderColor: Colors.grey.shade300,
+                  focusedBorderColor: Colors.redAccent,
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  focusedBorderWidth: 2,
+                  textColor: Colors.black87,
+                  labelColor: Colors.grey.shade700,
+                  hintColor: Colors.grey.shade500,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
+                  hintText: "https://yourportfolio.com",
+                  prefixIcon: const Icon(Icons.public_outlined, size: 20),
+                ),
+              ],
+            ),
+          ),
+
+          // Save Button Section
+          Container(
+            margin: const EdgeInsets.symmetric(vertical: 40),
+            child: Column(
+              children: [
+                ElevatedButton(
+                  onPressed: updateProfile,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.redAccent,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 40,
+                      vertical: 18,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                    shadowColor: Colors.redAccent.withValues(alpha: 0.4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.save_rounded, size: 20),
+                      const SizedBox(width: 10),
+                      Text(
+                        "Save All Changes",
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () => setState(() => showProfileSummary = true),
                   child: Text(
                     "Ver. 2026.02.BA1_SIT",
                     style: GoogleFonts.inter(
@@ -2134,10 +2759,10 @@ class _ProfilePageState extends State<ProfilePage>
         style: GoogleFonts.inter(
           color: Colors.black87,
         ),
-        items: departments.map((String department) {
+        items: departments.map((String dept) {
           return DropdownMenuItem<String>(
-            value: department,
-            child: Text(department),
+            value: dept,
+            child: Text(dept),
           );
         }).toList(),
         onChanged: (String? newValue) {

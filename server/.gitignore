@@ -1,3 +1,17 @@
+.env
+.env.*
+**/.env
+**/.env.*
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
 server/scripts/token.pickle
 server/token.pickle
 server/scripts/credentials.json

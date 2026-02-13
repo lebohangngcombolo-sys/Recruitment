@@ -271,8 +271,10 @@ class _LoginScreenState extends State<LoginScreen>
                 child: SingleChildScrollView(
                   child: Center(
                     child: MouseRegion(
-                      onEnter: (_) => kIsWeb ? _animationController.forward() : null,
-                      onExit: (_) => kIsWeb ? _animationController.reverse() : null,
+                      onEnter: (_) =>
+                          kIsWeb ? _animationController.forward() : null,
+                      onExit: (_) =>
+                          kIsWeb ? _animationController.reverse() : null,
                       child: ScaleTransition(
                         scale: _scaleAnimation,
                         child: Container(
@@ -283,234 +285,272 @@ class _LoginScreenState extends State<LoginScreen>
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               const SizedBox(height: 16),
-                        Text(
-                          "WELCOME BACK",
-                          style: GoogleFonts.poppins(
-                            fontSize: 32,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            shadows: [
-                              Shadow(
-                                  color: Colors.black26,
-                                  blurRadius: 4,
-                                  offset: Offset(2, 2))
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        Text(
-                          "Login",
-                          style: GoogleFonts.poppins(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 24),
-                        CustomTextField(
-                          label: "Email",
-                          controller: emailController,
-                          inputType: TextInputType.emailAddress,
-                          backgroundColor: Colors.white,
-                          textColor: Colors.black,
-                          borderColor: Colors.grey.shade300,
-                          labelColor: Colors.white,
-                          textInputAction: TextInputAction.next,
-                        ),
-                        const SizedBox(height: 12),
-                        CustomTextField(
-                          label: "Password",
-                          controller: passwordController,
-                          obscureText: _obscurePassword,
-                          backgroundColor: Colors.white,
-                          textColor: Colors.black,
-                          borderColor: Colors.grey.shade300,
-                          labelColor: Colors.white,
-                          textInputAction: TextInputAction.done,
-                          onSubmitted: (_) => _login(),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                              color: Colors.grey.shade600,
-                            ),
-                            onPressed: () {
-                              setState(() => _obscurePassword = !_obscurePassword);
-                            },
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: GestureDetector(
-                            onTap: () => context.push('/forgot-password'),
-                            child: Text(
-                              "Forgot Password?",
-                              style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        // Updated Login Button - Medium size and C10D00 color
-                        SizedBox(
-                          width: 200, // Medium width
-                          height: 44, // Medium height
-                          child: ElevatedButton(
-                            onPressed: loading ? null : _login,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  const Color(0xFFC10D00), // C10D00 background
-                              foregroundColor: Colors.white, // White text
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20)),
-                              elevation: 5,
-                            ),
-                            child: loading
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                          Colors.white),
-                                    ),
-                                  )
-                                : Text(
-                                    "LOGIN",
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        // 🆕 Enterprise SSO Button - White with C10D00 text and icon
-                        SizedBox(
-                          width: 200, // Same medium width as login button
-                          height: 44, // Same medium height as login button
-                          child: ElevatedButton(
-                            onPressed: loading
-                                ? null
-                                : () => context.push('/sso-enterprise'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.white, // White background
-                              foregroundColor:
-                                  const Color(0xFFC10D00), // C10D00 text
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20)),
-                              elevation: 5,
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.business,
-                                  size: 18,
-                                  color: const Color(0xFFC10D00), // C10D00 icon
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  "Enterprise SSO",
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                                child: Divider(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.4))),
-                            Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              child: Text(
-                                "Or login with",
+                              Text(
+                                "WELCOME BACK",
                                 style: GoogleFonts.poppins(
-                                  color: Colors.white70,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                                child: Divider(
-                                    color:
-                                        Colors.white.withValues(alpha: 0.4))),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            IconButton(
-                              icon: const FaIcon(FontAwesomeIcons.google,
-                                  color: Colors.white, size: 32),
-                              onPressed:
-                                  loading ? null : () => _socialLogin("Google"),
-                            ),
-                            const SizedBox(width: 24),
-                            IconButton(
-                              icon: const FaIcon(FontAwesomeIcons.github,
-                                  color: Colors.white, size: 32),
-                              onPressed:
-                                  loading ? null : () => _socialLogin("GitHub"),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 24),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              "Don't have an account? ",
-                              style: GoogleFonts.poppins(
-                                color: Colors.white70,
-                              ),
-                            ),
-                            GestureDetector(
-                              onTap: loading
-                                  ? null
-                                  : () => context.go('/register'),
-                              child: Text(
-                                "Register",
-                                style: GoogleFonts.poppins(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
                                   color: Colors.white,
-                                  fontWeight: FontWeight.w600,
+                                  shadows: [
+                                    Shadow(
+                                        color: Colors.black26,
+                                        blurRadius: 4,
+                                        offset: Offset(2, 2))
+                                  ],
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        IconButton(
-                          icon: Icon(
-                              themeProvider.isDarkMode
-                                  ? Icons.light_mode
-                                  : Icons.dark_mode,
-                              color: Colors.white),
-                          onPressed: loading
-                              ? null
-                              : () => themeProvider.toggleTheme(),
-                        ),
-                        const SizedBox(height: 16),
+                              const SizedBox(height: 24),
+                              Text(
+                                "Login",
+                                style: GoogleFonts.poppins(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              CustomTextField(
+                                label: "Email",
+                                controller: emailController,
+                                inputType: TextInputType.emailAddress,
+                                backgroundColor: Colors.white,
+                                textColor: Colors.black,
+                                borderColor: Colors.grey.shade300,
+                                labelColor: Colors.white,
+                                textInputAction: TextInputAction.next,
+                              ),
+                              const SizedBox(height: 12),
+                              CustomTextField(
+                                label: "Password",
+                                controller: passwordController,
+                                obscureText: _obscurePassword,
+                                backgroundColor: Colors.white,
+                                textColor: Colors.black,
+                                borderColor: Colors.grey.shade300,
+                                labelColor: Colors.white,
+                                textInputAction: TextInputAction.done,
+                                onSubmitted: (_) => _login(),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  onPressed: () {
+                                    setState(() =>
+                                        _obscurePassword = !_obscurePassword);
+                                  },
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: GestureDetector(
+                                  onTap: () => context.push('/forgot-password'),
+                                  child: Text(
+                                    "Forgot Password?",
+                                    style: GoogleFonts.poppins(
+                                      color: Colors.white,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              // Updated Login Button - Medium size and C10D00 color
+                              SizedBox(
+                                width: 200, // Medium width
+                                height: 44, // Medium height
+                                child: ElevatedButton(
+                                  onPressed: loading ? null : _login,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(
+                                        0xFFC10D00), // C10D00 background
+                                    foregroundColor: Colors.white, // White text
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(20)),
+                                    elevation: 5,
+                                  ),
+                                  child: loading
+                                      ? const SizedBox(
+                                          height: 20,
+                                          width: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                    Colors.white),
+                                          ),
+                                        )
+                                      : Text(
+                                          "LOGIN",
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              // 🆕 Enterprise SSO Button - White with C10D00 text and icon
+                              SizedBox(
+                                width: 200, // Same medium width as login button
+                                height:
+                                    44, // Same medium height as login button
+                                child: ElevatedButton(
+                                  onPressed: loading
+                                      ? null
+                                      : () => context.push('/sso-enterprise'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor:
+                                        Colors.white, // White background
+                                    foregroundColor:
+                                        const Color(0xFFC10D00), // C10D00 text
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(20)),
+                                    elevation: 5,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.business,
+                                        size: 18,
+                                        color: const Color(
+                                            0xFFC10D00), // C10D00 icon
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        "Enterprise SSO",
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                      child: Divider(
+                                          color: Colors.white
+                                              .withValues(alpha: 0.4))),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16),
+                                    child: Text(
+                                      "Or login with",
+                                      style: GoogleFonts.poppins(
+                                        color: Colors.white70,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                      child: Divider(
+                                          color: Colors.white
+                                              .withValues(alpha: 0.4))),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  IconButton(
+                                    icon: const FaIcon(FontAwesomeIcons.google,
+                                        color: Colors.white, size: 32),
+                                    onPressed: loading
+                                        ? null
+                                        : () => _socialLogin("Google"),
+                                  ),
+                                  const SizedBox(width: 24),
+                                  IconButton(
+                                    icon: const FaIcon(FontAwesomeIcons.github,
+                                        color: Colors.white, size: 32),
+                                    onPressed: loading
+                                        ? null
+                                        : () => _socialLogin("GitHub"),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 24),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    "Don't have an account? ",
+                                    style: GoogleFonts.poppins(
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: loading
+                                        ? null
+                                        : () => context.go('/register'),
+                                    child: Text(
+                                      "Register",
+                                      style: GoogleFonts.poppins(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              IconButton(
+                                icon: Icon(
+                                    themeProvider.isDarkMode
+                                        ? Icons.light_mode
+                                        : Icons.dark_mode,
+                                    color: Colors.white),
+                                onPressed: loading
+                                    ? null
+                                    : () => themeProvider.toggleTheme(),
+                              ),
+                              const SizedBox(height: 16),
                             ],
                           ),
                         ),
                       ),
                     ),
                   ),
+                ),
+              ),
+            ),
+          ),
+
+          // Top bar on top so back arrow and logo receive taps
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back,
+                          color: Colors.white, size: 28),
+                      onPressed: () => context.go('/'),
+                    ),
+                    const SizedBox(width: 12),
+                    GestureDetector(
+                      onTap: () => context.go('/'),
+                      child: Image.asset(
+                        "assets/icons/khono.png",
+                        height: 40,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

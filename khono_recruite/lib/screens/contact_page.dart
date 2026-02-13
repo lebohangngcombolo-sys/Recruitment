@@ -50,7 +50,7 @@ class ContactPage extends StatelessWidget {
         hintText: hint,
         hintStyle: GoogleFonts.poppins(color: Colors.white),
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.1),
+        fillColor: Colors.white.withOpacity(0.1),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -79,8 +79,7 @@ class ContactPage extends StatelessWidget {
             children: [
               // Nav bar
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 child: Row(
                   children: [
                     GestureDetector(
@@ -107,7 +106,7 @@ class ContactPage extends StatelessWidget {
                         backgroundColor: accentRed,
                         foregroundColor: Colors.white,
                         elevation: 2,
-                        shadowColor: Colors.black.withValues(alpha: 0.25),
+                        shadowColor: Colors.black.withOpacity(0.25),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 24, vertical: 12),
                         shape: RoundedRectangleBorder(
@@ -129,8 +128,7 @@ class ContactPage extends StatelessWidget {
               ),
               Expanded(
                 child: SingleChildScrollView(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 60, vertical: 24),
+                  padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 24),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -168,7 +166,7 @@ class ContactPage extends StatelessWidget {
                               width: 600,
                               constraints: const BoxConstraints(maxWidth: 600),
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.05),
+                                color: Colors.white.withOpacity(0.05),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(color: Colors.white10),
                               ),
@@ -185,8 +183,7 @@ class ContactPage extends StatelessWidget {
                                   const SizedBox(height: 16),
                                   ElevatedButton(
                                     onPressed: () {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
+                                      ScaffoldMessenger.of(context).showSnackBar(
                                         const SnackBar(
                                           content: Text(
                                               'Form submission functionality coming soon!'),
@@ -233,7 +230,7 @@ class ContactPage extends StatelessWidget {
                               'https://x.com/yourprofile',
                             ),
                             _socialIcon(
-                              'assets/icons/Linkedin.png',
+                              'assets/icons/LinkedIn.png',
                               'https://www.linkedin.com/in/yourprofile',
                             ),
                             _socialIcon(
@@ -269,8 +266,7 @@ class ContactPage extends StatelessWidget {
                   pageBuilder: (context, animation, secondaryAnimation) {
                     return const SizedBox.shrink();
                   },
-                  transitionBuilder:
-                      (context, animation, secondaryAnimation, child) {
+                  transitionBuilder: (context, animation, secondaryAnimation, child) {
                     return Stack(
                       children: [
                         GestureDetector(
@@ -288,8 +284,7 @@ class ContactPage extends StatelessWidget {
                               curve: Curves.easeOutCubic,
                             )),
                             child: Padding(
-                              padding: const EdgeInsets.only(
-                                  right: 0, top: 24, bottom: 24),
+                              padding: const EdgeInsets.only(right: 0, top: 24, bottom: 24),
                               child: Material(
                                 color: Colors.transparent,
                                 child: const SupportChatPanel(),

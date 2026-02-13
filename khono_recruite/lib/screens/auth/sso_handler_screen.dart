@@ -2,6 +2,7 @@ import 'package:web/web.dart' as html;
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
+import '../../services/auth_service.dart';
 
 final storage = FlutterSecureStorage();
 
@@ -33,6 +34,14 @@ class _SsoRedirectHandlerState extends State<SsoRedirectHandler> {
     final dashboard = uri.queryParameters['dashboard'];
 
     if (accessToken != null && refreshToken != null) {
+      // Persist tokens in secure storage + SharedPreferences
+      if (role != null) {
+        await AuthService.storeTokens(accessToken, refreshToken, role);
+      } else {
+        await AuthService.saveTokens(accessToken, refreshToken);
+      }
+
+      // Keep legacy secure storage writes for compatibility
       await storage.write(key: 'access_token', value: accessToken);
       await storage.write(key: 'refresh_token', value: refreshToken);
       await storage.write(key: 'user_id', value: id);
@@ -42,6 +51,23 @@ class _SsoRedirectHandlerState extends State<SsoRedirectHandler> {
       await storage.write(key: 'user_last_name', value: lastName);
       await storage.write(
           key: 'enrollment_completed', value: enrollmentCompleted);
+
+      // Save minimal user info for WebSocket/user ID lookup
+      final fullName = [
+        if (firstName != null && firstName.isNotEmpty) firstName,
+        if (lastName != null && lastName.isNotEmpty) lastName
+      ].join(' ');
+      await AuthService.saveUserInfo({
+        'id': id,
+        'email': email,
+        'role': role,
+        'enrollment_completed': enrollmentCompleted == 'true',
+        'profile': {
+          'first_name': firstName,
+          'last_name': lastName,
+          'full_name': fullName.isNotEmpty ? fullName : null,
+        }
+      });
 
       html.window.history.replaceState(null, 'Dashboard', '/');
 

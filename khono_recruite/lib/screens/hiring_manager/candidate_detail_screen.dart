@@ -1,10 +1,9 @@
-import 'package:web/web.dart' as web; // For web download
+// ignore_for_file: unused_import
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
+import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
@@ -146,7 +145,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
       }
 
       if (kIsWeb) {
-        web.window.open(cvUrl, '_blank');
+        final uri = Uri.parse(cvUrl);
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Download started")),

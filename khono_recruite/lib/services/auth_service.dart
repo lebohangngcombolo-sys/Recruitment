@@ -388,6 +388,7 @@ class AuthService {
     if (refreshToken != null) {
       await _storage.write(key: 'refresh_token', value: refreshToken);
     }
+    await _persistTokensToPrefs(accessToken, refreshToken);
   }
 
   static Future<String?> getAccessToken() async {
@@ -401,16 +402,32 @@ class AuthService {
   static Future<void> deleteTokens() async {
     await _storage.delete(key: 'access_token');
     await _storage.delete(key: 'refresh_token');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('access_token');
+    await prefs.remove('refresh_token');
+    await prefs.remove('token');
   }
 
 // ----------------- SAVE TOKEN -----------------
   static Future<void> saveToken(String token) async {
     await _storage.write(key: 'access_token', value: token);
+    await _persistTokensToPrefs(token, null);
   }
 
   // ----------------- AUTHORIZED REQUEST HELPERS -----------------
+  static http.Response _missingTokenResponse() {
+    return http.Response(
+      jsonEncode({"error": "Missing access token"}),
+      401,
+      headers: {"Content-Type": "application/json"},
+    );
+  }
+
   static Future<http.Response> authorizedGet(String url) async {
     final token = await getAccessToken();
+    if (token == null || token.isEmpty) {
+      return _missingTokenResponse();
+    }
     return http.get(
       Uri.parse(url),
       headers: {
@@ -423,6 +440,9 @@ class AuthService {
   static Future<http.Response> authorizedPost(
       String url, Map<String, dynamic> body) async {
     final token = await getAccessToken();
+    if (token == null || token.isEmpty) {
+      return _missingTokenResponse();
+    }
     return http.post(
       Uri.parse(url),
       headers: {
@@ -436,6 +456,9 @@ class AuthService {
   static Future<http.Response> authorizedPut(
       String url, Map<String, dynamic> data) async {
     final token = await getAccessToken();
+    if (token == null || token.isEmpty) {
+      return _missingTokenResponse();
+    }
     return http.put(
       Uri.parse(url),
       headers: {
@@ -448,6 +471,9 @@ class AuthService {
 
   static Future<http.Response> authorizedDelete(String url) async {
     final token = await getAccessToken();
+    if (token == null || token.isEmpty) {
+      return _missingTokenResponse();
+    }
     return http.delete(
       Uri.parse(url),
       headers: {
@@ -502,6 +528,16 @@ class AuthService {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('role', role);
+  }
+
+  static Future<void> _persistTokensToPrefs(
+      String accessToken, String? refreshToken) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('access_token', accessToken);
+    await prefs.setString('token', accessToken);
+    if (refreshToken != null) {
+      await prefs.setString('refresh_token', refreshToken);
+    }
   }
 
 // Retrieve stored role

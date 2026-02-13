@@ -1,5 +1,6 @@
+// ignore_for_file: unused_element
+
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import '../../services/admin_service.dart';
@@ -11,18 +12,20 @@ import 'job_management.dart';
 import 'interviews_list_screen.dart';
 import 'hm_analytics_page.dart';
 import 'hm_team_collaboration_page.dart';
+import 'offer_list_screen.dart';
+import 'pipeline_page.dart';
 import 'package:http/http.dart' as http;
-
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
-
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 import '../auth/login_screen.dart';
+
+// Simple meeting data source class
 
 class HMMainDashboard extends StatefulWidget {
   final String token;
@@ -43,6 +46,20 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   int cvReviewsCount = 0;
   int auditsCount = 0;
 
+  // Enhanced metrics
+  int activeJobs = 0;
+  int candidatesWithCV = 0;
+  int candidatesWithAssessments = 0;
+  int completedInterviews = 0;
+  int scheduledInterviews = 0;
+  int upcomingInterviews = 0;
+  int offeredApplications = 0;
+  int acceptedOffers = 0;
+  int newApplicationsWeek = 0;
+  int newInterviewsWeek = 0;
+
+  Map<String, dynamic> applicationStatusBreakdown = {};
+
   int? selectedJobId;
 
   // Calendar state
@@ -52,6 +69,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   final AdminService admin = AdminService();
 
   List<String> recentActivities = [];
+
+  // Display name for the logged-in user (shared with Team Collaboration semantics)
+  String userName = "Hiring Manager";
 
   bool sidebarCollapsed = false;
   late final AnimationController _sidebarAnimController;
@@ -63,16 +83,15 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   List<_ChartData> genderData = [];
   List<_ChartData> ethnicityData = [];
   List<_ChartData> sourcePerformanceData = [];
+  List<_ChartData> skillsData = [];
+  List<_ChartData> experienceData = [];
+  List<_ChartData> cvScreeningData = [];
+  List<_ChartData> assessmentData = [];
+  List<_ChartData> auditTrendData = [];
   bool loadingChartData = true;
-
-  // Power BI status
-  bool powerBIConnected = false;
-  bool checkingPowerBI = true;
-  Timer? _statusTimer;
 
   // --- Audits ---
   List<Map<String, dynamic>> audits = [];
-  List<_ChartData> auditTrendData = [];
   int auditPage = 1;
   int auditPerPage = 20;
   String? auditActionFilter;
@@ -99,19 +118,16 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   Uint8List? _profileImageBytes;
   String _profileImageUrl = "";
   final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
     fetchStats();
-    fetchPowerBIStatus();
+    fetchChartData();
     fetchAudits(page: 1);
     fetchProfileImage();
-    fetchChartData();
-
-    _statusTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      fetchPowerBIStatus();
-    });
+    _loadUserName();
 
     _sidebarAnimController = AnimationController(
       vsync: this,
@@ -125,25 +141,62 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   @override
   void dispose() {
     _sidebarAnimController.dispose();
-    _statusTimer?.cancel();
     auditSearchController.dispose();
     super.dispose();
   }
 
-  // ---------- Chart Data Methods ----------
-  Future<void> fetchChartData() async {
-    setState(() => loadingChartData = true);
+  Future<void> _loadUserName() async {
     try {
-      // TODO: Implement actual API calls for chart data
-      // For now, keeping empty to remove mock data
+      final info = await AuthService.getUserInfo();
+      if (info == null) return;
 
-      setState(() {
-        loadingChartData = false;
-      });
+      // Try a few common keys defensively
+      final profile = info['profile'] ?? {};
+      final candidate = info['candidate'] ?? {};
+
+      final name = info['full_name'] ??
+          info['name'] ??
+          profile['full_name'] ??
+          profile['name'] ??
+          candidate['full_name'] ??
+          candidate['name'];
+
+      if (name is String && name.trim().isNotEmpty) {
+        setState(() {
+          userName = name.trim();
+        });
+      }
     } catch (e) {
-      setState(() => loadingChartData = false);
-      debugPrint("Error fetching chart data: $e");
+      debugPrint('Failed to load user name: $e');
     }
+  }
+
+  // ---------- Error Handling ----------
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'Dismiss',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
+    );
+  }
+
+  void _showSuccessSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   // ---------- Profile Image Methods ----------
@@ -166,6 +219,17 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       }
     } catch (e) {
       debugPrint("Error fetching profile image: $e");
+    }
+  }
+
+  Future<void> _pickProfileImage() async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      if (kIsWeb) {
+        _profileImageBytes = await pickedFile.readAsBytes();
+      }
+      setState(() => _profileImage = pickedFile);
+      await uploadProfileImage();
     }
   }
 
@@ -217,22 +281,24 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     return const AssetImage("assets/images/profile_placeholder.png");
   }
 
-  // ---------- Dashboard Stats & PowerBI ----------
+  // ---------- Dashboard Stats ----------
   Future<void> fetchStats() async {
     setState(() => loadingStats = true);
     try {
       final counts = await admin.getDashboardCounts();
-      final token = await AuthService.getAccessToken();
-
-      final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/recent-activities"),
-        headers: {"Authorization": "Bearer $token"},
-      );
+      final role = await AuthService.getRole();
 
       List<String> activities = [];
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        activities = List<String>.from(data["recent_activities"] ?? []);
+      if (role == "admin") {
+        final token = await AuthService.getAccessToken();
+        final res = await http.get(
+          Uri.parse("http://127.0.0.1:5000/api/admin/recent-activities"),
+          headers: {"Authorization": "Bearer $token"},
+        );
+        if (res.statusCode == 200) {
+          final data = json.decode(res.body);
+          activities = List<String>.from(data["recent_activities"] ?? []);
+        }
       }
 
       setState(() {
@@ -241,42 +307,285 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         interviewsCount = counts["interviews"] ?? 0;
         cvReviewsCount = counts["cv_reviews"] ?? 0;
         auditsCount = counts["audits"] ?? 0;
+
+        // Enhanced metrics
+        activeJobs = counts["active_jobs"] ?? 0;
+        candidatesWithCV = counts["candidates_with_cv"] ?? 0;
+        candidatesWithAssessments = counts["candidates_with_assessments"] ?? 0;
+        completedInterviews = counts["completed_interviews"] ?? 0;
+        scheduledInterviews = counts["scheduled_interviews"] ?? 0;
+        upcomingInterviews = counts["upcoming_interviews"] ?? 0;
+        offeredApplications = counts["offered_applications"] ?? 0;
+        acceptedOffers = counts["accepted_offers"] ?? 0;
+
+        // Application status breakdown
+        applicationStatusBreakdown =
+            counts["application_status_breakdown"] ?? {};
+
+        // Recent activity
+        newApplicationsWeek =
+            counts["recent_activity"]?["new_applications"] ?? 0;
+        newInterviewsWeek = counts["recent_activity"]?["new_interviews"] ?? 0;
+
         recentActivities = activities;
         loadingStats = false;
       });
     } catch (e) {
       setState(() => loadingStats = false);
       debugPrint("Error fetching dashboard stats: $e");
+      _showErrorSnackBar(
+          "Failed to load dashboard statistics. Please try again.");
     }
   }
 
-  Future<void> fetchPowerBIStatus() async {
-    setState(() => checkingPowerBI = true);
+  Future<void> fetchChartData() async {
+    setState(() => loadingChartData = true);
     try {
       final token = await AuthService.getAccessToken();
-      final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/powerbi/status"),
-        headers: {"Authorization": "Bearer $token"},
-      );
+      final headers = {"Authorization": "Bearer $token"};
 
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        setState(() {
-          powerBIConnected = data["connected"] ?? false;
-        });
-      } else {
-        setState(() => powerBIConnected = false);
+      // Fetch candidate pipeline data (applications per requisition)
+      final pipelineRes = await http.get(
+        Uri.parse(
+            "http://127.0.0.1:5000/api/analytics/applications-per-requisition"),
+        headers: headers,
+      );
+      if (pipelineRes.statusCode == 200) {
+        final data = json.decode(pipelineRes.body) as List;
+        candidatePipelineData = data
+            .map((item) => _ChartData(
+                  item['title'] ?? 'Unknown',
+                  item['applications'] ?? 0,
+                ))
+            .toList();
+      }
+
+      // Fetch time to fill data (time per stage)
+      final timeRes = await http.get(
+        Uri.parse("http://127.0.0.1:5000/api/analytics/time-per-stage"),
+        headers: headers,
+      );
+      if (timeRes.statusCode == 200) {
+        final data = json.decode(timeRes.body) as List;
+        // Calculate average time to interview
+        final validTimes = data
+            .where((item) => item['time_to_interview_days'] != null)
+            .toList();
+        if (validTimes.isNotEmpty) {
+          final avgTime = validTimes
+                  .map((item) => item['time_to_interview_days'] as int)
+                  .reduce((a, b) => a + b) /
+              validTimes.length;
+          timeToFillData = [
+            _ChartData("Avg Time to Interview", avgTime.round())
+          ];
+        }
+      }
+
+      // Fetch gender diversity data if available
+      try {
+        final genderRes = await http.get(
+          Uri.parse(
+              "http://127.0.0.1:5000/api/analytics/candidate/gender-distribution"),
+          headers: headers,
+        );
+        if (genderRes.statusCode == 200) {
+          final data = json.decode(genderRes.body) as List;
+          genderData = data
+              .map((item) => _ChartData(
+                    item['gender'] ?? 'Unknown',
+                    item['count'] ?? 0,
+                  ))
+              .toList();
+        } else {
+          // Fallback to conversion rate if gender endpoint not available
+          final conversionRes = await http.get(
+            Uri.parse(
+                "http://127.0.0.1:5000/api/analytics/conversion/application-to-interview"),
+            headers: headers,
+          );
+          if (conversionRes.statusCode == 200) {
+            final data = json.decode(conversionRes.body);
+            genderData = [
+              _ChartData("Interview Rate",
+                  (data['conversion_rate_percent'] ?? 0).toInt()),
+            ];
+          }
+        }
+      } catch (e) {
+        // Use fallback data
+        final conversionRes = await http.get(
+          Uri.parse(
+              "http://127.0.0.1:5000/api/analytics/conversion/application-to-interview"),
+          headers: headers,
+        );
+        if (conversionRes.statusCode == 200) {
+          final data = json.decode(conversionRes.body);
+          genderData = [
+            _ChartData("Interview Rate",
+                (data['conversion_rate_percent'] ?? 0).toInt()),
+          ];
+        }
+      }
+
+      // Fetch ethnicity diversity data if available
+      try {
+        final ethnicityRes = await http.get(
+          Uri.parse(
+              "http://127.0.0.1:5000/api/analytics/candidate/ethnicity-distribution"),
+          headers: headers,
+        );
+        if (ethnicityRes.statusCode == 200) {
+          final data = json.decode(ethnicityRes.body) as List;
+          ethnicityData = data
+              .map((item) => _ChartData(
+                    item['ethnicity'] ?? 'Unknown',
+                    item['count'] ?? 0,
+                  ))
+              .toList();
+        } else {
+          // Fallback to dropoff data
+          final dropoffRes = await http.get(
+            Uri.parse("http://127.0.0.1:5000/api/analytics/dropoff"),
+            headers: headers,
+          );
+          if (dropoffRes.statusCode == 200) {
+            final data = json.decode(dropoffRes.body);
+            ethnicityData = [
+              _ChartData("Total Applications", data['total_applications'] ?? 0),
+              _ChartData("Interviewed", data['interviewed'] ?? 0),
+              _ChartData("Offered", data['offered'] ?? 0),
+            ];
+          }
+        }
+      } catch (e) {
+        // Use fallback data
+        final dropoffRes = await http.get(
+          Uri.parse("http://127.0.0.1:5000/api/analytics/dropoff"),
+          headers: headers,
+        );
+        if (dropoffRes.statusCode == 200) {
+          final data = json.decode(dropoffRes.body);
+          ethnicityData = [
+            _ChartData("Total Applications", data['total_applications'] ?? 0),
+            _ChartData("Interviewed", data['interviewed'] ?? 0),
+            _ChartData("Offered", data['offered'] ?? 0),
+          ];
+        }
+      }
+
+      // Fetch source performance data (applications per month)
+      final monthlyRes = await http.get(
+        Uri.parse("http://127.0.0.1:5000/api/analytics/applications/monthly"),
+        headers: headers,
+      );
+      if (monthlyRes.statusCode == 200) {
+        final data = json.decode(monthlyRes.body) as List;
+        sourcePerformanceData = data
+            .take(6)
+            .map((item) => _ChartData(
+                  item['month'] ?? 'Unknown',
+                  item['applications'] ?? 0,
+                ))
+            .toList();
+      }
+
+      // Fetch additional analytics data for comprehensive dashboard
+      try {
+        // Skills frequency data
+        final skillsRes = await http.get(
+          Uri.parse(
+              "http://127.0.0.1:5000/api/analytics/candidate/skills-frequency"),
+          headers: headers,
+        );
+        if (skillsRes.statusCode == 200) {
+          final data = json.decode(skillsRes.body) as List;
+          skillsData = data
+              .take(10)
+              .map((item) => _ChartData(
+                    item['skill'] ?? 'Unknown',
+                    item['frequency'] ?? 0,
+                  ))
+              .toList();
+        }
+      } catch (e) {
+        debugPrint("Error fetching skills data: $e");
+      }
+
+      try {
+        // Experience distribution data
+        final experienceRes = await http.get(
+          Uri.parse(
+              "http://127.0.0.1:5000/api/analytics/candidate/experience-distribution"),
+          headers: headers,
+        );
+        if (experienceRes.statusCode == 200) {
+          final data = json.decode(experienceRes.body) as List;
+          experienceData = data
+              .map((item) => _ChartData(
+                    item['experience_level'] ?? 'Unknown',
+                    item['count'] ?? 0,
+                  ))
+              .toList();
+        }
+      } catch (e) {
+        debugPrint("Error fetching experience data: $e");
+      }
+
+      try {
+        // CV screening drop trends
+        final cvDropRes = await http.get(
+          Uri.parse("http://127.0.0.1:5000/api/analytics/cv-screening-drop"),
+          headers: headers,
+        );
+        if (cvDropRes.statusCode == 200) {
+          final data = json.decode(cvDropRes.body) as List;
+          cvScreeningData = data
+              .map((item) => _ChartData(
+                    item['date'] ?? 'Unknown',
+                    item['drop_count'] ?? 0,
+                  ))
+              .toList();
+        }
+      } catch (e) {
+        debugPrint("Error fetching CV screening data: $e");
+      }
+
+      try {
+        // Assessment pass rates
+        final assessmentRes = await http.get(
+          Uri.parse(
+              "http://127.0.0.1:5000/api/analytics/assessments/pass-rate"),
+          headers: headers,
+        );
+        if (assessmentRes.statusCode == 200) {
+          final data = json.decode(assessmentRes.body) as List;
+          assessmentData = data
+              .map((item) => _ChartData(
+                    item['date'] ?? 'Unknown',
+                    item['pass_rate'] ?? 0,
+                  ))
+              .toList();
+        }
+      } catch (e) {
+        debugPrint("Error fetching assessment data: $e");
       }
     } catch (e) {
-      setState(() => powerBIConnected = false);
+      debugPrint("Error fetching chart data: $e");
     } finally {
-      setState(() => checkingPowerBI = false);
+      setState(() => loadingChartData = false);
     }
   }
 
   Future<void> fetchAudits({int page = 1}) async {
     setState(() => loadingAudits = true);
     try {
+      final role = await AuthService.getRole();
+      if (role != "admin") {
+        setState(() => loadingAudits = false);
+        return;
+      }
+
       final token = await AuthService.getAccessToken();
       final queryParams = {
         "page": page.toString(),
@@ -482,6 +791,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                         context.push(
                                             '/profile?token=${widget.token}');
                                       },
+                                      onLongPress: _pickProfileImage,
                                       child: CircleAvatar(
                                         radius: 18,
                                         backgroundColor: Colors.grey.shade200,
@@ -493,7 +803,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Text(
-                                        "Admin User",
+                                        userName,
                                         style: TextStyle(
                                           fontFamily: 'Poppins',
                                           color: themeProvider.isDarkMode
@@ -513,6 +823,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                       context.push(
                                           '/profile?token=${widget.token}');
                                     },
+                                    onLongPress: _pickProfileImage,
                                     child: CircleAvatar(
                                       radius: 18,
                                       backgroundColor: Colors.grey.shade200,
@@ -618,6 +929,37 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     contentPadding: const EdgeInsets.symmetric(
                                         vertical: 14, horizontal: 10),
                                   ),
+                                  onSubmitted: (query) {
+                                    final q = query.toLowerCase();
+                                    setState(() {
+                                      if (q.contains('job')) {
+                                        currentScreen = "jobs";
+                                      } else if (q.contains('candidate')) {
+                                        currentScreen = "candidates";
+                                      } else if (q.contains('interview')) {
+                                        currentScreen = "interviews";
+                                      } else if (q.contains('pipeline')) {
+                                        // For now, treat pipeline as analytics view
+                                        currentScreen = "analytics";
+                                      } else if (q.contains('analytics') ||
+                                          q.contains('report')) {
+                                        currentScreen = "analytics";
+                                      } else if (q.contains('notification')) {
+                                        currentScreen = "notifications";
+                                      } else if (q.contains('home') ||
+                                          q.contains('dashboard')) {
+                                        currentScreen = "dashboard";
+                                      } else {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                                "No results found for '$query'"),
+                                          ),
+                                        );
+                                      }
+                                    });
+                                  },
                                   cursorColor: Colors.redAccent,
                                   style: TextStyle(
                                     fontFamily: 'Poppins',
@@ -631,152 +973,134 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                             ),
                             const SizedBox(width: 16),
 
-                            Row(
-                              children: [
-                                // ---------- Theme Toggle Switch ----------
-                                Row(
+                            Flexible(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(
-                                      themeProvider.isDarkMode
-                                          ? Icons.dark_mode
-                                          : Icons.light_mode,
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.amber
-                                          : Colors.grey.shade700,
-                                      size: 20,
+                                    // ---------- Theme Toggle Switch ----------
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          themeProvider.isDarkMode
+                                              ? Icons.dark_mode
+                                              : Icons.light_mode,
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.amber
+                                              : Colors.grey.shade700,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Switch(
+                                          value: themeProvider.isDarkMode,
+                                          onChanged: (value) {
+                                            themeProvider.toggleTheme();
+                                          },
+                                          activeThumbColor: Colors.redAccent,
+                                          inactiveTrackColor:
+                                              Colors.grey.shade400,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(width: 12),
+
+                                    // ---------- Analytics Icon ----------
+                                    IconButton(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                              builder: (context) =>
+                                                  RecruitmentPipelinePage(
+                                                      token: widget.token)),
+                                        );
+                                      },
+                                      icon: Image.asset(
+                                        // Changed from Icon to Image.asset
+                                        'assets/icons/data-analytics.png',
+                                        width: 24,
+                                        height: 24,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                      tooltip: "Analytics Dashboard",
                                     ),
                                     const SizedBox(width: 8),
-                                    Switch(
-                                      value: themeProvider.isDarkMode,
-                                      onChanged: (value) {
-                                        themeProvider.toggleTheme();
+
+                                    // ---------- Team Collaboration Icon ----------
+                                    IconButton(
+                                      onPressed: () => setState(() =>
+                                          currentScreen = "team_collaboration"),
+                                      icon: Image.asset(
+                                        // Changed from Icon to Image.asset
+                                        'assets/icons/teamC.png',
+                                        width: 34,
+                                        height: 34,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                      tooltip: "Team Collaboration",
+                                    ),
+                                    const SizedBox(width: 8),
+
+                                    TextButton.icon(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                              builder: (context) =>
+                                                  AdminOfferListScreen()),
+                                        );
                                       },
-                                      activeThumbColor: Colors.redAccent,
-                                      inactiveTrackColor: Colors.grey.shade400,
+                                      icon: Image.asset(
+                                        'assets/icons/add.png',
+                                        width: 30,
+                                        height: 30,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                      label: Text(
+                                        "Create",
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.white
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    IconButton(
+                                      onPressed: () => setState(() =>
+                                          currentScreen = "notifications"),
+                                      icon: Image.asset(
+                                        // Changed from Icon to Image.asset
+                                        'assets/icons/notification.png',
+                                        width: 45,
+                                        height: 45,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    GestureDetector(
+                                      onTap: () {
+                                        context.push(
+                                            '/profile?token=${widget.token}');
+                                      },
+                                      onLongPress: _pickProfileImage,
+                                      child: CircleAvatar(
+                                        radius: 18,
+                                        backgroundColor: Colors.grey.shade200,
+                                        backgroundImage:
+                                            _getProfileImageProvider(),
+                                        child: null,
+                                      ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(width: 12),
-
-                                // ---------- Analytics Icon ----------
-                                IconButton(
-                                  onPressed: () {
-                                    context.push(
-                                      '/hiring-manager-pipeline?token=${Uri.encodeComponent(widget.token)}',
-                                    );
-                                  },
-                                  icon: Image.asset(
-                                    // Changed from Icon to Image.asset
-                                    'assets/icons/data-analytics.png',
-                                    width: 24,
-                                    height: 24,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                  tooltip: "Analytics Dashboard",
-                                ),
-                                const SizedBox(width: 8),
-
-                                // ---------- Power BI Status Icon ----------
-                                Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: powerBIConnected
-                                        ? Colors.green
-                                        : Colors.red,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: powerBIConnected
-                                            ? Colors.green
-                                                .withValues(alpha: 0.6)
-                                            : Colors.red.withValues(alpha: 0.6),
-                                        blurRadius: 12,
-                                        spreadRadius: 2,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Center(
-                                    child: checkingPowerBI
-                                        ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Icon(Icons.bar_chart,
-                                            color: Colors.white, size: 20),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-
-                                // ---------- Team Collaboration Icon ----------
-                                IconButton(
-                                  onPressed: () => setState(() =>
-                                      currentScreen = "team_collaboration"),
-                                  icon: Image.asset(
-                                    // Changed from Icon to Image.asset
-                                    'assets/icons/teamC.png',
-                                    width: 34,
-                                    height: 34,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                  tooltip: "Team Collaboration",
-                                ),
-                                const SizedBox(width: 8),
-
-                                TextButton.icon(
-                                  onPressed: () {
-                                    context.push('/hiring-manager-offers');
-                                  },
-                                  icon: Image.asset(
-                                    'assets/icons/add.png',
-                                    width: 30,
-                                    height: 30,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                  label: Text(
-                                    "Create",
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                IconButton(
-                                  onPressed: () => setState(
-                                      () => currentScreen = "notifications"),
-                                  icon: Image.asset(
-                                    // Changed from Icon to Image.asset
-                                    'assets/icons/notification.png',
-                                    width: 45,
-                                    height: 45,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                GestureDetector(
-                                  onTap: () {
-                                    context
-                                        .push('/profile?token=${widget.token}');
-                                  },
-                                  child: CircleAvatar(
-                                    radius: 18,
-                                    backgroundColor: Colors.grey.shade200,
-                                    backgroundImage: _getProfileImageProvider(),
-                                    child: null,
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
                           ],
                         ),
@@ -889,34 +1213,46 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
     final stats = [
       {
-        "title": "Jobs",
+        "title": "Total Jobs",
         "count": jobsCount,
+        "subtitle": "$activeJobs active",
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/jobs.png" // or .svg if using SVG
+        "icon": "assets/icons/jobs.png"
       },
       {
         "title": "Candidates",
         "count": candidatesCount,
+        "subtitle": "${candidatesWithCV} with CV",
         "color": const Color.fromARGB(255, 193, 13, 0),
         "icon": "assets/icons/candidates.png"
       },
       {
         "title": "Interviews",
         "count": interviewsCount,
+        "subtitle": "$upcomingInterviews upcoming",
         "color": const Color.fromARGB(255, 193, 13, 0),
         "icon": "assets/icons/interview.png"
       },
       {
-        "title": "CV Reviews",
+        "title": "Applications",
         "count": cvReviewsCount,
+        "subtitle": "$newApplicationsWeek this week",
         "color": const Color.fromARGB(255, 193, 13, 0),
         "icon": "assets/icons/review.png"
       },
       {
-        "title": "Audits",
-        "count": auditsCount,
+        "title": "Offers",
+        "count": offeredApplications,
+        "subtitle": "$acceptedOffers accepted",
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/audit.png"
+        "icon": "assets/icons/offer.png"
+      },
+      {
+        "title": "Assessments",
+        "count": candidatesWithAssessments,
+        "subtitle": "Completed",
+        "color": const Color.fromARGB(255, 193, 13, 0),
+        "icon": "assets/icons/assessment.png"
       },
     ];
 
@@ -939,8 +1275,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 6),
-            Text("Welcome Back, Admin",
+            const SizedBox(height: 8),
+            Text("Welcome Back, $userName",
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 28,
@@ -980,10 +1316,12 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                       ],
                     ),
                     child: kpiCard(
-                        item["title"].toString(),
-                        item["count"] as int,
-                        item["color"] as Color,
-                        item["icon"] as String),
+                      item["title"].toString(),
+                      item["count"] as int,
+                      item["color"] as Color,
+                      item["icon"] as String,
+                      item["subtitle"] as String?,
+                    ),
                   );
                 },
               ),
@@ -1055,7 +1393,97 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
                   const SizedBox(height: 16),
 
-                  // Row 3
+                  // Row 3 - Additional Analytics
+                  if (crossAxisCount == 2)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                            child: skillsData.isNotEmpty
+                                ? stylishBarChartCard("Top Skills", skillsData,
+                                    const Color.fromARGB(255, 193, 13, 0))
+                                : stylishBarChartCard("Top Skills", [],
+                                    const Color.fromARGB(255, 193, 13, 0))),
+                        const SizedBox(width: 16),
+                        Expanded(
+                            child: experienceData.isNotEmpty
+                                ? stylishBarChartCard(
+                                    "Experience Distribution",
+                                    experienceData,
+                                    const Color.fromARGB(255, 193, 13, 0))
+                                : stylishBarChartCard("Experience Distribution",
+                                    [], const Color.fromARGB(255, 193, 13, 0))),
+                      ],
+                    )
+                  else
+                    Column(
+                      children: [
+                        skillsData.isNotEmpty
+                            ? stylishBarChartCard("Top Skills", skillsData,
+                                const Color.fromARGB(255, 193, 13, 0))
+                            : stylishBarChartCard("Top Skills", [],
+                                const Color.fromARGB(255, 193, 13, 0)),
+                        const SizedBox(height: 16),
+                        experienceData.isNotEmpty
+                            ? stylishBarChartCard(
+                                "Experience Distribution",
+                                experienceData,
+                                const Color.fromARGB(255, 193, 13, 0))
+                            : stylishBarChartCard("Experience Distribution", [],
+                                const Color.fromARGB(255, 193, 13, 0)),
+                      ],
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // Row 4
+                  if (crossAxisCount == 2)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                            child: cvScreeningData.isNotEmpty
+                                ? stylishLineChartCard(
+                                    "CV Screening Trends",
+                                    cvScreeningData,
+                                    const Color.fromARGB(255, 193, 13, 0))
+                                : stylishLineChartCard("CV Screening Trends",
+                                    [], const Color.fromARGB(255, 193, 13, 0))),
+                        const SizedBox(width: 16),
+                        Expanded(
+                            child: assessmentData.isNotEmpty
+                                ? stylishLineChartCard(
+                                    "Assessment Pass Rates",
+                                    assessmentData,
+                                    const Color.fromARGB(255, 193, 13, 0))
+                                : stylishLineChartCard("Assessment Pass Rates",
+                                    [], const Color.fromARGB(255, 193, 13, 0))),
+                      ],
+                    )
+                  else
+                    Column(
+                      children: [
+                        cvScreeningData.isNotEmpty
+                            ? stylishLineChartCard(
+                                "CV Screening Trends",
+                                cvScreeningData,
+                                const Color.fromARGB(255, 193, 13, 0))
+                            : stylishLineChartCard("CV Screening Trends", [],
+                                const Color.fromARGB(255, 193, 13, 0)),
+                        const SizedBox(height: 16),
+                        assessmentData.isNotEmpty
+                            ? stylishLineChartCard(
+                                "Assessment Pass Rates",
+                                assessmentData,
+                                const Color.fromARGB(255, 193, 13, 0))
+                            : stylishLineChartCard("Assessment Pass Rates", [],
+                                const Color.fromARGB(255, 193, 13, 0)),
+                      ],
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // Row 5 - Original Row 3
                   if (crossAxisCount == 2)
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1959,7 +2387,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    "Today's Date",
+                    "Calendar",
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
@@ -1993,47 +2421,38 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Container(
-            height: 110,
-            decoration: BoxDecoration(
-              color: (themeProvider.isDarkMode
-                      ? const Color(0xFF14131E)
-                      : Colors.white)
-                  .withValues(alpha: 0.9),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Center(
+          const SizedBox(height: 16),
+          Expanded(
+            child: Container(
+              height: 400,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    DateTime.now().day.toString(),
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.blueAccent,
-                      height: 1.0,
-                    ),
+                    "Interview Calendar",
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    DateFormat('MMMM yyyy').format(DateTime.now()),
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: themeProvider.isDarkMode
-                          ? Colors.grey.shade300
-                          : Colors.grey.shade700,
+                  const SizedBox(height: 16),
+                  Container(
+                    height: 300,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Center(
+                      child: Text('Calendar functionality coming soon'),
                     ),
                   ),
                 ],
@@ -2045,7 +2464,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     );
   }
 
-  Widget kpiCard(String title, int count, Color color, String iconPath) {
+  Widget kpiCard(String title, int count, Color color, String iconPath,
+      [String? subtitle]) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
@@ -2122,10 +2542,35 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               fontWeight: FontWeight.w500,
             ),
           ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade500
+                    : Colors.grey.shade500,
+                fontSize: 11,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+class StackedLineData {
+  final String month;
+  final int login;
+  final int logout;
+  final int create;
+  final int update;
+  final int delete;
+  StackedLineData(this.month, this.login, this.logout, this.create, this.update,
+      this.delete);
 }
 
 class _ChartData {

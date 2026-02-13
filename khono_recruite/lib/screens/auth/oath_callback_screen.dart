@@ -27,8 +27,19 @@ class _OAuthCallbackScreenState extends State<OAuthCallbackScreen> {
     final role = uri.queryParameters['role'];
 
     if (accessToken != null && role != null) {
-      // Store tokens securely
+      // Store tokens securely (also persists to SharedPreferences)
       await AuthService.storeTokens(accessToken, refreshToken, role);
+
+      // Fetch and store user info for WebSocket/user ID lookup
+      try {
+        final userProfile = await AuthService.getUserProfile(accessToken);
+        final user = userProfile['user'] ?? userProfile;
+        if (user is Map<String, dynamic>) {
+          await AuthService.saveUserInfo(user);
+        }
+      } catch (_) {
+        // Best-effort: proceed without blocking navigation
+      }
 
       if (!mounted) return;
 

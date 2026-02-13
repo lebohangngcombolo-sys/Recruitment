@@ -192,6 +192,8 @@ def init_auth_routes(app):
     @limiter.limit("10 per minute")
     def google_login():
         try:
+            if not current_app.config.get("GOOGLE_CLIENT_ID") or not current_app.config.get("GOOGLE_CLIENT_SECRET"):
+                return jsonify({"error": "Google OAuth not configured"}), 500
             redirect_uri = url_for("google_callback", _external=True)
             # For Flutter Web, navigate in same tab
             return oauth.google.authorize_redirect(redirect_uri)
@@ -203,6 +205,8 @@ def init_auth_routes(app):
     @limiter.limit("10 per minute")
     def google_callback():
         try:
+            if not current_app.config.get("GOOGLE_CLIENT_ID") or not current_app.config.get("GOOGLE_CLIENT_SECRET"):
+                return jsonify({"error": "Google OAuth not configured"}), 500
             oauth.google.authorize_access_token()
             user_info = oauth.google.get(OAUTH_PROVIDERS["google"]["userinfo"]["url"]).json()
         
@@ -219,6 +223,8 @@ def init_auth_routes(app):
     @limiter.limit("10 per minute")
     def github_login():
         try:
+            if not current_app.config.get("GITHUB_CLIENT_ID") or not current_app.config.get("GITHUB_CLIENT_SECRET"):
+                return jsonify({"error": "GitHub OAuth not configured"}), 500
             redirect_uri = url_for("github_callback", _external=True)
             return oauth.github.authorize_redirect(redirect_uri)
         except Exception as e:
@@ -229,6 +235,8 @@ def init_auth_routes(app):
     @limiter.limit("10 per minute")
     def github_callback():
         try:
+            if not current_app.config.get("GITHUB_CLIENT_ID") or not current_app.config.get("GITHUB_CLIENT_SECRET"):
+                return jsonify({"error": "GitHub OAuth not configured"}), 500
             oauth.github.authorize_access_token()
             user_info = oauth.github.get(OAUTH_PROVIDERS["github"]["userinfo"]["url"]).json()
             if not user_info.get("email"):
