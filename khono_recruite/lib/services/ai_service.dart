@@ -1,17 +1,15 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:firebase_ai/firebase_ai.dart';
 
 class AIService {
-  static late GenerativeModel _generativeModel;
   static const String _openRouterApiKey =
       "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";
   static const String _openRouterModel = "openai/gpt-4o-mini";
   static const String _deepseekApiKey = "sk-e2731f1bc9f44e8dba5cfae851a21fd9";
 
   static void initialize() {
-    _generativeModel =
-        FirebaseAI.googleAI().generativeModel(model: 'gemini-2.5-flash');
+    // AI Service is ready to use with HTTP calls
+    print("AI Service initialized with HTTP-based models");
   }
 
   static Future<Map<String, dynamic>> generateJobDetails(
@@ -19,15 +17,7 @@ class AIService {
     const maxRetries = 2; // Reduced retries since we have multiple models
     const baseDelay = Duration(seconds: 1);
 
-    // Try Gemini first
-    try {
-      final result = await _tryGemini(jobTitle, maxRetries, baseDelay);
-      return _ensureAllFieldsFilled(result, jobTitle);
-    } catch (e) {
-      print("Gemini failed: $e");
-    }
-
-    // Fallback to OpenRouter
+    // Try OpenRouter first
     try {
       final result = await _tryOpenRouter(jobTitle, maxRetries, baseDelay);
       return _ensureAllFieldsFilled(result, jobTitle);
@@ -294,16 +284,7 @@ class AIService {
     const maxRetries = 2;
     const baseDelay = Duration(seconds: 1);
 
-    // Try Gemini first
-    try {
-      final result = await _tryGenerateQuestionsGemini(
-          jobTitle, difficulty, questionCount, maxRetries, baseDelay);
-      return result;
-    } catch (e) {
-      print("Gemini questions failed: $e");
-    }
-
-    // Fallback to OpenRouter
+    // Try OpenRouter first
     try {
       final result = await _tryGenerateQuestionsOpenRouter(
           jobTitle, difficulty, questionCount, maxRetries, baseDelay);
@@ -323,77 +304,6 @@ class AIService {
 
     // If all models fail, return fallback questions
     return _getFallbackAssessmentQuestions(jobTitle, difficulty, questionCount);
-  }
-
-  static Future<List<Map<String, dynamic>>> _tryGenerateQuestionsGemini(
-      String jobTitle,
-      String difficulty,
-      int questionCount,
-      int maxRetries,
-      Duration baseDelay) async {
-    for (int attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        final prompt = '''
-        Generate $questionCount assessment questions for a "$jobTitle" position with $difficulty difficulty level.
-        
-        Return the response in JSON format with this structure:
-        {
-          "questions": [
-            {
-              "question": "Clear, specific question text",
-              "options": ["Option A", "Option B", "Option C", "Option D"],
-              "answer": 2,
-              "weight": 1
-            }
-          ]
-        }
-        
-        Requirements:
-        - Questions should be relevant to the job role
-        - Difficulty level: $difficulty (easy, medium, or hard)
-        - Each question must have exactly 4 options
-        - "answer" field should be the index (0-3) of the correct option
-        - Questions should test practical knowledge and skills
-        - Make questions specific to $jobTitle responsibilities
-        
-        Make sure the response is valid JSON.
-      ''';
-
-        final response =
-            await _generativeModel.generateContent([Content.text(prompt)]);
-        final responseText = response.text?.trim();
-
-        if (responseText == null || responseText.isEmpty) {
-          throw Exception('Empty response from Gemini');
-        }
-
-        // Try to parse JSON response
-        try {
-          final jsonStart = responseText.indexOf('{');
-          final jsonEnd = responseText.lastIndexOf('}') + 1;
-
-          if (jsonStart == -1 || jsonEnd == 0) {
-            throw Exception('No JSON found in Gemini response');
-          }
-
-          final jsonStr = responseText.substring(jsonStart, jsonEnd);
-          final Map<String, dynamic> data = await _parseJson(jsonStr);
-
-          return List<Map<String, dynamic>>.from(data['questions'] ?? []);
-        } catch (e) {
-          throw Exception('Failed to parse Gemini response: $e');
-        }
-      } catch (e) {
-        if (attempt == maxRetries) {
-          throw Exception(
-              'Gemini failed after $maxRetries attempts. Last error: $e');
-        }
-
-        await Future.delayed(baseDelay);
-      }
-    }
-
-    throw Exception('Gemini: Unexpected error');
   }
 
   static Future<List<Map<String, dynamic>>> _tryGenerateQuestionsOpenRouter(
@@ -639,93 +549,6 @@ class AIService {
     }
 
     return baseQuestions.take(questionCount).toList();
-  }
-
-  static Future<Map<String, dynamic>> _tryGemini(
-      String jobTitle, int maxRetries, Duration baseDelay) async {
-    for (int attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        final prompt = '''
-        Based on the job title "$jobTitle", generate comprehensive job details in JSON format with the following structure:
-        {
-          "description": "Detailed job description (2-3 paragraphs) that clearly explains the role, its purpose, and what the candidate will be doing day-to-day",
-          "responsibilities": ["List of 5-7 specific, actionable key responsibilities as separate string items in the array"],
-          "qualifications": ["List of 5-7 required qualifications including education, experience, and specific skills"],
-          "company_details": "Professional company overview (2-3 sentences) that describes the company culture, mission, and what makes it an attractive workplace",
-          "category": "One of: Engineering, Marketing, Sales, HR, Finance, Operations, Customer Service, Product, Design, Data Science",
-          "required_skills": ["List of 5-8 technical/professional skills that are essential for this role"],
-          "min_experience": "Minimum years of experience as a number (0-15+)"
-        }
-        
-        IMPORTANT FORMATTING INSTRUCTIONS:
-        - Responsibilities MUST be an array of separate strings, each representing one bullet point
-        - Do NOT combine responsibilities into a single paragraph
-        - Each responsibility should be a complete, actionable statement starting with a verb
-        - Example format: ["Lead development projects", "Design scalable solutions", "Mentor junior developers"]
-        
-        Guidelines:
-        - Make the description compelling and detailed
-        - Responsibilities should be specific, measurable, and formatted as separate bullet points
-        - Qualifications should be realistic but selective
-        - Company details should be professional and appealing
-        - Choose the most appropriate category
-        - Skills should be current and relevant
-        - Experience should match the seniority level of the role
-        
-        Make sure the response is valid JSON and all fields are filled appropriately for the job title.
-      ''';
-
-        final response =
-            await _generativeModel.generateContent([Content.text(prompt)]);
-        final responseText = response.text?.trim();
-
-        if (responseText == null || responseText.isEmpty) {
-          throw Exception('Empty response from Gemini');
-        }
-
-        // Try to parse JSON response
-        try {
-          final jsonStart = responseText.indexOf('{');
-          final jsonEnd = responseText.lastIndexOf('}') + 1;
-
-          if (jsonStart == -1 || jsonEnd == 0) {
-            throw Exception('No JSON found in Gemini response');
-          }
-
-          final jsonStr = responseText.substring(jsonStart, jsonEnd);
-          final Map<String, dynamic> jobDetails = await _parseJson(jsonStr);
-
-          return jobDetails;
-        } catch (e) {
-          // Fallback to manual parsing if JSON parsing fails
-          return _parseManually(responseText);
-        }
-      } catch (e) {
-        // Check if it's a quota/rate limit error
-        final errorMessage = e.toString().toLowerCase();
-        final isQuotaError = errorMessage.contains('quota') ||
-            errorMessage.contains('rate limit') ||
-            errorMessage.contains('too many requests') ||
-            errorMessage.contains('resource exhausted');
-
-        if (attempt == maxRetries) {
-          throw Exception(
-              'Gemini failed after $maxRetries attempts. Last error: $e');
-        }
-
-        if (isQuotaError) {
-          // Exponential backoff for quota errors
-          final delaySeconds = baseDelay.inSeconds * (attempt * attempt);
-          await Future.delayed(Duration(seconds: delaySeconds));
-          continue;
-        } else {
-          // For non-quota errors, don't retry
-          throw Exception('Gemini failed: $e');
-        }
-      }
-    }
-
-    throw Exception('Gemini: Unexpected error');
   }
 
   static Future<Map<String, dynamic>> _tryOpenRouter(

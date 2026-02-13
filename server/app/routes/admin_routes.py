@@ -5,7 +5,6 @@ from app.models import User, Requisition, Candidate, Application, AssessmentResu
 from datetime import datetime, timedelta
 from app.utils.decorators import role_required
 from app.services.email_service import EmailService
-from app.services.audit_service import AuditService
 from app.services.audit2 import AuditService
 from flask_cors import cross_origin
 from sqlalchemy import func, and_, or_
@@ -706,9 +705,19 @@ def shortlist_candidates(job_id):
         assessment_score = app.assessment_score or 0
 
         try:
+            weightings = job.weightings or {
+                "cv": 60,
+                "assessment": 40,
+                "interview": 0,
+                "references": 0
+            }
+            interview_score = app.interview_feedback_score or 0
+            references_score = 0
             overall = (
-                (cv_score * job.weightings.get("cv", 60) / 100) +
-                (assessment_score * job.weightings.get("assessment", 40) / 100)
+                (cv_score * weightings.get("cv", 0) / 100) +
+                (assessment_score * weightings.get("assessment", 0) / 100) +
+                (interview_score * weightings.get("interview", 0) / 100) +
+                (references_score * weightings.get("references", 0) / 100)
             )
         except Exception:
             overall = 0
@@ -919,12 +928,64 @@ def list_audits():
 @role_required(["admin", "hiring_manager"])
 def dashboard_counts():
     try:
+        # Basic counts
+        total_jobs = Requisition.query.count()
+        total_candidates = Candidate.query.count()
+        total_applications = Application.query.count()
+        total_interviews = Interview.query.count()
+        total_audits = AuditLog.query.count()
+        
+        # Enhanced candidate statistics
+        active_jobs = Requisition.query.filter_by(is_active=True).count()
+        candidates_with_cv = Candidate.query.filter(Candidate.cv_url.isnot(None)).count()
+        candidates_with_assessments = db.session.query(AssessmentResult.candidate_id).distinct().count()
+        
+        # Application status breakdown
+        application_statuses = db.session.query(
+            Application.status,
+            func.count(Application.id)
+        ).group_by(Application.status).all()
+        
+        status_breakdown = {status: count for status, count in application_statuses}
+        
+        # Interview statistics
+        completed_interviews = Interview.query.filter_by(status='completed').count()
+        scheduled_interviews = Interview.query.filter_by(status='scheduled').count()
+        upcoming_interviews = Interview.query.filter(
+            Interview.scheduled_time > datetime.utcnow(),
+            Interview.status.in_(['scheduled', 'confirmed'])
+        ).count()
+        
+        # Recent activity (last 7 days)
+        week_ago = datetime.utcnow() - timedelta(days=7)
+        new_applications_week = Application.query.filter(Application.created_at >= week_ago).count()
+        new_interviews_week = Interview.query.filter(Interview.created_at >= week_ago).count()
+        
+        # Offer statistics
+        offered_applications = Application.query.filter_by(status='recommended').count()
+        accepted_offers = Application.query.filter_by(status='offered_accepted').count()
+        
         counts = {
-            "jobs": Requisition.query.count(),
-            "candidates": Candidate.query.count(),
-            "cv_reviews": Application.query.count(),
-            "audits": AuditLog.query.count(),
-            "interviews": Interview.query.count()
+            "jobs": total_jobs,
+            "candidates": total_candidates,
+            "cv_reviews": total_applications,
+            "audits": total_audits,
+            "interviews": total_interviews,
+            # Enhanced metrics
+            "active_jobs": active_jobs,
+            "candidates_with_cv": candidates_with_cv,
+            "candidates_with_assessments": candidates_with_assessments,
+            "completed_interviews": completed_interviews,
+            "scheduled_interviews": scheduled_interviews,
+            "upcoming_interviews": upcoming_interviews,
+            "offered_applications": offered_applications,
+            "accepted_offers": accepted_offers,
+            # Breakdowns
+            "application_status_breakdown": status_breakdown,
+            "recent_activity": {
+                "new_applications": new_applications_week,
+                "new_interviews": new_interviews_week,
+            }
         }
         return jsonify(counts), 200
     except Exception as e:

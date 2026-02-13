@@ -224,8 +224,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                                   color: Colors.grey.shade600,
                                 ),
                                 onPressed: () {
-                                  setState(() =>
-                                      _obscureNewPassword = !_obscureNewPassword);
+                                  setState(() => _obscureNewPassword =
+                                      !_obscureNewPassword);
                                 },
                               ),
                             ),

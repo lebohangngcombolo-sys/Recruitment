@@ -34,9 +34,17 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     });
 
     try {
-      final data = await admin.shortlistCandidates(widget.jobId);
-      final List<Map<String, dynamic>> fetched =
-          List<Map<String, dynamic>>.from(data);
+      final List<Map<String, dynamic>> fetched;
+
+      if (widget.jobId <= 0) {
+        // Fetch all candidates when no job is selected
+        final data = await admin.listCandidates();
+        fetched = List<Map<String, dynamic>>.from(data);
+      } else {
+        // Fetch shortlisted candidates for specific job
+        final data = await admin.shortlistCandidates(widget.jobId);
+        fetched = List<Map<String, dynamic>>.from(data);
+      }
 
       fetched.sort((a, b) {
         final aScore = a['overall_score'] ?? 0;
@@ -46,7 +54,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
 
       setState(() => candidates = fetched);
     } catch (e) {
-      debugPrint("Error fetching shortlist: $e");
+      debugPrint("Error fetching candidates: $e");
       setState(() => errorMessage = "Failed to load candidates: $e");
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error: $e")));

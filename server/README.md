@@ -9,6 +9,17 @@ for Python backend: cd server
                   : pip install -r requirements.txt
                   : python run.py
 
+Render deployment (recommended):
+1) Use the repo root `render.yaml` (Render Blueprint) to create:
+   - recruitment-api (web)
+   - recruitment-worker (celery)
+   - recruitment-web (static)
+2) Fill env vars in Render using `render.env.template` as a local guide.
+3) Health check endpoint: GET /api/public/healthz
+4) Production Gunicorn settings are read from:
+   GUNICORN_WORKERS, GUNICORN_TIMEOUT, GUNICORN_GRACEFUL_TIMEOUT, GUNICORN_KEEPALIVE
+   (defaults are set in server/render_start.sh)
+
 Run migration press Ctrl + C to stop the terminal  
 
               Run : flask db init

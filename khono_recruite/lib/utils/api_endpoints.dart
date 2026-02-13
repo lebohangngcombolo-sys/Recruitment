@@ -50,7 +50,7 @@ class ApiEndpoints {
   static const String parserCV = "$authBase/cv/parse"; // POST Multipart
 
   // ------------------- Public (no auth) -------------------
-  static const publicBase = "http://127.0.0.1:5001/api/public";
+  static const publicBase = "http://127.0.0.1:5000/api/public";
   static const getPublicJobs = "$publicBase/jobs";
 
   // ------------------- Candidate -------------------

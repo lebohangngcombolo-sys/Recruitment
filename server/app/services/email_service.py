@@ -123,12 +123,13 @@ class EmailService:
         def send_email(app, subject, recipients, html_body, text_body):
             with app.app_context():
                 try:
+                    sender = app.config.get('MAIL_DEFAULT_SENDER') or app.config.get('MAIL_USERNAME')
                     msg = Message(
                         subject=subject,
                         recipients=recipients,
                         html=html_body,
                         body=text_body or "",
-                        sender=app.config['MAIL_USERNAME']
+                        sender=sender
                     )
                     mail.send(msg)
                 except Exception as e:

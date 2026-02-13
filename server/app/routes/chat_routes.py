@@ -7,12 +7,21 @@ from app.models import db, ChatThread
 
 chat_bp = Blueprint('chat', __name__)
 
+def _get_user_id():
+    user_id = get_jwt_identity()
+    try:
+        return int(user_id)
+    except (TypeError, ValueError):
+        return None
+
 @chat_bp.route('/threads', methods=['GET'])
 @jwt_required()
 def get_threads():
     """Get all chat threads for current user"""
     try:
-        user_id = get_jwt_identity()
+        user_id = _get_user_id()
+        if user_id is None:
+            return jsonify({'success': False, 'error': 'Invalid user identity'}), 401
         entity_type = request.args.get('entity_type')
         entity_id = request.args.get('entity_id')
         
@@ -30,7 +39,9 @@ def get_threads():
 def create_thread():
     """Create a new chat thread"""
     try:
-        user_id = get_jwt_identity()
+        user_id = _get_user_id()
+        if user_id is None:
+            return jsonify({'success': False, 'error': 'Invalid user identity'}), 401
         data = request.get_json()
         
         if not data or 'title' not in data or 'participant_ids' not in data:
@@ -62,7 +73,9 @@ def create_thread():
 def get_thread(thread_id):
     """Get specific thread details"""
     try:
-        user_id = get_jwt_identity()
+        user_id = _get_user_id()
+        if user_id is None:
+            return jsonify({'success': False, 'error': 'Invalid user identity'}), 401
         
         thread = ChatThread.query.get_or_404(thread_id)
         
@@ -84,7 +97,9 @@ def get_thread(thread_id):
 def get_messages(thread_id):
     """Get message history for a thread"""
     try:
-        user_id = get_jwt_identity()
+        user_id = _get_user_id()
+        if user_id is None:
+            return jsonify({'success': False, 'error': 'Invalid user identity'}), 401
         
         limit = min(int(request.args.get('limit', 50)), 100)
         before = request.args.get('before')
@@ -117,18 +132,28 @@ def get_messages(thread_id):
 def send_message(thread_id):
     """Send a new message"""
     try:
-        user_id = get_jwt_identity()
+        user_id = _get_user_id()
+        if user_id is None:
+            return jsonify({'success': False, 'error': 'Invalid user identity'}), 401
         data = request.get_json()
         
         if not data or 'content' not in data:
             return jsonify({'success': False, 'error': 'Content is required'}), 400
         
+        parent_message_id = data.get('parent_message_id')
+        if parent_message_id is not None:
+            try:
+                parent_message_id = int(parent_message_id)
+            except (ValueError, TypeError):
+                return jsonify({'success': False, 'error': 'Invalid parent message ID format'}), 400
+
         message = ChatService.send_message(
             thread_id=thread_id,
             sender_id=user_id,
             content=data['content'],
             message_type=data.get('message_type', 'text'),
-            metadata=data.get('metadata')
+            metadata=data.get('metadata'),
+            parent_message_id=parent_message_id
         )
         
         return jsonify({
@@ -146,7 +171,9 @@ def send_message(thread_id):
 def mark_as_read(thread_id):
     """Mark messages as read"""
     try:
-        user_id = get_jwt_identity()
+        user_id = _get_user_id()
+        if user_id is None:
+            return jsonify({'success': False, 'error': 'Invalid user identity'}), 401
         
         # Verify user has access to thread
         thread = ChatThread.query.get_or_404(thread_id)
@@ -182,7 +209,9 @@ def mark_as_read(thread_id):
 def search_messages():
     """Search messages across all chats"""
     try:
-        user_id = get_jwt_identity()
+        user_id = _get_user_id()
+        if user_id is None:
+            return jsonify({'success': False, 'error': 'Invalid user identity'}), 401
         query = request.args.get('q', '').strip()
         thread_id = request.args.get('thread_id')
         
@@ -208,7 +237,9 @@ def search_messages():
 def update_presence():
     """Update user presence status"""
     try:
-        user_id = get_jwt_identity()
+        user_id = _get_user_id()
+        if user_id is None:
+            return jsonify({'success': False, 'error': 'Invalid user identity'}), 401
         data = request.get_json()
         
         if not data or 'status' not in data:
@@ -232,7 +263,9 @@ def update_presence():
 def get_entity_chat(entity_type, entity_id):
     """Get or create entity-specific chat thread"""
     try:
-        user_id = get_jwt_identity()
+        user_id = _get_user_id()
+        if user_id is None:
+            return jsonify({'success': False, 'error': 'Invalid user identity'}), 401
         
         thread = ChatService.get_or_create_entity_thread(
             entity_type=entity_type,

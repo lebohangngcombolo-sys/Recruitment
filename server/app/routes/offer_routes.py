@@ -157,12 +157,8 @@ def get_offers():
             return jsonify({"error": f"Invalid status: {status}"}), 400
 
     # Role-based filtering
-    current_user_role = get_jwt_identity()
-    if isinstance(current_user_role, str):
-        # Only the role string is returned from get_jwt_identity
-        role = current_user_role
-    else:
-        role = current_user_role.get("role", "")
+    claims = get_jwt()
+    role = claims.get("role", "")
 
     if role == "hiring_manager":
         query = query.filter_by(status=OfferStatus.DRAFT)

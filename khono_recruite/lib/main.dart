@@ -29,7 +29,6 @@ import 'screens/hiring_manager/offer_list_screen.dart';
 import 'providers/theme_provider.dart';
 import 'utils/theme_utils.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_ai/firebase_ai.dart'; // Import Firebase AI SDK
 import 'firebase_options.dart';
 import 'services/ai_service.dart';
 
@@ -39,13 +38,8 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Initialize Gemini 2.5 Flash model
-  final generativeModel =
-      FirebaseAI.googleAI().generativeModel(model: 'gemini-2.5-flash');
-
   // Initialize AI Service
   AIService.initialize();
-  // You can now pass 'generativeModel' to your widgets that need to interact with Gemini.
 
   // ⚡ Fix Flutter Web initial route handling
   setUrlStrategy(PathUrlStrategy());
@@ -54,8 +48,6 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        Provider<GenerativeModel>.value(
-            value: generativeModel), // Provide the generativeModel
       ],
       child: const KhonoRecruiteApp(),
     ),

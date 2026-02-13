@@ -91,9 +91,9 @@ class FindTalentPage extends StatelessWidget {
                         backgroundColor: strokeColor,
                         foregroundColor: Colors.white,
                         elevation: 2,
-                        shadowColor: Colors.black.withValues(alpha: 0.25),
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shadowColor: Colors.black.withOpacity(0.25),
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -119,8 +119,7 @@ class FindTalentPage extends StatelessWidget {
                       // Hero heading and subheading (scrolls with content)
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 60, vertical: 48),
+                        padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 48),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
@@ -158,8 +157,8 @@ class FindTalentPage extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: GridView.count(
-                                  shrinkWrap: true,
-                                  physics: NeverScrollableScrollPhysics(),
+                              shrinkWrap: true,
+                              physics: NeverScrollableScrollPhysics(),
                                   crossAxisCount: 2,
                                   mainAxisSpacing: 8,
                                   crossAxisSpacing: 8,
@@ -179,7 +178,7 @@ class FindTalentPage extends StatelessWidget {
                             SizedBox(width: 24),
                             Expanded(
                               flex: 1,
-                              child: Container(
+                                child: Container(
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(4),
                                 ),
@@ -187,8 +186,7 @@ class FindTalentPage extends StatelessWidget {
                                   padding: EdgeInsets.symmetric(
                                       horizontal: 24, vertical: 16),
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         'We Help To Get The Best Job And Find A Talent',
@@ -222,8 +220,8 @@ class FindTalentPage extends StatelessWidget {
                                           backgroundColor: strokeColor,
                                           foregroundColor: Colors.white,
                                           elevation: 2,
-                                          shadowColor: Colors.black
-                                              .withValues(alpha: 0.25),
+                                          shadowColor:
+                                              Colors.black.withOpacity(0.25),
                                           padding: EdgeInsets.symmetric(
                                               horizontal: 24, vertical: 14),
                                           shape: RoundedRectangleBorder(

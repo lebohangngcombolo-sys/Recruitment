@@ -1,3 +1,98 @@
-khono_recruite/android/app/automated-recruitment-workflow-firebase-adminsdk-fbsvc-f60d648f2b.json
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+myenv/
+env/
+ENV/
+.env
+.venv
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Database dumps
+*.dump
+*.sql
+*.bak
+
+# Your existing entries
+server/scripts/token.pickle
+server/token.pickle
+server/scripts/credentials.json
 server/automated-recruitment-workflow-firebase-adminsdk-fbsvc-13e956570a.json
-*.json
+
+# Flutter/Dart
+khono_recruite/build/
+khono_recruite/.dart_tool/
+khono_recruite/.flutter-plugins
+khono_recruite/.flutter-plugins-dependencies
+khono_recruite/pubspec.lock
+khono_recruite/.packages
+khono_recruite/android/app/build/
+khono_recruite/ios/build/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment files (keep .env.example)
+.env.local
+.env.development
+.env.test
+.env.production
+
+# IDE specific files beyond basics
+*.sublime-project
+*.sublime-workspace
+.vscode/settings.json
+.vscode/tasks.json
+.vscode/launch.json

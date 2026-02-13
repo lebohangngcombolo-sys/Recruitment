@@ -27,12 +27,14 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
     setState(() => loading = true);
     try {
       final data = await admin.listCVReviews();
+      if (!mounted) return;
       setState(() {
         cvReviews = List<Map<String, dynamic>>.from(data);
       });
     } catch (e) {
       debugPrint("Error fetching CV reviews: $e");
     } finally {
+      if (!mounted) return;
       setState(() => loading = false);
     }
   }

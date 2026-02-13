@@ -6,6 +6,11 @@ from app.routes.candidate_routes import _job_list_item
 public_bp = Blueprint("public_bp", __name__)
 
 
+@public_bp.route("/healthz", methods=["GET"])
+def healthz():
+    return jsonify({"status": "ok"}), 200
+
+
 @public_bp.route("/jobs", methods=["GET"])
 def get_public_jobs():
     """Return active job listings for explore category (no auth required)."""
