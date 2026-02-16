@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -216,7 +215,6 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                               textColor: Colors.black,
                               backgroundColor: Colors.white,
                               borderColor: Colors.grey.shade300,
-                              labelColor: Colors.white,
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _obscureNewPassword
@@ -225,8 +223,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                                   color: Colors.grey.shade600,
                                 ),
                                 onPressed: () {
-                                  setState(() =>
-                                      _obscureNewPassword = !_obscureNewPassword);
+                                  setState(() => _obscureNewPassword =
+                                      !_obscureNewPassword);
                                 },
                               ),
                             ),
@@ -240,7 +238,6 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                               textColor: Colors.black,
                               backgroundColor: Colors.white,
                               borderColor: Colors.grey.shade300,
-                              labelColor: Colors.white,
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _obscureConfirmPassword

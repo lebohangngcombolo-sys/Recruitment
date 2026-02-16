@@ -1,21 +1,21 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:go_router/go_router.dart';
 import 'dart:ui';
 import 'package:image_picker/image_picker.dart';
-import 'dart:async';
 import 'dart:io';
 
 // Import your existing services
 import 'job_details_page.dart';
 import 'assessments_results_screen.dart';
-import '../../screens/candidate/user_profile_page.dart';
-import 'jobs_applied_page.dart';
-import 'saved_application_screen.dart';
+import '../candidate/user_profile_page.dart';
+import '../auth/login_screen.dart';
 import '../../services/auth_service.dart';
+import '../../screens/candidate/jobs_applied_page.dart';
+import 'saved_application_screen.dart';
 import 'offers_screen.dart';
 
 class CandidateDashboard extends StatefulWidget {
