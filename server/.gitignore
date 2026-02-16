@@ -1,1 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+ 
+# Virtual Environment
+venv/
+myenv/
+env/
+ENV/
+.env
+.venv
+ 
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+ 
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+ 
+# Database
+*.dump
+*.sql
+*.bak
+*.db
+*.sqlite3
+ 
+# Logs
+*.log
+logs/
+ 
+# Secrets and credentials
 *.json
+*.pem
+*.key
+*.p12
+*.p8
+*.env
+.env.local
+.env.production
+token.pickle
+credentials.json
+firebase-adminsdk-*.json
+ 
+# Uploads and media
+uploads/
+media/
+static/
+ 
+# Cache
+.cache/
+.pytest_cache/
+ 
+# OS
+.DS_Store
+Thumbs.db
