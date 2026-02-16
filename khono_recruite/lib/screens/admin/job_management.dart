@@ -1209,11 +1209,15 @@ class _JobFormDialogState extends State<JobFormDialog>
         widget.job?['type']?.toString() ??
         "Full Time";
     if (!employmentTypes.contains(employmentType)) employmentType = "Full Time";
-    salaryRangeController.text =
-        widget.job?['salary_range']?.toString() ?? widget.job?['salary']?.toString() ?? '';
-    final deadline = widget.job?['application_deadline'] ?? widget.job?['deadline'];
+    salaryRangeController.text = widget.job?['salary_range']?.toString() ??
+        widget.job?['salary']?.toString() ??
+        '';
+    final deadline =
+        widget.job?['application_deadline'] ?? widget.job?['deadline'];
     applicationDeadlineController.text = deadline?.toString() ?? '';
-    bannerController.text = widget.job?['banner']?.toString() ?? widget.job?['company_logo']?.toString() ?? '';
+    bannerController.text = widget.job?['banner']?.toString() ??
+        widget.job?['company_logo']?.toString() ??
+        '';
 
     if (widget.job != null &&
         widget.job!['assessment_pack'] != null &&
@@ -1267,7 +1271,8 @@ class _JobFormDialogState extends State<JobFormDialog>
       'company_details': companyDetails.trim(),
       'category': category.trim(),
       'required_skills': skills,
-      'min_experience': double.tryParse(minExpController.text.toString().trim()) ?? 0,
+      'min_experience':
+          double.tryParse(minExpController.text.toString().trim()) ?? 0,
       'vacancy': 1,
       'weightings': {'cv': 60, 'assessment': 40},
       'company': company.trim(),
@@ -1275,7 +1280,9 @@ class _JobFormDialogState extends State<JobFormDialog>
       'employment_type': employmentType,
       'salary_range': salaryRangeController.text.trim(),
       'application_deadline': deadlineStr.isEmpty ? null : deadlineStr,
-      'banner': bannerController.text.trim().isEmpty ? null : bannerController.text.trim(),
+      'banner': bannerController.text.trim().isEmpty
+          ? null
+          : bannerController.text.trim(),
       'assessment_pack': {
         'questions': questions.map((q) {
           return {
@@ -1427,7 +1434,7 @@ class _JobFormDialogState extends State<JobFormDialog>
                             ),
                             const SizedBox(height: 16),
                             DropdownButtonFormField<String>(
-                              value: employmentType,
+                              initialValue: employmentType,
                               decoration: const InputDecoration(
                                 labelText: "Employment Type",
                                 border: OutlineInputBorder(),
@@ -1438,8 +1445,8 @@ class _JobFormDialogState extends State<JobFormDialog>
                                         child: Text(e),
                                       ))
                                   .toList(),
-                              onChanged: (v) =>
-                                  setState(() => employmentType = v ?? "Full Time"),
+                              onChanged: (v) => setState(
+                                  () => employmentType = v ?? "Full Time"),
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(

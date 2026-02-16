@@ -57,7 +57,8 @@ class _SupportChatPanelState extends State<SupportChatPanel> {
       if (!mounted) return;
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        final reply = data['reply'] as String? ?? "Thanks for your message. How else can we help?";
+        final reply = data['reply'] as String? ??
+            "Thanks for your message. How else can we help?";
         setState(() {
           _messages.add({'role': 'support', 'text': reply});
           _loading = false;
@@ -114,7 +115,7 @@ class _SupportChatPanelState extends State<SupportChatPanel> {
         border: Border.all(color: Colors.white10),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.35),
+            color: Colors.black.withValues(alpha: 0.35),
             blurRadius: 24,
             offset: const Offset(-4, 0),
           ),
@@ -170,7 +171,7 @@ class _SupportChatPanelState extends State<SupportChatPanel> {
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
+      decoration: BoxDecoration(
         color: Colors.black26,
         borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
       ),
@@ -233,7 +234,7 @@ class _SupportChatPanelState extends State<SupportChatPanel> {
               margin: const EdgeInsets.only(right: 8),
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
-                color: _accentRed.withOpacity(0.8),
+                color: _accentRed.withValues(alpha: 0.8),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.support_agent,
@@ -243,9 +244,8 @@ class _SupportChatPanelState extends State<SupportChatPanel> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: isUser
-                    ? _accentRed
-                    : Colors.white.withOpacity(0.08),
+                color:
+                    isUser ? _accentRed : Colors.white.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(14),
                   topRight: const Radius.circular(14),
@@ -253,7 +253,7 @@ class _SupportChatPanelState extends State<SupportChatPanel> {
                   bottomRight: Radius.circular(isUser ? 4 : 14),
                 ),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.1),
+                  color: Colors.white.withValues(alpha: 0.1),
                   width: 1,
                 ),
               ),
@@ -289,7 +289,7 @@ class _SupportChatPanelState extends State<SupportChatPanel> {
                 hintText: 'Type your message...',
                 hintStyle: GoogleFonts.poppins(color: Colors.white54),
                 filled: true,
-                fillColor: Colors.white.withOpacity(0.08),
+                fillColor: Colors.white.withValues(alpha: 0.08),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
                   borderSide: BorderSide.none,
