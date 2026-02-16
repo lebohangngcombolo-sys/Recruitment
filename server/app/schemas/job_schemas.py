@@ -234,7 +234,6 @@ class JobUpdateSchema(Schema):
     assessment_pack = fields.Dict()
     vacancy = fields.Int(validate=Range(min=1))
     is_active = fields.Bool()
-    employment_type = fields.Str()
 
     class Meta:
         unknown = EXCLUDE

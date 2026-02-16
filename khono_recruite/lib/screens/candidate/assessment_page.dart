@@ -24,13 +24,11 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   String? token;
 
-  // Enrollment-style Theme Colors
-  final Color _primaryDark = Colors.transparent; // Background
-  final Color _cardDark =
-      Colors.black.withValues(alpha: 0.55); // Card background
-  final Color _accentRed = const Color(0xFFC10D00); // Main red
-  final Color _textPrimary = Colors.white; // Main text
-  final Color _boxFillColor = const Color(0xFFF2F2F2).withValues(alpha: 0.2);
+  // Theme Colors
+  final Color _primaryDark = Colors.white; // Background
+  final Color _cardDark = Colors.white; // Card background
+  final Color _accentRed = Color(0xFFE53935); // Main red
+  final Color _textPrimary = Colors.black; // Main text
 
   @override
   void initState() {
@@ -218,6 +216,88 @@ class _AssessmentPageState extends State<AssessmentPage> {
     );
   }
 
+  Widget _buildQuestionCard(
+      BuildContext context, int index, String questionText, List options) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      decoration: BoxDecoration(
+        color: _cardDark,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _accentRed.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Q${index + 1}: $questionText",
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: _textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Column(
+              children: List.generate(options.length, (i) {
+                final optionLabel = ["A", "B", "C", "D"][i];
+                final optionText = options[i];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: _primaryDark.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: _accentRed.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        answers[index] = optionLabel;
+                      });
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Row(
+                        children: [
+                          Radio<String>(
+                            value: optionLabel,
+                            groupValue: answers[index],
+                            onChanged: (v) {
+                              if (v != null) {
+                                setState(() => answers[index] = v);
+                              }
+                            },
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              "$optionLabel. $optionText",
+                              style: TextStyle(color: _textPrimary),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) {
@@ -351,77 +431,8 @@ class _AssessmentPageState extends State<AssessmentPage> {
                     final String questionText =
                         q['question'] ?? "Question not available";
                     final List options = q['options'] ?? [];
-
-                    return Container(
-                      margin: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: _cardDark,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: _accentRed.withValues(alpha: 0.6),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "Q${index + 1}: $questionText",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: _textPrimary,
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            RadioGroup<String>(
-                              groupValue: answers[index],
-                              onChanged: (value) {
-                                if (value == null) return;
-                                setState(() {
-                                  answers[index] = value;
-                                });
-                              },
-                              child: Column(
-                                children: List.generate(options.length, (i) {
-                                  final optionLabel = ["A", "B", "C", "D"][i];
-                                  final optionText = options[i];
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    decoration: BoxDecoration(
-                                      color: _boxFillColor,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: _accentRed.withValues(alpha: 0.4),
-                                      ),
-                                    ),
-                                    child: RadioListTile<String>(
-                                      title: Text(
-                                        "$optionLabel. $optionText",
-                                        style: TextStyle(
-                                          color: _textPrimary,
-                                          fontFamily: 'Poppins',
-                                        ),
-                                      ),
-                                      value: optionLabel,
-                                    ),
-                                  );
-                                }),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
+                    return _buildQuestionCard(
+                        context, index, questionText, options);
                   },
                 ),
               ),

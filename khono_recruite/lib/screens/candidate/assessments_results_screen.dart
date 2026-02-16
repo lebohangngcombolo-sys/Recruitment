@@ -291,11 +291,11 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
               colors: passFail == "Pass"
                   ? [
                       _accentGreen.withValues(alpha: 0.1),
-                      _accentGreen.withValues(alpha: 0.05)
+                      _accentGreen.withValues(alpha: 0.05),
                     ]
                   : [
                       _accentRed.withValues(alpha: 0.1),
-                      _accentRed.withValues(alpha: 0.05)
+                      _accentRed.withValues(alpha: 0.05),
                     ],
             ),
             borderRadius: BorderRadius.circular(12),

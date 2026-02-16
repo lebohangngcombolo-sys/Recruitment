@@ -136,11 +136,23 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
           ),
 
           // Top bar: back arrow + logo only
+          // Top bar: back arrow + logo only
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Row(
                 children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back,
+                        color: Colors.white, size: 28),
+                    onPressed: () => context.go('/login'),
+                  ),
+                  const SizedBox(width: 12),
+                  Image.asset(
+                    "assets/icons/khono.png",
+                    height: 40,
+                    fit: BoxFit.contain,
+                  ),
                   IconButton(
                     icon: const Icon(Icons.arrow_back,
                         color: Colors.white, size: 28),
@@ -206,6 +218,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                             ),
                             const SizedBox(height: 24),
 
+                            // Password fields (white)
                             // Password fields (white)
                             CustomTextField(
                               label: "New Password",

@@ -26,6 +26,7 @@ class CandidateService {
   }
 
   // ----------------- GET AVAILABLE JOBS (authenticated) -----------------
+  // ----------------- GET AVAILABLE JOBS (authenticated) -----------------
   static Future<List<Map<String, dynamic>>> getAvailableJobs(
       String token) async {
     final response = await http.get(

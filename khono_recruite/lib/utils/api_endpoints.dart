@@ -1,19 +1,19 @@
 class ApiEndpoints {
   // ------------------- Base URLs -------------------
-  static const authBase = "http://127.0.0.1:5000/api/auth";
-  static const candidateBase = "http://127.0.0.1:5000/api/candidate";
-  static const adminBase = "http://127.0.0.1:5000/api/admin";
-  static const chatbotBase = "http://127.0.0.1:5000/api/chatbot";
-  static const hmBase = "http://127.0.0.1:5000/api/admin";
-  static const chatBase = "http://127.0.0.1:5000/api/chat";
-  static const analyticsBase = "http://127.0.0.1:5000/api/analytics";
+  static const authBase = "http://127.0.0.1:5001/api/auth";
+  static const candidateBase = "http://127.0.0.1:5001/api/candidate";
+  static const adminBase = "http://127.0.0.1:5001/api/admin";
+  static const chatbotBase = "http://127.0.0.1:5001/api/chatbot";
+  static const hmBase = "http://127.0.0.1:5001/api/admin";
+  static const chatBase = "http://127.0.0.1:5001/api/chat";
+  static const analyticsBase = "http://127.0.0.1:5001/api/analytics";
 
   // NEW: Offer management base URL (matches your Flask blueprint)
-  static const offerBase = "http://127.0.0.1:5000/api/offer";
+  static const offerBase = "http://127.0.0.1:5001/api/offer";
 
   // WebSocket URL (for real-time chat)
   static const webSocketUrl =
-      "ws://127.0.0.1:5000"; // Use wss:// for production with SSL
+      "ws://127.0.0.1:5001"; // Use wss:// for production with SSL
 
   // ------------------- Auth -------------------
   static const register = "$authBase/register";
@@ -50,7 +50,7 @@ class ApiEndpoints {
   static const String parserCV = "$authBase/cv/parse"; // POST Multipart
 
   // ------------------- Public (no auth) -------------------
-  static const publicBase = "http://127.0.0.1:5000/api/public";
+  static const publicBase = "http://127.0.0.1:5001/api/public";
   static const getPublicJobs = "$publicBase/jobs";
 
   // ------------------- Candidate -------------------

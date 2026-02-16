@@ -51,8 +51,7 @@ class JobService:
             )
             
             db.session.add(job)
-            # Ensure job.id is assigned before logging activity
-            db.session.flush()
+            db.session.flush()  # Assign job.id before logging (job_activity_logs.job_id NOT NULL)
             
             # Log activity (job.id is now set)
             JobService._log_activity(

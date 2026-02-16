@@ -8,7 +8,6 @@ import 'cv_reviews_screen.dart';
 import 'notifications_screen.dart';
 import 'job_management.dart';
 import 'interviews_list_screen.dart';
-import 'offer_list_screen.dart';
 import 'hm_analytics_page.dart';
 import 'hm_team_collaboration_page.dart';
 import 'package:http/http.dart' as http;
@@ -17,14 +16,12 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 import '../auth/login_screen.dart';
-import 'pipeline_page.dart';
 
 class HMMainDashboard extends StatefulWidget {
   final String token;
@@ -62,13 +59,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   late final AnimationController _sidebarAnimController;
   late final Animation<double> _sidebarWidthAnimation;
 
-  // --- Team Collaboration mock data (previously audits) ---
-  List<String> teamMessages = [
-    "John: Completed the candidate screening.",
-    "Mary: Scheduled interviews for next week.",
-    "Alex: Uploaded new CVs to review.",
-    "Lisa: Updated job descriptions.",
-  ];
+  // --- Chart Data ---
+  List<_ChartData> candidatePipelineData = [];
+  List<_ChartData> timeToFillData = [];
+  List<_ChartData> genderData = [];
+  List<_ChartData> ethnicityData = [];
+  List<_ChartData> sourcePerformanceData = [];
+  bool loadingChartData = true;
+
+  // Power BI status
+  bool powerBIConnected = false;
+  bool checkingPowerBI = true;
+  Timer? _statusTimer;
 
   // --- Audits ---
   List<Map<String, dynamic>> audits = [];
@@ -98,7 +100,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
   String _profileImageUrl = "";
-  final ImagePicker _picker = ImagePicker();
   final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
   @override
@@ -107,7 +108,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     fetchStats();
     fetchAudits(page: 1);
     fetchProfileImage();
-    _loadUserName();
+    fetchChartData();
+
+    _statusTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      fetchPowerBIStatus();
+    });
 
     _sidebarAnimController = AnimationController(
       vsync: this,
@@ -120,34 +125,25 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
   @override
   void dispose() {
+    _statusTimer?.cancel();
     _sidebarAnimController.dispose();
     auditSearchController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadUserName() async {
+  // ---------- Chart Data Methods ----------
+  Future<void> fetchChartData() async {
+    setState(() => loadingChartData = true);
     try {
-      final info = await AuthService.getUserInfo();
-      if (info == null) return;
+      // TODO: Implement actual API calls for chart data
+      // For now, keeping empty to remove mock data
 
-      // Try a few common keys defensively
-      final profile = info['profile'] ?? {};
-      final candidate = info['candidate'] ?? {};
-
-      final name = info['full_name'] ??
-          info['name'] ??
-          profile['full_name'] ??
-          profile['name'] ??
-          candidate['full_name'] ??
-          candidate['name'];
-
-      if (name is String && name.trim().isNotEmpty) {
-        setState(() {
-          userName = name.trim();
-        });
-      }
+      setState(() {
+        loadingChartData = false;
+      });
     } catch (e) {
-      debugPrint('Failed to load user name: $e');
+      setState(() => loadingChartData = false);
+      debugPrint("Error fetching chart data: $e");
     }
   }
 
@@ -171,17 +167,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       }
     } catch (e) {
       debugPrint("Error fetching profile image: $e");
-    }
-  }
-
-  Future<void> _pickProfileImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      if (kIsWeb) {
-        _profileImageBytes = await pickedFile.readAsBytes();
-      }
-      setState(() => _profileImage = pickedFile);
-      await uploadProfileImage();
     }
   }
 
@@ -397,7 +382,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                       boxShadow: [
                         BoxShadow(
                           color: const Color.fromARGB(255, 20, 19, 30)
-                              .withOpacity(0.02),
+                              .withValues(alpha: 0.02),
                           blurRadius: 8,
                           offset: const Offset(2, 0),
                         ),
@@ -524,7 +509,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     ),
                                   ),
                                 ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 6),
                               if (!sidebarCollapsed)
                                 ElevatedButton.icon(
                                   onPressed: () =>
@@ -564,8 +549,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     Container(
                       height: 72,
                       color: themeProvider.isDarkMode
-                          ? const Color(0xFF14131E).withOpacity(0.8)
-                          : Colors.white.withOpacity(0.8),
+                          ? const Color(0xFF14131E).withValues(alpha: 0.8)
+                          : Colors.white.withValues(alpha: 0.8),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
@@ -577,18 +562,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                 decoration: BoxDecoration(
                                   color: (themeProvider.isDarkMode
                                       ? const Color(0xFF14131E)
-                                      : Colors.white.withOpacity(0.8)),
+                                      : Colors.white.withValues(alpha: 0.8)),
                                   borderRadius: BorderRadius.circular(40),
                                   border: Border.all(
                                     color: themeProvider.isDarkMode
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.black.withOpacity(0.05),
+                                        ? Colors.white.withValues(alpha: 0.1)
+                                        : Colors.black.withValues(alpha: 0.05),
                                   ),
                                   boxShadow: [
                                     BoxShadow(
                                       color: themeProvider.isDarkMode
-                                          ? Colors.black.withOpacity(0.3)
-                                          : Colors.grey.withOpacity(0.2),
+                                          ? Colors.black.withValues(alpha: 0.3)
+                                          : Colors.grey.withValues(alpha: 0.2),
                                       blurRadius: 10,
                                       offset: const Offset(0, 4),
                                     ),
@@ -656,7 +641,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     fontFamily: 'Poppins',
                                     color: themeProvider.isDarkMode
                                         ? Colors.white
-                                        : Colors.black.withOpacity(0.8),
+                                        : Colors.black.withValues(alpha: 0.8),
                                     fontSize: 14,
                                   ),
                                 ),
@@ -696,102 +681,115 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     ),
                                     const SizedBox(width: 12),
 
-                                    // ---------- Analytics Icon ----------
-                                    IconButton(
-                                      onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                              builder: (context) =>
-                                                  RecruitmentPipelinePage(
-                                                      token: widget.token)),
-                                        );
-                                      },
-                                      icon: Image.asset(
-                                        // Changed from Icon to Image.asset
-                                        'assets/icons/data-analytics.png',
-                                        width: 24,
-                                        height: 24,
-                                        color: const Color.fromARGB(
-                                            255, 193, 13, 0),
+                                // ---------- Analytics Icon ----------
+                                IconButton(
+                                  onPressed: () {
+                                    context.push(
+                                      '/hiring-manager-pipeline?token=${Uri.encodeComponent(widget.token)}',
+                                    );
+                                  },
+                                  icon: Image.asset(
+                                    'assets/icons/data-analytics.png',
+                                    width: 24,
+                                    height: 24,
+                                  ),
+                                  tooltip: "Analytics Dashboard",
+                                ),
+                                const SizedBox(width: 8),
+
+                                // ---------- Power BI Status Icon ----------
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: powerBIConnected
+                                        ? Colors.green
+                                        : Colors.red,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: powerBIConnected
+                                            ? Colors.green
+                                                .withValues(alpha: 0.6)
+                                            : Colors.red.withValues(alpha: 0.6),
+                                        blurRadius: 12,
+                                        spreadRadius: 2,
                                       ),
-                                      tooltip: "Analytics Dashboard",
-                                    ),
-                                    const SizedBox(width: 8),
+                                    ],
+                                  ),
+                                  child: Center(
+                                    child: checkingPowerBI
+                                        ? const SizedBox(
+                                            width: 16,
+                                            height: 16,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(Icons.bar_chart,
+                                            color: Colors.white, size: 20),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
 
                                     // ---------- Team Collaboration Icon ----------
                                     IconButton(
                                       onPressed: () => setState(() =>
                                           currentScreen = "team_collaboration"),
                                       icon: Image.asset(
-                                        // Changed from Icon to Image.asset
                                         'assets/icons/teamC.png',
                                         width: 34,
                                         height: 34,
-                                        color: const Color.fromARGB(
-                                            255, 193, 13, 0),
                                       ),
                                       tooltip: "Team Collaboration",
                                     ),
                                     const SizedBox(width: 8),
 
-                                    TextButton.icon(
-                                      onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                              builder: (context) =>
-                                                  AdminOfferListScreen()),
-                                        );
-                                      },
-                                      icon: Image.asset(
-                                        'assets/icons/add.png',
-                                        width: 30,
-                                        height: 30,
-                                        color: const Color.fromARGB(
-                                            255, 193, 13, 0),
-                                      ),
-                                      label: Text(
-                                        "Create",
-                                        style: TextStyle(
-                                          fontFamily: 'Poppins',
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                      ),
+                                TextButton.icon(
+                                  onPressed: () {
+                                    context.push('/hiring-manager-offers');
+                                  },
+                                  icon: Image.asset(
+                                    'assets/icons/add.png',
+                                    width: 30,
+                                    height: 30,
+                                  ),
+                                  label: Text(
+                                    "Create",
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
                                     ),
-                                    const SizedBox(width: 12),
-                                    IconButton(
-                                      onPressed: () => setState(() =>
-                                          currentScreen = "notifications"),
-                                      icon: Image.asset(
-                                        // Changed from Icon to Image.asset
-                                        'assets/icons/notification.png',
-                                        width: 45,
-                                        height: 45,
-                                        color: const Color.fromARGB(
-                                            255, 193, 13, 0),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    GestureDetector(
-                                      onTap: () {
-                                        context.push(
-                                            '/profile?token=${widget.token}');
-                                      },
-                                      onLongPress: _pickProfileImage,
-                                      child: CircleAvatar(
-                                        radius: 18,
-                                        backgroundColor: Colors.grey.shade200,
-                                        backgroundImage:
-                                            _getProfileImageProvider(),
-                                        child: null,
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: 12),
+                                IconButton(
+                                  onPressed: () => setState(
+                                      () => currentScreen = "notifications"),
+                                  icon: Image.asset(
+                                    'assets/icons/notification.png',
+                                    width: 45,
+                                    height: 45,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                GestureDetector(
+                                  onTap: () {
+                                    context
+                                        .push('/profile?token=${widget.token}');
+                                  },
+                                  child: CircleAvatar(
+                                    radius: 18,
+                                    backgroundColor: Colors.grey.shade200,
+                                    backgroundImage: _getProfileImageProvider(),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            ),
                             ),
                           ],
                         ),
@@ -832,7 +830,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       onTap: () => setState(() => currentScreen = screenKey),
       child: Container(
         color: selected
-            ? const Color.fromRGBO(151, 18, 8, 1).withOpacity(0.06)
+            ? const Color.fromRGBO(151, 18, 8, 1).withValues(alpha: 0.06)
             : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
@@ -935,43 +933,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       },
     ];
 
-    final candidatePipeline = [
-      _ChartData("Applied", 48),
-      _ChartData("Screened", 34),
-      _ChartData("Interviewed", 22),
-      _ChartData("Offers", 9),
-      _ChartData("Hires", 5),
-    ];
+    // Data will be fetched from API
+    final List<_ChartData> candidatePipeline = candidatePipelineData;
 
-    final timeToFill = [
-      _ChartData("Jan", 35),
-      _ChartData("Feb", 32),
-      _ChartData("Mar", 30),
-      _ChartData("Apr", 28),
-      _ChartData("May", 27),
-      _ChartData("Jun", 25),
-    ];
+    // Data will be fetched from API
+    final List<_ChartData> timeToFill = timeToFillData;
 
-    final genderData = [
-      _ChartData("Female", 52),
-      _ChartData("Male", 45),
-      _ChartData("Non-binary", 3),
-    ];
+    // Data will be fetched from API
+    final List<_ChartData> genderMetrics = genderData;
+    final List<_ChartData> ethnicityMetrics = ethnicityData;
 
-    final ethnicityData = [
-      _ChartData("Black", 38),
-      _ChartData("White", 32),
-      _ChartData("Indian", 15),
-      _ChartData("Coloured", 10),
-      _ChartData("Other", 5),
-    ];
-
-    final sourcePerformance = [
-      _ChartData("LinkedIn", 40),
-      _ChartData("Referral", 25),
-      _ChartData("Job Boards", 20),
-      _ChartData("Career Site", 15),
-    ];
+    // Data will be fetched from API
+    final List<_ChartData> sourceMetrics = sourcePerformanceData;
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -979,8 +952,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 8),
-            Text("Welcome Back, $userName",
+            const SizedBox(height: 6),
+            Text("Welcome Back, Admin",
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 28,
@@ -988,7 +961,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     color: themeProvider.isDarkMode
                         ? Colors.white
                         : const Color.fromARGB(225, 20, 19, 30))),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
 
             // KPI Cards
             // Instead of SizedBox with fixed height, use:
@@ -1008,11 +981,12 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                       color: (themeProvider.isDarkMode
                               ? const Color(0xFF14131E)
                               : Colors.white)
-                          .withOpacity(0.9),
+                          .withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: (item["color"] as Color).withOpacity(0.1),
+                          color:
+                              (item["color"] as Color).withValues(alpha: 0.1),
                           blurRadius: 15,
                           offset: const Offset(0, 6),
                         ),
@@ -1030,26 +1004,94 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             const SizedBox(height: 24),
             LayoutBuilder(builder: (context, constraints) {
               int crossAxisCount = constraints.maxWidth > 900 ? 2 : 1;
-              double aspectRatio = constraints.maxWidth > 900 ? 2.7 : 2.2;
-              return GridView.count(
-                crossAxisCount: crossAxisCount,
-                shrinkWrap: true,
-                childAspectRatio: aspectRatio,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                physics: const NeverScrollableScrollPhysics(),
+              return Column(
                 children: [
-                  stylishBarChartCard("Candidate Pipeline", candidatePipeline,
-                      const Color.fromARGB(255, 193, 13, 0)),
-                  stylishLineChartCard("Time to Fill Trend", timeToFill,
-                      const Color.fromARGB(255, 193, 13, 0)),
-                  stylishDualDonutCard(
-                      "Diversity Metrics", genderData, ethnicityData),
-                  stylishBarChartCard("Source Performance", sourcePerformance,
-                      const Color.fromARGB(255, 193, 13, 0)),
-                  stylishTeamCollaborationCard(
-                      "Team Collaboration", teamMessages),
-                  modernCalendarCard(),
+                  // Row 1
+                  if (crossAxisCount == 2)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                            child: stylishBarChartCard(
+                                "Candidate Pipeline",
+                                candidatePipeline,
+                                const Color.fromARGB(255, 193, 13, 0))),
+                        const SizedBox(width: 16),
+                        Expanded(
+                            child: stylishLineChartCard(
+                                "Time to Fill Trend",
+                                timeToFill,
+                                const Color.fromARGB(255, 193, 13, 0))),
+                      ],
+                    )
+                  else
+                    Column(
+                      children: [
+                        stylishBarChartCard(
+                            "Candidate Pipeline",
+                            candidatePipeline,
+                            const Color.fromARGB(255, 193, 13, 0)),
+                        const SizedBox(height: 16),
+                        stylishLineChartCard("Time to Fill Trend", timeToFill,
+                            const Color.fromARGB(255, 193, 13, 0)),
+                      ],
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // Row 2
+                  if (crossAxisCount == 2)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                            child: stylishDualDonutCard("Diversity Metrics",
+                                genderMetrics, ethnicityMetrics)),
+                        const SizedBox(width: 16),
+                        Expanded(
+                            child: stylishBarChartCard(
+                                "Source Performance",
+                                sourceMetrics,
+                                const Color.fromARGB(255, 193, 13, 0))),
+                      ],
+                    )
+                  else
+                    Column(
+                      children: [
+                        stylishDualDonutCard("Diversity Metrics", genderMetrics,
+                            ethnicityMetrics),
+                        const SizedBox(height: 16),
+                        stylishBarChartCard("Source Performance", sourceMetrics,
+                            const Color.fromARGB(255, 193, 13, 0)),
+                      ],
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // Row 3
+                  if (crossAxisCount == 2)
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                            child: stylishTeamCollaborationCard(
+                                "Team Collaboration", [])),
+                        const SizedBox(width: 16),
+                        Expanded(child: modernCalendarCard()),
+                      ],
+                    )
+                  else
+                    Column(
+                      children: [
+                        stylishTeamCollaborationCard("Team Collaboration", []),
+                        const SizedBox(height: 16),
+                        modernCalendarCard(),
+                      ],
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // Activities card (always full width)
                   stylishActivitiesCard(recentActivities),
                 ],
               );
@@ -1062,7 +1104,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   Widget teamCollaborationWidget() {
-    return stylishTeamCollaborationCard("Team Collaboration", teamMessages);
+    return stylishTeamCollaborationCard("Team Collaboration", []);
   }
 
   // ---------------- Stylish Chart Cards ----------------
@@ -1070,15 +1112,16 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      height: 200,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1088,8 +1131,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.red.shade900.withOpacity(0.2),
-                  Colors.red.shade800.withOpacity(0.1),
+                  Colors.red.shade900.withValues(alpha: 0.2),
+                  Colors.red.shade800.withValues(alpha: 0.1),
                 ],
               )
             : LinearGradient(
@@ -1097,7 +1140,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 end: Alignment.bottomRight,
                 colors: [
                   Colors.red.shade50,
-                  Colors.red.shade100.withOpacity(0.3),
+                  Colors.red.shade100.withValues(alpha: 0.3),
                 ],
               ),
       ),
@@ -1112,14 +1155,14 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 14,
                       color: themeProvider.isDarkMode
                           ? Colors.white
                           : Colors.black87)),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text("${data.length} stages",
@@ -1131,52 +1174,113 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: SfCartesianChart(
-              margin: EdgeInsets.zero,
-              plotAreaBorderWidth: 0,
-              primaryXAxis: CategoryAxis(
-                majorGridLines: const MajorGridLines(width: 0),
-                axisLine: const AxisLine(width: 0),
-                labelStyle: TextStyle(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade700,
-                  fontFamily: 'Poppins',
-                ),
-              ),
-              primaryYAxis: NumericAxis(
-                majorGridLines: const MajorGridLines(width: 0),
-                axisLine: const AxisLine(width: 0),
-                labelStyle: TextStyle(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade700,
-                  fontFamily: 'Poppins',
-                ),
-              ),
-              series: <ColumnSeries<_ChartData, String>>[
-                ColumnSeries<_ChartData, String>(
-                  dataSource: data,
-                  xValueMapper: (d, _) => d.label,
-                  yValueMapper: (d, _) => d.value,
-                  color: color,
-                  width: 0.6,
-                  borderRadius: BorderRadius.circular(4),
-                  dataLabelSettings: DataLabelSettings(
-                    isVisible: true,
-                    textStyle: TextStyle(
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.black87,
-                      fontFamily: 'Poppins',
-                      fontSize: 10,
+          const SizedBox(height: 6),
+          Flexible(
+            child: loadingChartData
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(color),
+                          strokeWidth: 3,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Loading data...',
+                          style: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.white70
+                                : Colors.grey.shade600,
+                            fontFamily: 'Poppins',
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                )
-              ],
-            ),
+                  )
+                : data.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.bar_chart_outlined,
+                              size: 48,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.white24
+                                  : Colors.grey.shade300,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No data available',
+                              style: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white54
+                                    : Colors.grey.shade500,
+                                fontFamily: 'Poppins',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Data will appear here once available',
+                              style: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white38
+                                    : Colors.grey.shade400,
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : SfCartesianChart(
+                        margin: EdgeInsets.zero,
+                        plotAreaBorderWidth: 0,
+                        primaryXAxis: CategoryAxis(
+                          majorGridLines: const MajorGridLines(width: 0),
+                          axisLine: const AxisLine(width: 0),
+                          labelStyle: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade700,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        primaryYAxis: NumericAxis(
+                          majorGridLines: const MajorGridLines(width: 0),
+                          axisLine: const AxisLine(width: 0),
+                          labelStyle: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade700,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        series: <ColumnSeries<_ChartData, String>>[
+                          ColumnSeries<_ChartData, String>(
+                            dataSource: data,
+                            xValueMapper: (d, _) => d.label,
+                            yValueMapper: (d, _) => d.value,
+                            color: color,
+                            width: 0.6,
+                            borderRadius: BorderRadius.circular(4),
+                            dataLabelSettings: DataLabelSettings(
+                              isVisible: true,
+                              textStyle: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white
+                                    : Colors.black87,
+                                fontFamily: 'Poppins',
+                                fontSize: 10,
+                              ),
+                            ),
+                          )
+                        ],
+                      ),
           ),
         ],
       ),
@@ -1188,15 +1292,16 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      height: 200,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1206,8 +1311,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.blue.shade900.withOpacity(0.2),
-                  Colors.purple.shade800.withOpacity(0.1),
+                  Colors.blue.shade900.withValues(alpha: 0.2),
+                  Colors.purple.shade800.withValues(alpha: 0.1),
                 ],
               )
             : LinearGradient(
@@ -1221,6 +1326,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1229,14 +1335,14 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 14,
                       color: themeProvider.isDarkMode
                           ? Colors.white
                           : Colors.black87)),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -1254,52 +1360,114 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: SfCartesianChart(
-              margin: EdgeInsets.zero,
-              plotAreaBorderWidth: 0,
-              primaryXAxis: CategoryAxis(
-                majorGridLines: const MajorGridLines(width: 0),
-                axisLine: const AxisLine(width: 0),
-                labelStyle: TextStyle(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade700,
-                  fontFamily: 'Poppins',
-                ),
-              ),
-              primaryYAxis: NumericAxis(
-                majorGridLines: const MajorGridLines(width: 0),
-                axisLine: const AxisLine(width: 0),
-                labelStyle: TextStyle(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade700,
-                  fontFamily: 'Poppins',
-                ),
-              ),
-              series: <SplineSeries<_ChartData, String>>[
-                SplineSeries<_ChartData, String>(
-                  dataSource: data,
-                  xValueMapper: (d, _) => d.label,
-                  yValueMapper: (d, _) => d.value,
-                  color: color,
-                  width: 3,
-                  markerSettings: const MarkerSettings(isVisible: true),
-                  dataLabelSettings: DataLabelSettings(
-                    isVisible: true,
-                    textStyle: TextStyle(
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.black87,
-                      fontFamily: 'Poppins',
-                      fontSize: 10,
+          const SizedBox(height: 6),
+          Flexible(
+            child: loadingChartData
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(color),
+                          strokeWidth: 3,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Loading data...',
+                          style: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.white70
+                                : Colors.grey.shade600,
+                            fontFamily: 'Poppins',
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                )
-              ],
-            ),
+                  )
+                : data.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.show_chart,
+                              size: 48,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.white24
+                                  : Colors.grey.shade300,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No data available',
+                              style: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white54
+                                    : Colors.grey.shade500,
+                                fontFamily: 'Poppins',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Trend data will appear here once available',
+                              style: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white38
+                                    : Colors.grey.shade400,
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : SfCartesianChart(
+                        margin: EdgeInsets.zero,
+                        plotAreaBorderWidth: 0,
+                        primaryXAxis: CategoryAxis(
+                          majorGridLines: const MajorGridLines(width: 0),
+                          axisLine: const AxisLine(width: 0),
+                          labelStyle: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade700,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        primaryYAxis: NumericAxis(
+                          majorGridLines: const MajorGridLines(width: 0),
+                          axisLine: const AxisLine(width: 0),
+                          labelStyle: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade700,
+                            fontFamily: 'Poppins',
+                          ),
+                        ),
+                        series: <SplineSeries<_ChartData, String>>[
+                          SplineSeries<_ChartData, String>(
+                            dataSource: data,
+                            xValueMapper: (d, _) => d.label,
+                            yValueMapper: (d, _) => d.value,
+                            color: color,
+                            width: 3,
+                            markerSettings:
+                                const MarkerSettings(isVisible: true),
+                            dataLabelSettings: DataLabelSettings(
+                              isVisible: true,
+                              textStyle: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white
+                                    : Colors.black87,
+                                fontFamily: 'Poppins',
+                                fontSize: 10,
+                              ),
+                            ),
+                          )
+                        ],
+                      ),
           ),
         ],
       ),
@@ -1311,15 +1479,16 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      height: 200,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.purple.withOpacity(0.1),
+            color: Colors.purple.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1329,8 +1498,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.purple.shade900.withOpacity(0.2),
-                  Colors.indigo.shade800.withOpacity(0.1),
+                  Colors.purple.shade900.withValues(alpha: 0.2),
+                  Colors.indigo.shade800.withValues(alpha: 0.1),
                 ],
               )
             : LinearGradient(
@@ -1344,99 +1513,166 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(title,
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.bold,
-                  fontSize: 16,
+                  fontSize: 14,
                   color: themeProvider.isDarkMode
                       ? Colors.white
                       : Colors.black87)),
-          const SizedBox(height: 16),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: SfCircularChart(
-                    margin: EdgeInsets.zero,
-                    title: ChartTitle(
-                        text: "Gender",
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
+          const SizedBox(height: 6),
+          Flexible(
+            child: loadingChartData
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.purple),
+                          strokeWidth: 3,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Loading diversity data...',
+                          style: TextStyle(
                             color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 12)),
-                    legend: Legend(
-                        isVisible: true,
-                        textStyle: TextStyle(
+                                ? Colors.white70
+                                : Colors.grey.shade600,
                             fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 10)),
-                    series: <DoughnutSeries<_ChartData, String>>[
-                      DoughnutSeries<_ChartData, String>(
-                        dataSource: data1,
-                        xValueMapper: (d, _) => d.label,
-                        yValueMapper: (d, _) => d.value,
-                        innerRadius: '70%',
-                        dataLabelSettings: DataLabelSettings(
-                          isVisible: true,
-                          textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 10,
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
+                            fontSize: 14,
                           ),
                         ),
-                      )
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: SfCircularChart(
-                    margin: EdgeInsets.zero,
-                    title: ChartTitle(
-                        text: "Ethnicity",
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 12)),
-                    legend: Legend(
-                        isVisible: true,
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 10)),
-                    series: <DoughnutSeries<_ChartData, String>>[
-                      DoughnutSeries<_ChartData, String>(
-                        dataSource: data2,
-                        xValueMapper: (d, _) => d.label,
-                        yValueMapper: (d, _) => d.value,
-                        innerRadius: '70%',
-                        dataLabelSettings: DataLabelSettings(
-                          isVisible: true,
-                          textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 10,
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                          ),
+                      ],
+                    ),
+                  )
+                : data1.isEmpty && data2.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.donut_large_outlined,
+                              size: 48,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.white24
+                                  : Colors.grey.shade300,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No diversity data available',
+                              style: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white54
+                                    : Colors.grey.shade500,
+                                fontFamily: 'Poppins',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Diversity metrics will appear here once available',
+                              style: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white38
+                                    : Colors.grey.shade400,
+                                fontFamily: 'Poppins',
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
                       )
-                    ],
-                  ),
-                ),
-              ],
-            ),
+                    : Row(
+                        children: [
+                          Expanded(
+                            child: SfCircularChart(
+                              margin: EdgeInsets.zero,
+                              title: ChartTitle(
+                                  text: "Gender",
+                                  textStyle: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      fontSize: 12)),
+                              legend: Legend(
+                                  isVisible: true,
+                                  textStyle: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      fontSize: 10)),
+                              series: <DoughnutSeries<_ChartData, String>>[
+                                DoughnutSeries<_ChartData, String>(
+                                  dataSource: data1.isEmpty
+                                      ? [_ChartData("No Data", 1)]
+                                      : data1,
+                                  xValueMapper: (d, _) => d.label,
+                                  yValueMapper: (d, _) => d.value,
+                                  innerRadius: '70%',
+                                  dataLabelSettings: DataLabelSettings(
+                                    isVisible: true,
+                                    textStyle: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 10,
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                )
+                              ],
+                            ),
+                          ),
+                          Expanded(
+                            child: SfCircularChart(
+                              margin: EdgeInsets.zero,
+                              title: ChartTitle(
+                                  text: "Ethnicity",
+                                  textStyle: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      fontSize: 12)),
+                              legend: Legend(
+                                  isVisible: true,
+                                  textStyle: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      fontSize: 10)),
+                              series: <DoughnutSeries<_ChartData, String>>[
+                                DoughnutSeries<_ChartData, String>(
+                                  dataSource: data2.isEmpty
+                                      ? [_ChartData("No Data", 1)]
+                                      : data2,
+                                  xValueMapper: (d, _) => d.label,
+                                  yValueMapper: (d, _) => d.value,
+                                  innerRadius: '70%',
+                                  dataLabelSettings: DataLabelSettings(
+                                    isVisible: true,
+                                    textStyle: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 10,
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                )
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
           ),
         ],
       ),
@@ -1447,15 +1683,16 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      height: 200,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.green.withOpacity(0.1),
+            color: Colors.green.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1465,8 +1702,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.green.shade900.withOpacity(0.2),
-                  Colors.teal.shade800.withOpacity(0.1),
+                  Colors.green.shade900.withValues(alpha: 0.2),
+                  Colors.teal.shade800.withValues(alpha: 0.1),
                 ],
               )
             : LinearGradient(
@@ -1488,14 +1725,14 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.bold,
-                      fontSize: 16,
+                      fontSize: 14,
                       color: themeProvider.isDarkMode
                           ? Colors.white
                           : Colors.black87)),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text("${messages.length} updates",
@@ -1517,11 +1754,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: themeProvider.isDarkMode
-                        ? Colors.black.withOpacity(0.3)
+                        ? Colors.black.withValues(alpha: 0.3)
                         : Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: Colors.green.withOpacity(0.2),
+                      color: Colors.green.withValues(alpha: 0.2),
                     ),
                   ),
                   child: Row(
@@ -1564,15 +1801,16 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      height: 200,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.orange.withOpacity(0.1),
+            color: Colors.orange.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1582,8 +1820,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.orange.shade900.withOpacity(0.2),
-                  Colors.amber.shade800.withOpacity(0.1),
+                  Colors.orange.shade900.withValues(alpha: 0.2),
+                  Colors.amber.shade800.withValues(alpha: 0.1),
                 ],
               )
             : LinearGradient(
@@ -1609,7 +1847,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
+                  color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text("${activities.length} items",
@@ -1640,7 +1878,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: themeProvider.isDarkMode
-                              ? Colors.black.withOpacity(0.3)
+                              ? Colors.black.withValues(alpha: 0.3)
                               : Colors.white,
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -1682,15 +1920,16 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      height: 220,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.blueGrey.withOpacity(0.1),
+            color: Colors.blueGrey.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1700,8 +1939,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.blue.shade900.withOpacity(0.3),
-                  Colors.purple.shade900.withOpacity(0.3),
+                  Colors.blue.shade900.withValues(alpha: 0.3),
+                  Colors.purple.shade900.withValues(alpha: 0.3),
                 ],
               )
             : LinearGradient(
@@ -1725,7 +1964,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: const Color.fromARGB(255, 153, 26, 26)
-                          .withOpacity(0.1),
+                          .withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.calendar_month,
@@ -1737,7 +1976,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
-                      fontSize: 16,
+                      fontSize: 14,
                       color: Colors.blueAccent,
                     ),
                   ),
@@ -1747,7 +1986,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.blueAccent.withOpacity(0.1),
+                  color: Colors.blueAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: StreamBuilder(
@@ -1767,65 +2006,50 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: (themeProvider.isDarkMode
-                        ? const Color(0xFF14131E)
-                        : Colors.white)
-                    .withOpacity(0.9),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+          const SizedBox(height: 12),
+          Container(
+            height: 110,
+            decoration: BoxDecoration(
+              color: (themeProvider.isDarkMode
+                      ? const Color(0xFF14131E)
+                      : Colors.white)
+                  .withValues(alpha: 0.9),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    DateTime.now().day.toString(),
+                    style: const TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 28,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.blueAccent,
+                      height: 1.0,
+                    ),
                   ),
-                ],
-              ),
-              child: SfCalendar(
-                view: CalendarView.month,
-                monthViewSettings: MonthViewSettings(
-                  appointmentDisplayMode:
-                      MonthAppointmentDisplayMode.appointment,
-                  showAgenda: false,
-                  monthCellStyle: MonthCellStyle(
-                    textStyle: TextStyle(
+                  const SizedBox(height: 6),
+                  Text(
+                    DateFormat('MMMM yyyy').format(DateTime.now()),
+                    style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 14,
+                      fontWeight: FontWeight.w600,
                       color: themeProvider.isDarkMode
                           ? Colors.grey.shade300
                           : Colors.grey.shade700,
                     ),
-                    todayTextStyle: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: themeProvider.isDarkMode
-                          ? Colors.blueAccent.withOpacity(0.8)
-                          : Colors.blueAccent,
-                    ),
-                    trailingDatesTextStyle: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 14,
-                      color: Colors.grey.shade400,
-                    ),
-                    leadingDatesTextStyle: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 14,
-                      color: Colors.grey.shade400,
-                    ),
                   ),
-                ),
-                dataSource: _MeetingDataSource([]),
-                todayHighlightColor: Colors.blueAccent,
-                selectionDecoration: BoxDecoration(
-                  color: Colors.blueAccent.withOpacity(0.1),
-                  border: Border.all(color: Colors.blueAccent, width: 1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                backgroundColor: Colors.transparent,
+                ],
               ),
             ),
           ),
@@ -1839,7 +2063,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
     return Container(
       width: 200,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1858,7 +2082,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
+                      color: Colors.black.withValues(alpha: 0.08),
                       blurRadius: 6,
                       offset: const Offset(0, 3),
                     ),
@@ -1874,7 +2098,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1889,7 +2113,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           Text(
             count.toString(),
             style: TextStyle(
@@ -1915,27 +2139,20 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       ),
     );
   }
-}
 
-class StackedLineData {
-  final String month;
-  final int login;
-  final int logout;
-  final int create;
-  final int update;
-  final int delete;
-  StackedLineData(this.month, this.login, this.logout, this.create, this.update,
-      this.delete);
+  Future<void> _pickProfileImage() async {
+    final ImagePicker picker = ImagePicker();
+    await picker.pickImage(source: ImageSource.gallery);
+    // TODO: Handle the selected image
+  }
+
+  Future<void> fetchPowerBIStatus() async {
+    // TODO: Implement PowerBI status fetching
+  }
 }
 
 class _ChartData {
   final String label;
   final int value;
   _ChartData(this.label, this.value);
-}
-
-class _MeetingDataSource extends CalendarDataSource {
-  _MeetingDataSource(List<Appointment> source) {
-    appointments = source;
-  }
 }

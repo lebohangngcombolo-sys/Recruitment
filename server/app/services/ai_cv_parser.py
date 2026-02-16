@@ -49,6 +49,7 @@ class AIParser:
             # Step 1: Try AI parsing
             try:
                 parsed_data = _get_analyzer().analyse(resume_content=cv_text, job_id=job_id)
+                parsed_data = _get_analyzer().analyse(resume_content=cv_text, job_id=job_id)
             except Exception as e:
                 logger.warning(f"AI parsing failed: {e}")
                 parsed_data = {}
