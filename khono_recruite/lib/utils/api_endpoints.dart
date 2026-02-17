@@ -1,78 +1,80 @@
+import 'app_config.dart';
+
 class ApiEndpoints {
-  // ------------------- Base URLs -------------------
-  static const authBase = "http://127.0.0.1:5000/api/auth";
-  static const candidateBase = "http://127.0.0.1:5000/api/candidate";
-  static const adminBase = "http://127.0.0.1:5000/api/admin";
-  static const chatbotBase = "http://127.0.0.1:5000/api/chatbot";
-  static const hmBase = "http://127.0.0.1:5000/api/admin";
-  static const chatBase = "http://127.0.0.1:5000/api/chat";
-  static const analyticsBase = "http://127.0.0.1:5000/api/analytics";
+  // ------------------- Base URLs (driven by AppConfig / --dart-define) -------------------
+  static String get authBase => "${AppConfig.apiBase}/api/auth";
+  static String get candidateBase => "${AppConfig.apiBase}/api/candidate";
+  static String get adminBase => "${AppConfig.apiBase}/api/admin";
+  /// AI chat and CV parse (backend blueprint is at /api/ai)
+  static String get chatbotBase => "${AppConfig.apiBase}/api/ai";
+  static String get publicBase => "${AppConfig.publicApiBase}/api/public";
+  static String get analyticsBase => "${AppConfig.apiBase}/api/analytics";
 
   // NEW: Offer management base URL (matches your Flask blueprint)
-  static const offerBase = "http://127.0.0.1:5000/api/offer";
+  static String get offerBase => "${AppConfig.apiBase}/api/offer";
 
-  // WebSocket URL (for real-time chat)
-  static const webSocketUrl =
-      "ws://127.0.0.1:5000"; // Use wss:// for production with SSL
+  // WebSocket URL (for real-time chat) derived from API base (ws/wss)
+  static String get webSocketUrl => AppConfig.apiBase.startsWith('https')
+      ? AppConfig.apiBase.replaceFirst('https', 'wss')
+      : AppConfig.apiBase.replaceFirst('http', 'ws');
+
+  // Chat base URL
+  static String get chatBase => "${AppConfig.apiBase}/api/chat";
 
   // ------------------- Auth -------------------
-  static const register = "$authBase/register";
-  static const verify = "$authBase/verify";
-  static const login = "$authBase/login";
-  static const logout = "$authBase/logout";
-  static const forgotPassword = "$authBase/forgot-password";
-  static const resetPassword = "$authBase/reset-password";
-  static const changePassword = "$authBase/change-password";
-  static const currentUser = "$authBase/me";
-  static const adminEnroll = "$authBase/admin-enroll";
-  static const firebaseLogin = "$authBase/firebase-login";
+  static final register = "$authBase/register";
+  static final verify = "$authBase/verify";
+  static final login = "$authBase/login";
+  static final logout = "$authBase/logout";
+  static final forgotPassword = "$authBase/forgot-password";
+  static final resetPassword = "$authBase/reset-password";
+  static final changePassword = "$authBase/change-password";
+  static final currentUser = "$authBase/me";
+  static final adminEnroll = "$authBase/admin-enroll";
+  static final firebaseLogin = "$authBase/firebase-login";
 
   // ------------------- OAuth (UPDATED FOR SUPABASE) -------------------
-  static const googleOAuth = "$authBase/google";
-  static const githubOAuth = "$authBase/github";
-  static const supabaseCallback = "$authBase/callback"; // New unified callback
+  static final googleOAuth = "$authBase/google";
+  static final githubOAuth = "$authBase/github";
+  static final supabaseCallback = "$authBase/callback"; // New unified callback
 
   // ------------------- SSO -------------------
-  static const ssoLogout = "$authBase/sso/logout"; // <-- ADDED
+  static final ssoLogout = "$authBase/sso/logout"; // <-- ADDED
 
   // ------------------- MFA (UPDATED TO MATCH BACKEND) -------------------
-  static const enableMfa = "$authBase/mfa/enable"; // POST - Initiate MFA setup
-  static const verifyMfaSetup =
-      "$authBase/mfa/verify"; // POST - Verify MFA setup
-  static const mfaLogin =
-      "$authBase/mfa/login"; // POST - Verify MFA during login
-  static const disableMfa = "$authBase/mfa/disable"; // POST - Disable MFA
-  static const mfaStatus = "$authBase/mfa/status"; // GET - Get MFA status
-  static const backupCodes =
-      "$authBase/mfa/backup-codes"; // GET - Get backup codes
-  static const regenerateBackupCodes =
+  static final enableMfa = "$authBase/mfa/enable"; // POST - Initiate MFA setup
+  static final verifyMfaSetup = "$authBase/mfa/verify"; // POST - Verify MFA setup
+  static final mfaLogin = "$authBase/mfa/login"; // POST - Verify MFA during login
+  static final disableMfa = "$authBase/mfa/disable"; // POST - Disable MFA
+  static final mfaStatus = "$authBase/mfa/status"; // GET - Get MFA status
+  static final backupCodes = "$authBase/mfa/backup-codes"; // GET - Get backup codes
+  static final regenerateBackupCodes =
       "$authBase/mfa/regenerate-backup-codes"; // POST - Regenerate backup codes
-  static const String parserCV = "$authBase/cv/parse"; // POST Multipart
+  static final String parserCV = "$authBase/cv/parse"; // POST Multipart
 
   // ------------------- Public (no auth) -------------------
-  static const publicBase = "http://127.0.0.1:5000/api/public";
-  static const getPublicJobs = "$publicBase/jobs";
+  static final getPublicJobs = "$publicBase/jobs";
 
   // ------------------- Candidate -------------------
-  static const enrollment = "$candidateBase/enrollment";
-  static const applyJob = "$candidateBase/apply";
-  static const submitAssessment = "$candidateBase/applications";
-  static const uploadResume = "$candidateBase/upload_resume";
-  static const getApplications = "$candidateBase/applications";
-  static const getAvailableJobs = "$candidateBase/jobs";
-  static const saveDraft = "$candidateBase/apply/save_draft";
-  static const getDrafts = "$candidateBase/applications/drafts";
-  static const submitDraft = "$candidateBase/applications/submit_draft";
+  static final enrollment = "$candidateBase/enrollment";
+  static final applyJob = "$candidateBase/apply";
+  static final submitAssessment = "$candidateBase/applications";
+  static final uploadResume = "$candidateBase/upload_resume";
+  static final getApplications = "$candidateBase/applications";
+  static final getAvailableJobs = "$candidateBase/jobs";
+  static final saveDraft = "$candidateBase/apply/save_draft";
+  static final getDrafts = "$candidateBase/applications/drafts";
+  static final submitDraft = "$candidateBase/applications/submit_draft";
 
   // ==================== RECRUITMENT PIPELINE ENDPOINTS ====================
 
   // ------------------- Pipeline Statistics -------------------
-  static const getPipelineStats = "$adminBase/pipeline/stats";
-  static const getPipelineQuickStats = "$adminBase/pipeline/quick-stats";
-  static const getPipelineStagesCount = "$adminBase/pipeline/stages/count";
+  static final getPipelineStats = "$adminBase/pipeline/stats";
+  static final getPipelineQuickStats = "$adminBase/pipeline/quick-stats";
+  static final getPipelineStagesCount = "$adminBase/pipeline/stages/count";
 
   // ------------------- Applications with Filters -------------------
-  static const getFilteredApplications = "$adminBase/applications/filtered";
+  static final getFilteredApplications = "$adminBase/applications/filtered";
 
   // Enhanced existing endpoints with query params
   static String getApplicationsByStatus(String status) =>
@@ -85,17 +87,16 @@ class ApiEndpoints {
       "$adminBase/applications/filtered?search=$query";
 
   // ------------------- Jobs with Statistics -------------------
-  static const getJobsWithStats = "$adminBase/jobs/with-stats";
+  static final getJobsWithStats = "$adminBase/jobs/with-stats";
 
   // ------------------- Interviews by Timeframe -------------------
   static String getInterviewsByTimeframe(String timeframe) =>
       "$adminBase/interviews/dashboard/$timeframe"; // today, upcoming, past, week, month
 
   // Alias for compatibility
-  static const getTodaysInterviews = "$adminBase/interviews/dashboard/today";
-  static const getUpcomingInterviews =
-      "$adminBase/interviews/dashboard/upcoming";
-  static const getPastInterviews = "$adminBase/interviews/dashboard/past";
+  static final getTodaysInterviews = "$adminBase/interviews/dashboard/today";
+  static final getUpcomingInterviews = "$adminBase/interviews/dashboard/upcoming";
+  static final getPastInterviews = "$adminBase/interviews/dashboard/past";
 
   // ------------------- Update Application Status -------------------
   static String updateApplicationStatus(int applicationId) =>
@@ -105,9 +106,9 @@ class ApiEndpoints {
   static String searchAll(String query) => "$adminBase/search?q=$query";
 
   // ------------------- Admin / Hiring Manager -------------------
-  static const adminJobs = "$adminBase/jobs";
+  static final adminJobs = "$adminBase/jobs";
   static String getJobById(int id) => "$adminBase/jobs/$id";
-  static const createJob = "$adminBase/jobs";
+  static final createJob = "$adminBase/jobs";
   static String updateJob(int id) => "$adminBase/jobs/$id";
   static String deleteJob(int id) => "$adminBase/jobs/$id";
 
@@ -118,19 +119,19 @@ class ApiEndpoints {
   static String getJobApplications(int id) =>
       "$adminBase/jobs/$id/applications";
   static String getJobStats = "$adminBase/jobs/stats";
-  static const viewCandidates = "$adminBase/candidates";
+  static final viewCandidates = "$adminBase/candidates";
   static String getApplicationById(int id) => "$adminBase/applications/$id";
   static String shortlistCandidates(int jobId) =>
       "$adminBase/jobs/$jobId/shortlist";
-  static const scheduleInterview = "$adminBase/interviews";
-  static const getAllInterviews = "$adminBase/interviews";
+  static final scheduleInterview = "$adminBase/interviews";
+  static final getAllInterviews = "$adminBase/interviews";
   static String cancelInterview(int interviewId) =>
       "$adminBase/interviews/cancel/$interviewId";
-  static const getNotifications = "$adminBase/notifications";
-  static const auditLogs = "$adminBase/audits";
-  static const parseResume = "$adminBase/cv/parse";
-  static const cvReviews = "$adminBase/cv-reviews";
-  static const getUsers = "$adminBase/users";
+  static final getNotifications = "$adminBase/notifications";
+  static final auditLogs = "$adminBase/audits";
+  static final parseResume = "$adminBase/cv/parse";
+  static final cvReviews = "$adminBase/cv-reviews";
+  static final getUsers = "$adminBase/users";
 
   // ==================== INTERVIEW LIFECYCLE ENHANCEMENTS ====================
 
@@ -170,7 +171,7 @@ class ApiEndpoints {
 
   // ------------------- Interview Reminders -------------------
   /// POST – Schedule automated reminders for interviews
-  static const scheduleInterviewReminders =
+  static final scheduleInterviewReminders =
       "$adminBase/interviews/reminders/schedule";
 
   /// GET – Get all reminders for an interview
@@ -187,17 +188,17 @@ class ApiEndpoints {
 
   // ------------------- Interview Analytics -------------------
   /// GET – Get interview statistics and metrics
-  static const getInterviewAnalytics = "$adminBase/interviews/analytics";
+  static final getInterviewAnalytics = "$adminBase/interviews/analytics";
 
   /// GET – Get no-show statistics
-  static const getNoShowAnalytics = "$adminBase/interviews/analytics/no-shows";
+  static final getNoShowAnalytics = "$adminBase/interviews/analytics/no-shows";
 
   /// GET – Get feedback completion rates
-  static const getFeedbackAnalytics =
+  static final getFeedbackAnalytics =
       "$adminBase/interviews/analytics/feedback";
 
   /// GET – Get interviewer performance metrics
-  static const getInterviewerAnalytics =
+  static final getInterviewerAnalytics =
       "$adminBase/interviews/analytics/interviewers";
 
   // ------------------- Interview Notes -------------------
@@ -227,30 +228,30 @@ class ApiEndpoints {
       "$adminBase/interviews/$interviewId/workflow/previous";
 
   /// GET – Get interview workflow stages
-  static const getInterviewWorkflowStages =
+  static final getInterviewWorkflowStages =
       "$adminBase/interviews/workflow/stages";
 
   // ------------------- Bulk Interview Operations -------------------
   /// POST – Bulk update interview statuses
-  static const bulkUpdateInterviewStatus = "$adminBase/interviews/bulk/status";
+  static final bulkUpdateInterviewStatus = "$adminBase/interviews/bulk/status";
 
   /// POST – Bulk schedule reminders
-  static const bulkScheduleReminders = "$adminBase/interviews/bulk/reminders";
+  static final bulkScheduleReminders = "$adminBase/interviews/bulk/reminders";
 
   /// POST – Bulk request feedback
-  static const bulkRequestFeedback =
+  static final bulkRequestFeedback =
       "$adminBase/interviews/bulk/feedback/request";
 
   // ------------------- Interview Templates -------------------
   /// GET – Get all interview templates
-  static const getInterviewTemplates = "$adminBase/interviews/templates";
+  static final getInterviewTemplates = "$adminBase/interviews/templates";
 
   /// GET – Get specific interview template
   static String getInterviewTemplate(int templateId) =>
       "$adminBase/interviews/templates/$templateId";
 
   /// POST – Create new interview template
-  static const createInterviewTemplate = "$adminBase/interviews/templates";
+  static final createInterviewTemplate = "$adminBase/interviews/templates";
 
   /// PUT – Update interview template
   static String updateInterviewTemplate(int templateId) =>
@@ -270,39 +271,39 @@ class ApiEndpoints {
       "$adminBase/candidates/$candidateId/availability";
 
   /// POST – Check interview scheduling conflicts
-  static const checkSchedulingConflicts =
+  static final checkSchedulingConflicts =
       "$adminBase/interviews/conflict-check";
 
   // ------------------- Interview Dashboard -------------------
   /// GET – Get interviews requiring action
-  static const getInterviewsRequiringAction =
+  static final getInterviewsRequiringAction =
       "$adminBase/interviews/dashboard/action-required";
 
   // ------------------- Shared Notes & Meetings -------------------
-  static const createNote = "$adminBase/shared-notes";
-  static const getNotes = "$adminBase/shared-notes";
+  static final createNote = "$adminBase/shared-notes";
+  static final getNotes = "$adminBase/shared-notes";
   static String getNoteById(int id) => "$adminBase/shared-notes/$id";
   static String updateNote(int id) => "$adminBase/shared-notes/$id";
   static String deleteNote(int id) => "$adminBase/shared-notes/$id";
 
-  static const createMeeting = "$adminBase/meetings";
-  static const getMeetings = "$adminBase/meetings";
+  static final createMeeting = "$adminBase/meetings";
+  static final getMeetings = "$adminBase/meetings";
   static String getMeetingById(int id) => "$adminBase/meetings/$id";
   static String updateMeeting(int id) => "$adminBase/meetings/$id";
   static String deleteMeeting(int id) => "$adminBase/meetings/$id";
   static String cancelMeeting(int id) => "$adminBase/meetings/$id/cancel";
-  static const getUpcomingMeetings = "$adminBase/meetings/upcoming";
+  static final getUpcomingMeetings = "$adminBase/meetings/upcoming";
 
   // ------------------- Interview Calendar (Google Calendar) -------------------
   /// GET – Sync & compare upcoming interviews with Google Calendar
-  static const syncInterviewCalendar = "$adminBase/interviews/calendar/sync";
+  static final syncInterviewCalendar = "$adminBase/interviews/calendar/sync";
 
   /// POST – Sync a single interview to Google Calendar
   static String syncSingleInterviewCalendar(int interviewId) =>
       "$adminBase/interviews/$interviewId/calendar/sync";
 
   /// POST – Bulk sync multiple interviews
-  static const bulkSyncInterviewCalendar =
+  static final bulkSyncInterviewCalendar =
       "$adminBase/interviews/calendar/bulk-sync";
 
   /// GET – Get calendar status for a specific interview
@@ -310,14 +311,15 @@ class ApiEndpoints {
       "$adminBase/interviews/$interviewId/calendar/status";
 
   // ------------------- AI Chatbot -------------------
-  static const parseCV = "$chatbotBase/parse_cv";
-  static const askBot = "$chatbotBase/ask";
+  static final parseCV = "$chatbotBase/parse_cv";
+  /// Backend: POST /api/ai/chat with body { "message": "..." }
+  static final askBot = "$chatbotBase/chat";
 
   // ==================== CHAT FEATURE ENDPOINTS ====================
 
   // Thread Management
-  static const getChatThreads = "$chatBase/threads";
-  static const createChatThread = "$chatBase/threads";
+  static final getChatThreads = "$chatBase/threads";
+  static final createChatThread = "$chatBase/threads";
   static String getChatThread(int id) => "$chatBase/threads/$id";
 
   // Messages
@@ -329,10 +331,10 @@ class ApiEndpoints {
       "$chatBase/threads/$threadId/mark-read";
 
   // Search
-  static const searchChatMessages = "$chatBase/search";
+  static final searchChatMessages = "$chatBase/search";
 
   // Presence
-  static const updatePresence = "$chatBase/presence";
+  static final updatePresence = "$chatBase/presence";
 
   // Typing Indicator
   static String setTypingStatus(int threadId) =>
@@ -351,7 +353,7 @@ class ApiEndpoints {
   // ==================== OFFER ENDPOINTS (Flask blueprint routes) ====================
 
   // Offer endpoints - exactly matching your Flask routes
-  static const draftOffer = "$offerBase/"; // POST - Draft offer
+  static final draftOffer = "$offerBase/"; // POST - Draft offer
   static String reviewOffer(int offerId) =>
       "$offerBase/$offerId/review"; // POST - Review offer
   static String approveOffer(int offerId) =>
@@ -362,13 +364,13 @@ class ApiEndpoints {
       "$offerBase/$offerId/reject"; // POST - Reject offer
   static String expireOffer(int offerId) =>
       "$offerBase/$offerId/expire"; // POST - Expire offer
-  static const getCandidatesReadyForOffer =
+  static final getCandidatesReadyForOffer =
       "$adminBase/candidates/ready-for-offer";
 
   // GET endpoints
   static String getOffer(int offerId) =>
       "$offerBase/$offerId"; // GET - Get single offer
-  static const getAllOffers = "$offerBase/"; // GET - Get all offers
+  static final getAllOffers = "$offerBase/"; // GET - Get all offers
   static String getOffersByStatus(String status) =>
       "$offerBase/?status=$status"; // GET - Get offers by status
 
@@ -379,7 +381,7 @@ class ApiEndpoints {
   static String getApplicationOffers(int applicationId) =>
       "$adminBase/applications/$applicationId/offers";
 
-  static const getOfferAnalytics = "$offerBase/analytics";
+  static final getOfferAnalytics = "$offerBase/analytics";
 
   // Candidate's own offers
   static String myOffer() => "$offerBase/my-offers";
@@ -387,67 +389,67 @@ class ApiEndpoints {
   // ==================== APPLICATION ENDPOINTS ====================
 
   /// GET - Get all applications (existing endpoint)
-  static const getCandidateApplications = "$adminBase/applications";
+  static final getCandidateApplications = "$adminBase/applications";
 
   /// GET - Get all applications (alternative)
-  static const getAllApplications = "$adminBase/applications/all";
+  static final getAllApplications = "$adminBase/applications/all";
 
   // ==================== ANALYTICS ENDPOINTS ====================
-  static const getDashboardAnalytics = "$adminBase/analytics/dashboard";
-  static const getUsersGrowthAnalytics = "$adminBase/analytics/users-growth";
-  static const getApplicationsAnalysis =
+  static final getDashboardAnalytics = "$adminBase/analytics/dashboard";
+  static final getUsersGrowthAnalytics = "$adminBase/analytics/users-growth";
+  static final getApplicationsAnalysis =
       "$adminBase/analytics/applications-analysis";
-  static const getInterviewsAnalysis =
+  static final getInterviewsAnalysis =
       "$adminBase/analytics/interviews-analysis";
-  static const getAssessmentsAnalysis =
+  static final getAssessmentsAnalysis =
       "$adminBase/analytics/assessments-analysis";
-  static const getDashboardCounts = "$adminBase/dashboard-counts";
-  static const getRecentActivities = "$adminBase/recent-activities";
-  static const getPowerBIData = "$adminBase/powerbi/data";
-  static const getPowerBIStatus = "$adminBase/powerbi/status";
+  static final getDashboardCounts = "$adminBase/dashboard-counts";
+  static final getRecentActivities = "$adminBase/recent-activities";
+  static final getPowerBIData = "$adminBase/powerbi/data";
+  static final getPowerBIStatus = "$adminBase/powerbi/status";
 
   // Analytics blueprint routes
-  static const getApplicationsPerRequisition =
+  static final getApplicationsPerRequisition =
       "$analyticsBase/analytics/applications-per-requisition";
-  static const getApplicationToInterviewConversion =
+  static final getApplicationToInterviewConversion =
       "$analyticsBase/analytics/conversion/application-to-interview";
-  static const getInterviewToOfferConversion =
+  static final getInterviewToOfferConversion =
       "$analyticsBase/analytics/conversion/interview-to-offer";
-  static const getStageDropoff = "$analyticsBase/analytics/dropoff";
-  static const getTimePerStage = "$analyticsBase/analytics/time-per-stage";
-  static const getMonthlyApplications =
+  static final getStageDropoff = "$analyticsBase/analytics/dropoff";
+  static final getTimePerStage = "$analyticsBase/analytics/time-per-stage";
+  static final getMonthlyApplications =
       "$analyticsBase/analytics/applications/monthly";
-  static const getCVScreeningDrop =
+  static final getCVScreeningDrop =
       "$analyticsBase/analytics/cv-screening-drop";
-  static const getAssessmentPassRate =
+  static final getAssessmentPassRate =
       "$analyticsBase/analytics/assessments/pass-rate";
-  static const getInterviewScheduling =
+  static final getInterviewScheduling =
       "$analyticsBase/analytics/interviews/scheduled";
-  static const getOffersByCategory =
+  static final getOffersByCategory =
       "$analyticsBase/analytics/offers-by-category";
-  static const getAvgCVScore =
+  static final getAvgCVScore =
       "$analyticsBase/analytics/candidate/avg-cv-score";
-  static const getAvgAssessmentScore =
+  static final getAvgAssessmentScore =
       "$analyticsBase/analytics/candidate/avg-assessment-score";
-  static const getSkillsFrequency =
+  static final getSkillsFrequency =
       "$analyticsBase/analytics/candidate/skills-frequency";
-  static const getExperienceDistribution =
+  static final getExperienceDistribution =
       "$analyticsBase/analytics/candidate/experience-distribution";
 
   // ==================== CANDIDATE ENDPOINTS ====================
-  static const getCandidateProfile = "$candidateBase/profile";
-  static const updateCandidateProfile = "$candidateBase/profile";
-  static const uploadCandidateDocument = "$candidateBase/upload_document";
-  static const uploadProfilePicture = "$candidateBase/upload_profile_picture";
-  static const getCandidateSettings = "$candidateBase/settings";
-  static const updateCandidateSettings = "$candidateBase/settings";
-  static const changeCandidatePassword =
+  static final getCandidateProfile = "$candidateBase/profile";
+  static final updateCandidateProfile = "$candidateBase/profile";
+  static final uploadCandidateDocument = "$candidateBase/upload_document";
+  static final uploadProfilePicture = "$candidateBase/upload_profile_picture";
+  static final getCandidateSettings = "$candidateBase/settings";
+  static final updateCandidateSettings = "$candidateBase/settings";
+  static final changeCandidatePassword =
       "$candidateBase/settings/change_password";
-  static const updateNotificationPreferences =
+  static final updateNotificationPreferences =
       "$candidateBase/settings/notifications";
-  static const deactivateCandidateAccount =
+  static final deactivateCandidateAccount =
       "$candidateBase/settings/deactivate";
-  static const getCandidateNotifications = "$candidateBase/notifications";
+  static final getCandidateNotifications = "$candidateBase/notifications";
 
   // ==================== HELPER METHODS ====================
 

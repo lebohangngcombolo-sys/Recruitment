@@ -4,6 +4,8 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
+import '../../utils/app_config.dart';
 import 'assessment_page.dart';
 import '../../widgets/application_flow_stepper.dart';
 
@@ -172,7 +174,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     try {
       final res = await http.get(
         Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/applications/$applicationId/draft"),
+            "${ApiEndpoints.candidateBase}/applications/$applicationId/draft"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -224,7 +226,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
 
       final res = await http.post(
         Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/applications/$applicationId/draft"),
+            "${ApiEndpoints.candidateBase}/applications/$applicationId/draft"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -270,8 +272,8 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
 
     try {
       final res = await http.post(
-        Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/apply/${widget.job["id"]}"),
+        Uri.parse(localhostToEnv(
+            "http://127.0.0.1:5000/api/candidate/apply/${widget.job['id']}")),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -334,6 +336,9 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     final period = _formatSalaryPeriod(job['salary_period']);
 
     if (min == null && max == null) {
+      final rangeStr = job['salary_range']?.toString().trim() ??
+          job['salary']?.toString().trim();
+      if (rangeStr != null && rangeStr.isNotEmpty) return rangeStr;
       return "Salary not specified";
     }
 
@@ -510,6 +515,15 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                               fontSize: 18,
                             ),
                           ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _formatSalary(widget.job),
+                            style: GoogleFonts.poppins(
+                              color: Colors.white.withValues(alpha: 0.95),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -610,10 +624,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                                   _accentRed,
                                   [
                                     Text(
-                                      "Weightings - CV: ${weightings['cv'] ?? 60}%, "
-                                      "Assessment: ${weightings['assessment'] ?? 40}%, "
-                                      "Interview: ${weightings['interview'] ?? 0}%, "
-                                      "References: ${weightings['references'] ?? 0}%",
+                                      "Scoring: CV ${weightings['cv'] ?? 60}% • Assessment ${weightings['assessment'] ?? 40}%",
                                       style: GoogleFonts.poppins(
                                         fontSize: 14,
                                         color: _textPrimary,
@@ -1205,6 +1216,8 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
             height: 20,
             fit: BoxFit.contain,
             color: _textPrimary,
+            errorBuilder: (_, __, ___) =>
+                Icon(Icons.link, size: 20, color: _textPrimary),
           ),
         ),
       ),
@@ -1232,19 +1245,23 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
             color: _textPrimary,
           ),
           const SizedBox(height: 30),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _socialIcon('assets/icons/Instagram1.png',
-                  'https://www.instagram.com/yourprofile'),
-              _socialIcon('assets/icons/x1.png', 'https://x.com/yourprofile'),
-              _socialIcon('assets/icons/LinkedIn.png',
-                  'https://www.linkedin.com/in/yourprofile'),
-              _socialIcon('assets/icons/facebook1.png',
-                  'https://www.facebook.com/yourprofile'),
-              _socialIcon('assets/icons/YouTube1.png',
-                  'https://www.youtube.com/yourchannel'),
-            ],
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _socialIcon('assets/icons/Instagram.png',
+                    'https://www.instagram.com/yourprofile'),
+                _socialIcon(
+                    'assets/icons/LinkedIn.png', 'https://x.com/yourprofile'),
+                _socialIcon('assets/icons/LinkedIn.png',
+                    'https://www.linkedin.com/in/yourprofile'),
+                _socialIcon('assets/icons/facebook.png',
+                    'https://www.facebook.com/yourprofile'),
+                _socialIcon('assets/icons/YouTube.png',
+                    'https://www.youtube.com/yourchannel'),
+              ],
+            ),
           ),
           const SizedBox(height: 30),
           Text(

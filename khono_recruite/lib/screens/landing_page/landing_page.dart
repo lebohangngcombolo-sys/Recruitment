@@ -19,6 +19,7 @@ import 'package:khono_recruite/profile_image_provider_io.dart'
 // Import your existing services
 import '../../services/candidate_service.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 
 /// New landing screen: hero, explore by category, job cards. Optional [token] for logged-in state.
 /// Teammate will refine the real "candidate dashboard" (applications, profile, etc.) in candidate_dashboard.dart.
@@ -92,7 +93,7 @@ class _LandingPageState extends State<LandingPage>
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
   String _profileImageUrl = "";
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  final String apiBase = ApiEndpoints.candidateBase;
 
   @override
   void initState() {
@@ -464,7 +465,7 @@ class _LandingPageState extends State<LandingPage>
 
     try {
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/ai/chat"),
+        Uri.parse(ApiEndpoints.askBot),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer ${widget.token}",
@@ -515,7 +516,7 @@ class _LandingPageState extends State<LandingPage>
     _safeSetState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/ai/parse_cv"),
+        Uri.parse(ApiEndpoints.parseCV),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer ${widget.token}",
@@ -1571,7 +1572,11 @@ class _LandingPageState extends State<LandingPage>
           child: Padding(
             padding: const EdgeInsets.all(8.0),
             child: Image.asset(assetPath,
-                width: 24, height: 24, fit: BoxFit.contain),
+                width: 24,
+                height: 24,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) =>
+                    Icon(Icons.link, size: 24, color: Colors.white70)),
           ),
         ),
       ),
@@ -1986,20 +1991,23 @@ class _LandingPageState extends State<LandingPage>
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(4),
                             ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                _socialIcon('assets/icons/Instagram1.png',
-                                    'https://www.instagram.com/yourprofile'),
-                                _socialIcon('assets/icons/x1.png',
-                                    'https://x.com/yourprofile'),
-                                _socialIcon('assets/icons/LinkedIn.png',
-                                    'https://www.linkedin.com/in/yourprofile'),
-                                _socialIcon('assets/icons/facebook1.png',
-                                    'https://www.facebook.com/yourprofile'),
-                                _socialIcon('assets/icons/YouTube1.png',
-                                    'https://www.youtube.com/yourchannel'),
-                              ],
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  _socialIcon('assets/icons/Instagram.png',
+                                      'https://www.instagram.com/yourprofile'),
+                                  _socialIcon('assets/icons/LinkedIn.png',
+                                      'https://x.com/yourprofile'),
+                                  _socialIcon('assets/icons/LinkedIn.png',
+                                      'https://www.linkedin.com/in/yourprofile'),
+                                  _socialIcon('assets/icons/facebook.png',
+                                      'https://www.facebook.com/yourprofile'),
+                                  _socialIcon('assets/icons/YouTube.png',
+                                      'https://www.youtube.com/yourchannel'),
+                                ],
+                              ),
                             ),
                           ),
                           const SizedBox(height: 20),

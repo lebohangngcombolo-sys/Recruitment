@@ -1,5 +1,5 @@
 import pdfplumber
-import docx
+from docx import Document
 
 def extract_text_from_file(file):
     """
@@ -41,7 +41,7 @@ def extract_docx(file):
     Extract text from a DOCX file using python-docx.
     """
     try:
-        doc = docx.Document(file)
+        doc = Document(file)
         return "\n".join([p.text for p in doc.paragraphs]).strip()
     except Exception as e:
         raise Exception(f"Failed to extract DOCX text: {e}")

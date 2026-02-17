@@ -545,38 +545,42 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
   Widget _buildEmptyNotesState(ThemeProvider themeProvider) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.note_add_outlined,
-            size: 64,
-            color: themeProvider.isDarkMode
-                ? Colors.grey.shade600
-                : Colors.grey.shade300,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No shared notes yet',
-            style: GoogleFonts.inter(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.note_add_outlined,
+              size: 64,
               color: themeProvider.isDarkMode
-                  ? Colors.grey.shade400
-                  : Colors.grey.shade500,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+                  ? Colors.grey.shade600
+                  : Colors.grey.shade300,
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Create your first shared note to collaborate',
-            style: GoogleFonts.inter(
-              color: themeProvider.isDarkMode
-                  ? Colors.grey.shade500
-                  : Colors.grey.shade400,
-              fontSize: 12,
+            const SizedBox(height: 16),
+            Text(
+              'No shared notes yet',
+              style: GoogleFonts.inter(
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade400
+                    : Colors.grey.shade500,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              'Create your first shared note to collaborate',
+              style: GoogleFonts.inter(
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade500
+                    : Colors.grey.shade400,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -1,3 +1,6 @@
+# Optional: create a new Postgres with name recruitment-db and link it.
+# To use an existing DB (e.g. recruitment_db_vexi), set DATABASE_URL in the dashboard
+# to the External URL with ?sslmode=require appended.
 databases:
   - name: recruitment-db
     plan: free
@@ -12,6 +15,8 @@ services:
     startCommand: bash render_start.sh
     healthCheckPath: /api/public/healthz
     envVars:
+      - key: FLASK_ENV
+        value: production
       - key: DATABASE_URL
         fromDatabase:
           name: recruitment-db
@@ -69,3 +74,9 @@ services:
     rootDir: khono_recruite
     buildCommand: bash render_build.sh
     staticPublishPath: build/web
+    envVars:
+      # Set BACKEND_URL to your recruitment-api URL (e.g. https://recruitment-api.onrender.com) so the web app calls the right API.
+      - key: BACKEND_URL
+        sync: false
+      - key: FRONTEND_URL
+        sync: false

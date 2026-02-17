@@ -4,6 +4,7 @@ import 'dart:convert';
 import '../admin/admin_dashboard.dart';
 import '../candidate/candidate_dashboard.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 
 class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({Key? key}) : super(key: key);
@@ -34,8 +35,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       final token = await AuthService.getAccessToken();
       if (token == null) throw Exception("Token not found");
 
-      // Use 10.0.2.2 for Android emulator, replace with your PC IP on device
-      const String apiUrl = "http://127.0.0.1:5000/api/auth/change-password";
+      // Use configured API endpoint
+      final String apiUrl = ApiEndpoints.changePassword;
 
       final body = {
         "temporary_password": _oldPasswordController.text.trim(),

@@ -38,6 +38,15 @@ def _normalize_application_deadline(value):
             continue
     return None
 
+def _sanitize_like(value: str) -> str:
+    """Sanitize user-provided string for LIKE queries by removing wildcard characters.
+    This reduces the risk of unexpected pattern injection. In production, consider
+    more robust escaping depending on the DB backend (e.g., ESCAPE clause).
+    """
+    if value is None:
+        return ""
+    return str(value).replace('%', '').replace('_', '').replace('\\', '')
+
 
 
 
@@ -886,10 +895,12 @@ def list_audits():
             query = query.filter_by(user_id=user_id)
 
         if action:
-            query = query.filter(AuditLog.action.ilike(f"%{action}%"))
+            action_pattern = f"%{action}%"
+            query = query.filter(AuditLog.action.ilike(action_pattern))
 
         if search:
-            query = query.filter(AuditLog.details.ilike(f"%{search}%"))
+            search_pattern = f"%{search}%"
+            query = query.filter(AuditLog.details.ilike(search_pattern))
 
         if start_date:
             try:
@@ -2355,9 +2366,11 @@ def get_all_interviews():
 
         # ---------------- Filters ----------------
         if status:
-            query = query.filter(Interview.status.ilike(f"%{status}%"))
+            status_pattern = f"%{status}%"
+            query = query.filter(Interview.status.ilike(status_pattern))
         if interview_type:
-            query = query.filter(Interview.interview_type.ilike(f"%{interview_type}%"))
+            interview_type_pattern = f"%{interview_type}%"
+            query = query.filter(Interview.interview_type.ilike(interview_type_pattern))
         if search:
             search_pattern = f"%{search}%"
             query = query.filter(
@@ -2619,7 +2632,7 @@ def get_all_candidates():
         current_app.logger.error(f"Error fetching candidates: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
     
-@admin_bp.route('/api/auth/enroll_mfa/<int:user_id>', methods=['POST'])
+@admin_bp.route('/enroll_mfa/<int:user_id>', methods=['POST'])
 @jwt_required()
 def enroll_mfa(user_id):
     current_user_id = get_jwt_identity()
@@ -2678,10 +2691,11 @@ def get_shared_notes():
         
         # Apply filters
         if search:
+            search_pattern = f"%{search}%"
             query = query.filter(
                 or_(
-                    SharedNote.title.ilike(f'%{search}%'),
-                    SharedNote.content.ilike(f'%{search}%')
+                    SharedNote.title.ilike(search_pattern),
+                    SharedNote.content.ilike(search_pattern)
                 )
             )
         
@@ -2910,10 +2924,11 @@ def get_meetings():
         
         # Apply filters
         if search:
+            search_pattern = f"%{search}%"
             query = query.filter(
                 or_(
-                    Meeting.title.ilike(f'%{search}%'),
-                    Meeting.description.ilike(f'%{search}%')
+                    Meeting.title.ilike(search_pattern),
+                    Meeting.description.ilike(search_pattern)
                 )
             )
         
@@ -3299,10 +3314,11 @@ def get_upcoming_meetings():
 
         # keyword search
         if keyword:
+            keyword_pattern = f"%{_sanitize_like(keyword)}%"
             query = query.filter(
                 or_(
-                    Meeting.title.ilike(f"%{keyword}%"),
-                    Meeting.description.ilike(f"%{keyword}%")
+                    Meeting.title.ilike(keyword_pattern),
+                    Meeting.description.ilike(keyword_pattern)
                 )
             )
 
@@ -3820,8 +3836,7 @@ def get_interviews_by_timeframe(timeframe):
     except Exception as e:
         current_app.logger.error(f"Interviews by timeframe error: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
-    
-from sqlalchemy import func
+
 
 @admin_bp.route("/pipeline/stages/count", methods=["GET"])
 @role_required(["admin", "hiring_manager", "hr"])

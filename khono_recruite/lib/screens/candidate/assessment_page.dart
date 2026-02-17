@@ -5,6 +5,7 @@ import '../../services/auth_service.dart';
 import 'cv_upload_page.dart';
 import '../../widgets/application_flow_stepper.dart';
 import 'package:go_router/go_router.dart';
+import '../../utils/api_endpoints.dart';
 
 class AssessmentPage extends StatefulWidget {
   final int applicationId;
@@ -68,7 +69,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
     try {
       final res = await http.get(
         Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/applications/${widget.applicationId}/assessment"),
+            "${ApiEndpoints.candidateBase}/applications/${widget.applicationId}/assessment"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token"
@@ -110,7 +111,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
       final res = await http.post(
         Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/applications/${widget.applicationId}/assessment"),
+            "${ApiEndpoints.candidateBase}/applications/${widget.applicationId}/assessment"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token"
@@ -164,7 +165,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
       final res = await http.post(
         Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/apply/save_draft/${widget.applicationId}"),
+            "${ApiEndpoints.candidateBase}/apply/save_draft/${widget.applicationId}"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token"
@@ -401,7 +402,8 @@ class _AssessmentPageState extends State<AssessmentPage> {
                                       color: _boxFillColor,
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: _accentRed.withValues(alpha: 0.4),
+                                        color:
+                                            _accentRed.withValues(alpha: 0.4),
                                       ),
                                     ),
                                     child: RadioListTile<String>(
