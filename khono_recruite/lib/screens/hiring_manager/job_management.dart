@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
+import '../../widgets/knockout_rules_builder.dart';
+import '../../widgets/weighting_configuration_widget.dart';
 import '../../services/admin_service.dart';
 import '../../services/ai_service.dart';
 import '../../providers/theme_provider.dart';
@@ -176,6 +178,38 @@ class _JobManagementState extends State<JobManagement> {
                                                 ),
                                               ),
                                           ],
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              job['description'] ?? '',
+                                              style: TextStyle(
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.grey.shade400
+                                                    : Colors.black54,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            if (job['created_by_user'] != null)
+                                              Padding(
+                                                padding: const EdgeInsets.only(
+                                                    top: 4),
+                                                child: Text(
+                                                  "Created by: ${job['created_by_user']['name'] ?? job['created_by_user']['email'] ?? 'Unknown'}",
+                                                  style: TextStyle(
+                                                    color: themeProvider
+                                                            .isDarkMode
+                                                        ? Colors.grey.shade400
+                                                        : Colors.black54,
+                                                    fontSize: 12,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                          ],
                                         ),
                                       ),
                                       trailing: Row(
@@ -251,6 +285,8 @@ class _JobFormDialogState extends State<JobFormDialog>
   TextEditingController qualificationsController = TextEditingController();
   String companyName = "";
   String jobLocation = "";
+  String companyName = "";
+  String jobLocation = "";
   String companyDetails = "";
   String category = "";
   final skillsController = TextEditingController();
@@ -263,6 +299,15 @@ class _JobFormDialogState extends State<JobFormDialog>
   final TextEditingController salaryMinController = TextEditingController();
   final TextEditingController salaryMaxController = TextEditingController();
   List<Map<String, dynamic>> questions = [];
+  Map<String, int> weightings = {
+    "cv": 60,
+    "assessment": 40,
+    "interview": 0,
+    "references": 0,
+  };
+  List<Map<String, dynamic>> knockoutRules = [];
+  String employmentType = "full_time";
+  String? weightingsError;
   Map<String, int> weightings = {
     "cv": 60,
     "assessment": 40,
@@ -312,6 +357,8 @@ class _JobFormDialogState extends State<JobFormDialog>
     if (widget.job != null &&
         widget.job!['assessment_pack'] != null &&
         widget.job!['assessment_pack']['questions'] != null) {
+      questions =
+          _normalizeQuestions(widget.job!['assessment_pack']['questions']);
       questions =
           _normalizeQuestions(widget.job!['assessment_pack']['questions']);
     }
@@ -519,16 +566,24 @@ class _JobFormDialogState extends State<JobFormDialog>
         .toList();
 
     final normalizedQuestions = _normalizeQuestions(questions);
+    final normalizedQuestions = _normalizeQuestions(questions);
     final jobData = {
       'title': title,
       'description': description,
       'company': companyName,
       'location': jobLocation,
+      'company': companyName,
+      'location': jobLocation,
       'job_summary': jobSummary,
+      'employment_type': employmentType,
       'employment_type': employmentType,
       'responsibilities': responsibilities,
       'qualifications': qualifications,
       'company_details': companyDetails,
+      'salary_min': double.tryParse(salaryMinController.text),
+      'salary_max': double.tryParse(salaryMaxController.text),
+      'salary_currency': salaryCurrency,
+      'salary_period': salaryPeriod,
       'salary_min': double.tryParse(salaryMinController.text),
       'salary_max': double.tryParse(salaryMaxController.text),
       'salary_currency': salaryCurrency,
@@ -538,7 +593,10 @@ class _JobFormDialogState extends State<JobFormDialog>
       'min_experience': double.tryParse(minExpController.text) ?? 0,
       'weightings': weightings,
       'knockout_rules': knockoutRules,
+      'weightings': weightings,
+      'knockout_rules': knockoutRules,
       'assessment_pack': {
+        'questions': normalizedQuestions.map((q) {
         'questions': normalizedQuestions.map((q) {
           return {
             "question": q["question"],

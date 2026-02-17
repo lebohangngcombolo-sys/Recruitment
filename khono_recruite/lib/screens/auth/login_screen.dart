@@ -22,7 +22,6 @@ class _NoScrollbarScrollBehavior extends ScrollBehavior {
   ) =>
       child;
 }
-// 🆕 Import SSO Enterprise screen
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -215,8 +214,6 @@ class _LoginScreenState extends State<LoginScreen>
   // ------------------- NAVIGATION HELPER -------------------
   // Use GoRouter (context.go) so we don't trigger Navigator._debugLocked.
   // Defer to next frame so navigation runs after current build completes.
-  // Use GoRouter (context.go) so we don't trigger Navigator._debugLocked.
-  // Defer to next frame so navigation runs after current build completes.
   void _navigateToDashboard({
     required String token,
     required String role,
@@ -266,7 +263,6 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
 
-          // Centered Content - scroll fills screen so scroll works from anywhere
           // Centered Content - scroll fills screen so scroll works from anywhere
           Center(
             child: SizedBox.expand(

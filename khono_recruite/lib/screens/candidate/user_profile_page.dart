@@ -10,7 +10,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
 import '../../providers/theme_provider.dart';

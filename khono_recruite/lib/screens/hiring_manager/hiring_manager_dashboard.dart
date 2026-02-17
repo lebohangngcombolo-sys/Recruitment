@@ -19,6 +19,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 import '../auth/login_screen.dart';
@@ -224,7 +225,19 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     try {
       final counts = await admin.getDashboardCounts();
       final role = await AuthService.getRole();
+      final role = await AuthService.getRole();
 
+      List<String> activities = [];
+      if (role == "admin") {
+        final token = await AuthService.getAccessToken();
+        final res = await http.get(
+          Uri.parse("http://127.0.0.1:5000/api/admin/recent-activities"),
+          headers: {"Authorization": "Bearer $token"},
+        );
+        if (res.statusCode == 200) {
+          final data = json.decode(res.body);
+          activities = List<String>.from(data["recent_activities"] ?? []);
+        }
       List<String> activities = [];
       if (role == "admin") {
         final token = await AuthService.getAccessToken();
@@ -256,6 +269,12 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   Future<void> fetchAudits({int page = 1}) async {
     setState(() => loadingAudits = true);
     try {
+      final role = await AuthService.getRole();
+      if (role != "admin") {
+        setState(() => loadingAudits = false);
+        return;
+      }
+
       final role = await AuthService.getRole();
       if (role != "admin") {
         setState(() => loadingAudits = false);
@@ -468,6 +487,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                             '/profile?token=${widget.token}');
                                       },
                                       onLongPress: _pickProfileImage,
+                                      onLongPress: _pickProfileImage,
                                       child: CircleAvatar(
                                         radius: 18,
                                         backgroundColor: Colors.grey.shade200,
@@ -499,6 +519,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                       context.push(
                                           '/profile?token=${widget.token}');
                                     },
+                                    onLongPress: _pickProfileImage,
                                     onLongPress: _pickProfileImage,
                                     child: CircleAvatar(
                                       radius: 18,
@@ -649,6 +670,37 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                             ),
                             const SizedBox(width: 16),
 
+                            Flexible(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // ---------- Theme Toggle Switch ----------
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          themeProvider.isDarkMode
+                                              ? Icons.dark_mode
+                                              : Icons.light_mode,
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.amber
+                                              : Colors.grey.shade700,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Switch(
+                                          value: themeProvider.isDarkMode,
+                                          onChanged: (value) {
+                                            themeProvider.toggleTheme();
+                                          },
+                                          activeThumbColor: Colors.redAccent,
+                                          inactiveTrackColor:
+                                              Colors.grey.shade400,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(width: 12),
                             Flexible(
                               child: SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,

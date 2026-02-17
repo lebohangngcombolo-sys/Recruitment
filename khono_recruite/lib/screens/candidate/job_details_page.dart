@@ -457,9 +457,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                           end: Alignment.bottomCenter,
                           colors: [
                             Colors.black.withValues(alpha: 0.6),
-                            Colors.black.withValues(alpha: 0.6),
                             Colors.transparent,
-                            Colors.black.withValues(alpha: 0.3),
                             Colors.black.withValues(alpha: 0.3),
                           ],
                         ),

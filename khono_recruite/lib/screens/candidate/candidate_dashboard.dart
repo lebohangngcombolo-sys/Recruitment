@@ -375,7 +375,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return ['All Jobs', ...titles];
   }
 
-  // ignore: unused_element
   List<String> get _locations {
     final locations = availableJobs
         .map((job) => job['location']?.toString() ?? 'Remote')
@@ -827,6 +826,167 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       decoration: BoxDecoration(),
       padding: EdgeInsets.all(35),
       child: Container(
+        constraints: BoxConstraints(maxWidth: 1200),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 5,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: strokeColor, width: 1),
+                          color: fillColor,
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (value) => setState(() {}),
+                          style: GoogleFonts.poppins(color: Colors.white),
+                          decoration: InputDecoration(
+                            hintText: 'Keyword',
+                            hintStyle: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold),
+                            filled: false,
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide.none,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: strokeColor, width: 1),
+                          color: fillColor,
+                        ),
+                        child: DropdownButtonFormField(
+                          style: GoogleFonts.poppins(color: Colors.white),
+                          dropdownColor: Colors.black,
+                          icon:
+                              Icon(Icons.arrow_drop_down, color: Colors.white),
+                          iconEnabledColor: Colors.white,
+                          iconDisabledColor: Colors.white,
+                          iconSize: 24,
+                          decoration: InputDecoration(
+                            filled: false,
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide.none,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            hintText: 'All Jobs',
+                            hintStyle: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold),
+                          ),
+                          items: _jobTitles
+                              .map((category) => DropdownMenuItem(
+                                    value: category,
+                                    child: Text(category,
+                                        style: GoogleFonts.poppins(
+                                            color: Colors.white)),
+                                  ))
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => _selectedJobFilter = value!),
+                        ),
+                      ),
+                    ),
+                    SizedBox(width: 16),
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: strokeColor, width: 1),
+                          color: fillColor,
+                        ),
+                        child: DropdownButtonFormField(
+                          style: GoogleFonts.poppins(color: Colors.white),
+                          dropdownColor: Colors.black,
+                          icon:
+                              Icon(Icons.arrow_drop_down, color: Colors.white),
+                          iconEnabledColor: Colors.white,
+                          iconDisabledColor: Colors.white,
+                          iconSize: 24,
+                          decoration: InputDecoration(
+                            filled: false,
+                            border: OutlineInputBorder(
+                              borderSide: BorderSide.none,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            hintText: 'All Locations',
+                            hintStyle: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold),
+                          ),
+                          items: _locations
+                              .map((location) => DropdownMenuItem(
+                                    value: location,
+                                    child: Text(location,
+                                        style: GoogleFonts.poppins(
+                                            color: Colors.white)),
+                                  ))
+                              .toList(),
+                          onChanged: (value) =>
+                              setState(() => _selectedPlaceFilter = value!),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              flex: 1,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: strokeColor, width: 1),
+                  color: fillColor,
+                ),
+                child: ElevatedButton(
+                  onPressed: () {
+                    setState(() {});
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  child: Text('Search',
+                      style: GoogleFonts.poppins(
+                          color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLuxuryChatbotPanel() {
+    return Container(
       width: 380,
       height: 500,
       padding: const EdgeInsets.all(16),
@@ -1448,12 +1608,14 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         children: [
           Icon(Icons.format_quote, size: 32, color: Colors.white),
           SizedBox(height: 16),
-          Text(
-            'This platform has completely transformed the way I prepare for interviews. The feedback is clear, practical, and actually helps me improve. Highly recommended!',
-            style: GoogleFonts.poppins(
-                fontStyle: FontStyle.italic, color: Colors.white),
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
+          Expanded(
+            child: Text(
+              'This platform has completely transformed the way I prepare for interviews. The feedback is clear, practical, and actually helps me improve. Highly recommended!',
+              style: GoogleFonts.poppins(
+                  fontStyle: FontStyle.italic, color: Colors.white),
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
           SizedBox(height: 16),
           Row(
@@ -2073,48 +2235,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildLuxuryChatbotPanel() {
-    return Container(
-      width: 350,
-      height: 500,
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: primaryColor,
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(12),
-                topRight: Radius.circular(12),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.chat, color: Colors.white),
-                SizedBox(width: 8),
-                Text('Career Assistant', style: GoogleFonts.poppins(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                )),
-                Spacer(),
-                IconButton(
-                  onPressed: () => _safeSetState(() => chatbotOpen = false),
-                  icon: Icon(Icons.close, color: Colors.white),
-                ),
-              ],
-            ),
-          ),
-          Expanded(child: _buildLuxuryChatMessages()),
-        ],
       ),
     );
   }

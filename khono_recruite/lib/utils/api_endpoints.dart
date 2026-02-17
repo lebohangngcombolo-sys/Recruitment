@@ -4,8 +4,7 @@ class ApiEndpoints {
   static const candidateBase = "http://127.0.0.1:5001/api/candidate";
   static const adminBase = "http://127.0.0.1:5001/api/admin";
   static const chatbotBase = "http://127.0.0.1:5001/api/chatbot";
-  static const hmBase = "http://127.0.0.1:5001/api/admin";
-  static const chatBase = "http://127.0.0.1:5001/api/chat";
+  static const publicBase = "http://127.0.0.1:5000/api/public";
   static const analyticsBase = "http://127.0.0.1:5001/api/analytics";
 
   // NEW: Offer management base URL (matches your Flask blueprint)
@@ -50,7 +49,7 @@ class ApiEndpoints {
   static const String parserCV = "$authBase/cv/parse"; // POST Multipart
 
   // ------------------- Public (no auth) -------------------
-  static const publicBase = "http://127.0.0.1:5001/api/public";
+  static const publicBase = "http://127.0.0.1:5000/api/public";
   static const getPublicJobs = "$publicBase/jobs";
 
   // ------------------- Candidate -------------------
