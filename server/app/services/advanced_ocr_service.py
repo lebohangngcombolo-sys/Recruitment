@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import fitz  # PyMuPDF
-import pdfplumber
-import pytesseract
+import pdfplumber  # type: ignore[reportMissingImports]
+import pytesseract  # type: ignore[reportMissingImports]
 from PIL import Image, ImageEnhance
 
 logger = logging.getLogger(__name__)
