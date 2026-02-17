@@ -1245,23 +1245,19 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
             color: _textPrimary,
           ),
           const SizedBox(height: 30),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _socialIcon('assets/icons/Instagram.png',
-                    'https://www.instagram.com/yourprofile'),
-                _socialIcon(
-                    'assets/icons/LinkedIn.png', 'https://x.com/yourprofile'),
-                _socialIcon('assets/icons/LinkedIn.png',
-                    'https://www.linkedin.com/in/yourprofile'),
-                _socialIcon('assets/icons/facebook.png',
-                    'https://www.facebook.com/yourprofile'),
-                _socialIcon('assets/icons/YouTube.png',
-                    'https://www.youtube.com/yourchannel'),
-              ],
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _socialIcon('assets/icons/Instagram1.png',
+                  'https://www.instagram.com/yourprofile'),
+              _socialIcon('assets/icons/x1.png', 'https://x.com/yourprofile'),
+              _socialIcon('assets/icons/LinkedIn.png',
+                  'https://www.linkedin.com/in/yourprofile'),
+              _socialIcon('assets/icons/facebook1.png',
+                  'https://www.facebook.com/yourprofile'),
+              _socialIcon('assets/icons/YouTube1.png',
+                  'https://www.youtube.com/yourchannel'),
+            ],
           ),
           const SizedBox(height: 30),
           Text(
