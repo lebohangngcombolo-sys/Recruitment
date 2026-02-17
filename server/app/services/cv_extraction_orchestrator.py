@@ -1,111 +1,133 @@
-# app/services/cv_extraction_orchestrator.py
-"""
-Orchestrates CV text extraction into structured data for prepopulation and review.
-Used by Celery CV analysis task to produce structured_data, confidence_scores, warnings, suggestions.
-"""
 import logging
-from typing import Any, Dict, List
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 from app.services.cv_pattern_matcher import CVPatternMatcher
 
 logger = logging.getLogger(__name__)
 
 
-class ExtractionResult:
-    """Result of CV extraction for use by cv_tasks."""
-
-    __slots__ = ("structured_data", "confidence_scores", "warnings", "suggestions")
-
-    def __init__(
-        self,
-        structured_data: Dict[str, Any],
-        confidence_scores: Dict[str, float],
-        warnings: List[str],
-        suggestions: List[str],
-    ):
-        self.structured_data = structured_data or {}
-        self.confidence_scores = confidence_scores or {}
-        self.warnings = warnings or []
-        self.suggestions = suggestions or []
+@dataclass
+class OrchestratorOutput:
+    structured_data: Dict[str, Any]
+    confidence_scores: Dict[str, Any]
+    warnings: List[str]
+    suggestions: List[str]
 
 
 class CVExtractionOrchestrator:
-    """Extracts structured data from resume text for CV analysis and prepopulation."""
-
     def __init__(self):
         self.matcher = CVPatternMatcher()
 
-    def extract(
-        self,
-        resume_text: str,
-        extraction_metadata: Dict[str, Any] | None = None,
-    ) -> ExtractionResult:
-        """
-        Extract structured data from resume text. Optionally merge with extraction_metadata
-        (e.g. from upload-time extraction). Returns an ExtractionResult with structured_data,
-        confidence_scores, warnings, and suggestions.
-        """
-        text = (resume_text or "").strip()
+    def extract(self, raw_text: str, extraction_metadata: Optional[Dict[str, Any]] = None) -> OrchestratorOutput:
+        text = raw_text or ""
         extraction_metadata = extraction_metadata or {}
 
-        try:
-            flat = self.matcher.extract_all(text, metadata=extraction_metadata)
-        except Exception as e:
-            logger.warning("CVExtractionOrchestrator matcher failed: %s", e)
-            flat = {}
+        structured = self._build_structured_data(text)
+        confidence = self._calculate_confidence_scores(structured, extraction_metadata)
+        warnings = self._generate_warnings(structured, confidence, extraction_metadata)
+        suggestions = self._generate_suggestions(structured, confidence)
 
-        # Merge with any pre-existing extraction_metadata (e.g. from AI/upload)
-        structured_data = {**flat, **extraction_metadata}
-
-        # Simple confidence: presence of key fields
-        confidence_scores = self._confidence_scores(structured_data)
-
-        # Warnings and suggestions
-        warnings = self._collect_warnings(structured_data, text)
-        suggestions = self._collect_suggestions(structured_data, text)
-
-        return ExtractionResult(
-            structured_data=structured_data,
-            confidence_scores=confidence_scores,
+        return OrchestratorOutput(
+            structured_data=structured,
+            confidence_scores=confidence,
             warnings=warnings,
             suggestions=suggestions,
         )
 
-    def _confidence_scores(self, data: Dict[str, Any]) -> Dict[str, float]:
-        """Derive confidence scores from extracted fields."""
-        scores = {}
-        key_fields = [
-            "full_name", "email", "phone", "skills", "experience",
-            "education", "linkedin", "github",
-        ]
-        for k in key_fields:
-            v = data.get(k)
-            if v is None:
-                scores[k] = 0.0
-            elif isinstance(v, (list, dict)) and len(v) == 0:
-                scores[k] = 0.0
-            elif isinstance(v, str) and not v.strip():
-                scores[k] = 0.0
-            else:
-                scores[k] = 1.0
+    def _build_structured_data(self, text: str) -> Dict[str, Any]:
+        flat = self.matcher.extract_all(text)
+
+        # Keep BOTH:
+        # - flat keys for backward compatibility / easy Flutter binding
+        # - nested groups for review UI
+        structured: Dict[str, Any] = {
+            **flat,
+            "personal_details": {
+                "full_name": flat.get("full_name", ""),
+                "email": flat.get("email", ""),
+                "phone": flat.get("phone", ""),
+                "address": flat.get("address", ""),
+                "dob": flat.get("dob", ""),
+                "linkedin": flat.get("linkedin", ""),
+                "github": flat.get("github", ""),
+                "portfolio": flat.get("portfolio", ""),
+            },
+            "education_details": {
+                "education": flat.get("education", []),
+                "certifications": flat.get("certifications", []),
+                "languages": flat.get("languages", []),
+            },
+            "professional_details": {
+                "skills": flat.get("skills", []),
+                "experience": flat.get("experience", ""),
+                "position": flat.get("position", ""),
+                "previous_companies": flat.get("previous_companies", []),
+                "bio": flat.get("bio", ""),
+            },
+        }
+        return structured
+
+    def _calculate_confidence_scores(self, structured: Dict[str, Any], extraction_metadata: Dict[str, Any]) -> Dict[str, Any]:
+        # Basic heuristic confidence. This is meant for UX hints.
+        def _score_str(v: Any) -> float:
+            s = (v or "").strip() if isinstance(v, str) else ""
+            if not s:
+                return 0.0
+            if len(s) > 30:
+                return 0.9
+            return 0.6
+
+        def _score_list(v: Any) -> float:
+            if not isinstance(v, list) or not v:
+                return 0.0
+            if len(v) >= 5:
+                return 0.9
+            return 0.6
+
+        scores = {
+            "full_name": _score_str(structured.get("full_name")),
+            "email": _score_str(structured.get("email")),
+            "phone": _score_str(structured.get("phone")),
+            "linkedin": _score_str(structured.get("linkedin")),
+            "github": _score_str(structured.get("github")),
+            "education": _score_list(structured.get("education")),
+            "skills": _score_list(structured.get("skills")),
+            "certifications": _score_list(structured.get("certifications")),
+            "languages": _score_list(structured.get("languages")),
+            "experience": _score_str(structured.get("experience")),
+        }
+
+        # Surface OCR confidence if available
+        ocr_conf = extraction_metadata.get("confidence")
+        if ocr_conf is not None:
+            scores["ocr_confidence"] = ocr_conf
+
         return scores
 
-    def _collect_warnings(self, data: Dict[str, Any], text: str) -> List[str]:
-        """Collect warnings (e.g. missing or weak sections)."""
-        warnings = []
-        if not (data.get("email") or "").strip():
-            warnings.append("No email found.")
-        if not (data.get("phone") or "").strip():
-            warnings.append("No phone number found.")
-        if not (data.get("skills") or (isinstance(data.get("skills"), list) and not data["skills"])):
-            warnings.append("No skills section detected.")
+    def _generate_warnings(self, structured: Dict[str, Any], confidence: Dict[str, Any], extraction_metadata: Dict[str, Any]) -> List[str]:
+        warnings: List[str] = []
+        if not (structured.get("full_name") or "").strip():
+            warnings.append("Missing full name")
+        if not (structured.get("email") or "").strip():
+            warnings.append("Missing email")
+        if not structured.get("skills"):
+            warnings.append("Skills not detected")
+        if not (structured.get("experience") or "").strip():
+            warnings.append("Work experience not detected")
+
+        ocr_conf = extraction_metadata.get("confidence")
+        if isinstance(ocr_conf, (int, float)) and ocr_conf < 60:
+            warnings.append("Low OCR confidence; extracted text may be incomplete")
+
         return warnings
 
-    def _collect_suggestions(self, data: Dict[str, Any], text: str) -> List[str]:
-        """Collect suggestions for improving the CV."""
-        suggestions = []
-        if not data.get("linkedin"):
-            suggestions.append("Consider adding a LinkedIn profile URL.")
-        if not data.get("experience") and not data.get("education"):
-            suggestions.append("Add experience or education sections for better matching.")
+    def _generate_suggestions(self, structured: Dict[str, Any], confidence: Dict[str, Any]) -> List[str]:
+        suggestions: List[str] = []
+        if not (structured.get("linkedin") or "").strip():
+            suggestions.append("Add a LinkedIn URL")
+        if not (structured.get("portfolio") or "").strip() and not (structured.get("github") or "").strip():
+            suggestions.append("Add a portfolio or GitHub link")
+        if not structured.get("certifications"):
+            suggestions.append("Add certifications (if applicable)")
         return suggestions
