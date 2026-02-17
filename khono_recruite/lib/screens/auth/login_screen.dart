@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen>
         passwordController.text.trim(),
       );
 
-      if (result['success']) {
+      if (result['ok'] == true) {
         // 🆕 Check if MFA is required
         if (result['mfa_required'] == true) {
           // 🆕 STORE THE MFA SESSION TOKEN IN STATE
@@ -117,7 +117,7 @@ class _LoginScreenState extends State<LoginScreen>
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result['message'] ?? "Login failed")),
+          SnackBar(content: Text(result['error']?.toString() ?? "Login failed")),
         );
       }
     } catch (e) {
@@ -143,7 +143,7 @@ class _LoginScreenState extends State<LoginScreen>
     try {
       final result = await AuthService.verifyMfaLogin(_mfaSessionToken!, token);
 
-      if (result['success']) {
+      if (result['success'] == true) {
         // 🆕 CLEAR MFA STATE AFTER SUCCESS
         setState(() {
           _mfaSessionToken = null;
@@ -153,14 +153,14 @@ class _LoginScreenState extends State<LoginScreen>
         // Pop MFA screen and navigate to dashboard
         Navigator.pop(context); // Close MFA screen
         _navigateToDashboard(
-          token: result['access_token'],
-          role: result['user']['role'],
-          dashboard: result['dashboard'],
+          token: result['access_token'] as String,
+          role: (result['user']?['role'] ?? result['role']) as String? ?? 'candidate',
+          dashboard: result['dashboard'] as String? ?? '/candidate-dashboard',
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(result['message'] ?? "MFA verification failed")),
+              content: Text(result['message']?.toString() ?? "MFA verification failed")),
         );
       }
     } catch (e) {

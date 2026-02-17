@@ -1,11 +1,8 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import get_jwt_identity, jwt_required
-from app.extensions import db, cloudinary_client
-from werkzeug.security import check_password_hash, generate_password_hash
-from app.extensions import bcrypt
+from app.extensions import db, cloudinary_client, bcrypt
 import cloudinary.uploader
 from app.models import (
-    User, Candidate, Requisition, Application, AssessmentResult, Notification, AuditLog, CVAnalysis
     User, Candidate, Requisition, Application, AssessmentResult, Notification, AuditLog, CVAnalysis
 )
 from datetime import datetime
@@ -13,16 +10,12 @@ from werkzeug.utils import secure_filename
 
 # uses online analyzer via background task; do not instantiate heavy models here
 # NOTE: import analyze_cv_task lazily inside upload_resume to avoid circular import
-# uses online analyzer via background task; do not instantiate heavy models here
-# NOTE: import analyze_cv_task lazily inside upload_resume to avoid circular import
 from app.services.cv_parser_service import HybridResumeAnalyzer
-from app.services.job_service import JobService
 from app.services.job_service import JobService
 from app.utils.decorators import role_required
 from app.utils.helper import get_current_candidate
 from app.services.audit2 import AuditService
 import fitz
-from flask import jsonify, request, current_app
 import json
 import re
 
@@ -44,13 +37,6 @@ def apply_job(job_id):
             return jsonify({"error": "Job not found"}), 404
         if not job.is_active or job.deleted_at is not None:
             return jsonify({"error": "Job is not accepting applications"}), 400
-        data = request.get_json() or {}
-
-        job = Requisition.query.get(job_id)
-        if not job:
-            return jsonify({"error": "Job not found"}), 404
-        if not job.is_active or job.deleted_at is not None:
-            return jsonify({"error": "Job is not accepting applications"}), 400
 
         # Fetch or create Candidate profile
         candidate = Candidate.query.filter_by(user_id=user.id).first()
@@ -62,16 +48,8 @@ def apply_job(job_id):
         # Update candidate info
         if candidate.profile is None:
             candidate.profile = {}
-        if candidate.profile is None:
-            candidate.profile = {}
         candidate.full_name = data.get("full_name", candidate.full_name)
         candidate.phone = data.get("phone", candidate.phone)
-        if "portfolio" in data:
-            candidate.portfolio = data.get("portfolio")
-            candidate.profile["portfolio"] = candidate.portfolio
-        if "cover_letter" in data:
-            candidate.cover_letter = data.get("cover_letter")
-            candidate.profile["cover_letter"] = candidate.cover_letter
         if "portfolio" in data:
             candidate.portfolio = data.get("portfolio")
             candidate.profile["portfolio"] = candidate.portfolio
@@ -126,8 +104,13 @@ def _job_list_item(job):
         "location": getattr(job, "location", None) or "Remote",
         "type": getattr(job, "employment_type", None) or "Full Time",
         "salary": getattr(job, "salary_range", None) or "",
+        "salary_min": getattr(job, "salary_min", None),
+        "salary_max": getattr(job, "salary_max", None),
+        "salary_currency": getattr(job, "salary_currency", None) or "ZAR",
+        "salary_period": getattr(job, "salary_period", None) or "monthly",
         "deadline": deadline_str,
         "company_logo": getattr(job, "banner", None),
+        "banner": getattr(job, "banner", None),
         "role": job.category or "",
         "description": job.description or "",
         "responsibilities": job.responsibilities or [],
@@ -138,33 +121,10 @@ def _job_list_item(job):
         "published_on": job.published_on.strftime("%d %b, %Y") if job.published_on else "",
         "vacancy": job.vacancy or 1,
         "created_by": job.created_by,
-    }
-
-
-def _job_list_item(job):
-    """Build a single job item for Flutter explore listing (shared by candidate and public APIs)."""
-    deadline_str = ""
-    if getattr(job, "application_deadline", None) and job.application_deadline:
-        deadline_str = job.application_deadline.strftime("%d %b %Y")
-    return {
-        "id": job.id,
-        "title": job.title or "",
-        "company": getattr(job, "company", None) or "",
-        "location": getattr(job, "location", None) or "Remote",
-        "type": getattr(job, "employment_type", None) or "Full Time",
-        "salary": getattr(job, "salary_range", None) or "",
-        "deadline": deadline_str,
-        "company_logo": getattr(job, "banner", None),
-        "role": job.category or "",
-        "description": job.description or "",
-        "responsibilities": job.responsibilities or [],
-        "qualifications": job.qualifications or [],
-        "required_skills": job.required_skills or [],
-        "min_experience": job.min_experience or 0,
-        "company_details": job.company_details or "",
-        "published_on": job.published_on.strftime("%d %b, %Y") if job.published_on else "",
-        "vacancy": job.vacancy or 1,
-        "created_by": job.created_by,
+        "employment_type": getattr(job, "employment_type", None) or "full_time",
+        "weightings": getattr(job, "weightings", None) or {"cv": 60, "assessment": 40, "interview": 0, "references": 0},
+        "knockout_rules": getattr(job, "knockout_rules", None) or [],
+        "application_deadline": job.application_deadline.isoformat() if getattr(job, "application_deadline", None) else None,
     }
 
 
@@ -175,10 +135,6 @@ def get_available_jobs():
     try:
         user_id = get_jwt_identity()
 
-        jobs = Requisition.query.filter_by(is_active=True)\
-                                .filter(Requisition.deleted_at.is_(None))\
-                                .order_by(Requisition.created_at.desc())\
-                                .all()
         jobs = Requisition.query.filter_by(is_active=True)\
                                 .filter(Requisition.deleted_at.is_(None))\
                                 .order_by(Requisition.created_at.desc())\
@@ -197,24 +153,11 @@ def get_available_jobs():
                 "salary_currency": job.salary_currency or "ZAR",
                 "salary_period": job.salary_period or "monthly",
                 "employment_type": job.employment_type or "full_time",
-                "company": job.company or "",
-                "location": job.location or "",
-                "salary_min": job.salary_min,
-                "salary_max": job.salary_max,
-                "salary_currency": job.salary_currency or "ZAR",
-                "salary_period": job.salary_period or "monthly",
-                "employment_type": job.employment_type or "full_time",
                 "responsibilities": job.responsibilities or [],
                 "qualifications": job.qualifications or [],
                 "required_skills": job.required_skills or [],
                 "min_experience": job.min_experience or 0,
                 "knockout_rules": job.knockout_rules or [],
-                "weightings": job.weightings or {
-                    "cv": 60,
-                    "assessment": 40,
-                    "interview": 0,
-                    "references": 0
-                },
                 "weightings": job.weightings or {
                     "cv": 60,
                     "assessment": 40,
@@ -232,7 +175,6 @@ def get_available_jobs():
         # Audit log (candidate viewed jobs)
         AuditService.record_action(
             admin_id=user_id,
-            admin_id=user_id,
             action="Candidate Viewed Available Jobs",
             target_user_id=user_id,
             details="Retrieved list of available jobs"
@@ -246,7 +188,6 @@ def get_available_jobs():
 
 
 # ----------------- UPLOAD RESUME -----------------
-# ----------------- UPLOAD RESUME -----------------
 @candidate_bp.route("/upload_resume/<int:application_id>", methods=["POST"])
 @role_required(["candidate"])
 def upload_resume(application_id):
@@ -254,9 +195,6 @@ def upload_resume(application_id):
         application = Application.query.get_or_404(application_id)
         candidate = application.candidate
         job = application.requisition
-
-        if not job or not job.is_active or job.deleted_at is not None:
-            return jsonify({"error": "Job is not accepting applications"}), 400
 
         if not job or not job.is_active or job.deleted_at is not None:
             return jsonify({"error": "Job is not accepting applications"}), 400
@@ -309,43 +247,6 @@ def upload_resume(application_id):
         except Exception:
             pass
 
-        import os
-        import tempfile
-        from app.services.advanced_ocr_service import AdvancedOCRService
-
-        filename = (file.filename or "").strip()
-        if not filename:
-            return jsonify({"error": "No file selected"}), 400
-
-        _, ext = os.path.splitext(filename)
-        ext = (ext or "").lower().lstrip(".")
-
-        ocr_service = AdvancedOCRService()
-        if ext and ext not in ocr_service.SUPPORTED_EXTENSIONS:
-            return jsonify({
-                "error": f"Unsupported file type: .{ext}",
-                "supported_types": sorted(list(ocr_service.SUPPORTED_EXTENSIONS)),
-            }), 400
-
-        # Save to temp file for OCR / text extraction
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}" if ext else "") as tmp:
-            temp_path = tmp.name
-        try:
-            file.save(temp_path)
-            ocr_result = ocr_service.extract_text_with_metadata(temp_path, ext or "")
-            resume_text = (ocr_result.get("text") or "").strip()
-        finally:
-            try:
-                os.remove(temp_path)
-            except Exception:
-                pass
-
-        # Reset stream so Cloudinary upload can read the file content
-        try:
-            file.stream.seek(0)
-        except Exception:
-            pass
-
         # --- Upload to Cloudinary ---
         resume_url = HybridResumeAnalyzer.upload_cv(file)
         if not resume_url:
@@ -357,8 +258,6 @@ def upload_resume(application_id):
             resume_text = client_resume_text
 
         # --- Queue analysis (non-blocking) ---
-        # If client provided resume_text explicitly, prefer that.
-        client_resume_text = (request.form.get("resume_text", "") or "").strip()
         if client_resume_text:
             resume_text = client_resume_text
 
@@ -407,54 +306,15 @@ def upload_resume(application_id):
         except Exception:
             current_app.logger.exception("Failed to enqueue CV analysis task")
 
-        try:
-            # import task lazily to avoid circular import during app initialization
-            from app.tasks.cv_tasks import analyze_cv_task
-            analyze_cv_task.delay(cv_analysis.id, application.id)
-        except Exception:
-            current_app.logger.exception("Failed to enqueue CV analysis task")
-
         return jsonify({
-            "message": "Resume uploaded; analysis queued",
-            "analysis_id": cv_analysis.id,
             "message": "Resume uploaded; analysis queued",
             "analysis_id": cv_analysis.id,
             "resume_url": resume_url,
             "status": "queued"
         }), 202
-            "status": "queued"
-        }), 202
 
     except Exception as e:
         current_app.logger.error(f"Upload resume error: {e}", exc_info=True)
-        return jsonify({"error": "Internal server error"}), 500
-
-
-# ----------------- CV ANALYSIS STATUS -----------------
-@candidate_bp.route("/cv-analyses/<int:analysis_id>", methods=["GET"])
-@role_required(["candidate"])
-def get_cv_analysis_status(analysis_id):
-    try:
-        user_id = get_jwt_identity()
-        candidate = Candidate.query.filter_by(user_id=user_id).first()
-        if not candidate:
-            return jsonify({"error": "Candidate not found"}), 404
-
-        analysis = CVAnalysis.query.get_or_404(analysis_id)
-        if analysis.candidate_id != candidate.id:
-            return jsonify({"error": "Unauthorized"}), 403
-
-        return jsonify({
-            "analysis_id": analysis.id,
-            "candidate_id": analysis.candidate_id,
-            "status": analysis.status,
-            "result": analysis.result,
-            "started_at": analysis.started_at.isoformat() if analysis.started_at else None,
-            "finished_at": analysis.finished_at.isoformat() if analysis.finished_at else None,
-            "created_at": analysis.created_at.isoformat() if analysis.created_at else None,
-        }), 200
-    except Exception as e:
-        current_app.logger.error(f"Get CV analysis status error: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
 
 
@@ -500,7 +360,6 @@ def get_applications():
         result = []
         for app in applications:
             assessment_result = AssessmentResult.query.filter_by(application_id=app.id).first()
-            job = app.requisition
             job = app.requisition
             result.append({
                 "application_id": app.id,
@@ -710,8 +569,6 @@ def submit_assessment(application_id):
             "message": "Assessment submitted",
             "assessment_score": percentage_score,
             "overall_score": application.overall_score,
-            "recommendation": result.recommendation,
-            "knockout_rule_violations": violations
             "recommendation": result.recommendation,
             "knockout_rule_violations": violations
         }), 201

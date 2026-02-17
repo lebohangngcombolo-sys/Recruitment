@@ -9,9 +9,7 @@ from sqlalchemy.orm import Query
 
 from app.extensions import db
 from app.models import Requisition, User, Application, JobActivityLog, Candidate
-from app.models import Requisition, User, Application, JobActivityLog, Candidate
 from app.schemas.job_schemas import (
-    job_create_schema, job_update_schema, job_filter_schema, job_activity_filter_schema
     job_create_schema, job_update_schema, job_filter_schema, job_activity_filter_schema
 )
 
@@ -55,7 +53,6 @@ class JobService:
             db.session.add(job)
             db.session.flush()  # Assign job.id before logging (job_activity_logs.job_id NOT NULL)
             
-            # Log activity (job.id is now set)
             # Log activity (job.id is now set)
             JobService._log_activity(
                 action="CREATE",

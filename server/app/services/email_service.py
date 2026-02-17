@@ -26,7 +26,8 @@ class EmailService:
     def send_password_reset_email(email, reset_token):
         """Send password reset instructions."""
         subject = "Password Reset Request"
-        reset_link = f"http://localhost:3000/reset-password?token={reset_token}"
+        base = current_app.config.get("FRONTEND_URL") or "http://localhost:3000"
+        reset_link = f"{base.rstrip('/')}/reset-password?token={reset_token}"
         try:
             html = render_template(
                 'email_templates/password_reset_email.html', 

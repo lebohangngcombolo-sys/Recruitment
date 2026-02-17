@@ -34,11 +34,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     try {
       final userId = await AuthService.getUserId();
       final data = await getNotifications(userId);
+      if (!mounted) return;
       setState(() => notifications = List<Map<String, dynamic>>.from(data));
     } catch (e) {
       debugPrint("Error fetching notifications: $e");
+      if (!mounted) return;
       setState(() => errorMessage = "Failed to load notifications");
     } finally {
+      if (!mounted) return;
       setState(() => loading = false);
     }
   }

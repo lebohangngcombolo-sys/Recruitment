@@ -16,13 +16,14 @@ from app.services.file_text_extractor import extract_text_from_file
 from app.utils.decorators import role_required
 from datetime import datetime, timedelta
 import secrets
-import jwt  # ← ADD THIS IMPORT
+import jwt
 from app.utils.enrollment_schema import EnrollmentSchema
 from app.services.enrollment_service import EnrollmentService
 from app.services.ai_parser_service import analyse_resume_gemini
 from app.services.ai_cv_parser import AIParser
 from marshmallow import ValidationError
 from werkzeug.utils import secure_filename
+from sqlalchemy.exc import OperationalError
 import os
 
 
@@ -106,11 +107,11 @@ def init_auth_routes(app):
                 return jsonify({"error": "No SSO token provided"}), 401
         
             # Verify the token using our secret
-            user_data = jwt.decode(
-                token, 
-                current_app.config['SSO_JWT_SECRET'],  # Make sure this is in your config
-                algorithms=['HS256']
-            )
+            sso_secret = current_app.config.get('SSO_JWT_SECRET')
+            if not sso_secret:
+                current_app.logger.error("SSO_JWT_SECRET not configured")
+                return jsonify({"error": "SSO not configured"}), 500
+            user_data = jwt.decode(token, sso_secret, algorithms=['HS256'])
         
             # Get user info from token - FIXED: Use first_name and last_name
             email = user_data['email']
@@ -495,9 +496,16 @@ def init_auth_routes(app):
                 'dashboard': dashboard_url
             }), 200
 
+        except OperationalError as e:
+            db.session.rollback()
+            current_app.logger.error(f'Login error (database): {e}', exc_info=True)
+            return jsonify({
+                'error': 'Database temporarily unavailable. Please try again in a moment.'
+            }), 503
         except Exception as e:
+            db.session.rollback()
             current_app.logger.error(f'Login error: {str(e)}', exc_info=True)
-            return jsonify({'error': 'Internal server error'}), 500  # 🆕 Changed from 200 to 500
+            return jsonify({'error': 'Internal server error'}), 500
 
     # ------------------- REFRESH TOKEN -------------------
     @app.route('/api/auth/refresh', methods=['POST'])
@@ -523,7 +531,14 @@ def init_auth_routes(app):
                 'dashboard': dashboard_url
             }), 200
 
+        except OperationalError as e:
+            db.session.rollback()
+            current_app.logger.error(f'Token refresh error (database): {e}', exc_info=True)
+            return jsonify({
+                'error': 'Database temporarily unavailable. Please try again in a moment.'
+            }), 503
         except Exception as e:
+            db.session.rollback()
             current_app.logger.error(f'Token refresh error: {str(e)}', exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
 

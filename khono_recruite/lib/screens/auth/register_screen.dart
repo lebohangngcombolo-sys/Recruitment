@@ -115,21 +115,26 @@ class _RegisterScreenState extends State<RegisterScreen>
     final result = await AuthService.register(data);
     setState(() => loading = false);
 
-    final status = result['status'];
-    final body = result['body'];
+    final status = result['status'] as int? ?? 0;
+    final body = result['body'] is Map<String, dynamic> ? result['body'] as Map<String, dynamic> : <String, dynamic>{};
 
-    if (status != 201) {
-      final errorMessage =
-          body["errors"]?.join("\n") ?? body["error"] ?? "Registration failed.";
+    if (status != 201 && status != 200) {
+      final errors = body['errors'];
+      final errorMsg = body['error'];
+      final errorMessage = errors is List
+          ? errors.join('\n')
+          : (errorMsg is String ? errorMsg : 'Registration failed.');
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessage,
-            style: GoogleFonts.poppins(),
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              errorMessage,
+              style: GoogleFonts.poppins(),
+            ),
           ),
-        ),
-      );
+        );
+      }
       return;
     }
 
