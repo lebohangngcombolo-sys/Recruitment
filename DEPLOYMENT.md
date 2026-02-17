@@ -1,6 +1,67 @@
 # Deployment Guide — Render & PostgreSQL
 
+**Just pushed?** → Go to **§0. Right after you push** and follow the steps on Render.
+
 This document covers deployment readiness, the deployed database (PostgreSQL), and a checklist before pushing to your deployed branch.
+
+---
+
+## 0. Right after you push (do this on Render)
+
+Follow these steps **after** you’ve run `git push origin mabunda1` (or your deploy branch).
+
+### Step 1: Branch and deploy
+
+1. Open [Render Dashboard](https://dashboard.render.com).
+2. For **recruitment-api** and **recruitment-web**, open each service → **Settings**.
+3. Set **Branch** to the branch you push (e.g. `mabunda1` or `mabunda_deployment`). Save.
+4. If auto-deploy is on, Render will build and deploy. Otherwise click **Manual Deploy** → **Deploy latest commit**.
+
+**If you deploy from `mabunda_deployment` instead of `mabunda1`:**  
+You pushed `mabunda1`. If Render (or your process) is set to deploy from `mabunda_deployment`, merge and push:
+
+```bash
+git checkout mabunda_deployment
+git merge mabunda1
+git push origin mabunda_deployment
+```
+
+Then trigger or wait for deployment from `mabunda_deployment`. In Render, set **Branch** to `mabunda_deployment` for both services.
+
+### Step 2: Environment variables — recruitment-api
+
+In **recruitment-api** → **Environment**:
+
+| Variable | What to set |
+|----------|-------------|
+| **DATABASE_URL** | Your Postgres URL (see §1 below). For existing DB `recruitment_db_vexi`, use its External URL; app adds `?sslmode=require` in production. |
+| **SECRET_KEY** | Strong random string (e.g. `openssl rand -hex 32`). |
+| **JWT_SECRET_KEY** | Another strong random string. |
+| **FRONTEND_URL** | Your web app URL, e.g. `https://recruitment-web.onrender.com`. |
+| **BACKEND_URL** | Your API URL, e.g. `https://recruitment-api.onrender.com`. |
+| **REDIS_URL** | If you use Redis/Celery; otherwise leave unset (eager tasks). |
+| **CLOUDINARY_*** | Cloud name, API key, API secret (if you use uploads). |
+| **MAIL_*** | If you use password reset / email. |
+
+Save. Redeploy the API so it picks up new values.
+
+### Step 3: Environment variables — recruitment-web
+
+In **recruitment-web** → **Environment**:
+
+| Variable | What to set |
+|----------|-------------|
+| **BACKEND_URL** | **Required.** Your live API URL, e.g. `https://recruitment-api.onrender.com`. The Flutter build uses this so the app calls the deployed API. |
+| **FRONTEND_URL** | Optional; e.g. `https://recruitment-web.onrender.com`. |
+
+Save. **Redeploy recruitment-web** so the next build uses this `BACKEND_URL` (otherwise the app may still call `127.0.0.1`).
+
+### Step 4: Verify
+
+1. **API:** Open `https://<your-recruitment-api-url>/api/public/healthz` in a browser. You should see a healthy response.
+2. **Web:** Open your recruitment-web URL. Log in and load a page that calls the API (e.g. jobs list). Confirm it uses the deployed backend (no CORS or connection errors).
+
+If the API fails, check **recruitment-api** → **Logs** (e.g. migrations, `DATABASE_URL`, missing env). If the web app shows “failed to fetch” or wrong API, confirm **BACKEND_URL** is set for recruitment-web and redeploy.
 
 ---
 
@@ -102,7 +163,7 @@ Migration chain (already in repo): `d544fdd839da` (init) → `33f86c05b761` → 
 1. **Secrets**: Ensure no real secrets in repo; use Render env (and `.env` only locally, in `.gitignore`).
 2. **.env**: Keep `.env` out of git; use `render.env.template` as a reference for required keys.
 3. **Migrations**: All migrations committed and in order; run `flask db upgrade` against the deployed DB (or rely on deploy).
-4. **API ↔ Web**: After deploy, set **BACKEND_URL** for recruitment-web to the live API URL and redeploy the web service so the next build picks it up.
+4. **API ↔ Web**: After deploy, set **BACKEND_URL** for recruitment-web to the live API URL and redeploy the web service (see **§0 Step 3**).
 5. **Smoke test**: Open the deployed web app, log in, and call one API (e.g. jobs list) to confirm the app uses the deployed backend and DB.
 
 ---
