@@ -14,7 +14,9 @@ class WeightingConfigurationWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final total = weightings.values.fold<int>(0, (sum, v) => sum + v);
+    final cv = weightings["cv"] ?? 0;
+    final assessment = weightings["assessment"] ?? 0;
+    final total = cv + assessment;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -22,26 +24,14 @@ class WeightingConfigurationWidget extends StatelessWidget {
         _buildSlider(
           context,
           label: "CV",
-          value: weightings["cv"] ?? 0,
+          value: cv,
           onChanged: (value) => _updateWeighting("cv", value),
         ),
         _buildSlider(
           context,
           label: "Assessment",
-          value: weightings["assessment"] ?? 0,
+          value: assessment,
           onChanged: (value) => _updateWeighting("assessment", value),
-        ),
-        _buildSlider(
-          context,
-          label: "Interview",
-          value: weightings["interview"] ?? 0,
-          onChanged: (value) => _updateWeighting("interview", value),
-        ),
-        _buildSlider(
-          context,
-          label: "References",
-          value: weightings["references"] ?? 0,
-          onChanged: (value) => _updateWeighting("references", value),
         ),
         const SizedBox(height: 8),
         Text(
@@ -88,6 +78,9 @@ class WeightingConfigurationWidget extends StatelessWidget {
   void _updateWeighting(String key, int value) {
     final updated = Map<String, int>.from(weightings);
     updated[key] = value;
+    // Keep interview and references at 0 for backend; only CV and Assessment are editable
+    updated["interview"] = 0;
+    updated["references"] = 0;
     onChanged(updated);
   }
 }

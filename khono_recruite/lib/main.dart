@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -28,8 +29,39 @@ import 'screens/hiring_manager/offer_list_screen.dart';
 
 import 'providers/theme_provider.dart';
 import 'utils/theme_utils.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_ai/firebase_ai.dart'; // Import Firebase AI SDK
+import 'firebase_options.dart';
+import 'services/ai_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase only if config has a valid API key (avoids white screen on invalid-api-key)
+  GenerativeModel? generativeModel;
+  final opts = DefaultFirebaseOptions.currentPlatform;
+  final hasFirebaseConfig = opts.apiKey.isNotEmpty && opts.projectId.isNotEmpty;
+  if (hasFirebaseConfig) {
+    try {
+      await Firebase.initializeApp(options: opts);
+      generativeModel =
+          FirebaseAI.googleAI().generativeModel(model: 'gemini-2.5-flash');
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('Firebase init skipped or failed: $e');
+        debugPrint('$st');
+      }
+    }
+  } else {
+    if (kDebugMode) {
+      debugPrint(
+          'Firebase not configured (empty apiKey/projectId in firebase_options.dart). '
+          'Run "dart run flutterfire_cli:flutterfire configure" or set options. App will use OpenRouter/DeepSeek for AI.');
+    }
+  }
+
+  AIService.initialize(generativeModel);
+
   // ⚡ Fix Flutter Web initial route handling
   setUrlStrategy(PathUrlStrategy());
 
@@ -37,6 +69,7 @@ void main() {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        Provider<GenerativeModel?>.value(value: generativeModel),
       ],
       child: const KhonoRecruiteApp(),
     ),

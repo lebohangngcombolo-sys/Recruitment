@@ -12,27 +12,30 @@ class AuthService {
   static const _storage = FlutterSecureStorage();
 
   // ----------------- REGISTER -----------------
+  /// Returns {status: int, body: Map} so register_screen can show errors and navigate to verify-email on 201.
   static Future<Map<String, dynamic>> register(
     Map<String, dynamic> data,
   ) async {
-    // Only keep email and password
     final requestData = {
       "email": data["email"],
       "password": data["password"],
     };
 
-    final response = await http.post(
-      Uri.parse(ApiEndpoints.register),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode(requestData),
-    );
-
-    final body = jsonDecode(response.body);
-
-    return {
-      "status": response.statusCode, // HTTP status code
-      "body": body, // decoded response
-    };
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.register),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(requestData),
+      );
+      Map<String, dynamic> body = {};
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) body = decoded;
+      } catch (_) {}
+      return {"status": response.statusCode, "body": body};
+    } catch (e) {
+      return {"status": 0, "body": {"error": "Network or parsing error: $e"}};
+    }
   }
 
   // ----------------- VERIFY EMAIL -----------------
@@ -44,10 +47,14 @@ class AuthService {
       body: jsonEncode(data),
     );
 
-    final decoded = jsonDecode(response.body);
+    Map<String, dynamic> decoded = {};
+    try {
+      final d = jsonDecode(response.body);
+      if (d is Map<String, dynamic>) decoded = d;
+    } catch (_) {}
 
     if (decoded.containsKey('access_token')) {
-      await saveToken(decoded['access_token']);
+      await saveToken(decoded['access_token'].toString());
     }
     return decoded;
   }
@@ -66,42 +73,38 @@ class AuthService {
     String email,
     String password,
   ) async {
-    final response = await http.post(
-      Uri.parse(ApiEndpoints.login),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'password': password}),
-    );
-
-    final data = jsonDecode(response.body);
-
-    if (response.statusCode == 200) {
-      // 🆕 Check if MFA is required
-      if (data['mfa_required'] == true) {
-        // 🆕 FIX: Convert user_id to string to prevent type errors
-        final userId = data['user_id']?.toString() ?? '';
-
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.login),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'password': password}),
+      );
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        if (data['mfa_required'] == true) {
+          final userId = data['user_id']?.toString() ?? '';
+          return {
+            'ok': true,
+            'mfa_required': true,
+            'mfa_session_token': data['mfa_session_token'],
+            'user_id': userId,
+            'message': data['message'],
+          };
+        }
+        await saveToken(data['access_token']);
+        await saveUserInfo(data['user']);
         return {
-          'success': true,
-          'mfa_required': true,
-          'mfa_session_token': data['mfa_session_token'],
-          'user_id': userId, // 🆕 Now guaranteed to be string
-          'message': data['message'],
+          'ok': true,
+          'access_token': data['access_token'],
+          'refresh_token': data['refresh_token'],
+          'role': data['user']['role'],
+          'dashboard': data['dashboard'],
         };
+      } else {
+        return {'ok': false, 'error': data['error'] ?? 'Login failed'};
       }
-
-      // 🆕 Normal login without MFA
-      await saveToken(data['access_token']);
-      await saveUserInfo(data['user']);
-
-      return {
-        'success': true,
-        'access_token': data['access_token'],
-        'refresh_token': data['refresh_token'],
-        'role': data['user']['role'],
-        'dashboard': data['dashboard'],
-      };
-    } else {
-      return {'success': false, 'message': data['error'] ?? 'Login failed'};
+    } catch (e) {
+      return {'ok': false, 'error': 'Network or parsing error: $e'};
     }
   }
 

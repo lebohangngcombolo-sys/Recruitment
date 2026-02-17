@@ -5,7 +5,7 @@ import '../hr/offer_analytics_screen.dart';
 import '../../services/offer_service.dart';
 import '../../models/offer.dart';
 import 'approval_queue_screen.dart';
-import 'pipeline_page.dart';
+import '../hiring_manager/pipeline_page.dart';
 
 class HRDashboard extends StatefulWidget {
   final String token;

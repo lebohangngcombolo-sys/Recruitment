@@ -1,8 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import get_jwt_identity, jwt_required
-from app.extensions import db, cloudinary_client
-from werkzeug.security import check_password_hash, generate_password_hash
-from app.extensions import bcrypt
+from app.extensions import db, cloudinary_client, bcrypt
 import cloudinary.uploader
 from app.models import (
     User, Candidate, Requisition, Application, AssessmentResult, Notification, AuditLog, CVAnalysis
@@ -18,7 +16,6 @@ from app.utils.decorators import role_required
 from app.utils.helper import get_current_candidate
 from app.services.audit2 import AuditService
 import fitz
-from flask import jsonify, request, current_app
 import json
 import re
 
@@ -107,8 +104,13 @@ def _job_list_item(job):
         "location": getattr(job, "location", None) or "Remote",
         "type": getattr(job, "employment_type", None) or "Full Time",
         "salary": getattr(job, "salary_range", None) or "",
+        "salary_min": getattr(job, "salary_min", None),
+        "salary_max": getattr(job, "salary_max", None),
+        "salary_currency": getattr(job, "salary_currency", None) or "ZAR",
+        "salary_period": getattr(job, "salary_period", None) or "monthly",
         "deadline": deadline_str,
         "company_logo": getattr(job, "banner", None),
+        "banner": getattr(job, "banner", None),
         "role": job.category or "",
         "description": job.description or "",
         "responsibilities": job.responsibilities or [],
@@ -119,6 +121,10 @@ def _job_list_item(job):
         "published_on": job.published_on.strftime("%d %b, %Y") if job.published_on else "",
         "vacancy": job.vacancy or 1,
         "created_by": job.created_by,
+        "employment_type": getattr(job, "employment_type", None) or "full_time",
+        "weightings": getattr(job, "weightings", None) or {"cv": 60, "assessment": 40, "interview": 0, "references": 0},
+        "knockout_rules": getattr(job, "knockout_rules", None) or [],
+        "application_deadline": job.application_deadline.isoformat() if getattr(job, "application_deadline", None) else None,
     }
 
 
@@ -181,7 +187,6 @@ def get_available_jobs():
         return jsonify({"error": "Internal server error"}), 500
 
 
-# ----------------- UPLOAD RESUME -----------------
 # ----------------- UPLOAD RESUME -----------------
 @candidate_bp.route("/upload_resume/<int:application_id>", methods=["POST"])
 @role_required(["candidate"])
@@ -253,10 +258,30 @@ def upload_resume(application_id):
             resume_text = client_resume_text
 
         # --- Queue analysis (non-blocking) ---
+        if client_resume_text:
+            resume_text = client_resume_text
+
+        # --- Queue analysis (non-blocking) ---
         application.resume_url = resume_url
+        db.session.add(application)
         db.session.add(application)
         db.session.commit()
 
+        cv_analysis = CVAnalysis(
+            candidate_id=candidate.id,
+            job_description=job.description or "",
+            cv_text=resume_text or "",
+            result={
+                "extraction_metadata": {
+                    "extraction_method": ocr_result.get("extraction_method"),
+                    "confidence": ocr_result.get("confidence"),
+                    "pages": ocr_result.get("pages"),
+                    "has_scanned_content": ocr_result.get("has_scanned_content"),
+                }
+            },
+            status="pending"
+        )
+        db.session.add(cv_analysis)
         cv_analysis = CVAnalysis(
             candidate_id=candidate.id,
             job_description=job.description or "",
@@ -342,12 +367,26 @@ def get_applications():
                 "job_title": job.title if job else None,
                 "company": job.company if job else None,
                 "location": job.location if job else None,
+                "job_id": app.requisition_id,
+                "job_title": job.title if job else None,
+                "company": job.company if job else None,
+                "location": job.location if job else None,
                 "status": app.status,
+                "resume_url": app.resume_url,
                 "resume_url": app.resume_url,
                 "cv_score": app.cv_score,
                 "cv_parser_result": app.cv_parser_result,
+                "cv_parser_result": app.cv_parser_result,
                 "assessment_score": app.assessment_score,
                 "overall_score": app.overall_score,
+                "scoring_breakdown": app.scoring_breakdown,
+                "knockout_rule_violations": app.knockout_rule_violations,
+                "recommendation": app.recommendation,
+                "assessed_date": app.assessed_date.isoformat() if app.assessed_date else None,
+                "created_at": app.created_at.isoformat() if app.created_at else None,
+                "interview_status": app.interview_status,
+                "interview_feedback_score": app.interview_feedback_score,
+                "assessment_result": assessment_result.to_dict() if assessment_result else None,
                 "scoring_breakdown": app.scoring_breakdown,
                 "knockout_rule_violations": app.knockout_rule_violations,
                 "recommendation": app.recommendation,
@@ -385,6 +424,10 @@ def get_assessment(application_id):
         if not job or not job.is_active or job.deleted_at is not None:
             return jsonify({"error": "Job is not accepting applications"}), 400
 
+        job = application.requisition
+        if not job or not job.is_active or job.deleted_at is not None:
+            return jsonify({"error": "Job is not accepting applications"}), 400
+
         result = AssessmentResult.query.filter_by(application_id=application.id).first()
         return jsonify({
             "job_title": application.requisition.title if application.requisition else None,
@@ -405,6 +448,10 @@ def submit_assessment(application_id):
         candidate = Candidate.query.filter_by(user_id=get_jwt_identity()).first_or_404()
         if application.candidate_id != candidate.id:
             return jsonify({"error": "Unauthorized"}), 403
+
+        job = application.requisition
+        if not job or not job.is_active or job.deleted_at is not None:
+            return jsonify({"error": "Job is not accepting applications"}), 400
 
         job = application.requisition
         if not job or not job.is_active or job.deleted_at is not None:
@@ -445,6 +492,41 @@ def submit_assessment(application_id):
 
         # Update application with assessment score
         application.assessment_score = percentage_score
+
+        weightings = (job.weightings if job else None) or {
+            "cv": 60,
+            "assessment": 40,
+            "interview": 0,
+            "references": 0
+        }
+
+        cv_score = application.cv_score or 0
+        interview_score = application.interview_feedback_score or 0
+        references_score = 0
+
+        overall_score = (
+            (cv_score * weightings.get("cv", 0) / 100) +
+            (percentage_score * weightings.get("assessment", 0) / 100) +
+            (interview_score * weightings.get("interview", 0) / 100) +
+            (references_score * weightings.get("references", 0) / 100)
+        )
+
+        application.overall_score = overall_score
+        application.scoring_breakdown = {
+            "cv": cv_score,
+            "assessment": percentage_score,
+            "interview": interview_score,
+            "references": references_score,
+            "weightings": weightings,
+            "overall": overall_score
+        }
+
+        violations = []
+        if job:
+            violations = JobService.evaluate_knockout_rules(job, candidate)
+
+        application.knockout_rule_violations = violations
+        application.status = "disqualified" if violations else "assessment_submitted"
 
         weightings = (job.weightings if job else None) or {
             "cv": 60,
@@ -620,6 +702,7 @@ def upload_document():
         if not ('.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_docs):
             return jsonify({"success": False, "message": "Invalid file type"}), 400
 
+        url = HybridResumeAnalyzer.upload_cv(file)
         url = HybridResumeAnalyzer.upload_cv(file)
         if not url:
             return jsonify({"success": False, "message": "Failed to upload document"}), 500
@@ -889,6 +972,10 @@ def save_application_draft(application_id):
         if not job or not job.is_active or job.deleted_at is not None:
             return jsonify({"error": "Job is not accepting applications"}), 400
 
+        job = application.requisition
+        if not job or not job.is_active or job.deleted_at is not None:
+            return jsonify({"error": "Job is not accepting applications"}), 400
+
         # Merge per-screen draft data
         existing_draft = application.draft_data or {}
         existing_draft[last_saved_screen] = draft_data
@@ -970,6 +1057,10 @@ def submit_draft(draft_id):
         draft = Application.query.filter_by(
             id=draft_id, candidate_id=candidate.id, is_draft=True
         ).first_or_404()
+
+        job = draft.requisition
+        if not job or not job.is_active or job.deleted_at is not None:
+            return jsonify({"error": "Job is not accepting applications"}), 400
 
         job = draft.requisition
         if not job or not job.is_active or job.deleted_at is not None:

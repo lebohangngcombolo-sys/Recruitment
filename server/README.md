@@ -4,8 +4,8 @@ For fluuter fronend : cd khono_recruite
 
 
 for Python backend: cd server
-                  : python -m venv myenv
-                  : myenv\scripts\activate
+                  : python -m venv .venv
+                  : .\.venv\Scripts\Activate.ps1   (Windows PowerShell) or  source .venv/bin/activate  (WSL/Linux)
                   : pip install -r requirements.txt
                   : python run.py
 
@@ -72,8 +72,7 @@ http://127.0.0.1:5000/api/admin/powerbi/data
 Authorization Bearer $token
 
 Open another terminal : for Python backend: cd server
-                  : python -m venv myenv
-                  : myenv\scripts\activate
+                  : .\.venv\Scripts\Activate.ps1   (or  source .venv/bin/activate  on WSL)
                   : python test.py
 
 copy the Token and repace "$token" with your actual token

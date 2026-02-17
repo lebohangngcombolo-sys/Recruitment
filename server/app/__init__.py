@@ -3,6 +3,9 @@ from .extensions import db, jwt, mail, cloudinary_client, mongo_client, migrate,
 from .models import *
 from .routes import auth, admin_routes, candidate_routes, ai_routes, mfa_routes, sso_routes, analytics_routes, chat_routes, offer_routes, public_routes
 from .websocket_handler import register_websocket_handlers
+import firebase_admin
+from firebase_admin import credentials
+import os
 
 def create_app():
     app = Flask(__name__)
@@ -17,10 +20,36 @@ def create_app():
     cloudinary_client.init_app(app)
     migrate.init_app(app, db)
     limiter.init_app(app)
+
+    # Initialize Firebase Admin SDK
+    try:
+        firebase_service_account_key_file = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY_FILE')
+        if firebase_service_account_key_file:
+            if not os.path.isabs(firebase_service_account_key_file):
+                # Resolve relative to server root (parent of app package)
+                _server_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                firebase_service_account_key_file = os.path.normpath(
+                    os.path.join(_server_root, firebase_service_account_key_file)
+                )
+            if os.path.isfile(firebase_service_account_key_file):
+                cred = credentials.Certificate(firebase_service_account_key_file)
+                firebase_admin.initialize_app(cred)
+                app.logger.info("Firebase Admin SDK initialized successfully.")
+            else:
+                app.logger.warning(
+                    f"Firebase key file not found: {firebase_service_account_key_file}. "
+                    "Firebase Admin SDK not initialized."
+                )
+        else:
+            app.logger.warning("FIREBASE_SERVICE_ACCOUNT_KEY_FILE environment variable not set. Firebase Admin SDK not initialized.")
+    except Exception as e:
+        app.logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
+        # Depending on your application's needs, you might want to exit or handle this more gracefully.
+        # For now, we'll just log the error.
     socketio.init_app(
         app,
         cors_allowed_origins="*",
-        async_mode='eventlet',  # or 'gevent' depending on your setup
+        async_mode='threading',  # use threading to avoid eventlet/gevent compatibility problems
         manage_session=False,
         ping_timeout=60,
         ping_interval=25

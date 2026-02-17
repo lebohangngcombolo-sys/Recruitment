@@ -36,4 +36,11 @@ export PATH="${FLUTTER_DIR}/bin:${PATH}"
 flutter --version
 flutter config --enable-web
 flutter pub get
-flutter build web --release
+
+# Use BACKEND_URL (or API_BASE) at build time so the web app calls the deployed API.
+API_BASE="${API_BASE:-${BACKEND_URL:-http://127.0.0.1:5001}}"
+PUBLIC_BASE="${PUBLIC_API_BASE:-${API_BASE}}"
+echo "Building Flutter web with API_BASE=${API_BASE}"
+flutter build web --release \
+  --dart-define=API_BASE="$API_BASE" \
+  --dart-define=PUBLIC_API_BASE="$PUBLIC_BASE"

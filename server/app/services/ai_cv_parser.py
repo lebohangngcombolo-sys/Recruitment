@@ -31,6 +31,7 @@ class _AnalyzerProxy:
 # Public singleton proxy used by Celery tasks
 analyzer = _AnalyzerProxy()
 
+
 class AIParser:
 
     @staticmethod
