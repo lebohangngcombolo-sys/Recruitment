@@ -25,9 +25,21 @@ def create_app():
     try:
         firebase_service_account_key_file = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY_FILE')
         if firebase_service_account_key_file:
-            cred = credentials.Certificate(firebase_service_account_key_file)
-            firebase_admin.initialize_app(cred)
-            app.logger.info("Firebase Admin SDK initialized successfully.")
+            if not os.path.isabs(firebase_service_account_key_file):
+                # Resolve relative to server root (parent of app package)
+                _server_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                firebase_service_account_key_file = os.path.normpath(
+                    os.path.join(_server_root, firebase_service_account_key_file)
+                )
+            if os.path.isfile(firebase_service_account_key_file):
+                cred = credentials.Certificate(firebase_service_account_key_file)
+                firebase_admin.initialize_app(cred)
+                app.logger.info("Firebase Admin SDK initialized successfully.")
+            else:
+                app.logger.warning(
+                    f"Firebase key file not found: {firebase_service_account_key_file}. "
+                    "Firebase Admin SDK not initialized."
+                )
         else:
             app.logger.warning("FIREBASE_SERVICE_ACCOUNT_KEY_FILE environment variable not set. Firebase Admin SDK not initialized.")
     except Exception as e:

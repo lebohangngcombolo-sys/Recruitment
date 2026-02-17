@@ -13,8 +13,6 @@ import redis
 import firebase_admin
 from flask_socketio import SocketIO
 from flask_bcrypt import Bcrypt
-from flask_socketio import SocketIO
-# In app/extensions.py
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from app.utils.password_validator import PasswordValidator
@@ -53,13 +51,27 @@ cloudinary_client = CloudinaryClient()
 
 limiter = Limiter(key_func=get_remote_address)
 # ------------------- MongoDB Client -------------------
-mongo_client = MongoClient('mongodb://localhost:27017/')
-mongo_db = mongo_client['recruitment_cv']
+# Use MONGO_URI and MONGO_DB_NAME from .env (e.g. MongoDB Atlas)
+_mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+_mongo_db_name = os.getenv("MONGO_DB_NAME", "recruitment_cv")
+mongo_client = MongoClient(_mongo_uri)
+mongo_db = mongo_client[_mongo_db_name]
 
 
 # ------------------- Redis Client -------------------
-# Supports local Redis (redis://) and Upstash/TLS (rediss://)
-redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+# REDIS_URL (full URL) or build from REDIS_HOST, REDIS_PORT, REDIS_PASSWORD, REDIS_DB
+_redis_url = os.getenv("REDIS_URL")
+if _redis_url:
+    redis_url = _redis_url
+else:
+    _host = os.getenv("REDIS_HOST", "localhost")
+    _port = os.getenv("REDIS_PORT", "6379")
+    _pw = os.getenv("REDIS_PASSWORD", "")
+    _db = os.getenv("REDIS_DB", "0")
+    if _pw:
+        redis_url = f"redis://:{_pw}@{_host}:{_port}/{_db}"
+    else:
+        redis_url = f"redis://{_host}:{_port}/{_db}"
 redis_ssl_required = redis_url.startswith("rediss://")
 ssl_cert_reqs_env = os.getenv("REDIS_SSL_CERT_REQS", "required").lower()
 if redis_ssl_required:

@@ -1,7 +1,6 @@
 from app.extensions import db
 from datetime import datetime
-from sqlalchemy.dialects.postgresql import JSON
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSON, JSONB
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 import enum
 
@@ -207,12 +206,9 @@ class Requisition(db.Model):
     deleted_at = db.Column(db.DateTime, nullable=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # Display fields for job listing (explore category / candidate view)
-    location = db.Column(db.String(150), default="", nullable=True)
-    employment_type = db.Column(db.String(80), default="Full Time", nullable=True)  # e.g. Full Time, Contract
+    # Additional display fields for job listing (non-duplicating)
     salary_range = db.Column(db.String(100), default="", nullable=True)  # e.g. R850k - R1.2m
     application_deadline = db.Column(db.DateTime, nullable=True)
-    company = db.Column(db.String(200), default="", nullable=True)
     banner = db.Column(db.String(500), nullable=True)  # company logo / image URL
 
     applications = db.relationship('Application', back_populates='requisition', lazy=True)

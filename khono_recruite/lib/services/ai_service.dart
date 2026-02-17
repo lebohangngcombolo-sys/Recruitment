@@ -3,15 +3,14 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_ai/firebase_ai.dart';
 
 class AIService {
-  static late GenerativeModel _generativeModel;
+  static GenerativeModel? _generativeModel;
   static const String _openRouterApiKey =
       "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";
   static const String _openRouterModel = "openai/gpt-4o-mini";
   static const String _deepseekApiKey = "sk-e2731f1bc9f44e8dba5cfae851a21fd9";
 
-  static void initialize() {
-    _generativeModel =
-        FirebaseAI.googleAI().generativeModel(model: 'gemini-2.5-flash');
+  static void initialize(GenerativeModel? model) {
+    _generativeModel = model;
   }
 
   static Future<Map<String, dynamic>> generateJobDetails(
@@ -331,6 +330,9 @@ class AIService {
       int questionCount,
       int maxRetries,
       Duration baseDelay) async {
+    if (_generativeModel == null) {
+      throw Exception('Gemini not configured (Firebase API key missing or invalid)');
+    }
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         final prompt = '''
@@ -360,7 +362,7 @@ class AIService {
       ''';
 
         final response =
-            await _generativeModel.generateContent([Content.text(prompt)]);
+            await _generativeModel!.generateContent([Content.text(prompt)]);
         final responseText = response.text?.trim();
 
         if (responseText == null || responseText.isEmpty) {
@@ -643,6 +645,9 @@ class AIService {
 
   static Future<Map<String, dynamic>> _tryGemini(
       String jobTitle, int maxRetries, Duration baseDelay) async {
+    if (_generativeModel == null) {
+      throw Exception('Gemini not configured (Firebase API key missing or invalid)');
+    }
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         final prompt = '''
@@ -676,7 +681,7 @@ class AIService {
       ''';
 
         final response =
-            await _generativeModel.generateContent([Content.text(prompt)]);
+            await _generativeModel!.generateContent([Content.text(prompt)]);
         final responseText = response.text?.trim();
 
         if (responseText == null || responseText.isEmpty) {

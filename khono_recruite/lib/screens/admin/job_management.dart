@@ -4,8 +4,6 @@ import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../widgets/knockout_rules_builder.dart';
 import '../../widgets/weighting_configuration_widget.dart';
-import '../../widgets/knockout_rules_builder.dart';
-import '../../widgets/weighting_configuration_widget.dart';
 import '../../widgets/search_bar.dart'; // your custom SearchBar
 import '../../widgets/filter_chip.dart'; // your custom FilterChip
 import '../../services/admin_service.dart';
@@ -636,22 +634,6 @@ class _JobManagementState extends State<JobManagement> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              ),
-              if (job['created_by_user'] != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    "Created by: ${job['created_by_user']['name'] ?? job['created_by_user']['email'] ?? 'Unknown'}",
-                    style: TextStyle(
-                      color: themeProvider.isDarkMode
-                          ? Colors.grey.shade400
-                          : Colors.black54,
-                      fontSize: 12,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
               const SizedBox(height: 8),
 
               // Job info chips
@@ -1205,8 +1187,6 @@ class _JobFormDialogState extends State<JobFormDialog>
   TextEditingController qualificationsController = TextEditingController();
   String companyName = "";
   String jobLocation = "";
-  String companyName = "";
-  String jobLocation = "";
   String companyDetails = "";
   String category = "";
   final skillsController = TextEditingController();
@@ -1256,13 +1236,7 @@ class _JobFormDialogState extends State<JobFormDialog>
         (widget.job?['qualifications'] ?? []).join(", ");
     companyName = widget.job?['company'] ?? '';
     jobLocation = widget.job?['location'] ?? '';
-    companyName = widget.job?['company'] ?? '';
-    jobLocation = widget.job?['location'] ?? '';
     companyDetails = widget.job?['company_details'] ?? '';
-    salaryCurrency = widget.job?['salary_currency'] ?? 'ZAR';
-    salaryMinController.text = (widget.job?['salary_min'] ?? '').toString();
-    salaryMaxController.text = (widget.job?['salary_max'] ?? '').toString();
-    salaryPeriod = widget.job?['salary_period'] ?? 'monthly';
     salaryCurrency = widget.job?['salary_currency'] ?? 'ZAR';
     salaryMinController.text = (widget.job?['salary_min'] ?? '').toString();
     salaryMaxController.text = (widget.job?['salary_max'] ?? '').toString();
@@ -1287,8 +1261,6 @@ class _JobFormDialogState extends State<JobFormDialog>
     if (widget.job != null &&
         widget.job!['assessment_pack'] != null &&
         widget.job!['assessment_pack']['questions'] != null) {
-      questions =
-          _normalizeQuestions(widget.job!['assessment_pack']['questions']);
       questions =
           _normalizeQuestions(widget.job!['assessment_pack']['questions']);
     }
@@ -1416,23 +1388,6 @@ class _JobFormDialogState extends State<JobFormDialog>
         weightingsError = null;
       });
     }
-    final formState = _formKey.currentState;
-    if (formState == null || !formState.validate()) return;
-
-    final totalWeight = weightings.values.fold<int>(0, (sum, v) => sum + v);
-    if (totalWeight != 100) {
-      setState(() {
-        weightingsError = "Weightings must total 100%";
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Weightings must total 100%")),
-      );
-      return;
-    } else {
-      setState(() {
-        weightingsError = null;
-      });
-    }
 
     final skills = skillsController.text
         .split(",")
@@ -1477,7 +1432,6 @@ class _JobFormDialogState extends State<JobFormDialog>
           ? null
           : bannerController.text.trim(),
       'assessment_pack': {
-        'questions': normalizedQuestions.map((q) {
         'questions': normalizedQuestions.map((q) {
           return {
             "question": q["question"],
@@ -1690,71 +1644,6 @@ class _JobFormDialogState extends State<JobFormDialog>
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
-                              label: "Company",
-                              initialValue: companyName,
-                              hintText: "Company name",
-                              onChanged: (v) => companyName = v,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Location",
-                              initialValue: jobLocation,
-                              hintText: "City, Country or Remote",
-                              onChanged: (v) => jobLocation = v,
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: CustomTextField(
-                                    label: "Salary Min",
-                                    controller: salaryMinController,
-                                    inputType: TextInputType.number,
-                                    hintText: "e.g. 30000",
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: CustomTextField(
-                                    label: "Salary Max",
-                                    controller: salaryMaxController,
-                                    inputType: TextInputType.number,
-                                    hintText: "e.g. 45000",
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Salary Currency",
-                              initialValue: salaryCurrency,
-                              hintText: "ZAR, USD, EUR",
-                              onChanged: (v) =>
-                                  salaryCurrency = v.isEmpty ? "ZAR" : v,
-                            ),
-                            const SizedBox(height: 16),
-                            DropdownButtonFormField<String>(
-                              value: salaryPeriod,
-                              decoration: const InputDecoration(
-                                labelText: "Salary Period",
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: "monthly",
-                                  child: Text("Per Month"),
-                                ),
-                                DropdownMenuItem(
-                                  value: "yearly",
-                                  child: Text("Per Year"),
-                                ),
-                              ],
-                              onChanged: (value) {
-                                if (value == null) return;
-                                setState(() => salaryPeriod = value);
-                              },
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
                               label: "Company Details",
                               initialValue: companyDetails,
                               hintText: "About the company",
@@ -1828,73 +1717,6 @@ class _JobFormDialogState extends State<JobFormDialog>
                               controller: minExpController,
                               inputType: TextInputType.number,
                             ),
-                            const SizedBox(height: 16),
-                            DropdownButtonFormField<String>(
-                              initialValue: employmentType,
-                              decoration: const InputDecoration(
-                                labelText: "Employment Type",
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: "full_time",
-                                  child: Text("Full Time"),
-                                ),
-                                DropdownMenuItem(
-                                  value: "part_time",
-                                  child: Text("Part Time"),
-                                ),
-                                DropdownMenuItem(
-                                  value: "contract",
-                                  child: Text("Contract"),
-                                ),
-                                DropdownMenuItem(
-                                  value: "internship",
-                                  child: Text("Internship"),
-                                ),
-                              ],
-                              onChanged: (value) {
-                                if (value == null) return;
-                                setState(() {
-                                  employmentType = value;
-                                });
-                              },
-                            ),
-                            const SizedBox(height: 24),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                "Evaluation Weightings",
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            WeightingConfigurationWidget(
-                              weightings: weightings,
-                              errorText: weightingsError,
-                              onChanged: (updated) {
-                                setState(() {
-                                  weightings = updated;
-                                });
-                              },
-                            ),
-                            const SizedBox(height: 24),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                "Knockout Rules",
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            KnockoutRulesBuilder(
-                              rules: knockoutRules,
-                              onChanged: (updated) {
-                                setState(() {
-                                  knockoutRules = updated;
-                                });
-                              },
-                            ),
-                          ],
                             const SizedBox(height: 16),
                             DropdownButtonFormField<String>(
                               initialValue: employmentType,

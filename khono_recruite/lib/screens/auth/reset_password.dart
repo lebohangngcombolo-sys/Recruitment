@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/custom_textfield2.dart';
 import '../../widgets/custom_button.dart';
+import '../../utils/api_endpoints.dart';
 
 class ResetPasswordPage extends StatefulWidget {
   final String? token;
@@ -77,7 +78,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
 
     try {
       final res = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/auth/reset-password"),
+        Uri.parse(ApiEndpoints.resetPassword),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'token': token,

@@ -8,14 +8,16 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
 import '../../providers/theme_provider.dart';
+import '../../utils/api_endpoints.dart';
 
 // ------------------- API Base URL -------------------
-const String candidateBase = "http://127.0.0.1:5001/api/candidate";
+final String candidateBase = ApiEndpoints.candidateBase;
 
 class ProfilePage extends StatefulWidget {
   final String token;
@@ -91,7 +93,7 @@ class _ProfilePageState extends State<ProfilePage>
   int _backupCodesRemaining = 0;
 
   List<dynamic> documents = [];
-  final String apiBase = "http://127.0.0.1:5001/api/candidate";
+  final String apiBase = ApiEndpoints.candidateBase;
 
   // Add these helper methods in the _ProfilePageState class (around line 150, after the state variables):
 
@@ -2117,7 +2119,7 @@ class _ProfilePageState extends State<ProfilePage>
             child: GestureDetector(
               onTap: () {
                 final uri = Uri.tryParse(value) ?? Uri();
-                launchUrl(uri, mode: LaunchMode.externalApplication);
+                url_launcher.launchUrl(uri, mode: url_launcher.LaunchMode.externalApplication);
               },
               child: Text(
                 value,

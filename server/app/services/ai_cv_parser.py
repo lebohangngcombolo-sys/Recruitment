@@ -8,9 +8,6 @@ import docx
 from app.services.advanced_ocr_service import AdvancedOCRService
 from app.services.cv_pattern_matcher import CVPatternMatcher
 
-from app.services.advanced_ocr_service import AdvancedOCRService
-from app.services.cv_pattern_matcher import CVPatternMatcher
-
 logger = logging.getLogger(__name__)
 
 _analyzer = None
@@ -34,26 +31,6 @@ class _AnalyzerProxy:
 # Public singleton proxy used by Celery tasks
 analyzer = _AnalyzerProxy()
 
-_analyzer = None
-
-def _get_analyzer():
-    """Lazy-load HybridResumeAnalyzer so app starts without loading spaCy/SentenceTransformer."""
-    global _analyzer
-    if _analyzer is None:
-        from .cv_parser_service import HybridResumeAnalyzer
-        _analyzer = HybridResumeAnalyzer()
-    return _analyzer
-
-
-class _AnalyzerProxy:
-    """Lazy proxy that loads the analyzer on first use."""
-
-    def __getattr__(self, name):
-        return getattr(_get_analyzer(), name)
-
-
-# Public singleton proxy used by Celery tasks
-analyzer = _AnalyzerProxy()
 
 class AIParser:
 
@@ -73,7 +50,6 @@ class AIParser:
             # Step 1: Try AI parsing
             try:
                 parsed_data = _get_analyzer().analyse(resume_content=cv_text, job_id=job_id)
-                parsed_data = _get_analyzer().analyse(resume_content=cv_text, job_id=job_id)
             except Exception as e:
                 logger.warning(f"AI parsing failed: {e}")
                 parsed_data = {}
@@ -87,7 +63,6 @@ class AIParser:
 
             # Ensure all expected keys exist
             keys = [
-                "full_name", "email", "phone", "address", "dob", "linkedin", "github",
                 "full_name", "email", "phone", "address", "dob", "linkedin", "github",
                 "portfolio", "education", "skills", "certifications",
                 "languages", "experience", "position", "previous_companies",
@@ -167,45 +142,6 @@ class AIParser:
 
     @staticmethod
     def read_cv_file(cv_file) -> str:
-        import os
-        import tempfile
-
-        filename = (getattr(cv_file, "filename", None) or "cv").strip()
-        _, ext = os.path.splitext(filename)
-        ext = (ext or "").lower().lstrip(".")
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}" if ext else "") as tmp:
-            temp_path = tmp.name
-        try:
-            cv_file.save(temp_path)
-
-            # First try hybrid OCR/text extraction.
-            try:
-                svc = AdvancedOCRService()
-                result = svc.extract_text_with_metadata(temp_path, ext)
-                text = (result.get("text") or "")
-                if text.strip():
-                    return text
-            except Exception:
-                pass
-
-            # Fallback to legacy parsing.
-            text = ""
-            if filename.lower().endswith(".pdf"):
-                with pdfplumber.open(temp_path) as pdf:
-                    text = "\n".join(page.extract_text() or "" for page in pdf.pages)
-            elif filename.lower().endswith(".docx"):
-                doc = docx.Document(temp_path)
-                text = "\n".join(p.text for p in doc.paragraphs)
-            else:
-                with open(temp_path, "r", encoding="utf-8", errors="ignore") as f:
-                    text = f.read()
-            return text
-        finally:
-            try:
-                os.remove(temp_path)
-            except Exception:
-                pass
         import os
         import tempfile
 

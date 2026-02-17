@@ -6,6 +6,7 @@ import 'dart:convert';
 import '../../services/auth_service.dart';
 import 'assessments_results_screen.dart';
 import '../../widgets/application_flow_stepper.dart';
+import '../../utils/api_endpoints.dart';
 
 class CVUploadScreen extends StatefulWidget {
   final int applicationId;
@@ -106,7 +107,7 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
 
     try {
       final uri = Uri.parse(
-          'http://127.0.0.1:5000/api/candidate/upload_resume/${widget.applicationId}');
+          '${ApiEndpoints.candidateBase}/upload_resume/${widget.applicationId}');
 
       final request = http.MultipartRequest('POST', uri);
       request.headers['Authorization'] = 'Bearer $tokenValue';
@@ -197,8 +198,8 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
   Future<Map<String, dynamic>?> _fetchAnalysisStatus(int analysisId) async {
     final tokenValue = token;
     if (tokenValue == null) return null;
-    final uri = Uri.parse(
-        'http://127.0.0.1:5000/api/candidate/cv-analyses/$analysisId');
+    final uri =
+        Uri.parse('${ApiEndpoints.candidateBase}/cv-analyses/$analysisId');
     final response = await http.get(
       uri,
       headers: {

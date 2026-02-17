@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
-import '../../widgets/knockout_rules_builder.dart';
 import '../../widgets/weighting_configuration_widget.dart';
+import '../../widgets/knockout_rules_builder.dart';
 import '../../services/admin_service.dart';
 import '../../services/ai_service.dart';
 import '../../providers/theme_provider.dart';
@@ -178,38 +178,6 @@ class _JobManagementState extends State<JobManagement> {
                                                 ),
                                               ),
                                           ],
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              job['description'] ?? '',
-                                              style: TextStyle(
-                                                color: themeProvider.isDarkMode
-                                                    ? Colors.grey.shade400
-                                                    : Colors.black54,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                            if (job['created_by_user'] != null)
-                                              Padding(
-                                                padding: const EdgeInsets.only(
-                                                    top: 4),
-                                                child: Text(
-                                                  "Created by: ${job['created_by_user']['name'] ?? job['created_by_user']['email'] ?? 'Unknown'}",
-                                                  style: TextStyle(
-                                                    color: themeProvider
-                                                            .isDarkMode
-                                                        ? Colors.grey.shade400
-                                                        : Colors.black54,
-                                                    fontSize: 12,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                          ],
                                         ),
                                       ),
                                       trailing: Row(
@@ -285,8 +253,6 @@ class _JobFormDialogState extends State<JobFormDialog>
   TextEditingController qualificationsController = TextEditingController();
   String companyName = "";
   String jobLocation = "";
-  String companyName = "";
-  String jobLocation = "";
   String companyDetails = "";
   String category = "";
   final skillsController = TextEditingController();
@@ -299,15 +265,6 @@ class _JobFormDialogState extends State<JobFormDialog>
   final TextEditingController salaryMinController = TextEditingController();
   final TextEditingController salaryMaxController = TextEditingController();
   List<Map<String, dynamic>> questions = [];
-  Map<String, int> weightings = {
-    "cv": 60,
-    "assessment": 40,
-    "interview": 0,
-    "references": 0,
-  };
-  List<Map<String, dynamic>> knockoutRules = [];
-  String employmentType = "full_time";
-  String? weightingsError;
   Map<String, int> weightings = {
     "cv": 60,
     "assessment": 40,
@@ -359,8 +316,21 @@ class _JobFormDialogState extends State<JobFormDialog>
         widget.job!['assessment_pack']['questions'] != null) {
       questions =
           _normalizeQuestions(widget.job!['assessment_pack']['questions']);
-      questions =
-          _normalizeQuestions(widget.job!['assessment_pack']['questions']);
+    }
+
+    // Load weightings (CV %, Assessment %, etc.) and knockout rules when editing
+    final rawWeightings = widget.job?['weightings'];
+    if (rawWeightings is Map) {
+      weightings = {
+        "cv": (rawWeightings["cv"] is int) ? rawWeightings["cv"] as int : (rawWeightings["cv"] is num) ? (rawWeightings["cv"] as num).toInt() : 60,
+        "assessment": (rawWeightings["assessment"] is int) ? rawWeightings["assessment"] as int : (rawWeightings["assessment"] is num) ? (rawWeightings["assessment"] as num).toInt() : 40,
+        "interview": (rawWeightings["interview"] is int) ? rawWeightings["interview"] as int : (rawWeightings["interview"] is num) ? (rawWeightings["interview"] as num).toInt() : 0,
+        "references": (rawWeightings["references"] is int) ? rawWeightings["references"] as int : (rawWeightings["references"] is num) ? (rawWeightings["references"] as num).toInt() : 0,
+      };
+    }
+    final rawRules = widget.job?['knockout_rules'];
+    if (rawRules is List) {
+      knockoutRules = rawRules.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     }
 
     _tabController = TabController(length: 2, vsync: this);
@@ -533,7 +503,8 @@ class _JobFormDialogState extends State<JobFormDialog>
   }
 
   Future<void> saveJob() async {
-    if (!_formKey.currentState!.validate()) return;
+    final formState = _formKey.currentState;
+    if (formState == null || !formState.validate()) return;
 
     final responsibilities = responsibilitiesController.text
         .split("\n")
@@ -566,41 +537,49 @@ class _JobFormDialogState extends State<JobFormDialog>
         .toList();
 
     final normalizedQuestions = _normalizeQuestions(questions);
-    final normalizedQuestions = _normalizeQuestions(questions);
-    final jobData = {
-      'title': title,
-      'description': description,
-      'company': companyName,
-      'location': jobLocation,
-      'company': companyName,
-      'location': jobLocation,
-      'job_summary': jobSummary,
-      'employment_type': employmentType,
+    final totalWeight = weightings.values.fold<int>(0, (a, b) => a + b);
+    if (totalWeight != 100) {
+      setState(() => weightingsError = "Weightings must total 100% (current: $totalWeight%)");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Adjust CV and Assessment percentages so they total 100%."),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    final Map<String, int> adjustedWeightings = Map<String, int>.from(weightings);
+
+    final jobData = <String, dynamic>{
+      'title': (title).trim().isEmpty ? 'Untitled Position' : title.trim(),
+      'description': () {
+        final fromController = descriptionController.text.trim();
+        final fromState = description.trim();
+        final value = fromController.isNotEmpty ? fromController : fromState;
+        return value.isEmpty ? 'No description provided' : value;
+      }(),
+      'company': companyName.trim(),
+      'location': jobLocation.trim(),
+      'job_summary': jobSummary.trim(),
       'employment_type': employmentType,
       'responsibilities': responsibilities,
       'qualifications': qualifications,
-      'company_details': companyDetails,
+      'company_details': companyDetails.trim(),
       'salary_min': double.tryParse(salaryMinController.text),
       'salary_max': double.tryParse(salaryMaxController.text),
       'salary_currency': salaryCurrency,
       'salary_period': salaryPeriod,
-      'salary_min': double.tryParse(salaryMinController.text),
-      'salary_max': double.tryParse(salaryMaxController.text),
-      'salary_currency': salaryCurrency,
-      'salary_period': salaryPeriod,
-      'category': category,
+      'category': category.trim().isEmpty ? 'General' : category.trim(),
       'required_skills': skills,
       'min_experience': double.tryParse(minExpController.text) ?? 0,
-      'weightings': weightings,
+      'weightings': adjustedWeightings,
       'knockout_rules': knockoutRules,
-      'weightings': weightings,
-      'knockout_rules': knockoutRules,
+      'vacancy': 1,
       'assessment_pack': {
         'questions': normalizedQuestions.map((q) {
-        'questions': normalizedQuestions.map((q) {
-          return {
-            "question": q["question"],
-            "options": q["options"],
+          return <String, dynamic>{
+            "question": q["question"] as String? ?? "",
+            "options": q["options"] as List<dynamic>? ?? [],
             "correct_answer": q["answer"],
             "weight": q["weight"] ?? 1
           };
@@ -614,9 +593,11 @@ class _JobFormDialogState extends State<JobFormDialog>
       } else {
         await admin.updateJob(widget.job!['id'] as int, jobData);
       }
+      if (!mounted) return;
       widget.onSaved();
       Navigator.pop(context);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error saving job: $e")));
     }
@@ -764,6 +745,134 @@ class _JobFormDialogState extends State<JobFormDialog>
                               label: "Minimum Experience (years)",
                               controller: minExpController,
                               inputType: TextInputType.number,
+                            ),
+                            const SizedBox(height: 24),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                "Salary",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: themeProvider.isDarkMode
+                                      ? Colors.white
+                                      : Colors.black87,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: CustomTextField(
+                                    label: "Salary Min",
+                                    controller: salaryMinController,
+                                    inputType: TextInputType.number,
+                                    hintText: "e.g. 30000",
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: CustomTextField(
+                                    label: "Salary Max",
+                                    controller: salaryMaxController,
+                                    inputType: TextInputType.number,
+                                    hintText: "e.g. 45000",
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: CustomTextField(
+                                    label: "Currency",
+                                    initialValue: salaryCurrency,
+                                    hintText: "ZAR, USD, EUR",
+                                    onChanged: (v) {
+                                      setState(() {
+                                        salaryCurrency =
+                                            v.isEmpty ? "ZAR" : v;
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    value: salaryPeriod,
+                                    decoration: InputDecoration(
+                                      labelText: "Period",
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: "monthly",
+                                        child: Text("Per month"),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: "yearly",
+                                        child: Text("Per year"),
+                                      ),
+                                    ],
+                                    onChanged: (value) {
+                                      if (value != null) {
+                                        setState(() => salaryPeriod = value);
+                                      }
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 24),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                "Evaluation weightings (must total 100%)",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: themeProvider.isDarkMode
+                                      ? Colors.white
+                                      : Colors.black87,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            WeightingConfigurationWidget(
+                              weightings: weightings,
+                              errorText: weightingsError,
+                              onChanged: (updated) {
+                                setState(() {
+                                  weightings = updated;
+                                  final total = updated.values.fold<int>(0, (a, b) => a + b);
+                                  weightingsError = total == 100 ? null : "Weightings must total 100%";
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 24),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                "Knockout rules",
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: themeProvider.isDarkMode
+                                      ? Colors.white
+                                      : Colors.black87,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            KnockoutRulesBuilder(
+                              rules: knockoutRules,
+                              onChanged: (updated) {
+                                setState(() => knockoutRules = updated);
+                              },
                             ),
                           ],
                         ),

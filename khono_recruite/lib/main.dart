@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -35,17 +36,31 @@ import 'services/ai_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
 
-  // Initialize Gemini 2.5 Flash model
-  final generativeModel =
-      FirebaseAI.googleAI().generativeModel(model: 'gemini-2.5-flash');
+  // Initialize Firebase only if config has a valid API key (avoids white screen on invalid-api-key)
+  GenerativeModel? generativeModel;
+  final opts = DefaultFirebaseOptions.currentPlatform;
+  final hasFirebaseConfig = opts.apiKey.isNotEmpty && opts.projectId.isNotEmpty;
+  if (hasFirebaseConfig) {
+    try {
+      await Firebase.initializeApp(options: opts);
+      generativeModel =
+          FirebaseAI.googleAI().generativeModel(model: 'gemini-2.5-flash');
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('Firebase init skipped or failed: $e');
+        debugPrint('$st');
+      }
+    }
+  } else {
+    if (kDebugMode) {
+      debugPrint(
+          'Firebase not configured (empty apiKey/projectId in firebase_options.dart). '
+          'Run "dart run flutterfire_cli:flutterfire configure" or set options. App will use OpenRouter/DeepSeek for AI.');
+    }
+  }
 
-  // Initialize AI Service
-  AIService.initialize();
-  // You can now pass 'generativeModel' to your widgets that need to interact with Gemini.
+  AIService.initialize(generativeModel);
 
   // ⚡ Fix Flutter Web initial route handling
   setUrlStrategy(PathUrlStrategy());
@@ -54,8 +69,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        Provider<GenerativeModel>.value(
-            value: generativeModel), // Provide the generativeModel
+        Provider<GenerativeModel?>.value(value: generativeModel),
       ],
       child: const KhonoRecruiteApp(),
     ),
