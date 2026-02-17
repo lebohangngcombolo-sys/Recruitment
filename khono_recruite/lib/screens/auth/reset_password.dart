@@ -136,29 +136,16 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
           ),
 
           // Top bar: back arrow + logo only
-          // Top bar: back arrow + logo only
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back,
-                        color: Colors.white, size: 28),
+                    icon: Icon(Icons.arrow_back, color: Colors.white, size: 28),
                     onPressed: () => context.go('/login'),
                   ),
-                  const SizedBox(width: 12),
-                  Image.asset(
-                    "assets/icons/khono.png",
-                    height: 40,
-                    fit: BoxFit.contain,
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back,
-                        color: Colors.white, size: 28),
-                    onPressed: () => context.go('/login'),
-                  ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Image.asset(
                     "assets/icons/khono.png",
                     height: 40,
@@ -179,13 +166,11 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                   scale: _scaleAnimation,
                   child: Container(
                     width: size.width > 800 ? 400 : size.width * 0.9,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 32),
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.08),
+                      color: Colors.white.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.2)),
+                      border: Border.all(color: Colors.white.withOpacity(0.2)),
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(18),
@@ -194,8 +179,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const SizedBox(height: 16),
-                            const Text(
+                            SizedBox(height: 16),
+                            Text(
                               "RESET PASSWORD",
                               style: TextStyle(
                                 fontSize: 28,
@@ -209,16 +194,15 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 16),
+                            SizedBox(height: 16),
 
-                            const Text(
+                            Text(
                               "Enter your new password",
                               style: TextStyle(
                                   fontSize: 16, color: Colors.white70),
                             ),
-                            const SizedBox(height: 24),
+                            SizedBox(height: 24),
 
-                            // Password fields (white)
                             // Password fields (white)
                             CustomTextField(
                               label: "New Password",

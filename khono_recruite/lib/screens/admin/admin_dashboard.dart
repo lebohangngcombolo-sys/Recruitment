@@ -688,10 +688,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                                         boxShadow: [
                                           BoxShadow(
                                             color: powerBIConnected
-                                                ? Colors.green
-                                                    .withValues(alpha: 0.6)
-                                                : Colors.red
-                                                    .withValues(alpha: 0.6),
+                                                ? Colors.green.withOpacity(0.6)
+                                                : Colors.red.withOpacity(0.6),
                                             blurRadius: 12,
                                             spreadRadius: 2,
                                           ),

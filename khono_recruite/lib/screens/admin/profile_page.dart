@@ -1478,6 +1478,206 @@ class _ProfilePageState extends State<ProfilePage>
             ],
           ),
           const SizedBox(height: 24),
+
+          // Personal Information Card
+          _modernCard(
+            "Personal Information",
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _infoRow("Full Name", fullNameController.text),
+                _infoRow("Email", emailController.text),
+                _infoRow("Phone", phoneController.text),
+                _infoRow("Location", locationController.text),
+                _infoRow("Nationality", nationalityController.text),
+                _infoRow("Title", titleController.text),
+                if (bioController.text.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    "Bio",
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: themeProvider.isDarkMode
+                          ? Colors.white
+                          : Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    bioController.text,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: themeProvider.isDarkMode
+                          ? Colors.grey.shade400
+                          : Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            headerColor: Colors.blue.withValues(alpha: 0.1),
+          ),
+
+          // Education & Skills Card
+          _modernCard(
+            "Education & Skills",
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (degreeController.text.isNotEmpty)
+                  _infoRow("Degree", degreeController.text),
+                if (institutionController.text.isNotEmpty)
+                  _infoRow("Institution", institutionController.text),
+                if (graduationYearController.text.isNotEmpty)
+                  _infoRow("Graduation Year", graduationYearController.text),
+                if (skillsController.text.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    "Skills",
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: themeProvider.isDarkMode
+                          ? Colors.white
+                          : Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: skillsController.text.split(',').map((skill) {
+                      final trimmedSkill = skill.trim();
+                      if (trimmedSkill.isEmpty) return const SizedBox.shrink();
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          trimmedSkill,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ],
+            ),
+            headerColor: Colors.green.withValues(alpha: 0.1),
+          ),
+
+          // Online Profiles Card
+          if (linkedinController.text.isNotEmpty ||
+              githubController.text.isNotEmpty ||
+              portfolioController.text.isNotEmpty)
+            _modernCard(
+              "Online Profiles",
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (linkedinController.text.isNotEmpty)
+                    _linkRow("LinkedIn", linkedinController.text,
+                        Icons.work_outline),
+                  if (githubController.text.isNotEmpty)
+                    _linkRow("GitHub", githubController.text, Icons.code),
+                  if (portfolioController.text.isNotEmpty)
+                    _linkRow(
+                        "Portfolio", portfolioController.text, Icons.public),
+                ],
+              ),
+              headerColor: Colors.purple.withValues(alpha: 0.1),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
+    if (value.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: themeProvider.isDarkMode
+                    ? Colors.white
+                    : Colors.grey.shade700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              value,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade400
+                    : Colors.grey.shade600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _linkRow(String label, String value, IconData icon) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, color: Colors.redAccent, size: 18),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: 80,
+            child: Text(
+              label,
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: themeProvider.isDarkMode
+                    ? Colors.white
+                    : Colors.grey.shade700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                final uri = Uri.tryParse(value) ?? Uri();
+                launchUrl(uri, mode: LaunchMode.externalApplication);
+              },
+              child: Text(
+                value,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  color: Colors.blue.shade600,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
