@@ -314,6 +314,10 @@ class ApiEndpoints {
   static final parseCV = "$chatbotBase/parse_cv";
   /// Backend: POST /api/ai/chat with body { "message": "..." }
   static final askBot = "$chatbotBase/chat";
+  /// Backend: POST /api/ai/generate_job_details (auth required)
+  static final generateJobDetails = "$chatbotBase/generate_job_details";
+  /// Backend: POST /api/ai/generate_questions (auth required)
+  static final generateQuestions = "$chatbotBase/generate_questions";
 
   // ==================== CHAT FEATURE ENDPOINTS ====================
 

@@ -2,12 +2,11 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:firebase_ai/firebase_ai.dart';
 
+import '../utils/api_endpoints.dart';
+import 'auth_service.dart';
+
 class AIService {
   static GenerativeModel? _generativeModel;
-  static const String _openRouterApiKey =
-      "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";
-  static const String _openRouterModel = "openai/gpt-4o-mini";
-  static const String _deepseekApiKey = "sk-e2731f1bc9f44e8dba5cfae851a21fd9";
 
   static void initialize(GenerativeModel? model) {
     _generativeModel = model;
@@ -15,10 +14,33 @@ class AIService {
 
   static Future<Map<String, dynamic>> generateJobDetails(
       String jobTitle) async {
-    const maxRetries = 2; // Reduced retries since we have multiple models
+    const maxRetries = 2;
     const baseDelay = Duration(seconds: 1);
 
-    // Try Gemini first
+    // Try backend first (uses server-side API keys; no keys in client)
+    try {
+      final token = await AuthService.getAccessToken();
+      if (token != null && token.isNotEmpty) {
+        final response = await http.post(
+          Uri.parse(ApiEndpoints.generateJobDetails),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({'job_title': jobTitle.trim()}),
+        );
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data is Map<String, dynamic>) {
+            return _ensureAllFieldsFilled(data, jobTitle);
+          }
+        }
+      }
+    } catch (e) {
+      print("Backend generateJobDetails failed: $e");
+    }
+
+    // Fallback to Gemini if configured (Firebase)
     try {
       final result = await _tryGemini(jobTitle, maxRetries, baseDelay);
       return _ensureAllFieldsFilled(result, jobTitle);
@@ -26,23 +48,6 @@ class AIService {
       print("Gemini failed: $e");
     }
 
-    // Fallback to OpenRouter
-    try {
-      final result = await _tryOpenRouter(jobTitle, maxRetries, baseDelay);
-      return _ensureAllFieldsFilled(result, jobTitle);
-    } catch (e) {
-      print("OpenRouter failed: $e");
-    }
-
-    // Fallback to DeepSeek
-    try {
-      final result = await _tryDeepSeek(jobTitle, maxRetries, baseDelay);
-      return _ensureAllFieldsFilled(result, jobTitle);
-    } catch (e) {
-      print("DeepSeek failed: $e");
-    }
-
-    // If all models fail, return fallback data
     return _getFallbackJobDetails(jobTitle);
   }
 
@@ -293,34 +298,43 @@ class AIService {
     const maxRetries = 2;
     const baseDelay = Duration(seconds: 1);
 
-    // Try Gemini first
+    // Try backend first (uses server-side API keys)
     try {
-      final result = await _tryGenerateQuestionsGemini(
+      final token = await AuthService.getAccessToken();
+      if (token != null && token.isNotEmpty) {
+        final response = await http.post(
+          Uri.parse(ApiEndpoints.generateQuestions),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'job_title': jobTitle,
+            'difficulty': difficulty,
+            'question_count': questionCount,
+          }),
+        );
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          final questions = data['questions'];
+          if (questions is List) {
+            return List<Map<String, dynamic>>.from(
+                questions.map((e) => e is Map<String, dynamic> ? e : <String, dynamic>{}));
+          }
+        }
+      }
+    } catch (e) {
+      print("Backend generateQuestions failed: $e");
+    }
+
+    // Fallback to Gemini if configured
+    try {
+      return await _tryGenerateQuestionsGemini(
           jobTitle, difficulty, questionCount, maxRetries, baseDelay);
-      return result;
     } catch (e) {
       print("Gemini questions failed: $e");
     }
 
-    // Fallback to OpenRouter
-    try {
-      final result = await _tryGenerateQuestionsOpenRouter(
-          jobTitle, difficulty, questionCount, maxRetries, baseDelay);
-      return result;
-    } catch (e) {
-      print("OpenRouter questions failed: $e");
-    }
-
-    // Fallback to DeepSeek
-    try {
-      final result = await _tryGenerateQuestionsDeepSeek(
-          jobTitle, difficulty, questionCount, maxRetries, baseDelay);
-      return result;
-    } catch (e) {
-      print("DeepSeek questions failed: $e");
-    }
-
-    // If all models fail, return fallback questions
     return _getFallbackAssessmentQuestions(jobTitle, difficulty, questionCount);
   }
 
@@ -396,174 +410,6 @@ class AIService {
     }
 
     throw Exception('Gemini: Unexpected error');
-  }
-
-  static Future<List<Map<String, dynamic>>> _tryGenerateQuestionsOpenRouter(
-      String jobTitle,
-      String difficulty,
-      int questionCount,
-      int maxRetries,
-      Duration baseDelay) async {
-    for (int attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        final prompt = '''
-        Generate $questionCount assessment questions for a "$jobTitle" position with $difficulty difficulty level.
-        
-        Return the response in JSON format with this structure:
-        {
-          "questions": [
-            {
-              "question": "Clear, specific question text",
-              "options": ["Option A", "Option B", "Option C", "Option D"],
-              "answer": 2,
-              "weight": 1
-            }
-          ]
-        }
-        
-        Requirements:
-        - Questions should be relevant to the job role
-        - Difficulty level: $difficulty (easy, medium, or hard)
-        - Each question must have exactly 4 options
-        - "answer" field should be the index (0-3) of the correct option
-        - Questions should test practical knowledge and skills
-        - Make questions specific to $jobTitle responsibilities
-        
-        Make sure the response is valid JSON.
-      ''';
-
-        final response = await http.post(
-          Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
-          headers: {
-            'Authorization': 'Bearer $_openRouterApiKey',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({
-            'model': _openRouterModel,
-            'messages': [
-              {'role': 'user', 'content': prompt}
-            ],
-            'temperature': 0.7,
-          }),
-        );
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final responseText = data['choices'][0]['message']['content']?.trim();
-
-          if (responseText == null || responseText.isEmpty) {
-            throw Exception('Empty response from OpenRouter');
-          }
-
-          final jsonStart = responseText.indexOf('{');
-          final jsonEnd = responseText.lastIndexOf('}') + 1;
-
-          if (jsonStart == -1 || jsonEnd == 0) {
-            throw Exception('No JSON found in OpenRouter response');
-          }
-
-          final jsonStr = responseText.substring(jsonStart, jsonEnd);
-          final Map<String, dynamic> parsedData = await _parseJson(jsonStr);
-
-          return List<Map<String, dynamic>>.from(parsedData['questions'] ?? []);
-        } else {
-          throw Exception('OpenRouter API error: ${response.statusCode}');
-        }
-      } catch (e) {
-        if (attempt == maxRetries) {
-          throw Exception(
-              'OpenRouter failed after $maxRetries attempts. Last error: $e');
-        }
-
-        await Future.delayed(baseDelay);
-      }
-    }
-
-    throw Exception('OpenRouter: Unexpected error');
-  }
-
-  static Future<List<Map<String, dynamic>>> _tryGenerateQuestionsDeepSeek(
-      String jobTitle,
-      String difficulty,
-      int questionCount,
-      int maxRetries,
-      Duration baseDelay) async {
-    for (int attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        final prompt = '''
-        Generate $questionCount assessment questions for a "$jobTitle" position with $difficulty difficulty level.
-        
-        Return the response in JSON format with this structure:
-        {
-          "questions": [
-            {
-              "question": "Clear, specific question text",
-              "options": ["Option A", "Option B", "Option C", "Option D"],
-              "answer": 2,
-              "weight": 1
-            }
-          ]
-        }
-        
-        Requirements:
-        - Questions should be relevant to the job role
-        - Difficulty level: $difficulty (easy, medium, or hard)
-        - Each question must have exactly 4 options
-        - "answer" field should be the index (0-3) of the correct option
-        - Questions should test practical knowledge and skills
-        - Make questions specific to $jobTitle responsibilities
-        
-        Make sure the response is valid JSON.
-      ''';
-
-        final response = await http.post(
-          Uri.parse('https://api.deepseek.com/v1/chat/completions'),
-          headers: {
-            'Authorization': 'Bearer $_deepseekApiKey',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({
-            'model': 'deepseek-chat',
-            'messages': [
-              {'role': 'user', 'content': prompt}
-            ],
-            'temperature': 0.7,
-          }),
-        );
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final responseText = data['choices'][0]['message']['content']?.trim();
-
-          if (responseText == null || responseText.isEmpty) {
-            throw Exception('Empty response from DeepSeek');
-          }
-
-          final jsonStart = responseText.indexOf('{');
-          final jsonEnd = responseText.lastIndexOf('}') + 1;
-
-          if (jsonStart == -1 || jsonEnd == 0) {
-            throw Exception('No JSON found in DeepSeek response');
-          }
-
-          final jsonStr = responseText.substring(jsonStart, jsonEnd);
-          final Map<String, dynamic> parsedData = await _parseJson(jsonStr);
-
-          return List<Map<String, dynamic>>.from(parsedData['questions'] ?? []);
-        } else {
-          throw Exception('DeepSeek API error: ${response.statusCode}');
-        }
-      } catch (e) {
-        if (attempt == maxRetries) {
-          throw Exception(
-              'DeepSeek failed after $maxRetries attempts. Last error: $e');
-        }
-
-        await Future.delayed(baseDelay);
-      }
-    }
-
-    throw Exception('DeepSeek: Unexpected error');
   }
 
   static List<Map<String, dynamic>> _getFallbackAssessmentQuestions(
@@ -731,188 +577,6 @@ class AIService {
     }
 
     throw Exception('Gemini: Unexpected error');
-  }
-
-  static Future<Map<String, dynamic>> _tryOpenRouter(
-      String jobTitle, int maxRetries, Duration baseDelay) async {
-    for (int attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        final prompt = '''
-        Based on the job title "$jobTitle", generate comprehensive job details in JSON format with the following structure:
-        {
-          "description": "Detailed job description (2-3 paragraphs) that clearly explains the role, its purpose, and what the candidate will be doing day-to-day",
-          "responsibilities": ["List of 5-7 specific, actionable key responsibilities as separate string items in the array"],
-          "qualifications": ["List of 5-7 required qualifications including education, experience, and specific skills"],
-          "company_details": "Professional company overview (2-3 sentences) that describes the company culture, mission, and what makes it an attractive workplace",
-          "category": "One of: Engineering, Marketing, Sales, HR, Finance, Operations, Customer Service, Product, Design, Data Science",
-          "required_skills": ["List of 5-8 technical/professional skills that are essential for this role"],
-          "min_experience": "Minimum years of experience as a number (0-15+)"
-        }
-        
-        IMPORTANT FORMATTING INSTRUCTIONS:
-        - Responsibilities MUST be an array of separate strings, each representing one bullet point
-        - Do NOT combine responsibilities into a single paragraph
-        - Each responsibility should be a complete, actionable statement starting with a verb
-        - Example format: ["Lead development projects", "Design scalable solutions", "Mentor junior developers"]
-        
-        Guidelines:
-        - Make the description compelling and detailed
-        - Responsibilities should be specific, measurable, and formatted as separate bullet points
-        - Qualifications should be realistic but selective
-        - Company details should be professional and appealing
-        - Choose the most appropriate category
-        - Skills should be current and relevant
-        - Experience should match the seniority level of the role
-        
-        Make sure the response is valid JSON and all fields are filled appropriately for the job title.
-      ''';
-
-        final response = await http.post(
-          Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
-          headers: {
-            'Authorization': 'Bearer $_openRouterApiKey',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({
-            'model': _openRouterModel,
-            'messages': [
-              {'role': 'user', 'content': prompt}
-            ],
-            'temperature': 0.7,
-          }),
-        );
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final responseText = data['choices'][0]['message']['content']?.trim();
-
-          if (responseText == null || responseText.isEmpty) {
-            throw Exception('Empty response from OpenRouter');
-          }
-
-          // Try to parse JSON response
-          try {
-            final jsonStart = responseText.indexOf('{');
-            final jsonEnd = responseText.lastIndexOf('}') + 1;
-
-            if (jsonStart == -1 || jsonEnd == 0) {
-              throw Exception('No JSON found in OpenRouter response');
-            }
-
-            final jsonStr = responseText.substring(jsonStart, jsonEnd);
-            final Map<String, dynamic> jobDetails = await _parseJson(jsonStr);
-
-            return jobDetails;
-          } catch (e) {
-            // Fallback to manual parsing if JSON parsing fails
-            return _parseManually(responseText);
-          }
-        } else {
-          throw Exception('OpenRouter API error: ${response.statusCode}');
-        }
-      } catch (e) {
-        if (attempt == maxRetries) {
-          throw Exception(
-              'OpenRouter failed after $maxRetries attempts. Last error: $e');
-        }
-
-        // Brief delay before retry
-        await Future.delayed(baseDelay);
-      }
-    }
-
-    throw Exception('OpenRouter: Unexpected error');
-  }
-
-  static Future<Map<String, dynamic>> _tryDeepSeek(
-      String jobTitle, int maxRetries, Duration baseDelay) async {
-    for (int attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        final prompt = '''
-        Based on the job title "$jobTitle", generate comprehensive job details in JSON format with the following structure:
-        {
-          "description": "Detailed job description (2-3 paragraphs) that clearly explains the role, its purpose, and what the candidate will be doing day-to-day",
-          "responsibilities": ["List of 5-7 specific, actionable key responsibilities as separate string items in the array"],
-          "qualifications": ["List of 5-7 required qualifications including education, experience, and specific skills"],
-          "company_details": "Professional company overview (2-3 sentences) that describes the company culture, mission, and what makes it an attractive workplace",
-          "category": "One of: Engineering, Marketing, Sales, HR, Finance, Operations, Customer Service, Product, Design, Data Science",
-          "required_skills": ["List of 5-8 technical/professional skills that are essential for this role"],
-          "min_experience": "Minimum years of experience as a number (0-15+)"
-        }
-        
-        IMPORTANT FORMATTING INSTRUCTIONS:
-        - Responsibilities MUST be an array of separate strings, each representing one bullet point
-        - Do NOT combine responsibilities into a single paragraph
-        - Each responsibility should be a complete, actionable statement starting with a verb
-        - Example format: ["Lead development projects", "Design scalable solutions", "Mentor junior developers"]
-        
-        Guidelines:
-        - Make the description compelling and detailed
-        - Responsibilities should be specific, measurable, and formatted as separate bullet points
-        - Qualifications should be realistic but selective
-        - Company details should be professional and appealing
-        - Choose the most appropriate category
-        - Skills should be current and relevant
-        - Experience should match the seniority level of the role
-        
-        Make sure the response is valid JSON and all fields are filled appropriately for the job title.
-      ''';
-
-        final response = await http.post(
-          Uri.parse('https://api.deepseek.com/v1/chat/completions'),
-          headers: {
-            'Authorization': 'Bearer $_deepseekApiKey',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({
-            'model': 'deepseek-chat',
-            'messages': [
-              {'role': 'user', 'content': prompt}
-            ],
-            'temperature': 0.7,
-          }),
-        );
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body);
-          final responseText = data['choices'][0]['message']['content']?.trim();
-
-          if (responseText == null || responseText.isEmpty) {
-            throw Exception('Empty response from DeepSeek');
-          }
-
-          // Try to parse JSON response
-          try {
-            final jsonStart = responseText.indexOf('{');
-            final jsonEnd = responseText.lastIndexOf('}') + 1;
-
-            if (jsonStart == -1 || jsonEnd == 0) {
-              throw Exception('No JSON found in DeepSeek response');
-            }
-
-            final jsonStr = responseText.substring(jsonStart, jsonEnd);
-            final Map<String, dynamic> jobDetails = await _parseJson(jsonStr);
-
-            return jobDetails;
-          } catch (e) {
-            // Fallback to manual parsing if JSON parsing fails
-            return _parseManually(responseText);
-          }
-        } else {
-          throw Exception('DeepSeek API error: ${response.statusCode}');
-        }
-      } catch (e) {
-        if (attempt == maxRetries) {
-          throw Exception(
-              'DeepSeek failed after $maxRetries attempts. Last error: $e');
-        }
-
-        // Brief delay before retry
-        await Future.delayed(baseDelay);
-      }
-    }
-
-    throw Exception('DeepSeek: Unexpected error');
   }
 
   static Map<String, dynamic> _getFallbackJobDetails(String jobTitle) {

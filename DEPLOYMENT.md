@@ -63,6 +63,12 @@ Save. **Redeploy recruitment-web** so the next build uses this `BACKEND_URL` (ot
 
 If the API fails, check **recruitment-api** → **Logs** (e.g. migrations, `DATABASE_URL`, missing env). If the web app shows “failed to fetch” or wrong API, confirm **BACKEND_URL** is set for recruitment-web and redeploy.
 
+### Step 5: SPA routes (fix 404 on /verify-email and other client routes)
+
+The Flutter web app uses client-side routing (e.g. `/verify-email`, `/login`, `/candidate-dashboard`). When a user opens a direct link like `https://<recruitment-web>/verify-email?email=...`, the static server looks for a file at that path and returns **404** if you do not serve the app for all paths.
+
+**Fix on Render:** In **recruitment-web** go to **Redirects/Rewrites** in the dashboard and add a **Rewrite** rule: Source `/*`, Destination `/index.html`, Action **Rewrite**. This returns `index.html` for any path that does not match a real file so the Flutter app loads and GoRouter can show the correct screen. Do not use Redirect.
+
 ---
 
 ## 1. Database (PostgreSQL) — Ready for Deploy
