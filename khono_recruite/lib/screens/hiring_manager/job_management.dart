@@ -269,7 +269,7 @@ class _JobFormDialogState extends State<JobFormDialog>
     "cv": 60,
     "assessment": 40,
     "interview": 0,
-    "references": 0,
+    "references": 0
   };
   List<Map<String, dynamic>> knockoutRules = [];
   String employmentType = "full_time";
@@ -277,6 +277,93 @@ class _JobFormDialogState extends State<JobFormDialog>
   late TabController _tabController;
   final AdminService admin = AdminService();
   bool _isGeneratingWithAI = false;
+
+  // Location options for dropdown
+  static const List<String> locationOptions = [
+    "Remote",
+    "Eastern Cape - Alice",
+    "Eastern Cape - Aliwal North",
+    "Eastern Cape - Bhisho (Capital)",
+    "Eastern Cape - East London (Buffalo City)",
+    "Eastern Cape - Gqeberha (Port Elizabeth)",
+    "Eastern Cape - Jeffreys Bay",
+    "Eastern Cape - Kariega (Uitenhage)",
+    "Eastern Cape - Makhanda (Grahamstown)",
+    "Eastern Cape - Mthatha",
+    "Eastern Cape - Queenstown (Komani)",
+    "Free State - Bethlehem",
+    "Free State - Bloemfontein (Capital)",
+    "Free State - Harrismith",
+    "Free State - Kroonstad",
+    "Free State - Parys",
+    "Free State - Phuthaditjhaba",
+    "Free State - Sasolburg",
+    "Free State - Welkom",
+    "Gauteng - Benoni",
+    "Gauteng - Centurion",
+    "Gauteng - Germiston",
+    "Gauteng - Johannesburg (Capital)",
+    "Gauteng - Kempton Park",
+    "Gauteng - Krugersdorp",
+    "Gauteng - Midrand",
+    "Gauteng - Pretoria (Tshwane)",
+    "Gauteng - Randburg",
+    "Gauteng - Roodepoort",
+    "Gauteng - Sandton",
+    "Gauteng - Soweto",
+    "Gauteng - Vanderbijlpark",
+    "Gauteng - Vereeniging",
+    "KwaZulu-Natal - Ballito",
+    "KwaZulu-Natal - Durban (eThekwini)",
+    "KwaZulu-Natal - Ladysmith",
+    "KwaZulu-Natal - Newcastle",
+    "KwaZulu-Natal - Pietermaritzburg (Capital)",
+    "KwaZulu-Natal - Pinetown",
+    "KwaZulu-Natal - Port Shepstone",
+    "KwaZulu-Natal - Richards Bay",
+    "KwaZulu-Natal - Ulundi",
+    "KwaZulu-Natal - Umhlanga",
+    "Limpopo - Bela-Bela",
+    "Limpopo - Lephalale",
+    "Limpopo - Mokopane",
+    "Limpopo - Musina",
+    "Limpopo - Phalaborwa",
+    "Limpopo - Polokwane (Capital)",
+    "Limpopo - Thohoyandou",
+    "Limpopo - Tzaneen",
+    "Mpumalanga - Barberton",
+    "Mpumalanga - eMalahleni (Witbank)",
+    "Mpumalanga - Ermelo",
+    "Mpumalanga - Mbombela (Nelspruit - Capital)",
+    "Mpumalanga - Middelburg",
+    "Mpumalanga - Secunda",
+    "Mpumalanga - Standerton",
+    "Mpumalanga - White River",
+    "North West - Brits",
+    "North West - Klerksdorp",
+    "North West - Mahikeng (Capital)",
+    "North West - Potchefstroom",
+    "North West - Rustenburg",
+    "North West - Vryburg",
+    "Northern Cape - Colesberg",
+    "Northern Cape - De Aar",
+    "Northern Cape - Kathu",
+    "Northern Cape - Kimberley (Capital)",
+    "Northern Cape - Kuruman",
+    "Northern Cape - Springbok",
+    "Northern Cape - Upington",
+    "Western Cape - Beaufort West",
+    "Western Cape - Cape Town (Capital)",
+    "Western Cape - George",
+    "Western Cape - Hermanus",
+    "Western Cape - Knysna",
+    "Western Cape - Mossel Bay",
+    "Western Cape - Oudtshoorn",
+    "Western Cape - Paarl",
+    "Western Cape - Saldanha",
+    "Western Cape - Stellenbosch",
+    "Western Cape - Worcester",
+  ];
 
   // Generate job description with AI
   Future<void> _generateWithAI() async {
@@ -312,6 +399,13 @@ class _JobFormDialogState extends State<JobFormDialog>
           // Set category
           category = aiResponse['category'] ?? '';
           categoryController.text = category;
+
+          // Set company
+          companyName = aiResponse['company'] ?? 'Khonology';
+
+          // Set company details
+          companyDetails = aiResponse['company_details'] ?? '';
+          companyDetailsController.text = companyDetails;
 
           // Set required skills
           final skills = aiResponse['required_skills'] as List?;
@@ -387,7 +481,7 @@ class _JobFormDialogState extends State<JobFormDialog>
         (widget.job?['responsibilities'] ?? []).join(", ");
     qualificationsController.text =
         (widget.job?['qualifications'] ?? []).join(", ");
-    companyName = widget.job?['company'] ?? '';
+    companyName = widget.job?['company'] ?? 'Khonology';
     jobLocation = widget.job?['location'] ?? '';
     companyDetails = widget.job?['company_details'] ?? '';
     salaryCurrency = widget.job?['salary_currency'] ?? 'ZAR';
@@ -733,11 +827,33 @@ class _JobFormDialogState extends State<JobFormDialog>
                               onChanged: (v) => companyName = v,
                             ),
                             const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Location",
-                              initialValue: jobLocation,
-                              hintText: "City, Country or Remote",
-                              onChanged: (v) => jobLocation = v,
+                            Autocomplete<String>(
+                              initialValue: jobLocation.isEmpty
+                                  ? null
+                                  : TextEditingValue(text: jobLocation),
+                              optionsBuilder:
+                                  (TextEditingValue textEditingValue) {
+                                return locationOptions.where((String option) {
+                                  return option.toLowerCase().contains(
+                                      textEditingValue.text.toLowerCase());
+                                });
+                              },
+                              onSelected: (String selection) {
+                                setState(() => jobLocation = selection);
+                              },
+                              fieldViewBuilder: (BuildContext context,
+                                  TextEditingController textEditingController,
+                                  FocusNode focusNode,
+                                  VoidCallback onFieldSubmitted) {
+                                return TextFormField(
+                                  controller: textEditingController,
+                                  focusNode: focusNode,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Location',
+                                    hintText: 'Type to search locations...',
+                                  ),
+                                );
+                              },
                             ),
                             const SizedBox(height: 16),
                             Row(
