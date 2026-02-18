@@ -65,9 +65,7 @@ If the API fails, check **recruitment-api** → **Logs** (e.g. migrations, `DATA
 
 ### Step 5: SPA routes (fix 404 on /verify-email and other client routes)
 
-The Flutter web app uses client-side routing (e.g. `/verify-email`, `/login`, `/candidate-dashboard`). When a user opens a direct link like `https://<recruitment-web>/verify-email?email=...`, the static server looks for a file at that path and returns **404** if you do not serve the app for all paths.
-
-**Fix on Render:** In **recruitment-web** go to **Redirects/Rewrites** in the dashboard and add a **Rewrite** rule: Source `/*`, Destination `/index.html`, Action **Rewrite**. This returns `index.html` for any path that does not match a real file so the Flutter app loads and GoRouter can show the correct screen. Do not use Redirect.
+The Flutter web app uses client-side routing (e.g. `/verify-email`, `/login`, `/candidate-dashboard`). **This is now fixed in repo:** `render.yaml` defines a rewrite `/*` → `/index.html` for **recruitment-web**, so after a deploy (or Blueprint sync) client routes are served correctly. If you deployed before this change, either re-deploy from the updated repo or in **recruitment-web** → **Redirects/Rewrites** add a **Rewrite** rule: Source `/*`, Destination `/index.html`, Action **Rewrite**.
 
 ---
 
@@ -154,6 +152,24 @@ Migration chain (already in repo): `d544fdd839da` (init) → `33f86c05b761` → 
 
 ---
 
+## 3.1 Troubleshooting: Not receiving verification email
+
+The backend **only sends** the 6-digit verification email when **email is configured**. In **recruitment-api** → **Environment**, set:
+
+- **MAIL_USERNAME** – e.g. your Gmail or SMTP login
+- **MAIL_PASSWORD** – app password or SMTP password
+- **MAIL_DEFAULT_SENDER** – e.g. `"Recruitment Pro <noreply@yourdomain.com>"` (or leave unset to use MAIL_USERNAME as sender)
+
+Also set **MAIL_SERVER** (e.g. `smtp.gmail.com`), **MAIL_PORT** (e.g. `587`), **MAIL_USE_TLS** (`True`). If any of these are missing, the API does **not** send the verification email and instead returns tokens in the 201 response (the app then logs the user in and sends them to enrollment).
+
+If MAIL_* is set and you still do not receive the email:
+
+1. Check **recruitment-api** → **Logs** on Render for errors like `Failed to send email to ...` or SMTP errors.
+2. Check the recipient’s spam/junk folder.
+3. For Gmail, use an [App Password](https://support.google.com/accounts/answer/185833) and ensure “Less secure app access” or 2FA + app password is configured as needed.
+
+---
+
 ## 4. Codebase changes made for deployment
 
 - **Email reset link**: Uses `FRONTEND_URL` from config (no hardcoded localhost).
@@ -161,6 +177,14 @@ Migration chain (already in repo): `d544fdd839da` (init) → `33f86c05b761` → 
 - **Database URL**: In production, `sslmode=require` is appended if missing.
 - **Render**: `render.yaml` sets `FLASK_ENV=production`; static site has `BACKEND_URL` and `FRONTEND_URL` for build-time config.
 - **OpenRouter referer**: Uses `BACKEND_URL` from env when set.
+
+### 4.1 Render problems fixed in this repo
+
+| Problem | Fix |
+|--------|-----|
+| **404 on client routes** (e.g. `/verify-email`, `/login`, `/candidate-dashboard`) | `render.yaml` now defines a **rewrite** for `/*` → `/index.html` for **recruitment-web**, so the SPA is served for all paths. After syncing or redeploying, you no longer need to add this rule manually in the Render Dashboard. |
+| **CORS** | In production, when `FRONTEND_URL` is set, the API allows only that origin. Set **FRONTEND_URL** in **recruitment-api** to your web app URL (e.g. `https://recruitment-web.onrender.com`) so the browser allows requests. |
+| **Verification email link** | The link in the email uses `FRONTEND_URL`. Set **FRONTEND_URL** in **recruitment-api** to your deployed web URL so users land on the correct site (not localhost). |
 
 ---
 

@@ -1,4 +1,4 @@
-from flask import request, jsonify, current_app, redirect, url_for, make_response
+from flask import request, jsonify, current_app, redirect, url_for, make_response, render_template
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -7,7 +7,7 @@ from flask_jwt_extended import (
     verify_jwt_in_request, 
     get_jwt_identity
 )
-from app.extensions import db, oauth, limiter, validator
+from app.extensions import db, oauth, limiter, validator, mail
 from app.models import User, VerificationCode, OAuthConnection, Candidate
 from app.services.auth_service import AuthService
 from app.services.email_service import EmailService
@@ -404,6 +404,44 @@ def init_auth_routes(app):
                 exc_info=True
             )
             return jsonify({'error': 'Internal server error'}), 500
+
+    # ------------------- TEST SEND VERIFICATION EMAIL (one-off; requires TEST_EMAIL_SECRET) -------------------
+    @app.route('/api/auth/test-send-verification-email', methods=['POST'])
+    def test_send_verification_email():
+        secret = current_app.config.get("TEST_EMAIL_SECRET")
+        if not secret or request.headers.get("X-Test-Email-Secret") != secret:
+            return jsonify({"error": "Forbidden"}), 403
+        data = request.get_json() or {}
+        email = (data.get("email") or "").strip().lower()
+        if not email:
+            return jsonify({"error": "Missing email"}), 400
+        if not _email_configured():
+            return jsonify({"error": "Mail not configured (MAIL_USERNAME, MAIL_PASSWORD, MAIL_DEFAULT_SENDER)"}), 503
+        app_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/") or "http://localhost:3000"
+        code = "123456"
+        try:
+            html = render_template(
+                "email_templates/verification_email.html",
+                verification_code=code,
+                app_url=app_url,
+            )
+        except Exception:
+            html = f"Your verification code is: {code}. Enter it at {app_url}/verify-email"
+        from flask_mail import Message
+        sender = current_app.config.get("MAIL_DEFAULT_SENDER") or current_app.config.get("MAIL_USERNAME")
+        msg = Message(
+            subject="Verify Your Email Address (Test)",
+            recipients=[email],
+            html=html,
+            body=f"Your verification code is: {code}",
+            sender=sender,
+        )
+        try:
+            mail.send(msg)
+            return jsonify({"message": f"Test verification email sent to {email}", "code": code}), 200
+        except Exception as e:
+            current_app.logger.exception("Test verification email failed")
+            return jsonify({"error": str(e)}), 500
 
     # ------------------- VERIFY EMAIL -------------------
     @app.route('/api/auth/verify', methods=['POST'])
