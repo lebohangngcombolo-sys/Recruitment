@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -140,35 +140,41 @@ class _RegisterScreenState extends State<RegisterScreen>
 
     if (!context.mounted) return;
 
-    // When email is not configured, backend returns access_token and dashboard; log user in and go there.
-    final accessToken = body['access_token'] as String?;
-    if (accessToken != null && accessToken.isNotEmpty) {
-      try {
+    try {
+      // When email is not configured, backend returns access_token and dashboard; log user in and go there.
+      final accessToken = body['access_token'] as String?;
+      if (accessToken != null && accessToken.isNotEmpty) {
         final refreshToken = body['refresh_token'] as String?;
         await AuthService.saveTokens(accessToken, refreshToken);
         final user = body['user'];
         if (user is Map<String, dynamic>) {
           await AuthService.saveUserInfo(user);
         }
-      } catch (e) {
-        // On web, FlutterSecureStorage can throw; still navigate with token in URL so user can proceed
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Signed in. If you leave this page, log in again.')),
-          );
-        }
+        if (!context.mounted) return;
+        final dashboardPath = body['dashboard'] as String? ?? '/enrollment';
+        final safePath = dashboardPath.startsWith('/') ? dashboardPath : '/$dashboardPath';
+        context.go('$safePath?token=${Uri.encodeComponent(accessToken)}');
+        return;
       }
-      if (!context.mounted) return;
-      final dashboardPath = body['dashboard'] as String? ?? '/enrollment';
-      final safePath = dashboardPath.startsWith('/') ? dashboardPath : '/$dashboardPath';
-      context.go('$safePath?token=${Uri.encodeComponent(accessToken)}');
-      return;
-    }
 
-    // Email verification required: go to verify-email page
-    context.go(
-      '/verify-email?email=${Uri.encodeComponent(emailController.text.trim())}',
-    );
+      // Email verification required: go to verify-email page (backend sent the code by email)
+      final email = emailController.text.trim();
+      if (!context.mounted) return;
+      context.go(
+        '/verify-email?email=${Uri.encodeComponent(email)}',
+      );
+    } catch (e, st) {
+      // Defensive: any uncaught error (e.g. storage, navigation) — still try to reach verify-email so user can enter code
+      if (context.mounted) {
+        debugPrint('Register post-201 error: $e $st');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Registration succeeded. Please check your email for the verification code.')),
+        );
+        context.go(
+          '/verify-email?email=${Uri.encodeComponent(emailController.text.trim())}',
+        );
+      }
+    }
   }
 
   @override

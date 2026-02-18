@@ -168,6 +168,10 @@ If MAIL_* is set and you still do not receive the email:
 2. Check the recipient’s spam/junk folder.
 3. For Gmail, use an [App Password](https://support.google.com/accounts/answer/185833) and ensure “Less secure app access” or 2FA + app password is configured as needed.
 
+**Quick check:** If after registering you are taken straight to **enrollment** (no verify-email screen), the backend did not send an email because **MAIL_USERNAME**, **MAIL_PASSWORD**, or **MAIL_DEFAULT_SENDER** is missing in **recruitment-api** → Environment. Set all three (and MAIL_SERVER, MAIL_PORT, MAIL_USE_TLS), then redeploy the API.
+
+**Verify screen shows but no code received:** The backend sends the email in a background thread. Check **recruitment-api** → **Logs** on Render right after someone registers: look for `Sending verification email to ...` (confirms attempt) and `Failed to send email to ...` (SMTP error details). For **SendGrid**: MAIL_USERNAME must be exactly `apikey`; MAIL_PASSWORD = your API key (no spaces); MAIL_DEFAULT_SENDER must be a **verified sender** in SendGrid (Settings → Sender Authentication). Also check the recipient’s spam/junk folder.
+
 ---
 
 ## 4. Codebase changes made for deployment
