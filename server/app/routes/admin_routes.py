@@ -757,7 +757,6 @@ def list_candidates():
                         'id': ass.id,
                         'application_id': ass.application_id,
                         'percentage_score': ass.percentage_score,
-                        'recommendation': ass.recommendation,
                         'created_at': ass.created_at.isoformat() if ass.created_at else None
                     } for ass in assessments
                 ],
@@ -767,8 +766,7 @@ def list_candidates():
                         'application_id': interview.application_id,
                         'status': interview.status,
                         'scheduled_time': interview.scheduled_time.isoformat() if interview.scheduled_time else None,
-                        'interview_type': interview.interview_type,
-                        'feedback_score': interview.feedback_score
+                        'interview_type': interview.interview_type
                     } for interview in interviews
                 ]
             })
