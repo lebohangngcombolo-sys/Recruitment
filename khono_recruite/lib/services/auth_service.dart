@@ -385,26 +385,39 @@ class AuthService {
   }
 
   // ----------------- TOKEN HELPERS -----------------
+  // On web, FlutterSecureStorage is not supported and can throw; use SharedPreferences only.
   static Future<void> saveTokens(
       String accessToken, String? refreshToken) async {
-    await _storage.write(key: 'access_token', value: accessToken);
-    if (refreshToken != null) {
-      await _storage.write(key: 'refresh_token', value: refreshToken);
+    if (!kIsWeb) {
+      await _storage.write(key: 'access_token', value: accessToken);
+      if (refreshToken != null) {
+        await _storage.write(key: 'refresh_token', value: refreshToken);
+      }
     }
     await _persistTokensToPrefs(accessToken, refreshToken);
   }
 
   static Future<String?> getAccessToken() async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('access_token') ?? prefs.getString('token');
+    }
     return await _storage.read(key: 'access_token');
   }
 
   static Future<String?> getRefreshToken() async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('refresh_token');
+    }
     return await _storage.read(key: 'refresh_token');
   }
 
   static Future<void> deleteTokens() async {
-    await _storage.delete(key: 'access_token');
-    await _storage.delete(key: 'refresh_token');
+    if (!kIsWeb) {
+      await _storage.delete(key: 'access_token');
+      await _storage.delete(key: 'refresh_token');
+    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
     await prefs.remove('refresh_token');
@@ -413,7 +426,9 @@ class AuthService {
 
 // ----------------- SAVE TOKEN -----------------
   static Future<void> saveToken(String token) async {
-    await _storage.write(key: 'access_token', value: token);
+    if (!kIsWeb) {
+      await _storage.write(key: 'access_token', value: token);
+    }
     await _persistTokensToPrefs(token, null);
   }
 

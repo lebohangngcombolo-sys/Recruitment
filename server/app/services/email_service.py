@@ -22,6 +22,7 @@ class EmailService:
             logging.error(f"Failed to render verification email template for {email}", exc_info=True)
             html = f"Your verification code is: {verification_code}. Enter it at {app_url}/verify-email"
 
+        logging.info("Sending verification email to %s", email)
         EmailService.send_async_email(subject, [email], html)
 
     @staticmethod
@@ -135,8 +136,14 @@ class EmailService:
                         sender=sender
                     )
                     mail.send(msg)
+                    logging.info("Email sent successfully to %s", recipients)
                 except Exception as e:
-                    logging.error(f"Failed to send email to {recipients}: {str(e)}", exc_info=True)
+                    logging.error(
+                        "Failed to send email to %s: %s. Check MAIL_* (MAIL_SERVER, MAIL_USERNAME, MAIL_PASSWORD, MAIL_DEFAULT_SENDER) and sender verification.",
+                        recipients,
+                        str(e),
+                        exc_info=True,
+                    )
 
         thread = Thread(target=send_email, args=[app, subject, recipients, html_body, text_body])
         thread.start()
