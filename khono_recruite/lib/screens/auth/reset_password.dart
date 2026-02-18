@@ -215,7 +215,6 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                               textColor: Colors.black,
                               backgroundColor: Colors.white,
                               borderColor: Colors.grey.shade300,
-                              labelColor: Colors.white,
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _obscureNewPassword
@@ -239,7 +238,6 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                               textColor: Colors.black,
                               backgroundColor: Colors.white,
                               borderColor: Colors.grey.shade300,
-                              labelColor: Colors.white,
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _obscureConfirmPassword

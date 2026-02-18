@@ -556,34 +556,6 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
 
-          // Top bar on top so back arrow and logo receive taps
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back,
-                          color: Colors.white, size: 28),
-                      onPressed: () => context.go('/'),
-                    ),
-                    const SizedBox(width: 12),
-                    GestureDetector(
-                      onTap: () => context.go('/'),
-                      child: Image.asset(
-                        "assets/icons/khono.png",
-                        height: 40,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
           if (loading && !_showMfaForm)
             const Center(child: CircularProgressIndicator(color: Colors.white)),
         ],
