@@ -54,9 +54,15 @@ def create_app():
         ping_timeout=60,
         ping_interval=25
     )
+    # In production, restrict CORS to FRONTEND_URL when set; otherwise allow all (e.g. local dev)
+    _cors_origins = ["*"]
+    if app.config.get("FLASK_ENV") == "production":
+        _frontend = (app.config.get("FRONTEND_URL") or "").strip().rstrip("/")
+        if _frontend:
+            _cors_origins = [_frontend]
     cors.init_app(
         app,
-        origins=["*"],  # Allow all origins for development
+        origins=_cors_origins,
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
         supports_credentials=True

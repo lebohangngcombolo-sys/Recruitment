@@ -26,7 +26,7 @@ Analysis date: before push to deployed branch. Use this to confirm readiness and
 | Password verification | OK | Invalid salt handled; no 500 on bad hashes |
 | Email reset link | OK | Uses FRONTEND_URL from config |
 | OpenRouter referer | OK | Uses BACKEND_URL from env |
-| CORS | OK | Configured; can restrict to FRONTEND_URL later |
+| CORS | OK | In production, restricted to FRONTEND_URL when set (Config.FLASK_ENV + __init__.py) |
 | Migrations | OK | Chain complete; `render_start.sh` runs `flask db upgrade` |
 | Health check | OK | `GET /api/public/healthz` (no auth) |
 | Unused import | Fixed | Removed werkzeug password helpers from candidate_routes (use bcrypt only) |

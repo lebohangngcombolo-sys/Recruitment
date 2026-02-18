@@ -28,6 +28,9 @@ def _normalize_database_url(url):
 
 
 class Config:
+    # Env mode (Render sets FLASK_ENV=production); used e.g. for CORS
+    FLASK_ENV = os.getenv("FLASK_ENV", os.getenv("ENV", "development"))
+
     # Secrets - allow dev defaults when not running in production
     SECRET_KEY = _get_env("SECRET_KEY", "dev-secret-key", required_in_production=True)
     JWT_SECRET_KEY = _get_env("JWT_SECRET_KEY", "jwt-secret-key", required_in_production=True)
@@ -99,6 +102,8 @@ class Config:
 
     # Optional dev/debug (from .env)
     ENABLE_SECURITY_DEBUG_LOGS = _get_env("ENABLE_SECURITY_DEBUG_LOGS", "false").lower() == "true"
+    # One-off test: send verification email to check MAIL_* (set TEST_EMAIL_SECRET to enable)
+    TEST_EMAIL_SECRET = _get_env("TEST_EMAIL_SECRET", None)
 
     # Google Calendar Integration
     GOOGLE_CALENDAR_ENABLED = _get_env("GOOGLE_CALENDAR_ENABLED", "False").lower() == "true"
