@@ -9,16 +9,18 @@ class EmailService:
 
     @staticmethod
     def send_verification_email(email, verification_code):
-        """Send email verification code."""
+        """Send email verification code. Candidate receives the 6-digit code in the email."""
         subject = "Verify Your Email Address"
+        app_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/") or "http://localhost:3000"
         try:
             html = render_template(
-                'email_templates/verification_email.html', 
-                verification_code=verification_code
+                'email_templates/verification_email.html',
+                verification_code=verification_code,
+                app_url=app_url,
             )
         except Exception:
             logging.error(f"Failed to render verification email template for {email}", exc_info=True)
-            html = f"Your verification code is: {verification_code}"
+            html = f"Your verification code is: {verification_code}. Enter it at {app_url}/verify-email"
 
         EmailService.send_async_email(subject, [email], html)
 

@@ -139,6 +139,25 @@ class _RegisterScreenState extends State<RegisterScreen>
     }
 
     if (!context.mounted) return;
+
+    // When email is not configured, backend returns access_token and dashboard; log user in and go there.
+    final accessToken = body['access_token'] as String?;
+    if (accessToken != null && accessToken.isNotEmpty) {
+      final refreshToken = body['refresh_token'] as String?;
+      await AuthService.saveTokens(accessToken, refreshToken);
+      final user = body['user'];
+      if (user is Map<String, dynamic>) {
+        await AuthService.saveUserInfo(user);
+      }
+      final dashboardPath = body['dashboard'] as String? ?? '/enrollment';
+      if (!context.mounted) return;
+      // Routes expect query param 'token' for dashboard deep links
+      final safePath = dashboardPath.startsWith('/') ? dashboardPath : '/$dashboardPath';
+      context.go('$safePath?token=${Uri.encodeComponent(accessToken)}');
+      return;
+    }
+
+    // Email verification required: go to verify-email page
     context.go(
       '/verify-email?email=${Uri.encodeComponent(emailController.text.trim())}',
     );
