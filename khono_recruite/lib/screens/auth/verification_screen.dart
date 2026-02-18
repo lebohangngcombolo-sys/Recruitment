@@ -111,7 +111,9 @@ class _VerificationScreenState extends State<VerificationScreen>
                   IconButton(
                     icon: const Icon(Icons.arrow_back,
                         color: Colors.white, size: 28),
-                    onPressed: () => context.canPop() ? context.pop() : context.go('/register'),
+                    onPressed: () => context.canPop()
+                        ? context.pop()
+                        : context.go('/register'),
                   ),
                   const SizedBox(width: 12),
                   Image.asset(

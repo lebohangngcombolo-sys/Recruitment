@@ -1182,6 +1182,9 @@ class _JobFormDialogState extends State<JobFormDialog>
   final _formKey = GlobalKey<FormState>();
   late String title;
   late String description;
+  late String company;
+  late String location;
+  late String deadlineStr;
   String jobSummary = "";
   TextEditingController responsibilitiesController = TextEditingController();
   TextEditingController qualificationsController = TextEditingController();
@@ -1286,19 +1289,22 @@ class _JobFormDialogState extends State<JobFormDialog>
     salaryMaxController.text = (widget.job?['salary_max'] ?? '').toString();
     salaryPeriod = widget.job?['salary_period'] ?? 'monthly';
     category = widget.job?['category'] ?? '';
-    employmentType = widget.job?['employment_type'] ?? 'full_time';
-
-    final jobWeightings = widget.job?['weightings'];
-    if (jobWeightings is Map) {
-      weightings = {
-        "cv": (jobWeightings["cv"] ?? 60).toInt(),
-        "assessment": (jobWeightings["assessment"] ?? 40).toInt(),
-        "interview": (jobWeightings["interview"] ?? 0).toInt(),
-        "references": (jobWeightings["references"] ?? 0).toInt(),
-      };
-    }
-
-    knockoutRules = _normalizeKnockoutRules(widget.job?['knockout_rules']);
+    company = widget.job?['company']?.toString() ?? '';
+    location = widget.job?['location']?.toString() ?? '';
+    employmentType = widget.job?['employment_type']?.toString() ??
+        widget.job?['type']?.toString() ??
+        "Full Time";
+    if (!employmentTypes.contains(employmentType)) employmentType = "Full Time";
+    salaryRangeController.text = widget.job?['salary_range']?.toString() ??
+        widget.job?['salary']?.toString() ??
+        '';
+    final deadline =
+        widget.job?['application_deadline'] ?? widget.job?['deadline'];
+    applicationDeadlineController.text = deadline?.toString() ?? '';
+    deadlineStr = deadline?.toString() ?? '';
+    bannerController.text = widget.job?['banner']?.toString() ??
+        widget.job?['company_logo']?.toString() ??
+        '';
 
     if (widget.job != null &&
         widget.job!['assessment_pack'] != null &&
@@ -1333,21 +1339,6 @@ class _JobFormDialogState extends State<JobFormDialog>
         "weight": 1,
       });
     });
-  }
-
-  List<Map<String, dynamic>> _normalizeKnockoutRules(dynamic raw) {
-    if (raw is! List) return [];
-    return raw.map<Map<String, dynamic>>((rule) {
-      if (rule is Map<String, dynamic>) {
-        return Map<String, dynamic>.from(rule);
-      }
-      return {
-        "type": "skills",
-        "field": "skills",
-        "operator": "==",
-        "value": rule.toString(),
-      };
-    }).toList();
   }
 
   List<Map<String, dynamic>> _normalizeQuestions(dynamic raw) {
@@ -1446,9 +1437,15 @@ class _JobFormDialogState extends State<JobFormDialog>
       'salary_period': salaryPeriod,
       'category': category,
       'required_skills': skills,
-      'min_experience': double.tryParse(minExpController.text) ?? 0,
-      'weightings': weightings,
-      'knockout_rules': knockoutRules,
+      'min_experience':
+          double.tryParse(minExpController.text.toString().trim()) ?? 0,
+      'vacancy': 1,
+      'weightings': {'cv': 60, 'assessment': 40},
+      'salary_range': salaryRangeController.text.trim(),
+      'application_deadline': deadlineStr.isEmpty ? null : deadlineStr,
+      'banner': bannerController.text.trim().isEmpty
+          ? null
+          : bannerController.text.trim(),
       'assessment_pack': {
         'questions': normalizedQuestions.map((q) {
           return {
