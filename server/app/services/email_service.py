@@ -129,6 +129,7 @@ class EmailService:
         subject = str(subject)
 
         def send_email(app, subject, recipients, html_body, text_body):
+            logger = app.logger
             try:
                 with app.app_context():
                     sender = app.config.get('MAIL_DEFAULT_SENDER') or app.config.get('MAIL_USERNAME')
@@ -140,9 +141,9 @@ class EmailService:
                         sender=sender
                     )
                     mail.send(msg)
-                    logging.info("Email sent successfully to %s", recipients)
+                    logger.info("Email sent successfully to %s", recipients)
             except Exception as e:
-                logging.error(
+                logger.error(
                     "Failed to send email to %s: %s (type=%s). Check MAIL_* and SendGrid sender verification.",
                     recipients,
                     str(e),

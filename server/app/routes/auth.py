@@ -456,6 +456,7 @@ def init_auth_routes(app):
             return jsonify({"error": "Missing email"}), 400
         if not _email_configured():
             return jsonify({"error": "Mail not configured (MAIL_USERNAME, MAIL_PASSWORD, MAIL_DEFAULT_SENDER)"}), 503
+        current_app.logger.info("Test email queued for %s (check logs for success/failure)", email)
         EmailService.send_async_email(
             subject="Test from Render",
             recipients=[email],
