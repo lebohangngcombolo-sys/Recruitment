@@ -443,10 +443,10 @@ def init_auth_routes(app):
             current_app.logger.exception("Test verification email failed")
             return jsonify({"error": str(e)}), 500
 
-    # ------------------- TEST EMAIL (async, same path as registration; for Render debugging) -------------------
+    # ------------------- TEST EMAIL (async or sync; sync=1 returns success/error in response for Render debugging) -------------------
     @app.route('/api/auth/test-email', methods=['POST'])
     def test_email():
-        """Send a simple test email via the same async path as registration. Protected by TEST_EMAIL_SECRET."""
+        """Send a simple test email. ?sync=1 sends in-request and returns success or error in JSON (avoids eventlet thread logging)."""
         secret = current_app.config.get("TEST_EMAIL_SECRET")
         if not secret or request.headers.get("X-Test-Email-Secret") != secret:
             return jsonify({"error": "Forbidden"}), 403
@@ -456,6 +456,27 @@ def init_auth_routes(app):
             return jsonify({"error": "Missing email"}), 400
         if not _email_configured():
             return jsonify({"error": "Mail not configured (MAIL_USERNAME, MAIL_PASSWORD, MAIL_DEFAULT_SENDER)"}), 503
+
+        sync = request.args.get("sync", "").lower() in ("1", "true", "yes") or (data.get("sync") is True or data.get("sync") == "1")
+        if sync:
+            # Send synchronously so we get the exact error in the response (avoids eventlet/thread logging issues)
+            from flask_mail import Message
+            sender = current_app.config.get("MAIL_DEFAULT_SENDER") or current_app.config.get("MAIL_USERNAME")
+            msg = Message(
+                subject="Test from Render",
+                recipients=[email],
+                html="<p>This is a test email from your recruitment API.</p>",
+                body="This is a test email from your recruitment API.",
+                sender=sender,
+            )
+            try:
+                mail.send(msg)
+                current_app.logger.info("Test email sent successfully to %s (sync)", email)
+                return jsonify({"message": "Email sent successfully", "to": email}), 200
+            except Exception as e:
+                current_app.logger.exception("Test email failed (sync)")
+                return jsonify({"error": str(e), "type": type(e).__name__}), 500
+
         current_app.logger.info("Test email queued for %s (check logs for success/failure)", email)
         EmailService.send_async_email(
             subject="Test from Render",
