@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use
+// ignore_for_file: dead_code, deprecated_member_use
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -253,7 +253,6 @@ class _JobFormDialogState extends State<JobFormDialog>
   TextEditingController qualificationsController = TextEditingController();
   TextEditingController descriptionController = TextEditingController();
   TextEditingController companyDetailsController = TextEditingController();
-  TextEditingController categoryController = TextEditingController();
   String companyName = "";
   String jobLocation = "";
   String companyDetails = "";
@@ -276,7 +275,6 @@ class _JobFormDialogState extends State<JobFormDialog>
   String? weightingsError;
   late TabController _tabController;
   final AdminService admin = AdminService();
-  bool _isGeneratingWithAI = false;
 
   // Location options for dropdown
   static const List<String> locationOptions = [
@@ -365,92 +363,19 @@ class _JobFormDialogState extends State<JobFormDialog>
     "Western Cape - Worcester",
   ];
 
-  // Generate job description with AI
-  Future<void> _generateWithAI() async {
-    if (title.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter a job title first")),
-      );
-      return;
-    }
-
-    setState(() => _isGeneratingWithAI = true);
-
-    try {
-      // Use AI service to generate content
-      final aiResponse = await AIService.generateJobDetails(
-        title.trim(),
-      );
-
-      if (mounted) {
-        setState(() {
-          description = aiResponse['description'] ?? '';
-          descriptionController.text = aiResponse['description'] ?? '';
-          responsibilitiesController.text =
-              (aiResponse['responsibilities'] as List?)?.join(', ') ?? '';
-          // Set qualifications
-          final qualifications = aiResponse['qualifications'] as List?;
-          if (qualifications != null) {
-            qualificationsController.text =
-                qualifications.map((q) => "• $q").join('\n');
-          }
-          jobSummary = aiResponse['summary'] ?? '';
-
-          // Set category
-          category = aiResponse['category'] ?? '';
-          categoryController.text = category;
-
-          // Set company
-          companyName = aiResponse['company'] ?? 'Khonology';
-
-          // Set company details
-          companyDetails = aiResponse['company_details'] ?? '';
-          companyDetailsController.text = companyDetails;
-
-          // Set required skills
-          final skills = aiResponse['required_skills'] as List?;
-          if (skills != null) {
-            skillsController.text = skills.map((s) => "• $s").join('\n');
-          }
-
-          // Set minimum experience
-          minExpController.text =
-              aiResponse['min_experience']?.toString() ?? '0';
-
-          // Set salary
-          salaryMinController.text = aiResponse['salary_min']?.toString() ?? '';
-          salaryMaxController.text = aiResponse['salary_max']?.toString() ?? '';
-          salaryCurrency = aiResponse['salary_currency'] ?? 'ZAR';
-          salaryPeriod = aiResponse['salary_period'] ?? 'monthly';
-
-          // Set evaluation weightings
-          final weightingsData =
-              aiResponse['evaluation_weightings'] as Map<String, dynamic>?;
-          if (weightingsData != null) {
-            weightings = {
-              "cv": (weightingsData["cv"] ?? 60).toInt(),
-              "assessment": (weightingsData["assessment"] ?? 30).toInt(),
-              "interview": (weightingsData["interview"] ?? 10).toInt(),
-              "references": (weightingsData["references"] ?? 0).toInt(),
-            };
-          }
-
-          _isGeneratingWithAI = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Job details generated successfully!")),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isGeneratingWithAI = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Failed to generate: $e")),
-        );
-      }
-    }
-  }
+  // Category options for dropdown
+  static const List<String> categoryOptions = [
+    "Engineering",
+    "Marketing",
+    "Sales",
+    "HR",
+    "Finance",
+    "Operations",
+    "Customer Service",
+    "Product",
+    "Design",
+    "Data Science",
+  ];
 
   @override
   void initState() {
@@ -459,7 +384,7 @@ class _JobFormDialogState extends State<JobFormDialog>
     description = widget.job?['description'] ?? '';
     descriptionController.text = description;
     companyDetailsController.text = widget.job?['company_details'] ?? '';
-    categoryController.text = widget.job?['category'] ?? '';
+    category = widget.job?['category'] ?? '';
 
     // Format existing responsibilities as bullet points
     final existingResponsibilities = widget.job?['responsibilities'] ?? [];
@@ -532,7 +457,6 @@ class _JobFormDialogState extends State<JobFormDialog>
   void dispose() {
     descriptionController.dispose();
     companyDetailsController.dispose();
-    categoryController.dispose();
     responsibilitiesController.dispose();
     qualificationsController.dispose();
     skillsController.dispose();
@@ -737,91 +661,140 @@ class _JobFormDialogState extends State<JobFormDialog>
               indicatorColor: Colors.redAccent,
               indicatorWeight: 3,
             ),
+
             Expanded(
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  // Job Details Form
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Form(
-                      key: _formKey,
-                      child: SingleChildScrollView(
+                  // Job Details Tab
+                  Container(
+                    color: (themeProvider.isDarkMode
+                            ? const Color(0xFF1A1A2E)
+                            : Colors.white)
+                        .withValues(alpha: 0.95),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.work, color: Colors.redAccent, size: 24),
+                              const SizedBox(width: 12),
+                              Text(
+                                "Basic Job Information",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: themeProvider.isDarkMode
+                                      ? Colors.white
+                                      : Colors.black87),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                          Card(
+                            elevation: 4,
+                            shadowColor: Colors.black26,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            color: (themeProvider.isDarkMode
+                                    ? const Color(0xFF1A1A2E)
+                                    : Colors.white)
+                                .withValues(alpha: 0.95),
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.assignment, color: Colors.orangeAccent, size: 24),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        "Job Requirements",
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.white
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 20),
+                                  CustomTextField(
+                                    label: "Responsibilities",
+                                    controller: responsibilitiesController,
+                                    hintText: "Bullet points of key responsibilities",
+                                    maxLines: 4,
+                                    expands: false,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  CustomTextField(
+                                    label: "Qualifications",
+                                    controller: qualificationsController,
+                                    hintText: "Bullet points of required qualifications",
+                                    maxLines: 4,
+                                    expands: false,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  CustomTextField(
+                                    label: "Required Skills",
+                                    controller: skillsController,
+                                    hintText: "Bullet points of essential skills",
+                                    maxLines: 3,
+                                    expands: false,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  CustomTextField(
+                                    label: "Minimum Experience (years)",
+                                    controller: minExpController,
+                                    inputType: TextInputType.number,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                    const SizedBox(height: 24),
+
+                    // Company Information Section
+                    Card(
+                      elevation: 4,
+                      shadowColor: Colors.black26,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      color: (themeProvider.isDarkMode
+                              ? const Color(0xFF1A1A2E)
+                              : Colors.white)
+                          .withValues(alpha: 0.95),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
                               children: [
-                                Expanded(
-                                  child: CustomTextField(
-                                    label: "Title",
-                                    initialValue: title,
-                                    hintText: "Enter job title",
-                                    onChanged: (v) => title = v,
-                                    validator: (v) => v == null || v.isEmpty
-                                        ? "Enter title"
-                                        : null,
-                                  ),
-                                ),
+                                Icon(Icons.business, color: Colors.greenAccent, size: 24),
                                 const SizedBox(width: 12),
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.blue),
-                                  ),
-                                  child: IconButton(
-                                    icon: _isGeneratingWithAI
-                                        ? const SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                      Colors.blue),
-                                            ),
-                                          )
-                                        : const Icon(Icons.auto_awesome,
-                                            color: Colors.blue),
-                                    onPressed: _isGeneratingWithAI
-                                        ? null
-                                        : _generateWithAI,
-                                    tooltip: "Generate with AI",
+                                Text(
+                                  "Company Information",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.white
+                                        : Colors.black87,
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 20),
                             CustomTextField(
-                              label: "Description",
-                              controller: descriptionController,
-                              hintText: "Enter job description",
-                              maxLines: 5,
-                              expands: false,
-                              onChanged: (v) => description = v,
-                              validator: (v) => v == null || v.isEmpty
-                                  ? "Enter description"
-                                  : null,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Responsibilities",
-                              controller: responsibilitiesController,
-                              hintText: "Comma separated list",
-                              maxLines: 4,
-                              expands: false,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Qualifications",
-                              controller: qualificationsController,
-                              hintText: "Comma separated list",
-                              maxLines: 4,
-                              expands: false,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Company",
+                              label: "Company Name",
                               initialValue: companyName,
                               hintText: "Company name",
                               onChanged: (v) => companyName = v,
@@ -831,11 +804,11 @@ class _JobFormDialogState extends State<JobFormDialog>
                               initialValue: jobLocation.isEmpty
                                   ? null
                                   : TextEditingValue(text: jobLocation),
-                              optionsBuilder:
-                                  (TextEditingValue textEditingValue) {
+                              optionsBuilder: (TextEditingValue textEditingValue) {
                                 return locationOptions.where((String option) {
-                                  return option.toLowerCase().contains(
-                                      textEditingValue.text.toLowerCase());
+                                  return option
+                                      .toLowerCase()
+                                      .contains(textEditingValue.text.toLowerCase());
                                 });
                               },
                               onSelected: (String selection) {
@@ -856,11 +829,58 @@ class _JobFormDialogState extends State<JobFormDialog>
                               },
                             ),
                             const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Company Details",
+                              controller: companyDetailsController,
+                              hintText: "About the company",
+                              maxLines: 3,
+                              expands: false,
+                              onChanged: (v) => companyDetails = v,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Compensation Section
+                    Card(
+                      elevation: 4,
+                      shadowColor: Colors.black26,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      color: (themeProvider.isDarkMode
+                              ? const Color(0xFF1A1A2E)
+                              : Colors.white)
+                          .withValues(alpha: 0.95),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.attach_money, color: Colors.purpleAccent, size: 24),
+                                const SizedBox(width: 12),
+                                Text(
+                                  "Compensation",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
                             Row(
                               children: [
                                 Expanded(
                                   child: CustomTextField(
-                                    label: "Salary Min",
+                                    label: "Salary Minimum",
                                     controller: salaryMinController,
                                     inputType: TextInputType.number,
                                     hintText: "e.g. 30000",
@@ -869,7 +889,7 @@ class _JobFormDialogState extends State<JobFormDialog>
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: CustomTextField(
-                                    label: "Salary Max",
+                                    label: "Salary Maximum",
                                     controller: salaryMaxController,
                                     inputType: TextInputType.number,
                                     hintText: "e.g. 45000",
@@ -878,63 +898,91 @@ class _JobFormDialogState extends State<JobFormDialog>
                               ],
                             ),
                             const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Salary Currency",
-                              initialValue: salaryCurrency,
-                              hintText: "ZAR, USD, EUR",
-                              onChanged: (v) =>
-                                  salaryCurrency = v.isEmpty ? "ZAR" : v,
-                            ),
-                            const SizedBox(height: 16),
-                            DropdownButtonFormField<String>(
-                              initialValue: salaryPeriod,
-                              decoration: const InputDecoration(
-                                labelText: "Salary Period",
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: "monthly",
-                                  child: Text("Per Month"),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: CustomTextField(
+                                    label: "Salary Currency",
+                                    initialValue: salaryCurrency,
+                                    hintText: "ZAR, USD, EUR",
+                                    onChanged: (v) =>
+                                        salaryCurrency = v.isEmpty ? "ZAR" : v,
+                                  ),
                                 ),
-                                DropdownMenuItem(
-                                  value: "yearly",
-                                  child: Text("Per Year"),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    initialValue: salaryPeriod,
+                                    decoration: const InputDecoration(
+                                      labelText: "Salary Period",
+                                    ),
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: "monthly",
+                                        child: Text("Per Month"),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: "yearly",
+                                        child: Text("Per Year"),
+                                      ),
+                                    ],
+                                    onChanged: (value) {
+                                      if (value == null) return;
+                                      setState(() => salaryPeriod = value);
+                                    },
+                                  ),
                                 ),
                               ],
-                              onChanged: (value) {
-                                if (value == null) return;
-                                setState(() => salaryPeriod = value);
-                              },
                             ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Company Details",
-                              controller: companyDetailsController,
-                              hintText: "About the company",
-                              maxLines: 4,
-                              expands: false,
-                              onChanged: (v) => companyDetails = v,
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Job Classification Section
+                    Card(
+                      elevation: 4,
+                      shadowColor: Colors.black26,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      color: (themeProvider.isDarkMode
+                              ? const Color(0xFF1A1A2E)
+                              : Colors.white)
+                          .withValues(alpha: 0.95),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.category, color: Colors.tealAccent, size: 24),
+                                const SizedBox(width: 12),
+                                Text(
+                                  "Job Classification",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Category",
-                              controller: categoryController,
-                              hintText: "Engineering, Marketing...",
-                              onChanged: (v) => category = v,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Required Skills",
-                              controller: skillsController,
-                              hintText: "Comma separated skills",
-                              maxLines: 3,
-                              expands: false,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Minimum Experience (years)",
-                              controller: minExpController,
-                              inputType: TextInputType.number,
+                            const SizedBox(height: 20),
+                            DropdownButtonFormField<String>(
+                              value: category.isEmpty ? null : category,
+                              decoration: const InputDecoration(
+                                labelText: "Category",
+                              ),
+                              items: categoryOptions.map((cat) => DropdownMenuItem(
+                                value: cat,
+                                child: Text(cat),
+                              )).toList(),
+                              onChanged: (value) => setState(() => category = value ?? ''),
                             ),
                             const SizedBox(height: 16),
                             DropdownButtonFormField<String>(
@@ -967,7 +1015,45 @@ class _JobFormDialogState extends State<JobFormDialog>
                                 });
                               },
                             ),
-                            const SizedBox(height: 24),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Assessment Configuration Section
+                    Card(
+                      elevation: 4,
+                      shadowColor: Colors.black26,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      color: (themeProvider.isDarkMode
+                              ? const Color(0xFF1A1A2E)
+                              : Colors.white)
+                          .withValues(alpha: 0.95),
+                      child: Padding(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.assessment, color: Colors.blueAccent, size: 24),
+                                const SizedBox(width: 12),
+                                Text(
+                                  "Assessment Configuration",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
                             Align(
                               alignment: Alignment.centerLeft,
                               child: Text(
@@ -985,7 +1071,7 @@ class _JobFormDialogState extends State<JobFormDialog>
                                 });
                               },
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 20),
                             Align(
                               alignment: Alignment.centerLeft,
                               child: Text(
@@ -1005,14 +1091,15 @@ class _JobFormDialogState extends State<JobFormDialog>
                           ],
                         ),
                       ),
+                  ),
+                        ],
+                      ),
                     ),
                   ),
-
-                  // Assessment Tab
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      children: [
+                Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    children: [
                         // AI Questions Button
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1271,30 +1358,32 @@ class _JobFormDialogState extends State<JobFormDialog>
                     ),
                   ),
                 ],
-              ),
+              ), // End of TabBarView
+
             ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      "Cancel",
-                      style: TextStyle(
-                        color: themeProvider.isDarkMode
-                            ? Colors.grey.shade400
-                            : Colors.black87,
+
+            Container(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        "Cancel",
+                        style: TextStyle(
+                          color: themeProvider.isDarkMode
+                              ? Colors.grey.shade400
+                              : Colors.black87,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  CustomButton(text: "Save Job", onPressed: saveJob),
-                ],
-              ),
-            ),
-          ],
+                    const SizedBox(width: 8),
+                    CustomButton(text: "Save Job", onPressed: saveJob),
+                  ],
+                ),
+            ), // Closing Container
+            ], // Closing Column children
         ),
       ),
     );
