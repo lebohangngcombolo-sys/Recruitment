@@ -55,8 +55,24 @@ Use this when something isn’t working on Render (e.g. no verification email, 4
 
 ---
 
-## 6. Summary
+## 6. Email works locally but not on Render
 
-- **No verification code:** Set MAIL_* on recruitment-api, redeploy, then check API logs when someone registers (see §2 and §5).
+When verification email works on your machine but not on Render, the cause is usually **environment-specific** (SendGrid or network), not the code.
+
+| Check | Action |
+|-------|--------|
+| **SendGrid sender verification** | Render uses a different outbound IP than your PC. In SendGrid: **Settings → Sender Authentication**. Ensure **MAIL_DEFAULT_SENDER** (e.g. `cyriltrump3@gmail.com`) is under **Single Sender Verification**. If not, add and verify it. |
+| **API logs on register** | Right after someone registers on the **deployed** site, open recruitment-api → **Logs**. Look for **`Sending verification email to ...`** then either **`Email sent successfully to ...`** or **`Failed to send email to ...`** with the exact error (e.g. `Sender address rejected: not owned by auth user`). |
+| **Test-email endpoint** | Set **TEST_EMAIL_SECRET** on recruitment-api (e.g. a random string). Then: `POST https://<your-api>/api/auth/test-email` with header `X-Test-Email-Secret: <that-secret>` and body `{"email": "your@email.com"}`. This uses the same async path as registration. Check API logs for success or the full SMTP error. |
+| **Env var types** | MAIL_USE_TLS is already normalized in the app (`"True"`/`"true"` → boolean). No change needed unless you use a different config source. |
+| **Outbound SMTP from Render** | Uncommon, but if logs show timeouts or connection refused, test from Render: **Shell** (or a one-off job) run: `python -c "import smtplib; s=smtplib.SMTP('smtp.sendgrid.net', 587); s.starttls(); s.login('apikey', 'YOUR_SENDGRID_API_KEY'); print('OK')"` (replace with your real key only in a private shell). If this fails, the error (auth, network, etc.) tells you the next step. |
+
+After fixing sender verification or credentials, redeploy recruitment-api and test again with the test-email endpoint or a new registration.
+
+---
+
+## 7. Summary
+
+- **No verification code:** Set MAIL_* on recruitment-api, redeploy, then check API logs when someone registers (see §2 and §5). If it works locally but not on Render, see §6 (SendGrid sender verification, test-email endpoint).
 - **409 on register:** Email already registered; user should log in or use another email (message is now clear in the app).
 - **Web app calling wrong API:** Set BACKEND_URL on recruitment-web to your API URL and redeploy (see §1).
