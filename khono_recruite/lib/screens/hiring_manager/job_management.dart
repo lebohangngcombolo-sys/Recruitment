@@ -301,14 +301,51 @@ class _JobFormDialogState extends State<JobFormDialog>
           descriptionController.text = aiResponse['description'] ?? '';
           responsibilitiesController.text =
               (aiResponse['responsibilities'] as List?)?.join(', ') ?? '';
-          qualificationsController.text = aiResponse['qualifications'] ?? '';
+          // Set qualifications
+          final qualifications = aiResponse['qualifications'] as List?;
+          if (qualifications != null) {
+            qualificationsController.text =
+                qualifications.map((q) => "• $q").join('\n');
+          }
           jobSummary = aiResponse['summary'] ?? '';
+
+          // Set category
+          category = aiResponse['category'] ?? '';
+          categoryController.text = category;
+
+          // Set required skills
+          final skills = aiResponse['required_skills'] as List?;
+          if (skills != null) {
+            skillsController.text = skills.map((s) => "• $s").join('\n');
+          }
+
+          // Set minimum experience
+          minExpController.text =
+              aiResponse['min_experience']?.toString() ?? '0';
+
+          // Set salary
+          salaryMinController.text = aiResponse['salary_min']?.toString() ?? '';
+          salaryMaxController.text = aiResponse['salary_max']?.toString() ?? '';
+          salaryCurrency = aiResponse['salary_currency'] ?? 'ZAR';
+          salaryPeriod = aiResponse['salary_period'] ?? 'monthly';
+
+          // Set evaluation weightings
+          final weightingsData =
+              aiResponse['evaluation_weightings'] as Map<String, dynamic>?;
+          if (weightingsData != null) {
+            weightings = {
+              "cv": (weightingsData["cv"] ?? 60).toInt(),
+              "assessment": (weightingsData["assessment"] ?? 30).toInt(),
+              "interview": (weightingsData["interview"] ?? 10).toInt(),
+              "references": (weightingsData["references"] ?? 0).toInt(),
+            };
+          }
+
           _isGeneratingWithAI = false;
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Job description generated successfully!")),
+          const SnackBar(content: Text("Job details generated successfully!")),
         );
       }
     } catch (e) {
