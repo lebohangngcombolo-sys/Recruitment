@@ -251,14 +251,16 @@ class AIService:
     def generate_job_details(self, job_title: str) -> Dict[str, Any]:
         """Generate comprehensive job details using AI hierarchy: Gemini -> OpenRouter -> DeepSeek"""
         prompt = f'''
-        Based on the job title "$job_title", generate comprehensive job details in JSON format with the following structure:
+        First, determine the most appropriate category for the job titled "$job_title" from the following options: Engineering, Marketing, Sales, HR, Finance, Operations, Customer Service, Product, Design, Data Science. Base this on the job title and typical responsibilities.
+
+        Then, generate comprehensive job details in JSON format with the following structure:
         {{
           "description": "Detailed job description (2-3 paragraphs) that clearly explains the role, its purpose, and what the candidate will be doing day-to-day",
           "responsibilities": ["List of 5-7 specific, actionable key responsibilities as separate string items in the array"],
           "qualifications": ["List of 5-7 required qualifications including education, experience, and specific skills"],
           "company": "Khonology",
           "company_details": "Khonology is a South African digital services company founded in 2013, specializing in digital enablement, data solutions, and cloud services with B-BBEE Level 2 status. The company focuses on empowering African businesses through custom software, data analytics, and cloud migration, while also addressing the digital skills gap via the Khonology Academy.",
-          "category": "One of: Engineering, Marketing, Sales, HR, Finance, Operations, Customer Service, Product, Design, Data Science",
+          "category": "Choose the most appropriate category from: Engineering, Marketing, Sales, HR, Finance, Operations, Customer Service, Product, Design, Data Science, based on the job title, description, and responsibilities.",
           "required_skills": ["List of 7 technical/professional skills that are essential for this role"],
           "min_experience": "Minimum years of experience as a number (0-15+)",
           "salary_min": "Minimum monthly salary in ZAR (e.g., 25000)",
@@ -294,6 +296,7 @@ class AIService:
         - Qualifications should be realistic but selective
         - Company details should be professional and appealing
         - Choose the most appropriate category
+        - Include the determined category in the 'category' field of the JSON
         - Skills should be current and relevant
         - Experience should match the seniority level of the role
         - Salary range should be appropriate for the role and experience level
