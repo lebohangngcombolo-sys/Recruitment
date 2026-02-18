@@ -129,8 +129,8 @@ class EmailService:
         subject = str(subject)
 
         def send_email(app, subject, recipients, html_body, text_body):
-            with app.app_context():
-                try:
+            try:
+                with app.app_context():
                     sender = app.config.get('MAIL_DEFAULT_SENDER') or app.config.get('MAIL_USERNAME')
                     msg = Message(
                         subject=subject,
@@ -141,13 +141,14 @@ class EmailService:
                     )
                     mail.send(msg)
                     logging.info("Email sent successfully to %s", recipients)
-                except Exception as e:
-                    logging.error(
-                        "Failed to send email to %s: %s. Check MAIL_* (MAIL_SERVER, MAIL_USERNAME, MAIL_PASSWORD, MAIL_DEFAULT_SENDER) and sender verification.",
-                        recipients,
-                        str(e),
-                        exc_info=True,
-                    )
+            except Exception as e:
+                logging.error(
+                    "Failed to send email to %s: %s (type=%s). Check MAIL_* and SendGrid sender verification.",
+                    recipients,
+                    str(e),
+                    type(e).__name__,
+                    exc_info=True,
+                )
 
         thread = Thread(target=send_email, args=[app, subject, recipients, html_body, text_body])
         thread.start()

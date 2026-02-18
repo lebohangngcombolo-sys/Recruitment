@@ -443,6 +443,27 @@ def init_auth_routes(app):
             current_app.logger.exception("Test verification email failed")
             return jsonify({"error": str(e)}), 500
 
+    # ------------------- TEST EMAIL (async, same path as registration; for Render debugging) -------------------
+    @app.route('/api/auth/test-email', methods=['POST'])
+    def test_email():
+        """Send a simple test email via the same async path as registration. Protected by TEST_EMAIL_SECRET."""
+        secret = current_app.config.get("TEST_EMAIL_SECRET")
+        if not secret or request.headers.get("X-Test-Email-Secret") != secret:
+            return jsonify({"error": "Forbidden"}), 403
+        data = request.get_json() or {}
+        email = (data.get("email") or "").strip().lower()
+        if not email:
+            return jsonify({"error": "Missing email"}), 400
+        if not _email_configured():
+            return jsonify({"error": "Mail not configured (MAIL_USERNAME, MAIL_PASSWORD, MAIL_DEFAULT_SENDER)"}), 503
+        EmailService.send_async_email(
+            subject="Test from Render",
+            recipients=[email],
+            html_body="<p>This is a test email from your recruitment API.</p>",
+            text_body="This is a test email from your recruitment API.",
+        )
+        return jsonify({"message": "Test email queued; check API logs for 'Email sent successfully' or 'Failed to send email'"}), 200
+
     # ------------------- VERIFY EMAIL -------------------
     @app.route('/api/auth/verify', methods=['POST'])
     @limiter.limit("10 per minute")  # Add this line
