@@ -121,9 +121,14 @@ class _RegisterScreenState extends State<RegisterScreen>
     if (status != 201 && status != 200) {
       final errors = body['errors'];
       final errorMsg = body['error'];
-      final errorMessage = errors is List
-          ? errors.join('\n')
-          : (errorMsg is String ? errorMsg : 'Registration failed.');
+      String errorMessage;
+      if (status == 409) {
+        errorMessage = 'An account with this email already exists. Please log in or use a different email.';
+      } else {
+        errorMessage = errors is List
+            ? (errors.isNotEmpty ? errors.join('\n') : (errorMsg is String ? errorMsg : 'Registration failed.'))
+            : (errorMsg is String ? errorMsg : 'Registration failed.');
+      }
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
