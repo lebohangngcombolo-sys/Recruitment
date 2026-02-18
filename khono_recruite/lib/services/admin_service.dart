@@ -565,6 +565,19 @@ class AdminService {
     throw Exception('Failed to fetch CV reviews: ${res.body}');
   }
 
+  Future<List<Map<String, dynamic>>> listAllCVs() async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.get(
+      Uri.parse(ApiEndpoints.allCVs),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return List<Map<String, dynamic>>.from(json.decode(res.body));
+    }
+    throw Exception('Failed to fetch all CVs: ${res.body}');
+  }
+
 // ---------- ASSESSMENTS ----------
   Future<Map<String, dynamic>> updateAssessment(
       int jobId, Map<String, dynamic> data) async {
