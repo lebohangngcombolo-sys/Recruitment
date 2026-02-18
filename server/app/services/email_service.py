@@ -117,9 +117,13 @@ class EmailService:
         
     @staticmethod
     def send_async_email(subject, recipients, html_body, text_body=None):
-        """Send email in a background thread safely."""
+        """Send email in a background thread safely. Uses request app when available so mail config/state is correct."""
+        from flask import current_app
         from app import create_app
-        app = create_app()
+        try:
+            app = current_app._get_current_object()
+        except RuntimeError:
+            app = create_app()
 
         # Ensure subject is a string
         subject = str(subject)
