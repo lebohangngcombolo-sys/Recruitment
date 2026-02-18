@@ -130,6 +130,7 @@ class ApiEndpoints {
   static const auditLogs = "$adminBase/audits";
   static const parseResume = "$adminBase/cv/parse";
   static const cvReviews = "$adminBase/cv-reviews";
+  static const allCVs = "$adminBase/cvs/all";
   static const getUsers = "$adminBase/users";
 
   // ==================== INTERVIEW LIFECYCLE ENHANCEMENTS ====================

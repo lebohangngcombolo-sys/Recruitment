@@ -15,7 +15,9 @@ class CVReviewsScreen extends StatefulWidget {
 class _CVReviewsScreenState extends State<CVReviewsScreen> {
   final AdminService admin = AdminService();
   List<Map<String, dynamic>> cvReviews = [];
+  List<Map<String, dynamic>> allCVs = [];
   bool loading = true;
+  bool showAllCVs = false;
 
   @override
   void initState() {
@@ -26,17 +28,25 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   Future<void> fetchCVReviews() async {
     setState(() => loading = true);
     try {
-      final data = await admin.listCVReviews();
+      final [reviewsData, allCVsData] = await Future.wait([
+        admin.listCVReviews(),
+        admin.listAllCVs(),
+      ]);
       if (!mounted) return;
       setState(() {
-        cvReviews = List<Map<String, dynamic>>.from(data);
+        cvReviews = List<Map<String, dynamic>>.from(reviewsData);
+        allCVs = List<Map<String, dynamic>>.from(allCVsData);
       });
     } catch (e) {
-      debugPrint("Error fetching CV reviews: $e");
+      debugPrint("Error fetching CV data: $e");
     } finally {
       if (!mounted) return;
       setState(() => loading = false);
     }
+  }
+
+  List<Map<String, dynamic>> get displayedCVs {
+    return showAllCVs ? allCVs : cvReviews;
   }
 
   Color getScoreColor(double score) {
@@ -114,7 +124,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                 )
               : Padding(
                   padding: const EdgeInsets.all(20),
-                  child: cvReviews.isEmpty
+                  child: displayedCVs.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -128,7 +138,9 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                "No CV Reviews Found",
+                                showAllCVs
+                                    ? "No CVs Found"
+                                    : "No CV Reviews Found",
                                 style: GoogleFonts.inter(
                                   color: themeProvider.isDarkMode
                                       ? Colors.grey.shade400
@@ -139,7 +151,9 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                "CV reviews will appear here once available",
+                                showAllCVs
+                                    ? "CVs will appear here once candidates upload them"
+                                    : "CV reviews will appear here once available",
                                 style: GoogleFonts.inter(
                                   color: themeProvider.isDarkMode
                                       ? Colors.grey.shade500
@@ -153,7 +167,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Header with stats
+                            // Header with stats and filter toggle
                             Container(
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
@@ -170,64 +184,152 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                   ),
                                 ],
                               ),
-                              child: Row(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.redAccent
-                                          .withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Icon(
-                                      Icons.assignment_outlined,
-                                      color: Colors.redAccent,
-                                      size: 28,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                  Row(
                                     children: [
-                                      Text(
-                                        "CV Reviews",
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.w600,
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.redAccent
+                                              .withValues(alpha: 0.1),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: Icon(
+                                          Icons.assignment_outlined,
+                                          color: Colors.redAccent,
+                                          size: 28,
                                         ),
                                       ),
-                                      Text(
-                                        "${cvReviews.length} candidates reviewed",
-                                        style: GoogleFonts.inter(
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.grey.shade400
-                                              : Colors.grey.shade600,
-                                          fontSize: 14,
+                                      const SizedBox(width: 16),
+                                      Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            showAllCVs
+                                                ? "All CVs"
+                                                : "CV Reviews",
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w600,
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                            ),
+                                          ),
+                                          Text(
+                                            showAllCVs
+                                                ? "${allCVs.length} total CVs uploaded"
+                                                : "${cvReviews.length} candidates reviewed",
+                                            style: GoogleFonts.inter(
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.grey.shade400
+                                                  : Colors.grey.shade600,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const Spacer(),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: (showAllCVs
+                                                  ? Colors.blue
+                                                  : Colors.redAccent)
+                                              .withValues(alpha: 0.1),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          showAllCVs
+                                              ? "All CVs"
+                                              : "Reviewed CVs",
+                                          style: GoogleFonts.inter(
+                                            color: showAllCVs
+                                                ? Colors.blue
+                                                : Colors.redAccent,
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 12,
+                                          ),
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.redAccent
-                                          .withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      "Active Reviews",
-                                      style: GoogleFonts.inter(
-                                        color: Colors.redAccent,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 12,
+                                  const SizedBox(height: 16),
+                                  // Filter toggle buttons
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: GestureDetector(
+                                          onTap: () => setState(
+                                              () => showAllCVs = false),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 16, vertical: 12),
+                                            decoration: BoxDecoration(
+                                              color: !showAllCVs
+                                                  ? Colors.redAccent
+                                                  : Colors.transparent,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: Colors.redAccent
+                                                    .withValues(alpha: 0.3),
+                                              ),
+                                            ),
+                                            child: Text(
+                                              "Reviewed CVs",
+                                              textAlign: TextAlign.center,
+                                              style: GoogleFonts.inter(
+                                                color: !showAllCVs
+                                                    ? Colors.white
+                                                    : Colors.redAccent,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: GestureDetector(
+                                          onTap: () =>
+                                              setState(() => showAllCVs = true),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 16, vertical: 12),
+                                            decoration: BoxDecoration(
+                                              color: showAllCVs
+                                                  ? Colors.blue
+                                                  : Colors.transparent,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                color: Colors.blue
+                                                    .withValues(alpha: 0.3),
+                                              ),
+                                            ),
+                                            child: Text(
+                                              "All CVs",
+                                              textAlign: TextAlign.center,
+                                              style: GoogleFonts.inter(
+                                                color: showAllCVs
+                                                    ? Colors.white
+                                                    : Colors.blue,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
@@ -244,13 +346,21 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                   crossAxisSpacing: 20,
                                   childAspectRatio: 0.75,
                                 ),
-                                itemCount: cvReviews.length,
+                                itemCount: displayedCVs.length,
                                 itemBuilder: (_, index) {
-                                  final review = cvReviews[index];
-                                  final score =
-                                      (review['cv_score'] ?? 0).toDouble();
-                                  final scoreColor = getScoreColor(score);
-                                  final scoreLabel = getScoreLabel(score);
+                                  final review = displayedCVs[index];
+                                  final hasScore =
+                                      review.containsKey('cv_score') &&
+                                          review['cv_score'] != null;
+                                  final score = hasScore
+                                      ? (review['cv_score'] ?? 0).toDouble()
+                                      : 0.0;
+                                  final scoreColor = hasScore
+                                      ? getScoreColor(score)
+                                      : Colors.grey;
+                                  final scoreLabel = hasScore
+                                      ? getScoreLabel(score)
+                                      : 'Not Reviewed';
 
                                   final cvParser =
                                       review['cv_parser_result'] ?? {};
@@ -294,30 +404,52 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                               Stack(
                                                 alignment: Alignment.center,
                                                 children: [
-                                                  CircularPercentIndicator(
-                                                    radius: 30,
-                                                    lineWidth: 6,
-                                                    percent: (score / 100)
-                                                        .clamp(0.0, 1.0),
-                                                    center: Text(
-                                                      "${score.toStringAsFixed(0)}%",
-                                                      style: GoogleFonts.inter(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 14,
-                                                        color: scoreColor,
+                                                  if (hasScore)
+                                                    CircularPercentIndicator(
+                                                      radius: 30,
+                                                      lineWidth: 6,
+                                                      percent: (score / 100)
+                                                          .clamp(0.0, 1.0),
+                                                      center: Text(
+                                                        "${score.toStringAsFixed(0)}%",
+                                                        style:
+                                                            GoogleFonts.inter(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 14,
+                                                          color: scoreColor,
+                                                        ),
+                                                      ),
+                                                      progressColor: scoreColor,
+                                                      backgroundColor:
+                                                          themeProvider
+                                                                  .isDarkMode
+                                                              ? Colors
+                                                                  .grey.shade800
+                                                              : Colors.grey
+                                                                  .shade200,
+                                                      circularStrokeCap:
+                                                          CircularStrokeCap
+                                                              .round,
+                                                    )
+                                                  else
+                                                    Container(
+                                                      width: 60,
+                                                      height: 60,
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.grey
+                                                            .withValues(
+                                                                alpha: 0.2),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(30),
+                                                      ),
+                                                      child: Icon(
+                                                        Icons.help_outline,
+                                                        color: Colors.grey,
+                                                        size: 24,
                                                       ),
                                                     ),
-                                                    progressColor: scoreColor,
-                                                    backgroundColor:
-                                                        themeProvider.isDarkMode
-                                                            ? Colors
-                                                                .grey.shade800
-                                                            : Colors
-                                                                .grey.shade200,
-                                                    circularStrokeCap:
-                                                        CircularStrokeCap.round,
-                                                  ),
                                                 ],
                                               ),
                                               const SizedBox(width: 16),
@@ -407,7 +539,9 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                           ),
                                                         ),
                                                         Text(
-                                                          "${score.toStringAsFixed(1)}%",
+                                                          hasScore
+                                                              ? "${score.toStringAsFixed(1)}%"
+                                                              : "N/A",
                                                           style:
                                                               GoogleFonts.inter(
                                                             fontWeight:
@@ -419,22 +553,35 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                       ],
                                                     ),
                                                     const SizedBox(height: 8),
-                                                    LinearPercentIndicator(
-                                                      lineHeight: 6,
-                                                      percent: (score / 100)
-                                                          .clamp(0.0, 1.0),
-                                                      backgroundColor:
-                                                          themeProvider
-                                                                  .isDarkMode
-                                                              ? Colors
-                                                                  .grey.shade800
-                                                              : Colors.grey
-                                                                  .shade200,
-                                                      progressColor: scoreColor,
-                                                      barRadius:
-                                                          const Radius.circular(
-                                                              3),
-                                                    ),
+                                                    if (hasScore)
+                                                      LinearPercentIndicator(
+                                                        lineHeight: 6,
+                                                        percent: (score / 100)
+                                                            .clamp(0.0, 1.0),
+                                                        backgroundColor:
+                                                            themeProvider.isDarkMode
+                                                                ? Colors.grey
+                                                                    .shade800
+                                                                : Colors.grey
+                                                                    .shade200,
+                                                        progressColor:
+                                                            scoreColor,
+                                                        barRadius: const Radius
+                                                            .circular(3),
+                                                      )
+                                                    else
+                                                      Container(
+                                                        height: 6,
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: Colors.grey
+                                                              .withValues(
+                                                                  alpha: 0.3),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(3),
+                                                        ),
+                                                      ),
                                                   ],
                                                 ),
                                                 const SizedBox(height: 16),
