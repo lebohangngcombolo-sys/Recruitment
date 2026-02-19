@@ -1,12 +1,4 @@
 """
-Gunicorn config for Render. Eventlet monkey-patching is done in post_fork
-so only worker processes are patched; the arbiter stays unpatched and
-avoids "do not call blocking functions from the mainloop" crashes.
+Gunicorn config for Render. We use gthread worker (see render_start.sh), not eventlet,
+to avoid RLock/lock errors with SQLAlchemy and Flask. Add hooks or options here if needed.
 """
-import os
-
-
-def post_fork(server, worker):
-    """Run in each worker after fork. Patch eventlet here so the arbiter is never patched."""
-    import eventlet
-    eventlet.monkey_patch()
