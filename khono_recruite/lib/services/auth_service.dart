@@ -1,5 +1,6 @@
 import 'dart:convert';
-import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart' show File;
+import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart'
+    show File;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
@@ -34,7 +35,10 @@ class AuthService {
       } catch (_) {}
       return {"status": response.statusCode, "body": body};
     } catch (e) {
-      return {"status": 0, "body": {"error": "Network or parsing error: $e"}};
+      return {
+        "status": 0,
+        "body": {"error": "Network or parsing error: $e"}
+      };
     }
   }
 
@@ -57,6 +61,34 @@ class AuthService {
       await saveToken(decoded['access_token'].toString());
     }
     return decoded;
+  }
+
+  // ----------------- RESEND VERIFICATION CODE -----------------
+  /// POST /api/auth/resend-verification. Returns { message } or { error }. Optionally { code } if server includes it (e.g. test mode).
+  static Future<Map<String, dynamic>> resendVerificationCode(
+      String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.resendVerification),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"email": email.trim().toLowerCase()}),
+      );
+      Map<String, dynamic> decoded = {};
+      try {
+        final d = jsonDecode(response.body);
+        if (d is Map<String, dynamic>) decoded = d;
+      } catch (_) {}
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return decoded;
+      }
+      return {
+        "error": decoded["error"] ??
+            decoded["message"] ??
+            "Failed to resend code (${response.statusCode})",
+      };
+    } catch (e) {
+      return {"error": "Network or parsing error: $e"};
+    }
   }
 
   // Example: fetch stored user info from shared preferences

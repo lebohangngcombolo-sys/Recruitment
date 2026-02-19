@@ -22,7 +22,10 @@ class EmailService:
             logging.error(f"Failed to render verification email template for {email}", exc_info=True)
             html = f"Your verification code is: {verification_code}. Enter it at {app_url}/verify-email"
 
-        logging.info("Sending verification email to %s", email)
+        try:
+            current_app.logger.info("Sending verification email to %s", email)
+        except Exception:
+            logging.info("Sending verification email to %s", email)
         EmailService.send_async_email(subject, [email], html)
 
     @staticmethod

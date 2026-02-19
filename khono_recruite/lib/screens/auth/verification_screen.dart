@@ -19,6 +19,7 @@ class _VerificationScreenState extends State<VerificationScreen>
     with SingleTickerProviderStateMixin {
   String verificationCode = '';
   bool loading = false;
+  bool resendLoading = false;
 
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
@@ -84,6 +85,29 @@ class _VerificationScreenState extends State<VerificationScreen>
     }
   }
 
+  Future<void> resendCode() async {
+    if (resendLoading) return;
+    setState(() => resendLoading = true);
+    final response = await AuthService.resendVerificationCode(widget.email);
+    if (!mounted) return;
+    setState(() => resendLoading = false);
+    if (response.containsKey('error')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(response['error'].toString())),
+      );
+    } else {
+      final message =
+          response['message'] as String? ?? 'Verification code sent.';
+      final code = response['code'] as String?;
+      final show = code != null && code.isNotEmpty
+          ? '$message Check your email or use code: $code'
+          : message;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(show)),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -111,7 +135,9 @@ class _VerificationScreenState extends State<VerificationScreen>
                   IconButton(
                     icon: const Icon(Icons.arrow_back,
                         color: Colors.white, size: 28),
-                    onPressed: () => context.canPop() ? context.pop() : context.go('/register'),
+                    onPressed: () => context.canPop()
+                        ? context.pop()
+                        : context.go('/register'),
                   ),
                   const SizedBox(width: 12),
                   Image.asset(
@@ -241,21 +267,30 @@ class _VerificationScreenState extends State<VerificationScreen>
                                 ),
                               ),
                               GestureDetector(
-                                onTap: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                        content:
-                                            Text("Resend code functionality")),
-                                  );
-                                },
-                                child: const Text(
-                                  "Resend",
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    decoration: TextDecoration.underline,
-                                  ),
+                                onTap: resendLoading ? null : resendCode,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (resendLoading)
+                                      const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    else
+                                      const Text(
+                                        "Resend",
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ],
