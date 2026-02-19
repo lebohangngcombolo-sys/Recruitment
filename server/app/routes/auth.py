@@ -489,7 +489,18 @@ def init_auth_routes(app):
             t = Thread(target=_do_send)
             t.daemon = True
             t.start()
-            t.join(timeout=25)
+            try:
+                t.join(timeout=25)
+            except Exception as join_err:
+                # Under gunicorn+eventlet, join(timeout=25) raises eventlet.timeout.Timeout after 25s
+                # instead of returning; treat as timeout and return 504.
+                if join_err.__class__.__name__ == "Timeout" or "timeout" in (join_err.__class__.__module__ or "").lower():
+                    current_app.logger.warning("Test email (sync) timed out after 25s for %s", email)
+                    return jsonify({
+                        "error": "SMTP send timed out after 25s. Try: GET /api/public/healthz to wake the instance, then retry.",
+                        "type": "Timeout"
+                    }), 504
+                raise
             if t.is_alive():
                 current_app.logger.warning("Test email (sync) timed out after 25s for %s", email)
                 return jsonify({
