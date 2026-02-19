@@ -5,6 +5,71 @@ from threading import Thread
 from app.extensions import redis_client
 import logging
 import time
+import socket
+
+
+def _send_via_sendgrid_api(app, subject, recipients, html_body, text_body, sender):
+    """Send one email via SendGrid v3 HTTP API. Returns True on success, False on failure."""
+    api_key = (app.config.get("SENDGRID_API_KEY") or "").strip()
+    if not api_key:
+        return False
+    url = (app.config.get("SENDGRID_API_URL") or "https://api.sendgrid.com/v3/mail/send").strip()
+    # Parse sender: "Name <email>" or "email"
+    from_email = sender
+    from_name = None
+    if sender and " <" in sender and sender.strip().endswith(">"):
+        parts = sender.strip().rsplit(" <", 1)
+        from_name = (parts[0] or "").strip() or None
+        from_email = (parts[1] or "").rstrip(">").strip()
+    payload = {
+        "personalizations": [{"to": [{"email": r} for r in recipients], "subject": subject}],
+        "from": {"email": from_email, "name": from_name} if from_name else {"email": from_email},
+        "content": [{"type": "text/html", "value": html_body or ""}],
+    }
+    if text_body and (text_body or "").strip():
+        payload["content"].append({"type": "text/plain", "value": (text_body or "").strip()})
+    try:
+        import requests
+        r = requests.post(
+            url,
+            json=payload,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            timeout=30,
+        )
+        if 200 <= r.status_code < 300:
+            return True
+        app.logger.warning("SendGrid API returned %s: %s", r.status_code, r.text[:500])
+        return False
+    except Exception as e:
+        app.logger.warning("SendGrid API request failed: %s", e, exc_info=True)
+        return False
+
+
+def send_email_sync(app, subject, recipients, html_body, text_body=None):
+    """
+    Send one email synchronously: tries SendGrid API if SENDGRID_API_KEY is set,
+    else SMTP with MAIL_TIMEOUT. Raises on failure. Call from within app_context.
+    """
+    sender = app.config.get("MAIL_DEFAULT_SENDER") or app.config.get("MAIL_USERNAME")
+    if (app.config.get("SENDGRID_API_KEY") or "").strip():
+        if _send_via_sendgrid_api(app, subject, recipients, html_body, text_body, sender):
+            return
+        # Fall through to SMTP on API failure
+    timeout_seconds = max(30, int(app.config.get("MAIL_TIMEOUT") or 60))
+    old_timeout = socket.getdefaulttimeout()
+    try:
+        socket.setdefaulttimeout(timeout_seconds)
+        msg = Message(
+            subject=subject,
+            recipients=recipients,
+            html=html_body,
+            body=text_body or "",
+            sender=sender,
+        )
+        mail.send(msg)
+    finally:
+        socket.setdefaulttimeout(old_timeout)
+
 
 class EmailService:
 
@@ -134,21 +199,37 @@ class EmailService:
 
         def send_email(app, subject, recipients, html_body, text_body):
             logger = app.logger
+            sender = app.config.get('MAIL_DEFAULT_SENDER') or app.config.get('MAIL_USERNAME')
+            # Prefer SendGrid HTTP API when configured (avoids SMTP connect timeouts from cloud)
+            if (app.config.get("SENDGRID_API_KEY") or "").strip():
+                try:
+                    with app.app_context():
+                        if _send_via_sendgrid_api(app, subject, recipients, html_body, text_body, sender):
+                            logger.info("Email sent successfully to %s via SendGrid API", recipients)
+                            return
+                except Exception as e:
+                    logger.warning("SendGrid API send failed for %s: %s; falling back to SMTP", recipients, e)
+            # SMTP path: use longer timeout so Render → SendGrid connect can complete
+            timeout_seconds = max(30, int(app.config.get("MAIL_TIMEOUT") or 60))
             max_attempts = 3
             retry_delay_seconds = 5
             last_error = None
             for attempt in range(1, max_attempts + 1):
                 try:
                     with app.app_context():
-                        sender = app.config.get('MAIL_DEFAULT_SENDER') or app.config.get('MAIL_USERNAME')
-                        msg = Message(
-                            subject=subject,
-                            recipients=recipients,
-                            html=html_body,
-                            body=text_body or "",
-                            sender=sender
-                        )
-                        mail.send(msg)
+                        old_timeout = socket.getdefaulttimeout()
+                        try:
+                            socket.setdefaulttimeout(timeout_seconds)
+                            msg = Message(
+                                subject=subject,
+                                recipients=recipients,
+                                html=html_body,
+                                body=text_body or "",
+                                sender=sender
+                            )
+                            mail.send(msg)
+                        finally:
+                            socket.setdefaulttimeout(old_timeout)
                     logger.info("Email sent successfully to %s (attempt %d)", recipients, attempt)
                     return
                 except Exception as e:
@@ -160,7 +241,7 @@ class EmailService:
                     if attempt < max_attempts:
                         time.sleep(retry_delay_seconds)
             logger.error(
-                "Failed to send email to %s after %d attempts: %s (type=%s). Check MAIL_* and SendGrid sender verification.",
+                "Failed to send email to %s after %d attempts: %s (type=%s). Check MAIL_* / SENDGRID_API_KEY and sender verification.",
                 recipients, max_attempts, str(last_error), type(last_error).__name__,
                 exc_info=True,
             )

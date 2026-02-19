@@ -60,14 +60,12 @@ def init_auth_routes(app):
     enrollment_schema = EnrollmentSchema()
 
     def _email_configured() -> bool:
-        return bool(
-            current_app.config.get("MAIL_USERNAME")
-            and current_app.config.get("MAIL_PASSWORD")
-            and (
-                current_app.config.get("MAIL_DEFAULT_SENDER")
-                or current_app.config.get("MAIL_USERNAME")
-            )
-        )
+        sender = current_app.config.get("MAIL_DEFAULT_SENDER") or current_app.config.get("MAIL_USERNAME")
+        if not sender:
+            return False
+        if (current_app.config.get("SENDGRID_API_KEY") or "").strip():
+            return True
+        return bool(current_app.config.get("MAIL_USERNAME") and current_app.config.get("MAIL_PASSWORD"))
     # ------------------- Initialize OAuth -------------------
     if not hasattr(app, "oauth_initialized"):
         oauth.init_app(app)
@@ -417,7 +415,7 @@ def init_auth_routes(app):
         if not email:
             return jsonify({"error": "Missing email"}), 400
         if not _email_configured():
-            return jsonify({"error": "Mail not configured (MAIL_USERNAME, MAIL_PASSWORD, MAIL_DEFAULT_SENDER)"}), 503
+            return jsonify({"error": "Mail not configured (MAIL_DEFAULT_SENDER + MAIL_* or SENDGRID_API_KEY)"}), 503
         app_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/") or "http://localhost:3000"
         code = "123456"
         try:
@@ -428,17 +426,15 @@ def init_auth_routes(app):
             )
         except Exception:
             html = f"Your verification code is: {code}. Enter it at {app_url}/verify-email"
-        from flask_mail import Message
-        sender = current_app.config.get("MAIL_DEFAULT_SENDER") or current_app.config.get("MAIL_USERNAME")
-        msg = Message(
-            subject="Verify Your Email Address (Test)",
-            recipients=[email],
-            html=html,
-            body=f"Your verification code is: {code}",
-            sender=sender,
-        )
         try:
-            mail.send(msg)
+            from app.services.email_service import send_email_sync
+            send_email_sync(
+                current_app._get_current_object(),
+                "Verify Your Email Address (Test)",
+                [email],
+                html,
+                f"Your verification code is: {code}",
+            )
             return jsonify({"message": f"Test verification email sent to {email}", "code": code}), 200
         except Exception as e:
             current_app.logger.exception("Test verification email failed")
@@ -456,14 +452,13 @@ def init_auth_routes(app):
         if not email:
             return jsonify({"error": "Missing email"}), 400
         if not _email_configured():
-            return jsonify({"error": "Mail not configured (MAIL_USERNAME, MAIL_PASSWORD, MAIL_DEFAULT_SENDER)"}), 503
+            return jsonify({"error": "Mail not configured (MAIL_DEFAULT_SENDER + MAIL_* or SENDGRID_API_KEY)"}), 503
 
         sync = request.args.get("sync", "").lower() in ("1", "true", "yes") or (data.get("sync") is True or data.get("sync") == "1")
         if sync:
             current_app.logger.info("Test email (sync) started for %s", email)
-            # Send synchronously with a 25s timeout so we always return a response (avoids curl hanging when SMTP is slow/cold).
-            # Build and send entirely inside the thread's app_context so mail/msg are not request-scoped (avoids NoneType under eventlet).
-            from flask_mail import Message
+            # Send synchronously (SendGrid API or SMTP with MAIL_TIMEOUT). Run in thread so we can cap wait at 25s.
+            from app.services.email_service import send_email_sync
             from threading import Thread
             sync_result = []
             sync_error = []
@@ -473,15 +468,13 @@ def init_auth_routes(app):
             def _do_send():
                 try:
                     with app_obj.app_context():
-                        sender = app_obj.config.get("MAIL_DEFAULT_SENDER") or app_obj.config.get("MAIL_USERNAME")
-                        msg = Message(
-                            subject="Test from Render",
-                            recipients=[recipient],
-                            html="<p>This is a test email from your recruitment API.</p>",
-                            body="This is a test email from your recruitment API.",
-                            sender=sender,
+                        send_email_sync(
+                            app_obj,
+                            "Test from Render",
+                            [recipient],
+                            "<p>This is a test email from your recruitment API.</p>",
+                            "This is a test email from your recruitment API.",
                         )
-                        app_obj.extensions["mail"].send(msg)
                     sync_result.append(True)
                 except Exception as e:
                     sync_error.append(e)

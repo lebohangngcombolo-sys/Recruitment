@@ -66,6 +66,11 @@ class Config:
     MAIL_USERNAME = _get_env("MAIL_USERNAME", None)
     MAIL_PASSWORD = _get_env("MAIL_PASSWORD", None)
     MAIL_DEFAULT_SENDER = _get_env("MAIL_DEFAULT_SENDER", None)
+    # SMTP connect/send timeout (seconds). Increase on slow networks (e.g. Render → SendGrid).
+    MAIL_TIMEOUT = int(_get_env("MAIL_TIMEOUT", "60"))
+    # SendGrid HTTP API (avoids SMTP timeouts from cloud). When set, mail is sent via API instead of SMTP.
+    SENDGRID_API_KEY = _get_env("SENDGRID_API_KEY", None)
+    SENDGRID_API_URL = _get_env("SENDGRID_API_URL", "https://api.sendgrid.com/v3/mail/send")
 
     # OAuth Configuration
     GOOGLE_CLIENT_ID = _get_env("GOOGLE_CLIENT_ID", None)
