@@ -60,16 +60,17 @@ fi
 
 flask db upgrade
 
-# Start Flask app with eventlet for SocketIO support
-# Tune via env vars: GUNICORN_WORKERS, GUNICORN_TIMEOUT, GUNICORN_GRACEFUL_TIMEOUT, GUNICORN_KEEPALIVE
+# Start Flask app with gthread (SocketIO uses async_mode='threading'; eventlet caused RLock/lock errors)
+# Tune via env vars: GUNICORN_WORKERS, GUNICORN_THREADS, GUNICORN_TIMEOUT, GUNICORN_GRACEFUL_TIMEOUT, GUNICORN_KEEPALIVE
 GUNICORN_WORKERS="${GUNICORN_WORKERS:-2}"
+GUNICORN_THREADS="${GUNICORN_THREADS:-4}"
 GUNICORN_TIMEOUT="${GUNICORN_TIMEOUT:-120}"
 GUNICORN_GRACEFUL_TIMEOUT="${GUNICORN_GRACEFUL_TIMEOUT:-30}"
 GUNICORN_KEEPALIVE="${GUNICORN_KEEPALIVE:-5}"
 
-exec gunicorn -k eventlet \
-  -c gunicorn_config.py \
+exec gunicorn -k gthread \
   -w "${GUNICORN_WORKERS}" \
+  --threads "${GUNICORN_THREADS}" \
   --timeout "${GUNICORN_TIMEOUT}" \
   --graceful-timeout "${GUNICORN_GRACEFUL_TIMEOUT}" \
   --keep-alive "${GUNICORN_KEEPALIVE}" \
