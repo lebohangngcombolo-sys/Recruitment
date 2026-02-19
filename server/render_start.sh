@@ -68,6 +68,7 @@ GUNICORN_GRACEFUL_TIMEOUT="${GUNICORN_GRACEFUL_TIMEOUT:-30}"
 GUNICORN_KEEPALIVE="${GUNICORN_KEEPALIVE:-5}"
 
 exec gunicorn -k eventlet \
+  -c gunicorn_config.py \
   -w "${GUNICORN_WORKERS}" \
   --timeout "${GUNICORN_TIMEOUT}" \
   --graceful-timeout "${GUNICORN_GRACEFUL_TIMEOUT}" \
