@@ -19,6 +19,16 @@ import json
 import urllib.request
 import urllib.error
 import ssl
+from pathlib import Path
+
+# Load server/.env so TEST_EMAIL_SECRET and TEST_EMAIL are set when running from repo
+_env = Path(__file__).resolve().parent.parent / ".env"
+if _env.exists():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(_env)
+    except Exception:
+        pass
 
 def req(method, url, data=None, headers=None, timeout=15):
     headers = dict(headers or {})
