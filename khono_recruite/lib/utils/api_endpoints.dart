@@ -5,6 +5,7 @@ class ApiEndpoints {
   static String get authBase => "${AppConfig.apiBase}/api/auth";
   static String get candidateBase => "${AppConfig.apiBase}/api/candidate";
   static String get adminBase => "${AppConfig.apiBase}/api/admin";
+
   /// AI chat and CV parse (backend blueprint is at /api/ai)
   static String get chatbotBase => "${AppConfig.apiBase}/api/ai";
   static String get publicBase => "${AppConfig.publicApiBase}/api/public";
@@ -24,6 +25,7 @@ class ApiEndpoints {
   // ------------------- Auth -------------------
   static final register = "$authBase/register";
   static final verify = "$authBase/verify";
+  static final resendVerification = "$authBase/resend-verification";
   static final login = "$authBase/login";
   static final logout = "$authBase/logout";
   static final forgotPassword = "$authBase/forgot-password";
@@ -43,11 +45,14 @@ class ApiEndpoints {
 
   // ------------------- MFA (UPDATED TO MATCH BACKEND) -------------------
   static final enableMfa = "$authBase/mfa/enable"; // POST - Initiate MFA setup
-  static final verifyMfaSetup = "$authBase/mfa/verify"; // POST - Verify MFA setup
-  static final mfaLogin = "$authBase/mfa/login"; // POST - Verify MFA during login
+  static final verifyMfaSetup =
+      "$authBase/mfa/verify"; // POST - Verify MFA setup
+  static final mfaLogin =
+      "$authBase/mfa/login"; // POST - Verify MFA during login
   static final disableMfa = "$authBase/mfa/disable"; // POST - Disable MFA
   static final mfaStatus = "$authBase/mfa/status"; // GET - Get MFA status
-  static final backupCodes = "$authBase/mfa/backup-codes"; // GET - Get backup codes
+  static final backupCodes =
+      "$authBase/mfa/backup-codes"; // GET - Get backup codes
   static final regenerateBackupCodes =
       "$authBase/mfa/regenerate-backup-codes"; // POST - Regenerate backup codes
   static final String parserCV = "$authBase/cv/parse"; // POST Multipart
@@ -95,7 +100,8 @@ class ApiEndpoints {
 
   // Alias for compatibility
   static final getTodaysInterviews = "$adminBase/interviews/dashboard/today";
-  static final getUpcomingInterviews = "$adminBase/interviews/dashboard/upcoming";
+  static final getUpcomingInterviews =
+      "$adminBase/interviews/dashboard/upcoming";
   static final getPastInterviews = "$adminBase/interviews/dashboard/past";
 
   // ------------------- Update Application Status -------------------
@@ -312,10 +318,13 @@ class ApiEndpoints {
 
   // ------------------- AI Chatbot -------------------
   static final parseCV = "$chatbotBase/parse_cv";
+
   /// Backend: POST /api/ai/chat with body { "message": "..." }
   static final askBot = "$chatbotBase/chat";
+
   /// Backend: POST /api/ai/generate_job_details (auth required)
   static final generateJobDetails = "$chatbotBase/generate_job_details";
+
   /// Backend: POST /api/ai/generate_questions (auth required)
   static final generateQuestions = "$chatbotBase/generate_questions";
 

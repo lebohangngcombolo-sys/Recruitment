@@ -390,6 +390,7 @@ def init_auth_routes(app):
             db.session.add(verification_code)
             db.session.commit()
 
+            current_app.logger.info("Verification email queued for %s", email)
             EmailService.send_verification_email(email, code)
             AuditService.log(user_id=user.id, action="register")
 
@@ -459,8 +460,10 @@ def init_auth_routes(app):
 
         sync = request.args.get("sync", "").lower() in ("1", "true", "yes") or (data.get("sync") is True or data.get("sync") == "1")
         if sync:
-            # Send synchronously so we get the exact error in the response (avoids eventlet/thread logging issues)
+            current_app.logger.info("Test email (sync) started for %s", email)
+            # Send synchronously with a 25s timeout so we always return a response (avoids curl hanging when SMTP is slow/cold)
             from flask_mail import Message
+            from threading import Thread
             sender = current_app.config.get("MAIL_DEFAULT_SENDER") or current_app.config.get("MAIL_USERNAME")
             msg = Message(
                 subject="Test from Render",
@@ -469,13 +472,32 @@ def init_auth_routes(app):
                 body="This is a test email from your recruitment API.",
                 sender=sender,
             )
-            try:
-                mail.send(msg)
-                current_app.logger.info("Test email sent successfully to %s (sync)", email)
-                return jsonify({"message": "Email sent successfully", "to": email}), 200
-            except Exception as e:
+            sync_result = []
+            sync_error = []
+
+            def _do_send():
+                try:
+                    mail.send(msg)
+                    sync_result.append(True)
+                except Exception as e:
+                    sync_error.append(e)
+
+            t = Thread(target=_do_send)
+            t.daemon = True
+            t.start()
+            t.join(timeout=25)
+            if t.is_alive():
+                current_app.logger.warning("Test email (sync) timed out after 25s for %s", email)
+                return jsonify({
+                    "error": "SMTP send timed out after 25s. Try: GET /api/public/healthz to wake the instance, then retry.",
+                    "type": "Timeout"
+                }), 504
+            if sync_error:
+                e = sync_error[0]
                 current_app.logger.exception("Test email failed (sync)")
                 return jsonify({"error": str(e), "type": type(e).__name__}), 500
+            current_app.logger.info("Test email sent successfully to %s (sync)", email)
+            return jsonify({"message": "Email sent successfully", "to": email}), 200
 
         current_app.logger.info("Test email queued for %s (check logs for success/failure)", email)
         EmailService.send_async_email(
@@ -486,9 +508,41 @@ def init_auth_routes(app):
         )
         return jsonify({"message": "Test email queued; check API logs for 'Email sent successfully' or 'Failed to send email'"}), 200
 
+    # ------------------- RESEND VERIFICATION CODE -------------------
+    @app.route('/api/auth/resend-verification', methods=['POST'])
+    @limiter.limit("5 per 15 minutes")
+    def resend_verification():
+        """Resend verification email. If X-Test-Email-Secret matches, response includes code for testing."""
+        data = request.get_json() or {}
+        email = (data.get("email") or "").strip().lower()
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        user = User.query.filter(db.func.lower(User.email) == email).first()
+        if not user:
+            return jsonify({"error": "No account found for this email"}), 404
+        if user.is_verified:
+            return jsonify({"message": "Email already verified. You can log in."}), 200
+        if not _email_configured():
+            return jsonify({"error": "Email service not configured. Please contact support."}), 503
+
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        expires_at = datetime.utcnow() + timedelta(minutes=30)
+        VerificationCode.query.filter_by(email=email, is_used=False).delete()
+        verification_code = VerificationCode(email=email, code=code, expires_at=expires_at)
+        db.session.add(verification_code)
+        db.session.commit()
+
+        EmailService.send_verification_email(email, code)
+        current_app.logger.info("Resent verification email to %s", email)
+
+        payload = {"message": "Verification code sent. Check your email (and spam folder)."}
+        if current_app.config.get("TEST_EMAIL_SECRET") and request.headers.get("X-Test-Email-Secret") == current_app.config.get("TEST_EMAIL_SECRET"):
+            payload["code"] = code
+        return jsonify(payload), 200
+
     # ------------------- VERIFY EMAIL -------------------
     @app.route('/api/auth/verify', methods=['POST'])
-    @limiter.limit("10 per minute")  # Add this line
+    @limiter.limit("10 per minute")
     def verify_email():
         try:
             data = request.get_json()

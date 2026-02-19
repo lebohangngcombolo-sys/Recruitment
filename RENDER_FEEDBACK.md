@@ -63,7 +63,7 @@ When verification email works on your machine but not on Render, the cause is us
 |-------|--------|
 | **SendGrid sender verification** | Render uses a different outbound IP than your PC. In SendGrid: **Settings → Sender Authentication**. Ensure **MAIL_DEFAULT_SENDER** (e.g. `cyriltrump3@gmail.com`) is under **Single Sender Verification**. If not, add and verify it. |
 | **API logs on register** | Right after someone registers on the **deployed** site, open recruitment-api → **Logs**. Look for **`Sending verification email to ...`** then either **`Email sent successfully to ...`** or **`Failed to send email to ...`** with the exact error (e.g. `Sender address rejected: not owned by auth user`). |
-| **Test-email endpoint** | Set **TEST_EMAIL_SECRET** on recruitment-api. Then: `POST https://<your-api>/api/auth/test-email?sync=1` with header `X-Test-Email-Secret: <secret>` and body `{"email": "your@email.com"}`. **Use `?sync=1`** so the email is sent in the request and the response returns either success or the exact SMTP error (avoids eventlet/thread logging issues). |
+| **Test-email endpoint** | Set **TEST_EMAIL_SECRET** on recruitment-api. **Wake the instance first:** `curl https://<your-api>/api/public/healthz` then immediately `POST .../api/auth/test-email?sync=1` with header `X-Test-Email-Secret: <secret>` and body `{"email": "your@email.com"}`. **Use `?sync=1`** so the response returns 200 (success), 500 (error + message), or **504** (SMTP timed out after 25s — cold instance or slow SendGrid). |
 | **Env var types** | MAIL_USE_TLS is already normalized in the app (`"True"`/`"true"` → boolean). No change needed unless you use a different config source. |
 | **Outbound SMTP from Render** | Uncommon, but if logs show timeouts or connection refused, test from Render: **Shell** (or a one-off job) run: `python -c "import smtplib; s=smtplib.SMTP('smtp.sendgrid.net', 587); s.starttls(); s.login('apikey', 'YOUR_SENDGRID_API_KEY'); print('OK')"` (replace with your real key only in a private shell). If this fails, the error (auth, network, etc.) tells you the next step. |
 
@@ -71,8 +71,21 @@ After fixing sender verification or credentials, redeploy recruitment-api and te
 
 ---
 
-## 7. Summary
+## 7. “We used to see a pin” / verification code not visible
 
-- **No verification code:** Set MAIL_* on recruitment-api, redeploy, then check API logs when someone registers (see §2 and §5). If it works locally but not on Render, see §6 (SendGrid sender verification, test-email endpoint).
+The **6-digit verification code (pin)** is **only sent by email**. The app never shows it in the UI or returns it in the register API (for security). So if the email doesn’t arrive, the user has nothing to type on the verify screen.
+
+| What to do | Details |
+|------------|--------|
+| **Check email + spam** | The code is in the “Verify Your Email Address” email. If it’s not there, follow §2 and §6 (MAIL_*, SendGrid sender verification, API logs). |
+| **Test with a known code (no email)** | For debugging only: `POST .../api/auth/test-send-verification-email` with header `X-Test-Email-Secret: <secret>` and body `{"email": "your@email.com"}`. The **response** includes `"code": "123456"`. You can enter **123456** on the verify screen to complete verification for that email (the test endpoint sends that code to the inbox too, if mail is working). |
+| **curl test-email times out** | Free tier can be cold; sync send has a **25s timeout**. If you get **504** or curl times out: (1) Wake the instance: `GET .../api/public/healthz`, wait a few seconds. (2) Call `POST .../api/auth/test-email?sync=1` again. You should get 200, 500, or 504 in the response body. |
+
+---
+
+## 8. Summary
+
+- **No verification code (pin):** The code is only in the email (§7). Set MAIL_* on recruitment-api, redeploy, then check API logs when someone registers (see §2 and §5). If it works locally but not on Render, see §6. For testing without email you can use test-send-verification-email (code 123456).
+- **Test-email curl times out:** Wake the instance with healthz, then retry test-email?sync=1. Sync send now times out after 25s and returns 504 so you get a response.
 - **409 on register:** Email already registered; user should log in or use another email (message is now clear in the app).
 - **Web app calling wrong API:** Set BACKEND_URL on recruitment-web to your API URL and redeploy (see §1).
