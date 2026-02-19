@@ -461,23 +461,27 @@ def init_auth_routes(app):
         sync = request.args.get("sync", "").lower() in ("1", "true", "yes") or (data.get("sync") is True or data.get("sync") == "1")
         if sync:
             current_app.logger.info("Test email (sync) started for %s", email)
-            # Send synchronously with a 25s timeout so we always return a response (avoids curl hanging when SMTP is slow/cold)
+            # Send synchronously with a 25s timeout so we always return a response (avoids curl hanging when SMTP is slow/cold).
+            # Build and send entirely inside the thread's app_context so mail/msg are not request-scoped (avoids NoneType under eventlet).
             from flask_mail import Message
             from threading import Thread
-            sender = current_app.config.get("MAIL_DEFAULT_SENDER") or current_app.config.get("MAIL_USERNAME")
-            msg = Message(
-                subject="Test from Render",
-                recipients=[email],
-                html="<p>This is a test email from your recruitment API.</p>",
-                body="This is a test email from your recruitment API.",
-                sender=sender,
-            )
             sync_result = []
             sync_error = []
+            app_obj = current_app._get_current_object()
+            recipient = email
 
             def _do_send():
                 try:
-                    mail.send(msg)
+                    with app_obj.app_context():
+                        sender = app_obj.config.get("MAIL_DEFAULT_SENDER") or app_obj.config.get("MAIL_USERNAME")
+                        msg = Message(
+                            subject="Test from Render",
+                            recipients=[recipient],
+                            html="<p>This is a test email from your recruitment API.</p>",
+                            body="This is a test email from your recruitment API.",
+                            sender=sender,
+                        )
+                        app_obj.extensions["mail"].send(msg)
                     sync_result.append(True)
                 except Exception as e:
                     sync_error.append(e)
@@ -495,7 +499,9 @@ def init_auth_routes(app):
             if sync_error:
                 e = sync_error[0]
                 current_app.logger.exception("Test email failed (sync)")
-                return jsonify({"error": str(e), "type": type(e).__name__}), 500
+                err_msg = str(e) if e else "Unknown error in thread"
+                err_type = type(e).__name__ if e else "Exception"
+                return jsonify({"error": err_msg, "type": err_type}), 500
             current_app.logger.info("Test email sent successfully to %s (sync)", email)
             return jsonify({"message": "Email sent successfully", "to": email}), 200
 
