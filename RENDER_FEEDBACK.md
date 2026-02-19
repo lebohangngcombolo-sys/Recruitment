@@ -24,7 +24,21 @@ Use this when something isn’t working on Render (e.g. no verification email, 4
 
 ---
 
-## 3. 409 on register
+## 3. “I only see healthz in the logs” / Nothing about email
+
+If recruitment-api logs show **only** `GET /api/public/healthz` (every few seconds from `Render/1.0`), that’s **normal** when no one is triggering email or auth flows.
+
+| What it means | What to do |
+|---------------|------------|
+| **Only healthz** | The only traffic is Render’s health checker. No register, resend, or test-email requests have hit the API. |
+| **To see email-related lines** | 1) **Deploy** the branch that has the verification/resend/test-email routes and logging. 2) **Trigger** one of: a new **registration** from the deployed site, **Resend** on the verify screen, or **POST /api/auth/test-email** (with TEST_EMAIL_SECRET). Then check logs for: `Verification email queued for ...`, `Sending verification email to ...`, and either `Email sent successfully to ...` or `Failed to send email to ...`. |
+| **POST /api/auth/resend-verification → 404** | The **deployed** build doesn’t have that route yet (older branch or not redeployed). Deploy the branch that adds `resend-verification`, then redeploy recruitment-api. After that, the same request should return 400 (e.g. “Email is required”) when called with no body, not 404. |
+
+So: **email service** is used only when register, resend, or test-email is called. If those aren’t in the logs, either the routes aren’t deployed or no one has hit them yet.
+
+---
+
+## 4. 409 on register
 
 | Meaning | User message |
 |--------|---------------|
@@ -33,7 +47,7 @@ Use this when something isn’t working on Render (e.g. no verification email, 4
 
 ---
 
-## 4. Other browser messages
+## 5. Other browser messages
 
 | Message | Meaning |
 |---------|--------|
@@ -43,7 +57,7 @@ Use this when something isn’t working on Render (e.g. no verification email, 4
 
 ---
 
-## 5. Quick verification-email debug
+## 6. Quick verification-email debug
 
 1. In **recruitment-api** → Environment, confirm **MAIL_USERNAME**, **MAIL_PASSWORD**, **MAIL_DEFAULT_SENDER** are set. Save and redeploy if you changed them.
 2. Open **recruitment-api** → **Logs** and keep “Live tail” or refresh.
@@ -55,7 +69,7 @@ Use this when something isn’t working on Render (e.g. no verification email, 4
 
 ---
 
-## 6. Email works locally but not on Render
+## 7. Email works locally but not on Render
 
 When verification email works on your machine but not on Render, the cause is usually **environment-specific** (SendGrid or network), not the code.
 
@@ -71,7 +85,7 @@ After fixing sender verification or credentials, redeploy recruitment-api and te
 
 ---
 
-## 7. “We used to see a pin” / verification code not visible
+## 8. “We used to see a pin” / verification code not visible
 
 The **6-digit verification code (pin)** is **only sent by email**. The app never shows it in the UI or returns it in the register API (for security). So if the email doesn’t arrive, the user has nothing to type on the verify screen.
 
@@ -83,7 +97,7 @@ The **6-digit verification code (pin)** is **only sent by email**. The app never
 
 ---
 
-## 8. Summary
+## 9. Summary
 
 - **No verification code (pin):** The code is only in the email (§7). Set MAIL_* on recruitment-api, redeploy, then check API logs when someone registers (see §2 and §5). If it works locally but not on Render, see §6. For testing without email you can use test-send-verification-email (code 123456).
 - **Test-email curl times out:** Wake the instance with healthz, then retry test-email?sync=1. Sync send now times out after 25s and returns 504 so you get a response.
