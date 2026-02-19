@@ -4,6 +4,7 @@ from flask_mail import Message
 from threading import Thread
 from app.extensions import redis_client
 import logging
+import time
 
 class EmailService:
 
@@ -133,26 +134,36 @@ class EmailService:
 
         def send_email(app, subject, recipients, html_body, text_body):
             logger = app.logger
-            try:
-                with app.app_context():
-                    sender = app.config.get('MAIL_DEFAULT_SENDER') or app.config.get('MAIL_USERNAME')
-                    msg = Message(
-                        subject=subject,
-                        recipients=recipients,
-                        html=html_body,
-                        body=text_body or "",
-                        sender=sender
+            max_attempts = 3
+            retry_delay_seconds = 5
+            last_error = None
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    with app.app_context():
+                        sender = app.config.get('MAIL_DEFAULT_SENDER') or app.config.get('MAIL_USERNAME')
+                        msg = Message(
+                            subject=subject,
+                            recipients=recipients,
+                            html=html_body,
+                            body=text_body or "",
+                            sender=sender
+                        )
+                        mail.send(msg)
+                    logger.info("Email sent successfully to %s (attempt %d)", recipients, attempt)
+                    return
+                except Exception as e:
+                    last_error = e
+                    logger.warning(
+                        "Send attempt %d/%d failed for %s: %s (type=%s)",
+                        attempt, max_attempts, recipients, str(e), type(e).__name__,
                     )
-                    mail.send(msg)
-                    logger.info("Email sent successfully to %s", recipients)
-            except Exception as e:
-                logger.error(
-                    "Failed to send email to %s: %s (type=%s). Check MAIL_* and SendGrid sender verification.",
-                    recipients,
-                    str(e),
-                    type(e).__name__,
-                    exc_info=True,
-                )
+                    if attempt < max_attempts:
+                        time.sleep(retry_delay_seconds)
+            logger.error(
+                "Failed to send email to %s after %d attempts: %s (type=%s). Check MAIL_* and SendGrid sender verification.",
+                recipients, max_attempts, str(last_error), type(last_error).__name__,
+                exc_info=True,
+            )
 
         thread = Thread(target=send_email, args=[app, subject, recipients, html_body, text_body])
         thread.start()
