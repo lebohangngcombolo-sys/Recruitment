@@ -13,7 +13,8 @@ dsn = os.environ.get("DATABASE_URL")
 if not dsn:
     raise SystemExit("DATABASE_URL not set")
 
-conn = psycopg2.connect(dsn)
+# Avoid hanging on slow/unreachable DB; fail within 30s so deploy shows a clear error
+conn = psycopg2.connect(dsn, connect_timeout=30)
 cur = conn.cursor()
 
 def table_exists(name: str) -> bool:
