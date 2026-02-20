@@ -139,19 +139,21 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
               child: Container(
                 padding: EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.9),
+                  color: Color(0xFFF2F2F2).withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Color(0xFFC10D00), width: 1),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    CircularProgressIndicator(color: Colors.redAccent),
+                    CircularProgressIndicator(color: Color(0xFFC10D00)),
                     SizedBox(height: 16),
                     Text(
                       "Loading your applications...",
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
+                        color: Colors.white,
                       ),
                     ),
                   ],
@@ -201,8 +203,9 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                   children: [
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.9),
+                        color: Colors.transparent,
                         borderRadius: BorderRadius.circular(30),
+                        border: Border.all(color: Color(0xFFC10D00), width: 2),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.2),
@@ -212,12 +215,13 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                         ],
                       ),
                       child: IconButton(
-                        icon: Icon(Icons.arrow_back, color: Colors.black87),
+                        icon: Icon(Icons.arrow_back, color: Colors.white),
                         onPressed: () {
                           if (context.canPop()) {
                             context.pop();
                           } else {
-                            context.go('/candidate-dashboard?token=${widget.token}');
+                            context.go(
+                                '/candidate-dashboard?token=${widget.token}');
                           }
                         },
                       ),
@@ -241,8 +245,10 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                           padding: EdgeInsets.all(24),
                           margin: EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.9),
+                            color: Color(0xFFF2F2F2).withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(20),
+                            border:
+                                Border.all(color: Color(0xFFC10D00), width: 1),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.1),
@@ -257,7 +263,7 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                               Icon(
                                 Icons.drafts_outlined,
                                 size: 64,
-                                color: const Color.fromARGB(255, 112, 16, 16),
+                                color: Color(0xFFC10D00),
                               ),
                               SizedBox(height: 16),
                               Text(
@@ -265,7 +271,7 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                                 style: GoogleFonts.poppins(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade800,
+                                  color: Colors.white,
                                 ),
                               ),
                               SizedBox(height: 8),
@@ -273,7 +279,7 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                                 "Your draft applications will appear here",
                                 style: GoogleFonts.poppins(
                                   fontSize: 14,
-                                  color: Colors.grey.shade600,
+                                  color: Colors.white70,
                                 ),
                                 textAlign: TextAlign.center,
                               ),
@@ -310,11 +316,10 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                               borderRadius: BorderRadius.circular(16),
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.9),
+                                  color:
+                                      Color(0xFFF2F2F2).withValues(alpha: 0.2),
                                   border: Border.all(
-                                    color:
-                                        const Color.fromARGB(255, 112, 16, 16)
-                                            .withValues(alpha: 0.3),
+                                    color: Color(0xFFC10D00),
                                     width: 1,
                                   ),
                                 ),
@@ -329,16 +334,14 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                                           Container(
                                             padding: EdgeInsets.all(8),
                                             decoration: BoxDecoration(
-                                              color: const Color.fromARGB(
-                                                      255, 112, 16, 16)
+                                              color: Color(0xFFC10D00)
                                                   .withValues(alpha: 0.1),
                                               borderRadius:
                                                   BorderRadius.circular(12),
                                             ),
                                             child: Icon(
                                               Icons.work_outline,
-                                              color: const Color.fromARGB(
-                                                  255, 112, 16, 16),
+                                              color: Color(0xFFC10D00),
                                               size: 24,
                                             ),
                                           ),
@@ -354,8 +357,7 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                                                   style: GoogleFonts.poppins(
                                                     fontSize: 18,
                                                     fontWeight: FontWeight.bold,
-                                                    color: const Color.fromARGB(
-                                                        255, 112, 16, 16),
+                                                    color: Color(0xFFC10D00),
                                                   ),
                                                   maxLines: 2,
                                                   overflow:
@@ -367,7 +369,7 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                                                       "Company Not Available",
                                                   style: GoogleFonts.poppins(
                                                     fontSize: 14,
-                                                    color: Colors.grey.shade700,
+                                                    color: Colors.white70,
                                                     fontWeight: FontWeight.w500,
                                                   ),
                                                 ),
@@ -381,7 +383,8 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                                         padding: EdgeInsets.symmetric(
                                             horizontal: 12, vertical: 6),
                                         decoration: BoxDecoration(
-                                          color: Colors.grey.shade100,
+                                          color: Color(0xFFC10D00)
+                                              .withValues(alpha: 0.1),
                                           borderRadius:
                                               BorderRadius.circular(8),
                                         ),
@@ -391,14 +394,14 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                                             Icon(
                                               Icons.access_time_outlined,
                                               size: 16,
-                                              color: Colors.grey.shade600,
+                                              color: Color(0xFFC10D00),
                                             ),
                                             SizedBox(width: 6),
                                             Text(
                                               "Saved on: $savedDate",
                                               style: GoogleFonts.poppins(
                                                 fontSize: 12,
-                                                color: Colors.grey.shade600,
+                                                color: Color(0xFFC10D00),
                                                 fontWeight: FontWeight.w500,
                                               ),
                                             ),
@@ -421,9 +424,7 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                                             ),
                                           ),
                                           style: ElevatedButton.styleFrom(
-                                            backgroundColor:
-                                                const Color.fromARGB(
-                                                    255, 112, 16, 16),
+                                            backgroundColor: Color(0xFFC10D00),
                                             foregroundColor: Colors.white,
                                             padding: EdgeInsets.symmetric(
                                                 vertical: 16),
@@ -432,8 +433,7 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
                                                   BorderRadius.circular(12),
                                             ),
                                             elevation: 2,
-                                            shadowColor: const Color.fromARGB(
-                                                    255, 112, 16, 16)
+                                            shadowColor: Color(0xFFC10D00)
                                                 .withValues(alpha: 0.3),
                                           ),
                                         ),

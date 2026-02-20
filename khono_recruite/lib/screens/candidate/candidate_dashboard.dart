@@ -12,8 +12,6 @@ import 'dart:io';
 import 'job_details_page.dart';
 import 'assessments_results_screen.dart';
 import '../candidate/user_profile_page.dart';
-import '../auth/login_screen.dart';
-import '../../services/auth_service.dart';
 import '../../screens/candidate/jobs_applied_page.dart';
 import 'saved_application_screen.dart';
 import 'offers_screen.dart';
@@ -322,82 +320,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                     'Close',
                     style: GoogleFonts.poppins(color: Colors.white),
                   ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showLogoutConfirmation(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-          child: Container(
-            padding: EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Logout',
-                  style: GoogleFonts.poppins(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                SizedBox(height: 20),
-                Text(
-                  'Are you sure you want to logout?',
-                  style: GoogleFonts.poppins(),
-                ),
-                SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.grey),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        'Cancel',
-                        style: GoogleFonts.poppins(color: Colors.black),
-                      ),
-                    ),
-                    ElevatedButton(
-                      onPressed: () async {
-                        Navigator.of(context).pop();
-                        await AuthService.logout();
-                        Navigator.pushAndRemoveUntil(
-                          context,
-                          MaterialPageRoute(builder: (_) => LoginScreen()),
-                          (route) => false,
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: Text(
-                        'Logout',
-                        style: GoogleFonts.poppins(color: Colors.white),
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -856,77 +778,22 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                           color: Colors.white,
                         ),
                       ),
-                      PopupMenuButton<String>(
-                        itemBuilder: (context) => [
-                          PopupMenuItem(
-                            child: Text(
-                              'Saved Applications',
-                              style: GoogleFonts.poppins(color: Colors.black),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => CandidateOffersScreen(),
                             ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => SavedApplicationsScreen(
-                                      token: widget.token),
-                                ),
-                              );
-                            },
-                          ),
-                          PopupMenuItem(
-                            child: Text(
-                              'Applied jobs',
-                              style: GoogleFonts.poppins(color: Colors.black),
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      JobsAppliedPage(token: widget.token),
-                                ),
-                              );
-                            },
-                          ),
-                          PopupMenuItem(
-                            child: Text(
-                              'Offers',
-                              style: GoogleFonts.poppins(color: Colors.black),
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CandidateOffersScreen(),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
+                          );
+                        },
                         child: Padding(
                           padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: Row(
-                            children: [
-                              Text(
-                                'Application',
-                                style: GoogleFonts.poppins(color: Colors.white),
-                              ),
-                              Icon(
-                                Icons.arrow_drop_down,
-                                color: Colors.white,
-                              ),
-                            ],
+                          child: Text(
+                            'Offers',
+                            style: GoogleFonts.poppins(color: Colors.white),
                           ),
                         ),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => _showLogoutConfirmation(context),
-                        icon: const Icon(
-                          Icons.logout,
-                          color: Colors.white,
-                        ),
-                        label: Text('Log Out',
-                            style: GoogleFonts.poppins(color: Colors.white)),
                       ),
                       // Notifications Bell Icon
                       Stack(
