@@ -1,20 +1,23 @@
+// ignore_for_file: deprecated_member_use
+
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io' show File;
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import 'package:google_fonts/google_fonts.dart';
-import '../../providers/theme_provider.dart';
+import 'package:provider/provider.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
+import '../../providers/theme_provider.dart';
+import '../../utils/api_endpoints.dart';
 
 // ------------------- API Base URL -------------------
-const String candidateBase = "http://127.0.0.1:5000/api/candidate";
+final String candidateBase = ApiEndpoints.candidateBase;
 
 class ProfilePage extends StatefulWidget {
   final String token;
@@ -47,6 +50,10 @@ class _ProfilePageState extends State<ProfilePage>
   final TextEditingController bioController = TextEditingController();
   final TextEditingController locationController = TextEditingController();
   final TextEditingController titleController = TextEditingController();
+  final TextEditingController departmentController = TextEditingController();
+  final TextEditingController designationController = TextEditingController();
+  final TextEditingController preferredNameController = TextEditingController();
+  final TextEditingController managerController = TextEditingController();
 
   // Candidate fields
   final TextEditingController degreeController = TextEditingController();
@@ -86,7 +93,7 @@ class _ProfilePageState extends State<ProfilePage>
   int _backupCodesRemaining = 0;
 
   List<dynamic> documents = [];
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  final String apiBase = ApiEndpoints.candidateBase;
 
   // Add these helper methods in the _ProfilePageState class (around line 150, after the state variables):
 
@@ -122,6 +129,32 @@ class _ProfilePageState extends State<ProfilePage>
         {'value': 'other', 'label': 'Other'}
       ];
 
+  List<Map<String, String>> get departmentOptions => [
+        {'value': '', 'label': 'Select Department'},
+        {'value': 'finance', 'label': 'Finance'},
+        {'value': 'hr', 'label': 'Human Resources'},
+        {'value': 'it', 'label': 'Information Technology'},
+        {'value': 'marketing', 'label': 'Marketing'},
+        {'value': 'sales', 'label': 'Sales'},
+        {'value': 'operations', 'label': 'Operations'},
+        {'value': 'engineering', 'label': 'Engineering'},
+        {'value': 'other', 'label': 'Other'},
+      ];
+
+  List<Map<String, String>> get designationOptions => [
+        {'value': '', 'label': 'Select Designation'},
+        {'value': 'business_analyst', 'label': 'Business Analyst'},
+        {'value': 'software_engineer', 'label': 'Software Engineer'},
+        {'value': 'project_manager', 'label': 'Project Manager'},
+        {'value': 'hr_manager', 'label': 'HR Manager'},
+        {'value': 'marketing_specialist', 'label': 'Marketing Specialist'},
+        {'value': 'sales_executive', 'label': 'Sales Executive'},
+        {'value': 'ceo', 'label': 'CEO'},
+        {'value': 'cto', 'label': 'CTO'},
+        {'value': 'cfo', 'label': 'CFO'},
+        {'value': 'other', 'label': 'Other'},
+      ];
+
   // Helper method to get value from stored data
   String? _getValueFromStoredData(
       String? storedValue, List<Map<String, String>> options) {
@@ -136,6 +169,132 @@ class _ProfilePageState extends State<ProfilePage>
           option['value'] == lowerValue) {
         return option['value'];
       }
+
+      // ignore: unused_element
+      Widget _buildProfileHeader() {
+        return Column(
+          children: [
+            Stack(
+              children: [
+                Container(
+                  width: 140,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.redAccent.withOpacity(0.7),
+                      width: 4,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 10,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(70),
+                    child: Image(
+                      image: _getProfileImageProvider(),
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.person,
+                          color: Colors.grey.shade400,
+                          size: 70,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.redAccent.withOpacity(0.4),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 3,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Text(
+              fullNameController.text.isNotEmpty
+                  ? fullNameController.text
+                  : "Your Name",
+              style: GoogleFonts.poppins(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              titleController.text.isNotEmpty
+                  ? titleController.text
+                  : "Your Title",
+              style: GoogleFonts.inter(
+                fontSize: 18,
+                color: Colors.white70,
+              ),
+            ),
+            const SizedBox(height: 15),
+            if (_mfaEnabled)
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.verified_user,
+                        color: Colors.greenAccent, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      "2FA Enabled",
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: Colors.greenAccent,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 30),
+          ],
+        );
+      }
+
+      // Profile Summary Tab
     }
 
     // If no exact match, try partial match
@@ -882,15 +1041,16 @@ class _ProfilePageState extends State<ProfilePage>
     return const AssetImage("assets/images/profile_placeholder.png");
   }
 
-  Widget _modernCard(String title, Widget child) {
+  Widget _modernCard(String title, Widget child,
+      {Color? cardColor, Color? textColor}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardColor ?? Colors.white.withOpacity(0.5), // Translucent white
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -911,7 +1071,7 @@ class _ProfilePageState extends State<ProfilePage>
                   style: GoogleFonts.poppins(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black,
+                    color: textColor ?? Colors.black,
                   ),
                 ),
               ],
@@ -930,7 +1090,6 @@ class _ProfilePageState extends State<ProfilePage>
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-
     if (loading) {
       return Scaffold(
         backgroundColor: Colors.transparent,
@@ -939,7 +1098,7 @@ class _ProfilePageState extends State<ProfilePage>
             // Full-background image
             Positioned.fill(
               child: Image.asset(
-                "assets/images/background.jpg",
+                themeProvider.backgroundImage,
                 fit: BoxFit.cover,
               ),
             ),
@@ -957,7 +1116,7 @@ class _ProfilePageState extends State<ProfilePage>
                     "Loading Profile...",
                     style: GoogleFonts.inter(
                       fontSize: 16,
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha: 0.9),
                     ),
                   ),
                 ],
@@ -998,10 +1157,11 @@ class _ProfilePageState extends State<ProfilePage>
                   padding:
                       const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05), // almost invisible
+                    color: Colors.white
+                        .withValues(alpha: 0.05), // almost invisible
                     border: Border(
-                        right:
-                            BorderSide(color: Colors.white.withOpacity(0.1))),
+                        right: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.1))),
                   ),
                   child: Column(
                     children: [
@@ -1016,7 +1176,7 @@ class _ProfilePageState extends State<ProfilePage>
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: Colors.white.withOpacity(0.3),
+                                    color: Colors.white.withValues(alpha: 0.3),
                                     width: 2,
                                   ),
                                 ),
@@ -1028,10 +1188,12 @@ class _ProfilePageState extends State<ProfilePage>
                                     errorBuilder:
                                         (context, error, stackTrace) =>
                                             Container(
-                                      color: Colors.white.withOpacity(0.1),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.1),
                                       child: Icon(
                                         Icons.person,
-                                        color: Colors.white.withOpacity(0.3),
+                                        color:
+                                            Colors.white.withValues(alpha: 0.3),
                                         size: 40,
                                       ),
                                     ),
@@ -1047,7 +1209,8 @@ class _ProfilePageState extends State<ProfilePage>
                                     width: 32,
                                     height: 32,
                                     decoration: BoxDecoration(
-                                      color: Colors.redAccent.withOpacity(0.8),
+                                      color: Colors.redAccent
+                                          .withValues(alpha: 0.8),
                                       shape: BoxShape.circle,
                                       border: Border.all(
                                         color: Colors.white,
@@ -1093,7 +1256,7 @@ class _ProfilePageState extends State<ProfilePage>
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.15),
+                                color: Colors.green.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Row(
@@ -1118,7 +1281,6 @@ class _ProfilePageState extends State<ProfilePage>
                       ),
                       const SizedBox(height: 40),
                       // Navigation buttons
-                      _sidebarButton("Profile", Icons.person_outline_rounded),
                       _sidebarButton("Settings", Icons.settings_outlined),
                       _sidebarButton("2FA", Icons.security_outlined),
                       _sidebarButton(
@@ -1152,8 +1314,8 @@ class _ProfilePageState extends State<ProfilePage>
       margin: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: isSelected
-            ? Colors.redAccent.withOpacity(0.2)
-            : Colors.white.withOpacity(0.05), // subtle transparent bg
+            ? Colors.redAccent.withValues(alpha: 0.2)
+            : Colors.white.withValues(alpha: 0.05), // subtle transparent bg
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: () {
@@ -1167,7 +1329,7 @@ class _ProfilePageState extends State<ProfilePage>
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               border: isSelected
-                  ? Border.all(color: Colors.redAccent.withOpacity(0.3))
+                  ? Border.all(color: Colors.redAccent.withValues(alpha: 0.3))
                   : null,
               borderRadius: BorderRadius.circular(12),
             ),
@@ -1216,11 +1378,29 @@ class _ProfilePageState extends State<ProfilePage>
             ? _buildProfileSummary()
             : _buildProfileForm();
       case "Settings":
-        return _buildSettingsTab();
-      case "2FA":
         return _build2FATab();
       case "Reset Password":
-        return _buildResetPasswordTab();
+        return Container(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              Text(
+                "Reset Password",
+                style: GoogleFonts.poppins(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                "Password reset functionality coming soon.",
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+        );
       default:
         return _buildProfileSummary();
     }
@@ -1244,7 +1424,7 @@ class _ProfilePageState extends State<ProfilePage>
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                       ),
                     ],
@@ -1285,8 +1465,8 @@ class _ProfilePageState extends State<ProfilePage>
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: _mfaEnabled
-                            ? Colors.green.withOpacity(0.1)
-                            : Colors.orange.withOpacity(0.1),
+                            ? Colors.green.withValues(alpha: 0.1)
+                            : Colors.orange.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
@@ -1564,7 +1744,7 @@ class _ProfilePageState extends State<ProfilePage>
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.redAccent.withOpacity(0.1),
+                    color: Colors.redAccent.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: Colors.redAccent, size: 20),
@@ -1612,7 +1792,7 @@ class _ProfilePageState extends State<ProfilePage>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 18),
@@ -1700,17 +1880,6 @@ class _ProfilePageState extends State<ProfilePage>
 
   // Profile Summary
   Widget _buildProfileSummary() {
-    Future<void> _launchUrl(String url) async {
-      final uri = Uri.tryParse(url) ?? Uri();
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Could not launch URL")),
-        );
-      }
-    }
-
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1727,12 +1896,13 @@ class _ProfilePageState extends State<ProfilePage>
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                       ),
                     ],
                   ),
-                  child: Icon(Icons.arrow_back, color: Colors.redAccent),
+                  child: Icon(Icons.arrow_back,
+                      color: Colors.white), // Changed to white
                 ),
               ),
               const SizedBox(width: 12),
@@ -1741,7 +1911,7 @@ class _ProfilePageState extends State<ProfilePage>
                 style: GoogleFonts.poppins(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
-                  color: Colors.black,
+                  color: Colors.white, // Changed to white
                 ),
               ),
               const Spacer(),
@@ -1850,7 +2020,7 @@ class _ProfilePageState extends State<ProfilePage>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.redAccent.withOpacity(0.1),
+                          color: Colors.redAccent.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
@@ -1949,7 +2119,7 @@ class _ProfilePageState extends State<ProfilePage>
             child: GestureDetector(
               onTap: () {
                 final uri = Uri.tryParse(value) ?? Uri();
-                launchUrl(uri, mode: LaunchMode.externalApplication);
+                url_launcher.launchUrl(uri, mode: url_launcher.LaunchMode.externalApplication);
               },
               child: Text(
                 value,
@@ -1967,40 +2137,7 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   // Profile Form
-  // Profile Form - Fixed dropdown values
   Widget _buildProfileForm() {
-    // Define dropdown options - Use unique values
-    final List<Map<String, String>> genderOptions = [
-      {'value': '', 'label': 'Select Gender'},
-      {'value': 'male', 'label': 'Male'},
-      {'value': 'female', 'label': 'Female'},
-      {'value': 'other', 'label': 'Other'},
-      {'value': 'prefer_not_to_say', 'label': 'Prefer not to say'}
-    ];
-
-    final List<Map<String, String>> nationalityOptions = [
-      {'value': '', 'label': 'Select Nationality'},
-      {'value': 'south_african', 'label': 'South African'},
-      {'value': 'tanzanian', 'label': 'Tanzanian'},
-      {'value': 'ugandan', 'label': 'Ugandan'},
-      {'value': 'rwandan', 'label': 'Rwandan'},
-      {'value': 'burundian', 'label': 'Burundian'},
-      {'value': 'south_sudanese', 'label': 'South Sudanese'},
-      {'value': 'other', 'label': 'Other'}
-    ];
-
-    final List<Map<String, String>> titleOptions = [
-      {'value': '', 'label': 'Select Title'},
-      {'value': 'mr', 'label': 'Mr.'},
-      {'value': 'mrs', 'label': 'Mrs.'},
-      {'value': 'ms', 'label': 'Ms.'},
-      {'value': 'miss', 'label': 'Miss'},
-      {'value': 'dr', 'label': 'Dr.'},
-      {'value': 'prof', 'label': 'Prof.'},
-      {'value': 'eng', 'label': 'Eng.'},
-      {'value': 'other', 'label': 'Other'}
-    ];
-
     return SingleChildScrollView(
       child: Column(
         children: [
@@ -2013,7 +2150,7 @@ class _ProfilePageState extends State<ProfilePage>
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: Colors.redAccent.withValues(alpha: 0.1),
                   blurRadius: 20,
                   spreadRadius: 2,
                   offset: const Offset(0, 4),
@@ -2035,7 +2172,7 @@ class _ProfilePageState extends State<ProfilePage>
                       icon: Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.redAccent.withOpacity(0.1),
+                          color: Colors.redAccent.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(Icons.arrow_back_rounded,
@@ -2079,7 +2216,7 @@ class _ProfilePageState extends State<ProfilePage>
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 24, vertical: 14),
-                        shadowColor: Colors.redAccent.withOpacity(0.3),
+                        shadowColor: Colors.redAccent.withValues(alpha: 0.3),
                       ),
                       icon: Icon(Icons.save_rounded, size: 18),
                       label: Text(
@@ -2098,9 +2235,9 @@ class _ProfilePageState extends State<ProfilePage>
             ),
           ),
 
-          // Profile Picture Section
+          // Personal Information
           _modernCard(
-            "Profile Picture",
+            "Personal Information",
             Column(
               children: [
                 GestureDetector(
@@ -2114,14 +2251,14 @@ class _ProfilePageState extends State<ProfilePage>
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
                             colors: [
-                              Colors.redAccent.withOpacity(0.1),
-                              Colors.redAccent.withOpacity(0.3),
+                              Colors.redAccent.withValues(alpha: 0.1),
+                              Colors.redAccent.withValues(alpha: 0.3),
                             ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
                           border: Border.all(
-                            color: Colors.redAccent.withOpacity(0.3),
+                            color: Colors.redAccent.withValues(alpha: 0.3),
                             width: 3,
                           ),
                         ),
@@ -2156,7 +2293,7 @@ class _ProfilePageState extends State<ProfilePage>
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.redAccent.withOpacity(0.4),
+                                color: Colors.redAccent.withValues(alpha: 0.4),
                                 blurRadius: 8,
                                 offset: const Offset(0, 4),
                               ),
@@ -2435,7 +2572,8 @@ class _ProfilePageState extends State<ProfilePage>
                               icon: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.redAccent.withOpacity(0.1),
+                                  color:
+                                      Colors.redAccent.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Icon(
@@ -2471,7 +2609,7 @@ class _ProfilePageState extends State<ProfilePage>
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                         side: BorderSide(
-                          color: Colors.redAccent.withOpacity(0.3),
+                          color: Colors.redAccent.withValues(alpha: 0.3),
                           width: 1.5,
                         ),
                       ),
@@ -2650,7 +2788,8 @@ class _ProfilePageState extends State<ProfilePage>
                               icon: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.redAccent.withOpacity(0.1),
+                                  color:
+                                      Colors.redAccent.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Icon(
@@ -2686,7 +2825,7 @@ class _ProfilePageState extends State<ProfilePage>
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                         side: BorderSide(
-                          color: Colors.redAccent.withOpacity(0.3),
+                          color: Colors.redAccent.withValues(alpha: 0.3),
                           width: 1.5,
                         ),
                       ),
@@ -2796,7 +2935,7 @@ class _ProfilePageState extends State<ProfilePage>
                       borderRadius: BorderRadius.circular(14),
                     ),
                     elevation: 0,
-                    shadowColor: Colors.redAccent.withOpacity(0.4),
+                    shadowColor: Colors.redAccent.withValues(alpha: 0.4),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -3012,6 +3151,7 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   // Settings Tab
+  // ignore: unused_element
   Widget _buildSettingsTab() {
     return SingleChildScrollView(
       child: Column(
@@ -3113,7 +3253,7 @@ class _ProfilePageState extends State<ProfilePage>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.redAccent.withOpacity(0.1),
+              color: Colors.redAccent.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: Colors.redAccent, size: 20),
@@ -3145,7 +3285,12 @@ class _ProfilePageState extends State<ProfilePage>
           Switch.adaptive(
             value: value,
             onChanged: onChanged,
-            activeColor: Colors.redAccent,
+            activeTrackColor: Colors.redAccent.withValues(alpha: 0.3),
+            thumbColor: WidgetStateProperty.resolveWith((states) {
+              return states.contains(WidgetState.selected)
+                  ? Colors.redAccent
+                  : Colors.grey;
+            }),
           ),
         ],
       ),
@@ -3153,6 +3298,7 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   // Reset Password Tab
+  // ignore: unused_element
   Widget _buildResetPasswordTab() {
     final TextEditingController currentPassword = TextEditingController();
     final TextEditingController newPassword = TextEditingController();

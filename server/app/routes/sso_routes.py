@@ -21,6 +21,10 @@ ROLE_DASHBOARD_MAP = {
 FRONTEND_URL = "http://localhost:3000"  # Update for production
 
 
+def _get_frontend_url():
+    return current_app.config.get("FRONTEND_URL") or FRONTEND_URL
+
+
 # ------------------- Configuration Validation -------------------
 def validate_sso_config(app):
     """Validate all required SSO configuration is present and metadata URL accessible."""
@@ -106,23 +110,24 @@ def sso_login():
 @sso_bp.route("/api/auth/sso/callback")
 def sso_callback():
     try:
+        frontend_url = _get_frontend_url()
         # ----- Handle error from SSO provider -----
         error = request.args.get("error")
         error_description = request.args.get("error_description")
         if error:
             msg = urllib.parse.quote(error_description or error)
-            return redirect(f"{FRONTEND_URL}/login?error={msg}")
+            return redirect(f"{frontend_url}/login?error={msg}")
 
         # ----- Get access token & parse user info -----
         token = oauth.keycloak.authorize_access_token()
         if not token:
-            return redirect(f"{FRONTEND_URL}/login?error=Failed to obtain access token")
+            return redirect(f"{frontend_url}/login?error=Failed to obtain access token")
 
         nonce = session.pop("oauth_nonce", None) or secrets.token_urlsafe(16)
         user_info = oauth.keycloak.parse_id_token(token, nonce=nonce)
 
         if not user_info or "email" not in user_info:
-            return redirect(f"{FRONTEND_URL}/login?error=Failed to parse user info")
+            return redirect(f"{frontend_url}/login?error=Failed to parse user info")
 
         email = user_info["email"].strip().lower()
         first_name = user_info.get("given_name", "")
@@ -208,13 +213,13 @@ def sso_callback():
             "dashboard": dashboard_path
         }
 
-        redirect_url = f"{FRONTEND_URL}/sso-redirect?{urllib.parse.urlencode(query_params)}"
+        redirect_url = f"{frontend_url}/sso-redirect?{urllib.parse.urlencode(query_params)}"
         return redirect(redirect_url)
 
     except Exception:
         current_app.logger.error("SSO callback failed:\n%s", traceback.format_exc())
         db.session.rollback()
-        return redirect(f"{FRONTEND_URL}/login?error={urllib.parse.quote('SSO callback failed')}")
+        return redirect(f"{frontend_url}/login?error={urllib.parse.quote('SSO callback failed')}")
 
 
 # ------------------- SSO Status -------------------
@@ -260,7 +265,7 @@ def sso_logout():
         id_token = request.args.get("id_token")
 
         # Where the SSO provider should redirect after logout
-        post_logout = f"{FRONTEND_URL}/login"
+        post_logout = f"{_get_frontend_url()}/login"
 
         # Construct final logout URL
         logout_url = (

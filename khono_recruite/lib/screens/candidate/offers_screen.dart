@@ -59,12 +59,6 @@ class _CandidateOffersScreenState extends State<CandidateOffersScreen> {
     }
   }
 
-  // Helper method to get candidate ID (replace with your auth logic)
-  Future<int> _getCandidateId() async {
-    // This is a placeholder - implement based on your auth system
-    return 1; // Example candidate ID
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(

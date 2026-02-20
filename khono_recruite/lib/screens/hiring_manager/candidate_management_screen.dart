@@ -28,6 +28,15 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
   }
 
   Future<void> fetchShortlist() async {
+    if (widget.jobId <= 0) {
+      setState(() {
+        loading = false;
+        errorMessage = "Select a job to view shortlisted candidates.";
+        candidates = [];
+      });
+      return;
+    }
+
     setState(() {
       loading = true;
       errorMessage = null;
@@ -109,7 +118,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                   color: (themeProvider.isDarkMode
                           ? const Color(0xFF14131E)
                           : Colors.white)
-                      .withOpacity(0.9),
+                      .withValues(alpha: 0.9),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -182,7 +191,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                             color: (themeProvider.isDarkMode
                                                     ? const Color(0xFF14131E)
                                                     : Colors.white)
-                                                .withOpacity(0.9),
+                                                .withValues(alpha: 0.9),
                                             borderRadius:
                                                 BorderRadius.circular(12),
                                             border: Border.all(
@@ -192,7 +201,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                             boxShadow: [
                                               BoxShadow(
                                                 color: Colors.black
-                                                    .withOpacity(0.03),
+                                                    .withValues(alpha: 0.03),
                                                 blurRadius: 6,
                                                 offset: const Offset(0, 3),
                                               )

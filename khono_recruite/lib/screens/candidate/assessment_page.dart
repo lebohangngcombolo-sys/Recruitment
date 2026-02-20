@@ -3,7 +3,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../services/auth_service.dart';
 import 'cv_upload_page.dart';
+import '../../widgets/application_flow_stepper.dart';
 import 'package:go_router/go_router.dart';
+import '../../utils/api_endpoints.dart';
 
 class AssessmentPage extends StatefulWidget {
   final int applicationId;
@@ -23,16 +25,13 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   String? token;
 
-  // Theme Colors
-  final Color _primaryDark = Colors.white; // Background
-  final Color _cardDark = Colors.white; // Card background
-  final Color _accentRed = Color(0xFFE53935); // Main red
-  final Color _accentPurple = Color(0xFFD32F2F); // Dark red
-  final Color _accentBlue = Color(0xFFEF5350); // Light red
-  final Color _accentGreen = Color(0xFF43A047); // Success
-  final Color _textPrimary = Colors.black; // Main text
-  final Color _textSecondary = Colors.redAccent; // Secondary text
-  final Color _surfaceOverlay = Colors.red.withOpacity(0.1); // subtle overlay
+  // Enrollment-style Theme Colors
+  final Color _primaryDark = Colors.transparent; // Background
+  final Color _cardDark =
+      Colors.black.withValues(alpha: 0.55); // Card background
+  final Color _accentRed = const Color(0xFFC10D00); // Main red
+  final Color _textPrimary = Colors.white; // Main text
+  final Color _boxFillColor = const Color(0xFFF2F2F2).withValues(alpha: 0.2);
 
   @override
   void initState() {
@@ -50,8 +49,17 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
   Future<void> loadTokenAndFetch() async {
     final t = await AuthService.getAccessToken();
+    if (!mounted) return;
     setState(() => token = t);
-    fetchAssessment();
+    await fetchAssessment();
+  }
+
+  dynamic _safeJsonDecode(String body) {
+    try {
+      return json.decode(body);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> fetchAssessment() async {
@@ -61,7 +69,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
     try {
       final res = await http.get(
         Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/applications/${widget.applicationId}/assessment"),
+            "${ApiEndpoints.candidateBase}/applications/${widget.applicationId}/assessment"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token"
@@ -69,7 +77,11 @@ class _AssessmentPageState extends State<AssessmentPage> {
       );
 
       if (res.statusCode == 200) {
-        final data = json.decode(res.body);
+        final data = _safeJsonDecode(res.body);
+        if (data is! Map) {
+          throw Exception("Invalid assessment response");
+        }
+        if (!mounted) return;
         setState(() {
           questions = (data['assessment_pack']?['questions'] as List? ?? [])
               .take(11)
@@ -79,9 +91,11 @@ class _AssessmentPageState extends State<AssessmentPage> {
         throw Exception("Failed to load assessment: ${res.body}");
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
+      if (!mounted) return;
       setState(() => loading = false);
     }
   }
@@ -97,7 +111,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
       final res = await http.post(
         Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/applications/${widget.applicationId}/assessment"),
+            "${ApiEndpoints.candidateBase}/applications/${widget.applicationId}/assessment"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token"
@@ -106,11 +120,16 @@ class _AssessmentPageState extends State<AssessmentPage> {
       );
 
       if (res.statusCode == 201) {
-        final data = json.decode(res.body);
+        final data = _safeJsonDecode(res.body);
+        if (data is! Map) {
+          throw Exception("Invalid submission response");
+        }
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text(
                 "Assessment Submitted! Score: ${data['total_score']}%, Result: ${data['recommendation']}")));
 
+        if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -121,9 +140,11 @@ class _AssessmentPageState extends State<AssessmentPage> {
         throw Exception("Failed to submit: ${res.body}");
       }
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
+      if (!mounted) return;
       setState(() => submitting = false);
     }
   }
@@ -144,7 +165,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
       final res = await http.post(
         Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/apply/save_draft/${widget.applicationId}"),
+            "${ApiEndpoints.candidateBase}/apply/save_draft/${widget.applicationId}"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token"
@@ -172,20 +193,49 @@ class _AssessmentPageState extends State<AssessmentPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    if (loading) {
-      return Scaffold(
-        backgroundColor: _primaryDark,
-        body: Container(
+  Widget _buildBackground(Widget child) {
+    return Stack(
+      children: [
+        Container(
           decoration: const BoxDecoration(
             image: DecorationImage(
               image: AssetImage("assets/images/dark.png"),
               fit: BoxFit.cover,
             ),
           ),
-          child: Center(
-            child: CircularProgressIndicator(color: _accentRed),
+        ),
+        Container(
+          color: Colors.black.withValues(alpha: 0.4),
+        ),
+        child,
+      ],
+    );
+  }
+
+  Widget _buildStepperHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: ApplicationFlowStepper(currentStep: 1),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return Scaffold(
+        backgroundColor: _primaryDark,
+        body: _buildBackground(
+          Column(
+            children: [
+              const SizedBox(height: 16),
+              _buildStepperHeader(),
+              const SizedBox(height: 16),
+              Expanded(
+                child: Center(
+                  child: CircularProgressIndicator(color: _accentRed),
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -194,27 +244,25 @@ class _AssessmentPageState extends State<AssessmentPage> {
     if (questions.isEmpty) {
       return Scaffold(
         backgroundColor: _primaryDark,
-        appBar: AppBar(
-          title: Text(
-            "Assessment",
-            style: TextStyle(color: _textPrimary),
-          ),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          iconTheme: IconThemeData(color: _textPrimary),
-        ),
-        body: Container(
-          decoration: const BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage("assets/images/dark.png"),
-              fit: BoxFit.cover,
-            ),
-          ),
-          child: Center(
-            child: Text(
-              "No assessment available",
-              style: TextStyle(color: _textPrimary, fontSize: 16),
-            ),
+        body: _buildBackground(
+          Column(
+            children: [
+              const SizedBox(height: 16),
+              _buildStepperHeader(),
+              const SizedBox(height: 16),
+              Expanded(
+                child: Center(
+                  child: Text(
+                    "No assessment available",
+                    style: TextStyle(
+                      color: _textPrimary,
+                      fontSize: 16,
+                      fontFamily: 'Poppins',
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -222,163 +270,165 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
     return Scaffold(
       backgroundColor: _primaryDark,
-      appBar: AppBar(
-        title: Text(
-          "Assessment",
-          style: TextStyle(
-            color: _textPrimary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: IconThemeData(color: _textPrimary),
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage("assets/images/dark.png"),
-            fit: BoxFit.cover,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: ListView.builder(
-            itemCount: questions.length + 2, // ✅ Added 1 more for Save & Exit
-            itemBuilder: (context, index) {
-              if (index == questions.length) {
-                // Submit button
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: submitting ? null : submitAssessment,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _accentRed,
-                        foregroundColor: _textPrimary,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: submitting
-                          ? SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                color: _textPrimary,
-                                strokeWidth: 2,
+      body: _buildBackground(
+        Column(
+          children: [
+            const SizedBox(height: 16),
+            _buildStepperHeader(),
+            const SizedBox(height: 12),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: ListView.builder(
+                  itemCount:
+                      questions.length + 2, // ✅ Added 1 more for Save & Exit
+                  itemBuilder: (context, index) {
+                    if (index == questions.length) {
+                      // Submit button
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: submitting ? null : submitAssessment,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _accentRed,
+                              foregroundColor: _textPrimary,
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                            )
-                          : Text(
-                              "Submit Assessment",
+                            ),
+                            child: submitting
+                                ? SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                      color: _textPrimary,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(
+                                    "Submit Assessment",
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _textPrimary,
+                                      fontFamily: 'Poppins',
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      );
+                    } else if (index == questions.length + 1) {
+                      // ✅ New Save & Exit button
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: saveDraftAndExit,
+                            icon: Icon(Icons.save, color: _accentRed),
+                            label: Text(
+                              "Save & Exit",
+                              style: TextStyle(
+                                color: _accentRed,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: _accentRed, width: 1.5),
+                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+
+                    final q = questions[index];
+                    final String questionText =
+                        q['question'] ?? "Question not available";
+                    final List options = q['options'] ?? [];
+
+                    return Container(
+                      margin: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _cardDark,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _accentRed.withValues(alpha: 0.6),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              "Q${index + 1}: $questionText",
                               style: TextStyle(
                                 fontSize: 16,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.bold,
                                 color: _textPrimary,
+                                fontFamily: 'Poppins',
                               ),
                             ),
-                    ),
-                  ),
-                );
-              } else if (index == questions.length + 1) {
-                // ✅ New Save & Exit button
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: saveDraftAndExit,
-                      icon: Icon(Icons.save, color: _accentRed),
-                      label: Text(
-                        "Save & Exit",
-                        style: TextStyle(color: _accentRed),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: _accentRed, width: 1.5),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }
-
-              final q = questions[index];
-              final String questionText =
-                  q['question'] ?? "Question not available";
-              final List options = q['options'] ?? [];
-
-              return Container(
-                margin: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  color: _cardDark,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: _accentRed.withOpacity(0.3)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Q${index + 1}: $questionText",
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: _textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Column(
-                        children: List.generate(options.length, (i) {
-                          final optionLabel = ["A", "B", "C", "D"][i];
-                          final optionText = options[i];
-                          return Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: _primaryDark.withOpacity(0.5),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                color: _accentRed.withOpacity(0.2),
-                              ),
-                            ),
-                            child: RadioListTile<String>(
-                              title: Text(
-                                "$optionLabel. $optionText",
-                                style: TextStyle(color: _textPrimary),
-                              ),
-                              value: optionLabel,
-                              groupValue: answers[
-                                  index], // already prefilled from draft
-                              onChanged: (val) {
+                            const SizedBox(height: 12),
+                            RadioGroup<String>(
+                              groupValue: answers[index],
+                              onChanged: (value) {
+                                if (value == null) return;
                                 setState(() {
-                                  answers[index] = val!;
+                                  answers[index] = value;
                                 });
                               },
-                              activeColor: _accentRed,
-                              tileColor: Colors.transparent,
-                              selectedTileColor: _accentRed.withOpacity(0.1),
+                              child: Column(
+                                children: List.generate(options.length, (i) {
+                                  final optionLabel = ["A", "B", "C", "D"][i];
+                                  final optionText = options[i];
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    decoration: BoxDecoration(
+                                      color: _boxFillColor,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color:
+                                            _accentRed.withValues(alpha: 0.4),
+                                      ),
+                                    ),
+                                    child: RadioListTile<String>(
+                                      title: Text(
+                                        "$optionLabel. $optionText",
+                                        style: TextStyle(
+                                          color: _textPrimary,
+                                          fontFamily: 'Poppins',
+                                        ),
+                                      ),
+                                      value: optionLabel,
+                                    ),
+                                  );
+                                }),
+                              ),
                             ),
-                          );
-                        }),
+                          ],
+                        ),
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
+              ),
+            ),
+          ],
         ),
       ),
     );

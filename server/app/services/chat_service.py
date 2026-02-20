@@ -139,20 +139,32 @@ class ChatService:
     
     @staticmethod
     def send_message(thread_id: int, sender_id: int, content: str, 
-                    message_type: str = 'text', metadata: dict = None):
+                    message_type: str = 'text', metadata: dict = None,
+                    parent_message_id: Optional[int] = None):
         """Send a new message"""
+        try:
+            sender_id = int(sender_id)
+        except (ValueError, TypeError):
+            raise ValueError("Invalid sender ID")
+
         thread = ChatThread.query.get_or_404(thread_id)
         
         # Verify sender is a participant
         if not any(p.id == sender_id for p in thread.participants):
             raise ValueError("User is not a participant in this thread")
         
+        if parent_message_id is not None:
+            parent_message = ChatMessage.query.get(parent_message_id)
+            if not parent_message or parent_message.thread_id != thread_id:
+                raise ValueError("Invalid parent message")
+
         message = ChatMessage(
             thread_id=thread_id,
             sender_id=sender_id,
             content=content,
             message_type=message_type,
-            metadata=metadata or {}
+            metadata=metadata or {},
+            parent_message_id=parent_message_id
         )
         
         db.session.add(message)
@@ -181,6 +193,34 @@ class ChatService:
                 socketio.emit('new_message', message_data, room=f'user_{participant.id}')
         
         return message
+
+    @staticmethod
+    def get_thread_details(thread_id: int, user_id: int) -> Optional[dict]:
+        """Get thread details if user has access."""
+        thread = ChatThread.query.get(thread_id)
+        if not thread:
+            return None
+        if not any(p.id == user_id for p in thread.participants):
+            return None
+        return thread.to_dict_detailed()
+
+    @staticmethod
+    def set_typing_status(user_id: int, thread_id: int, is_typing: bool) -> bool:
+        """Update typing status for a user in a thread."""
+        thread = ChatThread.query.get(thread_id)
+        if not thread or not any(p.id == user_id for p in thread.participants):
+            return False
+
+        presence = UserPresence.query.get(user_id)
+        if not presence:
+            presence = UserPresence(user_id=user_id)
+            db.session.add(presence)
+
+        presence.is_typing = bool(is_typing)
+        presence.typing_in_thread = thread_id if is_typing else None
+        presence.last_seen = datetime.utcnow()
+        db.session.commit()
+        return True
     
     @staticmethod
     def update_presence(user_id: int, status: str, socket_id: str = None):

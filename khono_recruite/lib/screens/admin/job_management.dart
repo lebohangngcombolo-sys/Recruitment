@@ -2,9 +2,12 @@ import 'package:provider/provider.dart';
 import 'package:flutter/material.dart' hide SearchBar, FilterChip; // hide both
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
+import '../../widgets/knockout_rules_builder.dart';
+import '../../widgets/weighting_configuration_widget.dart';
 import '../../widgets/search_bar.dart'; // your custom SearchBar
 import '../../widgets/filter_chip.dart'; // your custom FilterChip
 import '../../services/admin_service.dart';
+import '../../services/ai_service.dart';
 import '../../providers/theme_provider.dart';
 
 class JobManagement extends StatefulWidget {
@@ -354,7 +357,8 @@ class _JobManagementState extends State<JobManagement> {
   Widget _buildStatChip(String label, String value, {Color? color}) {
     return Chip(
       label: Text("$label: $value"),
-      backgroundColor: color?.withOpacity(0.1) ?? Colors.blue.withOpacity(0.1),
+      backgroundColor:
+          color?.withValues(alpha: 0.1) ?? Colors.blue.withValues(alpha: 0.1),
       side: BorderSide(color: color ?? Colors.blue),
     );
   }
@@ -383,7 +387,7 @@ class _JobManagementState extends State<JobManagement> {
             return Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.1),
+                color: Colors.grey.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.grey.shade300),
               ),
@@ -494,7 +498,7 @@ class _JobManagementState extends State<JobManagement> {
             return Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: colors[index % colors.length].withOpacity(0.1),
+                color: colors[index % colors.length].withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: colors[index % colors.length]),
               ),
@@ -556,7 +560,7 @@ class _JobManagementState extends State<JobManagement> {
 
     return Card(
       color: (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-          .withOpacity(0.9),
+          .withValues(alpha: 0.9),
       elevation: 3,
       margin: const EdgeInsets.symmetric(vertical: 8),
       shape: RoundedRectangleBorder(
@@ -596,8 +600,8 @@ class _JobManagementState extends State<JobManagement> {
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
                       color: isActive
-                          ? Colors.green.withOpacity(0.1)
-                          : Colors.red.withOpacity(0.1),
+                          ? Colors.green.withValues(alpha: 0.1)
+                          : Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: isActive ? Colors.green : Colors.red,
@@ -615,6 +619,21 @@ class _JobManagementState extends State<JobManagement> {
                   ),
                 ],
               ),
+              if (job['created_by_user'] != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    "Created by: ${job['created_by_user']['name'] ?? job['created_by_user']['email'] ?? 'Unknown'}",
+                    style: TextStyle(
+                      color: themeProvider.isDarkMode
+                          ? Colors.grey.shade400
+                          : Colors.black54,
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               const SizedBox(height: 8),
 
               // Job info chips
@@ -625,26 +644,26 @@ class _JobManagementState extends State<JobManagement> {
                   if (job['category'] != null && job['category'].isNotEmpty)
                     Chip(
                       label: Text(job['category']),
-                      backgroundColor: Colors.blue.withOpacity(0.1),
+                      backgroundColor: Colors.blue.withValues(alpha: 0.1),
                       side: BorderSide(color: Colors.blue, width: 0.5),
                     ),
                   if (job['min_experience'] != null)
                     Chip(
                       label: Text("${job['min_experience']} yrs exp"),
-                      backgroundColor: Colors.orange.withOpacity(0.1),
+                      backgroundColor: Colors.orange.withValues(alpha: 0.1),
                       side: BorderSide(color: Colors.orange, width: 0.5),
                     ),
                   if (job['vacancy'] != null && job['vacancy'] > 1)
                     Chip(
                       label: Text("${job['vacancy']} vacancies"),
-                      backgroundColor: Colors.purple.withOpacity(0.1),
+                      backgroundColor: Colors.purple.withValues(alpha: 0.1),
                       side: BorderSide(color: Colors.purple, width: 0.5),
                     ),
                   if (job['application_count'] != null &&
                       job['application_count'] > 0)
                     Chip(
                       label: Text("${job['application_count']} applications"),
-                      backgroundColor: Colors.teal.withOpacity(0.1),
+                      backgroundColor: Colors.teal.withValues(alpha: 0.1),
                       side: BorderSide(color: Colors.teal, width: 0.5),
                     ),
                 ],
@@ -764,7 +783,7 @@ class _JobManagementState extends State<JobManagement> {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      color: Colors.black.withOpacity(0.05),
+      color: Colors.black.withValues(alpha: 0.05),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -871,8 +890,8 @@ class _JobManagementState extends State<JobManagement> {
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: themeProvider.isDarkMode
-                                  ? Colors.black.withOpacity(0.6)
-                                  : Colors.white.withOpacity(0.7),
+                                  ? Colors.black.withValues(alpha: 0.6)
+                                  : Colors.white.withValues(alpha: 0.7),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Column(
@@ -1166,13 +1185,42 @@ class _JobFormDialogState extends State<JobFormDialog>
   String jobSummary = "";
   TextEditingController responsibilitiesController = TextEditingController();
   TextEditingController qualificationsController = TextEditingController();
+  String companyName = "";
+  String jobLocation = "";
   String companyDetails = "";
   String category = "";
   final skillsController = TextEditingController();
   final minExpController = TextEditingController();
+  // Listing fields (shown on landing page explore section)
+  String company = "";
+  String location = "";
+  String employmentType = "Full Time";
+  String salaryCurrency = "ZAR";
+  String salaryPeriod = "monthly";
+  final TextEditingController salaryMinController = TextEditingController();
+  final TextEditingController salaryMaxController = TextEditingController();
+  final salaryRangeController = TextEditingController();
+  final applicationDeadlineController = TextEditingController();
+  final bannerController = TextEditingController();
   List<Map<String, dynamic>> questions = [];
+  Map<String, int> weightings = {
+    "cv": 60,
+    "assessment": 40,
+    "interview": 0,
+    "references": 0,
+  };
+  List<Map<String, dynamic>> knockoutRules = [];
+  String? weightingsError;
   late TabController _tabController;
   final AdminService admin = AdminService();
+  bool _isGeneratingWithAI = false;
+  static const List<String> employmentTypes = [
+    "Full Time",
+    "Part Time",
+    "Contract",
+    "Remote",
+    "Internship",
+  ];
 
   @override
   void initState() {
@@ -1186,17 +1234,86 @@ class _JobFormDialogState extends State<JobFormDialog>
         (widget.job?['responsibilities'] ?? []).join(", ");
     qualificationsController.text =
         (widget.job?['qualifications'] ?? []).join(", ");
+    companyName = widget.job?['company'] ?? '';
+    jobLocation = widget.job?['location'] ?? '';
     companyDetails = widget.job?['company_details'] ?? '';
+    salaryCurrency = widget.job?['salary_currency'] ?? 'ZAR';
+    salaryMinController.text = (widget.job?['salary_min'] ?? '').toString();
+    salaryMaxController.text = (widget.job?['salary_max'] ?? '').toString();
+    salaryPeriod = widget.job?['salary_period'] ?? 'monthly';
     category = widget.job?['category'] ?? '';
+    company = widget.job?['company']?.toString() ?? '';
+    location = widget.job?['location']?.toString() ?? '';
+    employmentType = widget.job?['employment_type']?.toString() ??
+        widget.job?['type']?.toString() ??
+        "Full Time";
+    if (!employmentTypes.contains(employmentType)) employmentType = "Full Time";
+    salaryRangeController.text = widget.job?['salary_range']?.toString() ??
+        widget.job?['salary']?.toString() ??
+        '';
+    final deadline =
+        widget.job?['application_deadline'] ?? widget.job?['deadline'];
+    applicationDeadlineController.text = deadline?.toString() ?? '';
+    bannerController.text = widget.job?['banner']?.toString() ??
+        widget.job?['company_logo']?.toString() ??
+        '';
 
     if (widget.job != null &&
         widget.job!['assessment_pack'] != null &&
         widget.job!['assessment_pack']['questions'] != null) {
-      questions = List<Map<String, dynamic>>.from(
-          widget.job!['assessment_pack']['questions']);
+      questions =
+          _normalizeQuestions(widget.job!['assessment_pack']['questions']);
     }
 
     _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    responsibilitiesController.dispose();
+    qualificationsController.dispose();
+    skillsController.dispose();
+    minExpController.dispose();
+    salaryMinController.dispose();
+    salaryMaxController.dispose();
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  List<Map<String, dynamic>> _normalizeQuestions(dynamic raw) {
+    if (raw == null) return [];
+
+    final List<dynamic> items;
+    if (raw is List) {
+      items = raw;
+    } else {
+      return [];
+    }
+
+    final normalized = <Map<String, dynamic>>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      final map = Map<String, dynamic>.from(item);
+
+      final optsRaw = map['options'];
+      final options = (optsRaw is List)
+          ? optsRaw.map((e) => e?.toString() ?? '').toList()
+          : <String>['', '', '', ''];
+      while (options.length < 4) {
+        options.add('');
+      }
+
+      normalized.add({
+        'question': (map['question'] ?? '').toString(),
+        'options': options.take(4).toList(),
+        'answer': (map['answer'] ?? map['correct_answer'] ?? 0) is num
+            ? ((map['answer'] ?? map['correct_answer'] ?? 0) as num).toInt()
+            : 0,
+        'weight':
+            (map['weight'] ?? 1) is num ? (map['weight'] as num).toInt() : 1,
+      });
+    }
+    return normalized;
   }
 
   void addQuestion() {
@@ -1210,8 +1327,67 @@ class _JobFormDialogState extends State<JobFormDialog>
     });
   }
 
+  Future<void> _generateWithAI() async {
+    if (title.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please enter a job title first")),
+      );
+      return;
+    }
+
+    setState(() => _isGeneratingWithAI = true);
+
+    try {
+      final jobDetails = await AIService.generateJobDetails(title.trim());
+
+      setState(() {
+        description = jobDetails['description'] ?? '';
+        responsibilitiesController.text =
+            (jobDetails['responsibilities'] as List?)?.join(', ') ?? '';
+        qualificationsController.text =
+            (jobDetails['qualifications'] as List?)?.join(', ') ?? '';
+        category = jobDetails['category'] ?? '';
+        skillsController.text =
+            (jobDetails['required_skills'] as List?)?.join(', ') ?? '';
+        minExpController.text = jobDetails['min_experience']?.toString() ?? '0';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Job details generated successfully!"),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error generating job details: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() => _isGeneratingWithAI = false);
+    }
+  }
+
   Future<void> saveJob() async {
-    if (!_formKey.currentState!.validate()) return;
+    final formState = _formKey.currentState;
+    if (formState == null || !formState.validate()) return;
+
+    final totalWeight = weightings.values.fold<int>(0, (sum, v) => sum + v);
+    if (totalWeight != 100) {
+      setState(() {
+        weightingsError = "Weightings must total 100%";
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Weightings must total 100%")),
+      );
+      return;
+    } else {
+      setState(() {
+        weightingsError = null;
+      });
+    }
 
     final skills = skillsController.text
         .split(",")
@@ -1231,19 +1407,32 @@ class _JobFormDialogState extends State<JobFormDialog>
         .where((e) => e.isNotEmpty)
         .toList();
 
+    final normalizedQuestions = _normalizeQuestions(questions);
+
+    final deadlineStr = applicationDeadlineController.text.trim();
     final jobData = {
-      'title': title,
-      'description': description,
-      'job_summary': jobSummary,
+      'title': title.trim(),
+      'description': description.trim(),
+      'job_summary': jobSummary.trim(),
       'responsibilities': responsibilities,
       'qualifications': qualifications,
-      'company_details': companyDetails,
-      'category': category,
+      'company_details': companyDetails.trim(),
+      'category': category.trim(),
       'required_skills': skills,
-      'min_experience': double.tryParse(minExpController.text) ?? 0,
+      'min_experience':
+          double.tryParse(minExpController.text.toString().trim()) ?? 0,
+      'vacancy': 1,
       'weightings': {'cv': 60, 'assessment': 40},
+      'company': company.trim(),
+      'location': location.trim(),
+      'employment_type': employmentType,
+      'salary_range': salaryRangeController.text.trim(),
+      'application_deadline': deadlineStr.isEmpty ? null : deadlineStr,
+      'banner': bannerController.text.trim().isEmpty
+          ? null
+          : bannerController.text.trim(),
       'assessment_pack': {
-        'questions': questions.map((q) {
+        'questions': normalizedQuestions.map((q) {
           return {
             "question": q["question"],
             "options": q["options"],
@@ -1273,8 +1462,10 @@ class _JobFormDialogState extends State<JobFormDialog>
       widget.onSaved();
       Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error saving job: $e")));
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error saving job: $msg")),
+      );
     }
   }
 
@@ -1291,7 +1482,7 @@ class _JobFormDialogState extends State<JobFormDialog>
           color: (themeProvider.isDarkMode
                   ? const Color(0xFF14131E)
                   : Colors.white)
-              .withOpacity(0.95),
+              .withValues(alpha: 0.95),
           borderRadius: BorderRadius.circular(24),
         ),
         child: Column(
@@ -1321,13 +1512,47 @@ class _JobFormDialogState extends State<JobFormDialog>
                       child: SingleChildScrollView(
                         child: Column(
                           children: [
-                            CustomTextField(
-                              label: "Title",
-                              initialValue: title,
-                              hintText: "Enter job title",
-                              onChanged: (v) => title = v,
-                              validator: (v) =>
-                                  v == null || v.isEmpty ? "Enter title" : null,
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: CustomTextField(
+                                    label: "Title",
+                                    initialValue: title,
+                                    hintText: "Enter job title",
+                                    onChanged: (v) => title = v,
+                                    validator: (v) => v == null || v.isEmpty
+                                        ? "Enter title"
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.blue),
+                                  ),
+                                  child: IconButton(
+                                    icon: _isGeneratingWithAI
+                                        ? const SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              valueColor:
+                                                  AlwaysStoppedAnimation<Color>(
+                                                      Colors.blue),
+                                            ),
+                                          )
+                                        : const Icon(Icons.auto_awesome,
+                                            color: Colors.blue),
+                                    onPressed: _isGeneratingWithAI
+                                        ? null
+                                        : _generateWithAI,
+                                    tooltip: "Generate with AI",
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
@@ -1342,14 +1567,6 @@ class _JobFormDialogState extends State<JobFormDialog>
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
-                              label: "Job Summary",
-                              initialValue: jobSummary,
-                              hintText: "Brief job summary",
-                              maxLines: 3,
-                              onChanged: (v) => jobSummary = v,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
                               label: "Responsibilities",
                               controller: responsibilitiesController,
                               hintText: "Comma separated list",
@@ -1359,6 +1576,71 @@ class _JobFormDialogState extends State<JobFormDialog>
                               label: "Qualifications",
                               controller: qualificationsController,
                               hintText: "Comma separated list",
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Company",
+                              initialValue: companyName,
+                              hintText: "Company name",
+                              onChanged: (v) => companyName = v,
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Location",
+                              initialValue: jobLocation,
+                              hintText: "City, Country or Remote",
+                              onChanged: (v) => jobLocation = v,
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: CustomTextField(
+                                    label: "Salary Min",
+                                    controller: salaryMinController,
+                                    inputType: TextInputType.number,
+                                    hintText: "e.g. 30000",
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: CustomTextField(
+                                    label: "Salary Max",
+                                    controller: salaryMaxController,
+                                    inputType: TextInputType.number,
+                                    hintText: "e.g. 45000",
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Salary Currency",
+                              initialValue: salaryCurrency,
+                              hintText: "ZAR, USD, EUR",
+                              onChanged: (v) =>
+                                  salaryCurrency = v.isEmpty ? "ZAR" : v,
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              value: salaryPeriod,
+                              decoration: const InputDecoration(
+                                labelText: "Salary Period",
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: "monthly",
+                                  child: Text("Per Month"),
+                                ),
+                                DropdownMenuItem(
+                                  value: "yearly",
+                                  child: Text("Per Year"),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setState(() => salaryPeriod = value);
+                              },
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
@@ -1377,6 +1659,54 @@ class _JobFormDialogState extends State<JobFormDialog>
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
+                              label: "Company (listing)",
+                              initialValue: company,
+                              hintText: "Company name shown on job cards",
+                              onChanged: (v) => company = v,
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Location",
+                              initialValue: location,
+                              hintText: "e.g. Johannesburg, Cape Town, Remote",
+                              onChanged: (v) => location = v,
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              initialValue: employmentType,
+                              decoration: const InputDecoration(
+                                labelText: "Employment Type",
+                                border: OutlineInputBorder(),
+                              ),
+                              items: employmentTypes
+                                  .map((e) => DropdownMenuItem(
+                                        value: e,
+                                        child: Text(e),
+                                      ))
+                                  .toList(),
+                              onChanged: (v) => setState(
+                                  () => employmentType = v ?? "Full Time"),
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Salary Range",
+                              controller: salaryRangeController,
+                              hintText: "e.g. R850k - R1.2m",
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Application Deadline",
+                              controller: applicationDeadlineController,
+                              hintText: "YYYY-MM-DD (e.g. 2025-03-15)",
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Company Logo URL (optional)",
+                              controller: bannerController,
+                              hintText: "Image URL for job card",
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
                               label: "Required Skills",
                               controller: skillsController,
                               hintText: "Comma separated skills",
@@ -1386,6 +1716,72 @@ class _JobFormDialogState extends State<JobFormDialog>
                               label: "Minimum Experience (years)",
                               controller: minExpController,
                               inputType: TextInputType.number,
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              initialValue: employmentType,
+                              decoration: const InputDecoration(
+                                labelText: "Employment Type",
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: "full_time",
+                                  child: Text("Full Time"),
+                                ),
+                                DropdownMenuItem(
+                                  value: "part_time",
+                                  child: Text("Part Time"),
+                                ),
+                                DropdownMenuItem(
+                                  value: "contract",
+                                  child: Text("Contract"),
+                                ),
+                                DropdownMenuItem(
+                                  value: "internship",
+                                  child: Text("Internship"),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setState(() {
+                                  employmentType = value;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 24),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                "Evaluation Weightings",
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            WeightingConfigurationWidget(
+                              weightings: weightings,
+                              errorText: weightingsError,
+                              onChanged: (updated) {
+                                setState(() {
+                                  weightings = updated;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 24),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                "Knockout Rules",
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            KnockoutRulesBuilder(
+                              rules: knockoutRules,
+                              onChanged: (updated) {
+                                setState(() {
+                                  knockoutRules = updated;
+                                });
+                              },
                             ),
                           ],
                         ),
@@ -1407,7 +1803,7 @@ class _JobFormDialogState extends State<JobFormDialog>
                                 color: (themeProvider.isDarkMode
                                         ? const Color(0xFF14131E)
                                         : Colors.white)
-                                    .withOpacity(0.9),
+                                    .withValues(alpha: 0.9),
                                 margin: const EdgeInsets.symmetric(vertical: 8),
                                 child: Padding(
                                   padding: const EdgeInsets.all(12),

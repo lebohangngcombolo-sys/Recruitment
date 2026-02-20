@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 import secrets
 import string
 import logging
+logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -25,8 +26,16 @@ class AuthService:
 
     @staticmethod
     def verify_password(password: str, hashed_password: str) -> bool:
-        """Verify a plain-text password against a hash."""
-        return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+        """Verify a plain-text password against a bcrypt hash. Returns False if hash is missing or invalid."""
+        if not hashed_password or not isinstance(hashed_password, str):
+            return False
+        hashed_password = hashed_password.strip()
+        if not hashed_password.startswith(('$2a$', '$2b$', '$2y$')):
+            return False
+        try:
+            return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+        except (ValueError, TypeError):
+            return False
 
     @staticmethod
     def create_user(email: str, password: str) -> User:
@@ -71,7 +80,11 @@ class AuthService:
         token = jwt.encode(payload, current_app.config['JWT_SECRET_KEY'], algorithm='HS256')
         if isinstance(token, bytes):
             token = token.decode('utf-8')
-        redis_client.setex(f"password_reset:{token}", 3600, user_id)
+        try:
+            redis_client.setex(f"password_reset:{token}", 3600, user_id)
+        except Exception as e:
+            current_app.logger.error(f"Redis error storing password reset token: {e}", exc_info=True)
+            raise RuntimeError("Password reset temporarily unavailable")
         return token
 
     @staticmethod
@@ -87,9 +100,15 @@ class AuthService:
             redis_client.delete(f"password_reset:{token}")
             return int(user_id)
         except jwt.ExpiredSignatureError:
-            redis_client.delete(f"password_reset:{token}")
+            try:
+                redis_client.delete(f"password_reset:{token}")
+            except Exception:
+                pass
             return None
         except jwt.InvalidTokenError:
+            return None
+        except Exception as e:
+            current_app.logger.error(f"Redis error verifying password reset token: {e}", exc_info=True)
             return None
 
     @staticmethod

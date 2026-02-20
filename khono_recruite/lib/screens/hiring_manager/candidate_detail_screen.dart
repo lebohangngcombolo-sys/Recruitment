@@ -1,7 +1,6 @@
 import 'dart:html' as html; // For web download
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -12,6 +11,7 @@ import '../../services/admin_service.dart';
 import '../../widgets/custom_button.dart';
 import 'interview_schedule_page.dart';
 import 'package:http/http.dart' as http;
+import '../../utils/api_endpoints.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 
@@ -95,7 +95,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
           await admin.getCandidateInterviews(widget.candidateId);
       interviews = List<Map<String, dynamic>>.from(interviewData);
     } catch (e) {
-      debugPrint("Error fetching candidate details: $e");
+      print("Error fetching candidate details: $e");
       errorMessage = "Failed to load data: $e";
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -118,8 +118,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
       }
 
       final response = await http.get(
-        Uri.parse(
-            'http://127.0.0.1:5000/api/admin/applications/$applicationId/download-cv'),
+        Uri.parse('${ApiEndpoints.adminBase}/applications/$applicationId/download-cv'),
         headers: {
           'Authorization': 'Bearer $jwtToken',
           'Content-Type': 'application/json',
@@ -146,7 +145,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
       }
 
       if (kIsWeb) {
-        final anchor = html.AnchorElement(href: cvUrl)
+        html.AnchorElement(href: cvUrl)
           ..setAttribute("download", "cv_$fullName.pdf")
           ..click();
 
@@ -194,7 +193,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
               onPressed: () => Navigator.pop(context),
             ),
             title: Text(candidateData?['full_name'] ?? "Candidate Details"),
-            backgroundColor: Colors.black87.withOpacity(0.8),
+            backgroundColor: Colors.black87.withValues(alpha: 0.8),
             elevation: 0,
           ),
           body: loading
@@ -392,7 +391,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
             color: (themeProvider.isDarkMode
                     ? const Color(0xFF14131E)
                     : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
                 color: themeProvider.isDarkMode ? Colors.white24 : Colors.white,
@@ -489,7 +488,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
     return Drawer(
       backgroundColor:
           (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-              .withOpacity(0.9),
+              .withValues(alpha: 0.9),
       child: SafeArea(
         child: ListView(
           padding: EdgeInsets.zero,

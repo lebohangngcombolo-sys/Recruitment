@@ -1,6 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart'
+    show File;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,27 +13,33 @@ class AuthService {
   static const _storage = FlutterSecureStorage();
 
   // ----------------- REGISTER -----------------
+  /// Returns {status: int, body: Map} so register_screen can show errors and navigate to verify-email on 201.
   static Future<Map<String, dynamic>> register(
     Map<String, dynamic> data,
   ) async {
-    // Only keep email and password
     final requestData = {
       "email": data["email"],
       "password": data["password"],
     };
 
-    final response = await http.post(
-      Uri.parse(ApiEndpoints.register),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode(requestData),
-    );
-
-    final body = jsonDecode(response.body);
-
-    return {
-      "status": response.statusCode, // HTTP status code
-      "body": body, // decoded response
-    };
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.register),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(requestData),
+      );
+      Map<String, dynamic> body = {};
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) body = decoded;
+      } catch (_) {}
+      return {"status": response.statusCode, "body": body};
+    } catch (e) {
+      return {
+        "status": 0,
+        "body": {"error": "Network or parsing error: $e"}
+      };
+    }
   }
 
   // ----------------- VERIFY EMAIL -----------------
@@ -43,12 +51,44 @@ class AuthService {
       body: jsonEncode(data),
     );
 
-    final decoded = jsonDecode(response.body);
+    Map<String, dynamic> decoded = {};
+    try {
+      final d = jsonDecode(response.body);
+      if (d is Map<String, dynamic>) decoded = d;
+    } catch (_) {}
 
     if (decoded.containsKey('access_token')) {
-      await saveToken(decoded['access_token']);
+      await saveToken(decoded['access_token'].toString());
     }
     return decoded;
+  }
+
+  // ----------------- RESEND VERIFICATION CODE -----------------
+  /// POST /api/auth/resend-verification. Returns { message } or { error }. Optionally { code } if server includes it (e.g. test mode).
+  static Future<Map<String, dynamic>> resendVerificationCode(
+      String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.resendVerification),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"email": email.trim().toLowerCase()}),
+      );
+      Map<String, dynamic> decoded = {};
+      try {
+        final d = jsonDecode(response.body);
+        if (d is Map<String, dynamic>) decoded = d;
+      } catch (_) {}
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return decoded;
+      }
+      return {
+        "error": decoded["error"] ??
+            decoded["message"] ??
+            "Failed to resend code (${response.statusCode})",
+      };
+    } catch (e) {
+      return {"error": "Network or parsing error: $e"};
+    }
   }
 
   // Example: fetch stored user info from shared preferences
@@ -65,42 +105,38 @@ class AuthService {
     String email,
     String password,
   ) async {
-    final response = await http.post(
-      Uri.parse(ApiEndpoints.login),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'password': password}),
-    );
-
-    final data = jsonDecode(response.body);
-
-    if (response.statusCode == 200) {
-      // 🆕 Check if MFA is required
-      if (data['mfa_required'] == true) {
-        // 🆕 FIX: Convert user_id to string to prevent type errors
-        final userId = data['user_id']?.toString() ?? '';
-
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.login),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'password': password}),
+      );
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        if (data['mfa_required'] == true) {
+          final userId = data['user_id']?.toString() ?? '';
+          return {
+            'ok': true,
+            'mfa_required': true,
+            'mfa_session_token': data['mfa_session_token'],
+            'user_id': userId,
+            'message': data['message'],
+          };
+        }
+        await saveToken(data['access_token']);
+        await saveUserInfo(data['user']);
         return {
-          'success': true,
-          'mfa_required': true,
-          'mfa_session_token': data['mfa_session_token'],
-          'user_id': userId, // 🆕 Now guaranteed to be string
-          'message': data['message'],
+          'ok': true,
+          'access_token': data['access_token'],
+          'refresh_token': data['refresh_token'],
+          'role': data['user']['role'],
+          'dashboard': data['dashboard'],
         };
+      } else {
+        return {'ok': false, 'error': data['error'] ?? 'Login failed'};
       }
-
-      // 🆕 Normal login without MFA
-      await saveToken(data['access_token']);
-      await saveUserInfo(data['user']);
-
-      return {
-        'success': true,
-        'access_token': data['access_token'],
-        'refresh_token': data['refresh_token'],
-        'role': data['user']['role'],
-        'dashboard': data['dashboard'],
-      };
-    } else {
-      return {'success': false, 'message': data['error'] ?? 'Login failed'};
+    } catch (e) {
+      return {'ok': false, 'error': 'Network or parsing error: $e'};
     }
   }
 
@@ -316,9 +352,9 @@ class AuthService {
       });
 
       // --------------------
-      // Optional CV upload
+      // Optional CV upload (fromPath not supported on web)
       // --------------------
-      if (cvFile != null) {
+      if (cvFile != null && !kIsWeb) {
         request.files.add(
           await http.MultipartFile.fromPath('cv', cvFile.path),
         );
@@ -381,35 +417,67 @@ class AuthService {
   }
 
   // ----------------- TOKEN HELPERS -----------------
+  // On web, FlutterSecureStorage is not supported and can throw; use SharedPreferences only.
   static Future<void> saveTokens(
       String accessToken, String? refreshToken) async {
-    await _storage.write(key: 'access_token', value: accessToken);
-    if (refreshToken != null) {
-      await _storage.write(key: 'refresh_token', value: refreshToken);
+    if (!kIsWeb) {
+      await _storage.write(key: 'access_token', value: accessToken);
+      if (refreshToken != null) {
+        await _storage.write(key: 'refresh_token', value: refreshToken);
+      }
     }
+    await _persistTokensToPrefs(accessToken, refreshToken);
   }
 
   static Future<String?> getAccessToken() async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('access_token') ?? prefs.getString('token');
+    }
     return await _storage.read(key: 'access_token');
   }
 
   static Future<String?> getRefreshToken() async {
+    if (kIsWeb) {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('refresh_token');
+    }
     return await _storage.read(key: 'refresh_token');
   }
 
   static Future<void> deleteTokens() async {
-    await _storage.delete(key: 'access_token');
-    await _storage.delete(key: 'refresh_token');
+    if (!kIsWeb) {
+      await _storage.delete(key: 'access_token');
+      await _storage.delete(key: 'refresh_token');
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('access_token');
+    await prefs.remove('refresh_token');
+    await prefs.remove('token');
   }
 
 // ----------------- SAVE TOKEN -----------------
   static Future<void> saveToken(String token) async {
-    await _storage.write(key: 'access_token', value: token);
+    if (!kIsWeb) {
+      await _storage.write(key: 'access_token', value: token);
+    }
+    await _persistTokensToPrefs(token, null);
   }
 
   // ----------------- AUTHORIZED REQUEST HELPERS -----------------
+  static http.Response _missingTokenResponse() {
+    return http.Response(
+      jsonEncode({"error": "Missing access token"}),
+      401,
+      headers: {"Content-Type": "application/json"},
+    );
+  }
+
   static Future<http.Response> authorizedGet(String url) async {
     final token = await getAccessToken();
+    if (token == null || token.isEmpty) {
+      return _missingTokenResponse();
+    }
     return http.get(
       Uri.parse(url),
       headers: {
@@ -422,6 +490,9 @@ class AuthService {
   static Future<http.Response> authorizedPost(
       String url, Map<String, dynamic> body) async {
     final token = await getAccessToken();
+    if (token == null || token.isEmpty) {
+      return _missingTokenResponse();
+    }
     return http.post(
       Uri.parse(url),
       headers: {
@@ -435,6 +506,9 @@ class AuthService {
   static Future<http.Response> authorizedPut(
       String url, Map<String, dynamic> data) async {
     final token = await getAccessToken();
+    if (token == null || token.isEmpty) {
+      return _missingTokenResponse();
+    }
     return http.put(
       Uri.parse(url),
       headers: {
@@ -447,6 +521,9 @@ class AuthService {
 
   static Future<http.Response> authorizedDelete(String url) async {
     final token = await getAccessToken();
+    if (token == null || token.isEmpty) {
+      return _missingTokenResponse();
+    }
     return http.delete(
       Uri.parse(url),
       headers: {
@@ -501,6 +578,16 @@ class AuthService {
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('role', role);
+  }
+
+  static Future<void> _persistTokensToPrefs(
+      String accessToken, String? refreshToken) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('access_token', accessToken);
+    await prefs.setString('token', accessToken);
+    if (refreshToken != null) {
+      await prefs.setString('refresh_token', refreshToken);
+    }
   }
 
 // Retrieve stored role

@@ -1,4 +1,4 @@
-from flask import request, jsonify, current_app, redirect, url_for, make_response
+from flask import request, jsonify, current_app, redirect, url_for, make_response, render_template
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -7,7 +7,7 @@ from flask_jwt_extended import (
     verify_jwt_in_request, 
     get_jwt_identity
 )
-from app.extensions import db, oauth, limiter, validator
+from app.extensions import db, oauth, limiter, validator, mail
 from app.models import User, VerificationCode, OAuthConnection, Candidate
 from app.services.auth_service import AuthService
 from app.services.email_service import EmailService
@@ -16,29 +16,22 @@ from app.services.file_text_extractor import extract_text_from_file
 from app.utils.decorators import role_required
 from datetime import datetime, timedelta
 import secrets
-import jwt  # ← ADD THIS IMPORT
+import jwt  
 from app.utils.enrollment_schema import EnrollmentSchema
 from app.services.enrollment_service import EnrollmentService
 from app.services.ai_parser_service import analyse_resume_gemini
 from app.services.ai_cv_parser import AIParser
 from marshmallow import ValidationError
 from werkzeug.utils import secure_filename
+from sqlalchemy.exc import OperationalError
 import os
-
-
-
-
-
-
-
-
 
 # ------------------- ROLE DASHBOARD MAP -------------------
 ROLE_DASHBOARD_MAP = {
     "admin": "/api/dashboard/admin",
     "hiring_manager": "/api/dashboard/hiring-manager",
     "candidate": "/dashboard/candidate",
-    "hr": "/api/dashboard/hr"   # ← ADDED
+    "hr": "/api/dashboard/hr"   
 }
 
 # OAuth providers config
@@ -65,6 +58,14 @@ OAUTH_PROVIDERS = {
 def init_auth_routes(app):
 
     enrollment_schema = EnrollmentSchema()
+
+    def _email_configured() -> bool:
+        sender = current_app.config.get("MAIL_DEFAULT_SENDER") or current_app.config.get("MAIL_USERNAME")
+        if not sender:
+            return False
+        if (current_app.config.get("SENDGRID_API_KEY") or "").strip():
+            return True
+        return bool(current_app.config.get("MAIL_USERNAME") and current_app.config.get("MAIL_PASSWORD"))
     # ------------------- Initialize OAuth -------------------
     if not hasattr(app, "oauth_initialized"):
         oauth.init_app(app)
@@ -106,11 +107,11 @@ def init_auth_routes(app):
                 return jsonify({"error": "No SSO token provided"}), 401
         
             # Verify the token using our secret
-            user_data = jwt.decode(
-                token, 
-                current_app.config['SSO_JWT_SECRET'],  # Make sure this is in your config
-                algorithms=['HS256']
-            )
+            sso_secret = current_app.config.get('SSO_JWT_SECRET')
+            if not sso_secret:
+                current_app.logger.error("SSO_JWT_SECRET not configured")
+                return jsonify({"error": "SSO not configured"}), 500
+            user_data = jwt.decode(token, sso_secret, algorithms=['HS256'])
         
             # Get user info from token - FIXED: Use first_name and last_name
             email = user_data['email']
@@ -158,7 +159,7 @@ def init_auth_routes(app):
         
             # Redirect to frontend with tokens
             frontend_redirect = (
-                f"{current_app.config['FRONTEND_URL']}/oauth-callback"  # ← CHANGED THIS LINE
+                f"{current_app.config['FRONTEND_URL']}/oauth-callback"  
                 f"?access_token={access_token}&refresh_token={refresh_token}&role={user.role}"
             )
         
@@ -177,7 +178,7 @@ def init_auth_routes(app):
     # ------------------- LOGOUT -------------------
     @app.route("/api/auth/logout", methods=["POST"])
     @jwt_required()
-    @limiter.limit("20 per minute")  # Add this line
+    @limiter.limit("20 per minute")  
     def logout():
         try:
             response = jsonify({"message": "Successfully logged out"})
@@ -192,6 +193,8 @@ def init_auth_routes(app):
     @limiter.limit("10 per minute")
     def google_login():
         try:
+            if not current_app.config.get("GOOGLE_CLIENT_ID") or not current_app.config.get("GOOGLE_CLIENT_SECRET"):
+                return jsonify({"error": "Google OAuth not configured"}), 500
             redirect_uri = url_for("google_callback", _external=True)
             # For Flutter Web, navigate in same tab
             return oauth.google.authorize_redirect(redirect_uri)
@@ -203,6 +206,8 @@ def init_auth_routes(app):
     @limiter.limit("10 per minute")
     def google_callback():
         try:
+            if not current_app.config.get("GOOGLE_CLIENT_ID") or not current_app.config.get("GOOGLE_CLIENT_SECRET"):
+                return jsonify({"error": "Google OAuth not configured"}), 500
             oauth.google.authorize_access_token()
             user_info = oauth.google.get(OAUTH_PROVIDERS["google"]["userinfo"]["url"]).json()
         
@@ -219,6 +224,8 @@ def init_auth_routes(app):
     @limiter.limit("10 per minute")
     def github_login():
         try:
+            if not current_app.config.get("GITHUB_CLIENT_ID") or not current_app.config.get("GITHUB_CLIENT_SECRET"):
+                return jsonify({"error": "GitHub OAuth not configured"}), 500
             redirect_uri = url_for("github_callback", _external=True)
             return oauth.github.authorize_redirect(redirect_uri)
         except Exception as e:
@@ -229,6 +236,8 @@ def init_auth_routes(app):
     @limiter.limit("10 per minute")
     def github_callback():
         try:
+            if not current_app.config.get("GITHUB_CLIENT_ID") or not current_app.config.get("GITHUB_CLIENT_SECRET"):
+                return jsonify({"error": "GitHub OAuth not configured"}), 500
             oauth.github.authorize_access_token()
             user_info = oauth.github.get(OAUTH_PROVIDERS["github"]["userinfo"]["url"]).json()
             if not user_info.get("email"):
@@ -340,6 +349,27 @@ def init_auth_routes(app):
             except ValueError:
                 return jsonify({'error': 'User already exists'}), 409
 
+            if not _email_configured():
+                user.is_verified = True
+                db.session.commit()
+
+                additional_claims = {"role": user.role}
+                access_token = create_access_token(identity=str(user.id), additional_claims=additional_claims)
+                refresh_token = create_refresh_token(identity=str(user.id), additional_claims=additional_claims)
+                dashboard_url = "/enrollment" if user.role == "candidate" and not user.enrollment_completed \
+                    else ROLE_DASHBOARD_MAP.get(user.role, "/dashboard")
+
+                AuditService.log(user_id=user.id, action="register")
+                AuditService.log(user_id=user.id, action="email_verified")
+
+                return jsonify({
+                    'message': 'User registered successfully.',
+                    'access_token': access_token,
+                    'refresh_token': refresh_token,
+                    'user': user.to_dict(),
+                    'dashboard': dashboard_url
+                }), 201
+
             # Generate verification code
             code = f"{secrets.randbelow(1_000_000):06d}"
             expires_at = datetime.utcnow() + timedelta(minutes=30)
@@ -358,6 +388,7 @@ def init_auth_routes(app):
             db.session.add(verification_code)
             db.session.commit()
 
+            current_app.logger.info("Verification email queued for %s", email)
             EmailService.send_verification_email(email, code)
             AuditService.log(user_id=user.id, action="register")
 
@@ -373,9 +404,155 @@ def init_auth_routes(app):
             )
             return jsonify({'error': 'Internal server error'}), 500
 
+    # ------------------- TEST SEND VERIFICATION EMAIL (one-off; requires TEST_EMAIL_SECRET) -------------------
+    @app.route('/api/auth/test-send-verification-email', methods=['POST'])
+    def test_send_verification_email():
+        secret = current_app.config.get("TEST_EMAIL_SECRET")
+        if not secret or request.headers.get("X-Test-Email-Secret") != secret:
+            return jsonify({"error": "Forbidden"}), 403
+        data = request.get_json() or {}
+        email = (data.get("email") or "").strip().lower()
+        if not email:
+            return jsonify({"error": "Missing email"}), 400
+        if not _email_configured():
+            return jsonify({"error": "Mail not configured (MAIL_DEFAULT_SENDER + MAIL_* or SENDGRID_API_KEY)"}), 503
+        app_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/") or "http://localhost:3000"
+        code = "123456"
+        try:
+            html = render_template(
+                "email_templates/verification_email.html",
+                verification_code=code,
+                app_url=app_url,
+            )
+        except Exception:
+            html = f"Your verification code is: {code}. Enter it at {app_url}/verify-email"
+        try:
+            from app.services.email_service import send_email_sync
+            send_email_sync(
+                current_app._get_current_object(),
+                "Verify Your Email Address (Test)",
+                [email],
+                html,
+                f"Your verification code is: {code}",
+            )
+            return jsonify({"message": f"Test verification email sent to {email}", "code": code}), 200
+        except Exception as e:
+            current_app.logger.exception("Test verification email failed")
+            return jsonify({"error": str(e)}), 500
+
+    # ------------------- TEST EMAIL (async or sync; sync=1 returns success/error in response for Render debugging) -------------------
+    @app.route('/api/auth/test-email', methods=['POST'])
+    def test_email():
+        """Send a simple test email. ?sync=1 sends in-request and returns success or error in JSON (avoids eventlet thread logging)."""
+        secret = current_app.config.get("TEST_EMAIL_SECRET")
+        if not secret or request.headers.get("X-Test-Email-Secret") != secret:
+            return jsonify({"error": "Forbidden"}), 403
+        data = request.get_json() or {}
+        email = (data.get("email") or "").strip().lower()
+        if not email:
+            return jsonify({"error": "Missing email"}), 400
+        if not _email_configured():
+            return jsonify({"error": "Mail not configured (MAIL_DEFAULT_SENDER + MAIL_* or SENDGRID_API_KEY)"}), 503
+
+        sync = request.args.get("sync", "").lower() in ("1", "true", "yes") or (data.get("sync") is True or data.get("sync") == "1")
+        if sync:
+            current_app.logger.info("Test email (sync) started for %s", email)
+            # Send synchronously (SendGrid API or SMTP with MAIL_TIMEOUT). Run in thread so we can cap wait at 25s.
+            from app.services.email_service import send_email_sync
+            from threading import Thread
+            sync_result = []
+            sync_error = []
+            app_obj = current_app._get_current_object()
+            recipient = email
+
+            def _do_send():
+                try:
+                    with app_obj.app_context():
+                        send_email_sync(
+                            app_obj,
+                            "Test from Render",
+                            [recipient],
+                            "<p>This is a test email from your recruitment API.</p>",
+                            "This is a test email from your recruitment API.",
+                        )
+                    sync_result.append(True)
+                except Exception as e:
+                    sync_error.append(e)
+
+            t = Thread(target=_do_send)
+            t.daemon = True
+            t.start()
+            try:
+                t.join(timeout=25)
+            except Exception as join_err:
+                # Under gunicorn+eventlet, join(timeout=25) raises eventlet.timeout.Timeout after 25s
+                # instead of returning; treat as timeout and return 504.
+                if join_err.__class__.__name__ == "Timeout" or "timeout" in (join_err.__class__.__module__ or "").lower():
+                    current_app.logger.warning("Test email (sync) timed out after 25s for %s", email)
+                    return jsonify({
+                        "error": "SMTP send timed out after 25s. Try: GET /api/public/healthz to wake the instance, then retry.",
+                        "type": "Timeout"
+                    }), 504
+                raise
+            if t.is_alive():
+                current_app.logger.warning("Test email (sync) timed out after 25s for %s", email)
+                return jsonify({
+                    "error": "SMTP send timed out after 25s. Try: GET /api/public/healthz to wake the instance, then retry.",
+                    "type": "Timeout"
+                }), 504
+            if sync_error:
+                e = sync_error[0]
+                current_app.logger.exception("Test email failed (sync)")
+                err_msg = str(e) if e else "Unknown error in thread"
+                err_type = type(e).__name__ if e else "Exception"
+                return jsonify({"error": err_msg, "type": err_type}), 500
+            current_app.logger.info("Test email sent successfully to %s (sync)", email)
+            return jsonify({"message": "Email sent successfully", "to": email}), 200
+
+        current_app.logger.info("Test email queued for %s (check logs for success/failure)", email)
+        EmailService.send_async_email(
+            subject="Test from Render",
+            recipients=[email],
+            html_body="<p>This is a test email from your recruitment API.</p>",
+            text_body="This is a test email from your recruitment API.",
+        )
+        return jsonify({"message": "Test email queued; check API logs for 'Email sent successfully' or 'Failed to send email'"}), 200
+
+    # ------------------- RESEND VERIFICATION CODE -------------------
+    @app.route('/api/auth/resend-verification', methods=['POST'])
+    @limiter.limit("5 per 15 minutes")
+    def resend_verification():
+        """Resend verification email. If X-Test-Email-Secret matches, response includes code for testing."""
+        data = request.get_json() or {}
+        email = (data.get("email") or "").strip().lower()
+        if not email:
+            return jsonify({"error": "Email is required"}), 400
+        user = User.query.filter(db.func.lower(User.email) == email).first()
+        if not user:
+            return jsonify({"error": "No account found for this email"}), 404
+        if user.is_verified:
+            return jsonify({"message": "Email already verified. You can log in."}), 200
+        if not _email_configured():
+            return jsonify({"error": "Email service not configured. Please contact support."}), 503
+
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        expires_at = datetime.utcnow() + timedelta(minutes=30)
+        VerificationCode.query.filter_by(email=email, is_used=False).delete()
+        verification_code = VerificationCode(email=email, code=code, expires_at=expires_at)
+        db.session.add(verification_code)
+        db.session.commit()
+
+        EmailService.send_verification_email(email, code)
+        current_app.logger.info("Resent verification email to %s", email)
+
+        payload = {"message": "Verification code sent. Check your email (and spam folder)."}
+        if current_app.config.get("TEST_EMAIL_SECRET") and request.headers.get("X-Test-Email-Secret") == current_app.config.get("TEST_EMAIL_SECRET"):
+            payload["code"] = code
+        return jsonify(payload), 200
+
     # ------------------- VERIFY EMAIL -------------------
     @app.route('/api/auth/verify', methods=['POST'])
-    @limiter.limit("10 per minute")  # Add this line
+    @limiter.limit("10 per minute")
     def verify_email():
         try:
             data = request.get_json()
@@ -441,12 +618,17 @@ def init_auth_routes(app):
 
             # ---- Handle unverified user ----
             if not user.is_verified:
-                AuditService.log(user_id=user.id, action="login_attempt_unverified")
-                return jsonify({
-                    'message': 'Please verify your email before continuing.',
-                    'redirect': '/verify-email',
-                    'verified': False
-                }), 403
+                if not _email_configured():
+                    user.is_verified = True
+                    db.session.commit()
+                    AuditService.log(user_id=user.id, action="email_verified")
+                else:
+                    AuditService.log(user_id=user.id, action="login_attempt_unverified")
+                    return jsonify({
+                        'message': 'Please verify your email before continuing.',
+                        'redirect': '/verify-email',
+                        'verified': False
+                    }), 403
 
             # 🆕 MFA CHECK - If MFA enabled, return MFA session token instead of final tokens
             if user.mfa_enabled:
@@ -487,9 +669,16 @@ def init_auth_routes(app):
                 'dashboard': dashboard_url
             }), 200
 
+        except OperationalError as e:
+            db.session.rollback()
+            current_app.logger.error(f'Login error (database): {e}', exc_info=True)
+            return jsonify({
+                'error': 'Database temporarily unavailable. Please try again in a moment.'
+            }), 503
         except Exception as e:
+            db.session.rollback()
             current_app.logger.error(f'Login error: {str(e)}', exc_info=True)
-            return jsonify({'error': 'Internal server error'}), 500  # 🆕 Changed from 200 to 500
+            return jsonify({'error': 'Internal server error'}), 500
 
     # ------------------- REFRESH TOKEN -------------------
     @app.route('/api/auth/refresh', methods=['POST'])
@@ -515,7 +704,14 @@ def init_auth_routes(app):
                 'dashboard': dashboard_url
             }), 200
 
+        except OperationalError as e:
+            db.session.rollback()
+            current_app.logger.error(f'Token refresh error (database): {e}', exc_info=True)
+            return jsonify({
+                'error': 'Database temporarily unavailable. Please try again in a moment.'
+            }), 503
         except Exception as e:
+            db.session.rollback()
             current_app.logger.error(f'Token refresh error: {str(e)}', exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
 

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../constants/app_colors.dart';
 import '../../../providers/theme_provider.dart';
 import '../../../services/websocket_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/admin_service.dart';
 import 'meeting_screen.dart';
 
@@ -32,11 +33,52 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
   bool _isLoading = true;
   bool _isSending = false;
 
+  // Cache user ID locally for synchronous access
+  int? _cachedUserId;
+
   @override
   void initState() {
     super.initState();
     _initializeChat();
     _loadTeamData();
+    _loadUserId();
+  }
+
+  /// Load user ID asynchronously and cache it
+  Future<void> _loadUserId() async {
+    try {
+      // Try WebSocketService first (fastest, already connected)
+      final wsUserId = _webSocketService?.userId;
+      if (wsUserId != null) {
+        _cachedUserId = wsUserId;
+        return;
+      }
+      // Fallback to AuthService (handles int, double, string including "42.0")
+      final userInfo = await AuthService.getUserInfo();
+      final parsed = _safeUserIdFromDynamic(userInfo?['id']);
+      if (parsed != null) {
+        _cachedUserId = parsed;
+      }
+      // Never overwrite _cachedUserId with null - preserves existing valid value
+    } catch (e) {
+      debugPrint('Error loading user ID: $e');
+    } finally {
+      if (mounted) setState(() {});
+    }
+  }
+
+  /// Safely parses user ID from dynamic (int, double, string e.g. "42.0")
+  static int? _safeUserIdFromDynamic(dynamic id) {
+    if (id == null) return null;
+    if (id is int) return id;
+    if (id is double) return id.toInt();
+    if (id is String) {
+      final i = int.tryParse(id);
+      if (i != null) return i;
+      final d = double.tryParse(id);
+      return d?.toInt();
+    }
+    return null;
   }
 
   Future<void> _initializeChat() async {
@@ -54,9 +96,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
       // Update presence to online
       _webSocketService!.updatePresence('online');
 
-      setState(() {
-        _isConnected = true;
-      });
+      final uid = _webSocketService?.userId;
+      if (uid != null) _cachedUserId = uid;
+      setState(() => _isConnected = true);
+      // Ensure user ID is cached (in case onConnected hasn't fired yet)
+      await _loadUserId();
     } catch (e) {
       debugPrint("Error initializing chat: $e");
       setState(() {
@@ -69,9 +113,9 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
     if (_webSocketService == null) return;
 
     _webSocketService!.onConnected = () {
-      setState(() {
-        _isConnected = true;
-      });
+      final uid = _webSocketService?.userId;
+      if (uid != null) _cachedUserId = uid;
+      setState(() => _isConnected = true);
     };
 
     _webSocketService!.onDisconnected = () {
@@ -287,14 +331,14 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            AppColors.primaryRed.withOpacity(0.9),
+            AppColors.primaryRed.withValues(alpha: 0.9),
             const Color(0xFFEF4444),
           ],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryRed.withOpacity(0.3),
+            color: AppColors.primaryRed.withValues(alpha: 0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -306,7 +350,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Center(
@@ -330,7 +374,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                 Text(
                   'Connect, communicate, and collaborate in real-time',
                   style: GoogleFonts.inter(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 13,
                   ),
                 ),
@@ -340,7 +384,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
+              color: Colors.white.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -387,7 +431,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 20,
                 ),
               ],
@@ -419,11 +463,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           width: 280,
           child: Column(
             children: [
-              _buildTeamMembersPanel(themeProvider),
+              Expanded(child: _buildTeamMembersPanel(themeProvider)),
               const SizedBox(height: 16),
               _buildQuickActionsPanel(themeProvider),
               const SizedBox(height: 16),
-              _buildSharedNotesPanel(themeProvider),
+              Expanded(child: _buildSharedNotesPanel(themeProvider)),
             ],
           ),
         ),
@@ -445,7 +489,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -495,10 +539,14 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           if (_teamMembers.isEmpty)
             _buildEmptyTeamState(themeProvider)
           else
-            Column(
-              children: _teamMembers
-                  .map((member) => _buildTeamMemberTile(member, themeProvider))
-                  .toList(),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _teamMembers.length,
+                itemBuilder: (context, index) {
+                  final member = _teamMembers[index];
+                  return _buildTeamMemberTile(member, themeProvider);
+                },
+              ),
             ),
         ],
       ),
@@ -530,7 +578,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        AppColors.primaryRed.withOpacity(0.8),
+                        AppColors.primaryRed.withValues(alpha: 0.8),
                         const Color(0xFFEF4444),
                       ],
                       begin: Alignment.topLeft,
@@ -605,7 +653,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: AppColors.primaryRed.withOpacity(0.1),
+                  color: AppColors.primaryRed.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
@@ -656,7 +704,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -722,9 +770,9 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           width: 110, // Fixed width to prevent overflow
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.2)),
+            border: Border.all(color: color.withValues(alpha: 0.2)),
           ),
           child: Center(
             child: Text(
@@ -754,7 +802,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 20,
               offset: const Offset(0, 4),
             ),
@@ -797,7 +845,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
+                      color: Colors.blue.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
@@ -873,7 +921,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
+                        color: Colors.blue.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -985,7 +1033,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -1275,7 +1323,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -1381,7 +1429,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                 style: GoogleFonts.inter(
                   color: themeProvider.isDarkMode ? Colors.white : Colors.black,
                 ),
-                enabled: _currentThreadId != null && !_isSending,
+                enabled: !_isSending,
                 onChanged: (value) {
                   if (_currentThreadId != null && _webSocketService != null) {
                     _webSocketService!
@@ -1403,15 +1451,14 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               borderRadius: BorderRadius.circular(25),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
               ],
             ),
             child: IconButton(
-              onPressed:
-                  _currentThreadId != null && !_isSending ? _sendMessage : null,
+              onPressed: !_isSending ? _sendMessage : null,
               icon: _isSending
                   ? const SizedBox(
                       width: 20,
@@ -1434,8 +1481,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
   // All other methods remain exactly the same (unchanged)
   Future<void> _sendMessage() async {
-    if (_messageController.text.trim().isEmpty || _currentThreadId == null)
-      return;
+    if (_messageController.text.trim().isEmpty) return;
 
     setState(() {
       _isSending = true;
@@ -1444,22 +1490,39 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
     try {
       final content = _messageController.text.trim();
 
-      // Send via WebSocket for real-time
-      _webSocketService?.sendMessage(
-        threadId: _currentThreadId!,
+      // Create a default thread if none selected
+      if (_currentThreadId == null) {
+        final participantIds = _teamMembers.map((m) => m.userId).toList();
+        final newThread = await _apiService.createChatThread(
+          title: 'Team Chat',
+          participantIds: participantIds,
+        );
+        setState(() {
+          _currentThreadId = newThread['id'];
+          _currentThreadTitle = newThread['title'] ?? 'Team Chat';
+          _chatThreads.insert(0, newThread);
+        });
+      }
+
+      final threadId = _currentThreadId!;
+
+      // Send via API for persistence (also broadcasts to other participants)
+      final response = await _apiService.sendMessage(
+        threadId: threadId,
         content: content,
       );
 
-      // Also send via API for persistence
-      await _apiService.sendMessage(
-        threadId: _currentThreadId!,
-        content: content,
-      );
+      final messageData = response['message_data'] ?? response;
+      if (messageData is Map<String, dynamic>) {
+        setState(() {
+          _messages.insert(0, ChatMessage.fromJson(messageData));
+        });
+      }
 
       _messageController.clear();
 
       // Clear typing indicator
-      _webSocketService?.sendTyping(_currentThreadId!, false);
+      _webSocketService?.sendTyping(threadId, false);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -1549,7 +1612,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -1680,7 +1743,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -1781,272 +1844,6 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
     );
   }
 
-  void _showNoteOptions(SharedNote note) {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor:
-          themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(Icons.edit, color: AppColors.primaryRed),
-              title: Text('Edit Note',
-                  style: GoogleFonts.inter(
-                    color:
-                        themeProvider.isDarkMode ? Colors.white : Colors.black,
-                  )),
-              onTap: () {
-                Navigator.pop(context);
-                _editSharedNote(note);
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.delete, color: AppColors.primaryRed),
-              title: Text('Delete Note',
-                  style: GoogleFonts.inter(
-                    color:
-                        themeProvider.isDarkMode ? Colors.white : Colors.black,
-                  )),
-              onTap: () {
-                Navigator.pop(context);
-                _deleteSharedNote(note);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _editSharedNote(SharedNote note) {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    final titleController = TextEditingController(text: note.title);
-    final contentController = TextEditingController(text: note.content);
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor:
-            themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
-        title: Text('Edit Shared Note',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-            )),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: InputDecoration(
-                labelText: 'Title',
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                labelStyle: GoogleFonts.inter(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.black,
-                ),
-              ),
-              style: GoogleFonts.inter(
-                color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: contentController,
-              decoration: InputDecoration(
-                labelText: 'Content',
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                labelStyle: GoogleFonts.inter(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.black,
-                ),
-              ),
-              maxLines: 4,
-              style: GoogleFonts.inter(
-                color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel',
-                style: GoogleFonts.inter(
-                    color: themeProvider.isDarkMode
-                        ? Colors.grey.shade400
-                        : AppColors.textGrey)),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ElevatedButton(
-              onPressed: () async {
-                if (titleController.text.trim().isEmpty ||
-                    contentController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Please fill in both title and content',
-                          style: GoogleFonts.inter()),
-                      backgroundColor: AppColors.primaryRed,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  );
-                  return;
-                }
-
-                try {
-                  await _apiService.updateNote(note.id, {
-                    'title': titleController.text.trim(),
-                    'content': contentController.text.trim(),
-                  });
-
-                  Navigator.pop(context);
-                  await _loadTeamData(); // Refresh the notes list
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Shared note updated successfully',
-                          style: GoogleFonts.inter()),
-                      backgroundColor: Colors.green,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to update note: $e',
-                          style: GoogleFonts.inter()),
-                      backgroundColor: AppColors.primaryRed,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryRed,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: Text('Update',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _deleteSharedNote(SharedNote note) {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor:
-            themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
-        title: Text('Delete Note',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-            )),
-        content: Text('Are you sure you want to delete "${note.title}"?',
-            style: GoogleFonts.inter(
-              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-            )),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel',
-                style: GoogleFonts.inter(
-                    color: themeProvider.isDarkMode
-                        ? Colors.grey.shade400
-                        : AppColors.textGrey)),
-          ),
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: ElevatedButton(
-              onPressed: () async {
-                try {
-                  await _apiService.deleteNote(note.id);
-                  Navigator.pop(context);
-                  await _loadTeamData(); // Refresh the notes list
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Note deleted successfully',
-                          style: GoogleFonts.inter()),
-                      backgroundColor: Colors.green,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  );
-                } catch (e) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to delete note: $e',
-                          style: GoogleFonts.inter()),
-                      backgroundColor: AppColors.primaryRed,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryRed,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: Text('Delete',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _scheduleMeeting() {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -2056,9 +1853,18 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
   }
 
   int _getCurrentUserId() {
-    // This should be replaced with actual user ID from authentication
-    // For now, return 1 as a placeholder
-    return 1;
+    // Return cached value if available
+    if (_cachedUserId != null) return _cachedUserId!;
+
+    // Try WebSocketService synchronously
+    if (_webSocketService?.userId != null) {
+      _cachedUserId = _webSocketService!.userId;
+      return _cachedUserId!;
+    }
+
+    // Last resort: return 0 (no message will match, isCurrentUser will be false)
+    // Prefer this over throwing to avoid build-time crashes
+    return 0;
   }
 
   String _formatTimeAgo(DateTime dateTime) {
