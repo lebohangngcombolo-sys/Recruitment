@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../../services/candidate_service.dart';
 
 class JobsAppliedPage extends StatefulWidget {
@@ -47,33 +48,77 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
           children: [
             // Navigation Header with Back Button
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              color: Colors.white,
+              width: double.infinity,
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top + 16,
+                bottom: 16,
+                left: 16,
+                right: 16,
+              ),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.7),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
               child: Row(
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.black87),
-                    onPressed: () {
-                      if (context.canPop()) {
-                        context.pop();
-                      } else {
-                        context.go('/candidate-dashboard?token=${widget.token}');
-                      }
-                    },
-                  ),
-                  const SizedBox(width: 16),
-                  const Text(
-                    "Jobs Applied",
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: Color(0xFFC10D00), width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.arrow_back, color: Colors.white),
+                      onPressed: () {
+                        if (context.canPop()) {
+                          context.pop();
+                        } else {
+                          context
+                              .go('/candidate-dashboard?token=${widget.token}');
+                        }
+                      },
                     ),
                   ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.refresh, color: Colors.black87),
-                    onPressed: fetchApplications,
+                  SizedBox(width: 16),
+                  Text(
+                    "Jobs Applied",
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Spacer(),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(30),
+                      border: Border.all(color: Color(0xFFC10D00), width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      icon: Icon(Icons.refresh, color: Colors.white),
+                      onPressed: fetchApplications,
+                    ),
                   ),
                 ],
               ),
@@ -91,41 +136,94 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
 
   Widget _buildContent() {
     if (loading) {
-      return const Center(
-        child: CircularProgressIndicator(
-          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF991A1A)),
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            // Background Image
+            Container(
+              decoration: BoxDecoration(
+                image: DecorationImage(
+                  image: AssetImage("assets/images/dark.png"),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            Center(
+              child: Container(
+                padding: EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Color(0xFFF2F2F2).withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Color(0xFFC10D00), width: 1),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(color: Color(0xFFC10D00)),
+                    SizedBox(height: 16),
+                    Text(
+                      "Loading your applications...",
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
 
     if (applications.isEmpty) {
       return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.work_outline,
-              size: 64,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              "You haven't applied to any jobs yet",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w500,
+        child: Container(
+          padding: EdgeInsets.all(24),
+          margin: EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Color(0xFFF2F2F2).withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Color(0xFFC10D00), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 20,
+                offset: Offset(0, 10),
               ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              "Start applying to see your applications here",
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: 14,
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.work_outline,
+                size: 64,
+                color: Color(0xFFC10D00),
               ),
-            ),
-          ],
+              SizedBox(height: 16),
+              Text(
+                "You haven't applied to any jobs yet",
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                "Start applying to see your applications here",
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: Colors.white70,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -135,9 +233,9 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             "Your Job Applications",
-            style: TextStyle(
+            style: GoogleFonts.poppins(
               fontSize: 28,
               fontWeight: FontWeight.bold,
               color: Colors.white,
@@ -146,8 +244,8 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
           const SizedBox(height: 8),
           Text(
             "${applications.length} application${applications.length != 1 ? 's' : ''} found",
-            style: const TextStyle(
-              color: Colors.grey,
+            style: GoogleFonts.poppins(
+              color: Colors.white70,
               fontSize: 16,
             ),
           ),
@@ -159,200 +257,177 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
   }
 
   Widget _buildApplicationList() {
-    return ListView.separated(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+    return ListView.builder(
+      padding: EdgeInsets.all(16),
       itemCount: applications.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 16),
       itemBuilder: (context, index) {
         final app = applications[index];
-        return _buildApplicationCard(app);
-      },
-    );
-  }
-
-  Widget _buildApplicationCard(Map<String, dynamic> app) {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header with Job Title and Status
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color:
-                                const Color(0xFF991A1A).withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.work_outline,
-                            color: Color(0xFF991A1A),
-                            size: 24,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            app['job_title'] ?? "No title",
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  _buildStatusBadge(app["status"] ?? "Pending"),
-                ],
+        return Container(
+          margin: EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 20,
+                offset: Offset(0, 8),
               ),
-              const SizedBox(height: 16),
-
-              // Job Description
-              if (app['job_description'] != null)
-                Column(
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.1),
+                blurRadius: 10,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Color(0xFFF2F2F2).withValues(alpha: 0.2),
+                border: Border.all(
+                  color: Color(0xFFC10D00),
+                  width: 1,
+                ),
+              ),
+              child: Padding(
+                padding: EdgeInsets.all(20),
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        const Icon(
-                          Icons.description,
-                          color: Colors.grey,
-                          size: 16,
+                        Container(
+                          padding: EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Color(0xFFC10D00).withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.work_outline,
+                            color: Color(0xFFC10D00),
+                            size: 24,
+                          ),
                         ),
-                        const SizedBox(width: 8),
-                        const Text(
-                          "Description:",
-                          style: TextStyle(
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black87,
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                app['job_title'] ?? "Job Title Not Available",
+                                style: GoogleFonts.poppins(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFC10D00),
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                app['company'] ?? "Company Not Available",
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        _buildStatusBadge(app["status"] ?? "Pending"),
+                      ],
+                    ),
+                    SizedBox(height: 12),
+                    Container(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Color(0xFFC10D00).withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.access_time_outlined,
+                            size: 16,
+                            color: Color(0xFFC10D00),
+                          ),
+                          SizedBox(width: 6),
+                          Text(
+                            "Applied: ${app["assessed_date"] != null ? app["assessed_date"]!.substring(0, 10) : "N/A"}",
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Color(0xFFC10D00),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () {
+                              // View job details action
+                            },
+                            icon: Icon(Icons.remove_red_eye, size: 18),
+                            label: Text(
+                              "View Details",
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Color(0xFFC10D00),
+                              side: BorderSide(color: Color(0xFFC10D00)),
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              // Withdraw application action
+                            },
+                            icon: Icon(Icons.cancel, size: 18),
+                            label: Text(
+                              "Withdraw",
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.grey[600],
+                              foregroundColor: Colors.white,
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 2,
+                              shadowColor: Colors.grey.withValues(alpha: 0.3),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      app['job_description']!.length > 100
-                          ? "${app['job_description']!.substring(0, 100)}..."
-                          : app['job_description']!,
-                      style: const TextStyle(
-                        color: Colors.grey,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
                   ],
                 ),
-
-              // Application Details
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.calendar_today,
-                              color: Colors.grey,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              "Applied: ${app["assessed_date"] != null ? app["assessed_date"]!.substring(0, 10) : "N/A"}",
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.business_center,
-                              color: Colors.grey,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              "Company: ${app['company'] ?? 'Not specified'}",
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ),
-
-              const SizedBox(height: 16),
-
-              // Action Buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        // View job details action
-                      },
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF991A1A),
-                        side: const BorderSide(color: Color(0xFF991A1A)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      icon: const Icon(Icons.remove_red_eye, size: 18),
-                      label: const Text("View Details"),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        // Withdraw application action
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey[300],
-                        foregroundColor: Colors.black87,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      icon: const Icon(Icons.cancel, size: 18),
-                      label: const Text("Withdraw"),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -397,7 +472,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
           const SizedBox(width: 4),
           Text(
             status,
-            style: TextStyle(
+            style: GoogleFonts.poppins(
               color: textColor,
               fontSize: 12,
               fontWeight: FontWeight.w600,
