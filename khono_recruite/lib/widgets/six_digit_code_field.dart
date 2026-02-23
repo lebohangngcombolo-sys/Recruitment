@@ -117,7 +117,7 @@ class _SixDigitCodeFieldState extends State<SixDigitCodeField> {
         style: const TextStyle(
           fontSize: 22,
           fontWeight: FontWeight.bold,
-          color: Colors.black,
+          color: Colors.white,
         ),
         decoration: const InputDecoration(
           counterText: '',

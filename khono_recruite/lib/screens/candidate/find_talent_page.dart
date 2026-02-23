@@ -21,24 +21,6 @@ class FindTalentPage extends StatelessWidget {
     );
   }
 
-  Widget _buildFeatureItem(String text) {
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Icon(Icons.check, color: primaryColor),
-          SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: GoogleFonts.poppins(color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -113,6 +95,7 @@ class FindTalentPage extends StatelessWidget {
               ),
               Expanded(
                 child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -142,6 +125,7 @@ class FindTalentPage extends StatelessWidget {
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
+                            const SizedBox(height: 32),
                           ],
                         ),
                       ),
@@ -189,7 +173,7 @@ class FindTalentPage extends StatelessWidget {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        'We Help To Get The Best Job And Find A Talent',
+                                        "Investing in Africa's talent is what we believe in",
                                         style: GoogleFonts.poppins(
                                           fontSize: 32,
                                           fontWeight: FontWeight.bold,
@@ -198,24 +182,28 @@ class FindTalentPage extends StatelessWidget {
                                       ),
                                       SizedBox(height: 16),
                                       Text(
-                                        'We connect ambitious professionals with opportunities that match their skills, goals, and passion. '
-                                        'Whether you\'re building your dream career or searching for exceptional talent, our smart matching '
-                                        'system and expert guidance make the journey faster, easier, and more impactful.',
+                                        'Khonology Academy is a technology-focused FinTech Incubator. Our portfolio companies make us who we are, and we know that their accomplishments measure our success. When you join us, you\'ll get immediate access to mentorship from strategic industry experts and skills applicable across any industry.',
                                         style: GoogleFonts.poppins(
                                           fontSize: 16,
                                           color: Colors.white,
                                         ),
                                       ),
-                                      SizedBox(height: 16),
-                                      _buildFeatureItem(
-                                          'Smart AI-powered job matching to save you time'),
-                                      _buildFeatureItem(
-                                          'Verified talent profiles for confident hiring decisions'),
-                                      _buildFeatureItem(
-                                          'Personalized guidance to help you stand out and grow'),
+                                      SizedBox(height: 12),
+                                      Text(
+                                        'The Academy offers a 12‑month internship where learning happens on the job. '
+                                        'Interns build software development skills and a strong base in finance, data, '
+                                        'economics, technology and soft skills by delivering projects that use the same '
+                                        'tools as South Africa\'s leading firms. We do this because we believe sustainable '
+                                        'growth depends on a support ecosystem that can sustain itself—and that starts '
+                                        'with people who are ready to lead it.',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 16,
+                                          color: Colors.white,
+                                        ),
+                                      ),
                                       SizedBox(height: 24),
                                       ElevatedButton(
-                                        onPressed: () {},
+                                        onPressed: () => context.push('/intern-stories'),
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: strokeColor,
                                           foregroundColor: Colors.white,
@@ -230,7 +218,7 @@ class FindTalentPage extends StatelessWidget {
                                           ),
                                         ),
                                         child: Text(
-                                          'Read More',
+                                          'Read more',
                                           style: GoogleFonts.poppins(
                                             color: Colors.white,
                                             fontSize: 16,

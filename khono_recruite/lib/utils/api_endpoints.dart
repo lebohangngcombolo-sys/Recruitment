@@ -24,6 +24,7 @@ class ApiEndpoints {
   static const resetPassword = "$authBase/reset-password";
   static const changePassword = "$authBase/change-password";
   static const currentUser = "$authBase/me";
+  static const refresh = "$authBase/refresh";
   static const adminEnroll = "$authBase/admin-enroll";
   static const firebaseLogin = "$authBase/firebase-login";
 
@@ -120,6 +121,8 @@ class ApiEndpoints {
   static String getJobStats = "$adminBase/jobs/stats";
   static const viewCandidates = "$adminBase/candidates";
   static String getApplicationById(int id) => "$adminBase/applications/$id";
+  static String getCandidateApplicationsByCandidateId(int candidateId) =>
+      "$adminBase/candidates/$candidateId/applications";
   static String shortlistCandidates(int jobId) =>
       "$adminBase/jobs/$jobId/shortlist";
   static const scheduleInterview = "$adminBase/interviews";

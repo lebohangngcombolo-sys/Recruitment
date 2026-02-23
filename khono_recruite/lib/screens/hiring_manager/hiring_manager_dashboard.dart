@@ -104,6 +104,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   @override
   void initState() {
     super.initState();
+    userName = AuthService.getCachedDisplayName() ?? "Hiring Manager";
     fetchStats();
     fetchAudits(page: 1);
     fetchProfileImage();
