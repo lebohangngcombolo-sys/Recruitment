@@ -94,7 +94,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
           await admin.getCandidateInterviews(widget.candidateId);
       interviews = List<Map<String, dynamic>>.from(interviewData);
     } catch (e) {
-      debugPrint("Error fetching candidate details: $e");
+      print("Error fetching candidate details: $e");
       errorMessage = "Failed to load data: $e";
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error: $e")));
