@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
@@ -64,7 +64,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     // Use cached name so greeting shows correct name from first paint (set by login/MFA before navigate)
     _userName = AuthService.getCachedDisplayName();
     _loadPersistedNameIfNeeded();
-    // Don't restore from cache on init — show Continue section only after API returns, so no stale "Not started" cards appear
+    // Don't restore from cache on init ΓÇö show Continue section only after API returns, so no stale "Not started" cards appear
     _fetchDashboardCounts();
     _fetchUserProfile();
     _fetchNotifications();
@@ -182,7 +182,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   Map<String, dynamic>? _inProgressApplication;
   List<Map<String, dynamic>> _inProgressApplications = [];
   List<Map<String, dynamic>> _completedApplications = [];
-  /// Form submitted but assessment not done (status 'applied') — show "Applied" on job cards, not in Continue section.
+  /// Form submitted but assessment not done (status 'applied') ΓÇö show "Applied" on job cards, not in Continue section.
   List<Map<String, dynamic>> _appliedOnlyApplications = [];
   int _interviewsScheduledCount = 0;
   bool _dashboardCountsLoaded = false;
@@ -205,7 +205,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         }
       }
     } catch (_) {}
-    // Do NOT set _dashboardCountsLoaded here — only _fetchDashboardCounts does, so Continue section stays empty until API returns
+    // Do NOT set _dashboardCountsLoaded here ΓÇö only _fetchDashboardCounts does, so Continue section stays empty until API returns
   }
 
   Future<void> _saveCachedInProgressApplications(List<Map<String, dynamic>> list) async {
@@ -297,7 +297,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return null;
   }
 
-  /// Form submitted (status applied) for this job — show "Applied" on job card, not Continue.
+  /// Form submitted (status applied) for this job ΓÇö show "Applied" on job card, not Continue.
   Map<String, dynamic>? _appliedOnlyForJob(Map<String, dynamic> job) {
     final jobId = job['id'];
     if (jobId == null) return null;
@@ -750,7 +750,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             ),
             SizedBox(height: 8),
             Text(
-              (job['company']?.toString().trim().isNotEmpty == true) ? (job['company'] ?? '') : '—',
+              (job['company']?.toString().trim().isNotEmpty == true) ? (job['company'] ?? '') : 'ΓÇö',
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 color: Colors.white70,
@@ -758,7 +758,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             ),
             SizedBox(height: 8),
             Text(
-              (job['location']?.toString().trim().isNotEmpty == true) ? (job['location'] ?? '') : '—',
+              (job['location']?.toString().trim().isNotEmpty == true) ? (job['location'] ?? '') : 'ΓÇö',
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 color: Colors.white70,
@@ -1182,7 +1182,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           Expanded(
             child: _buildOpportunityCard(
               title: 'My applications',
-              count: _applicationsCount != null ? '$_applicationsCount' : '—',
+              count: _applicationsCount != null ? '$_applicationsCount' : 'ΓÇö',
               gradient: LinearGradient(
                 colors: [
                   Color(0xFF991A1A).withValues(alpha: 0.8),
@@ -1218,7 +1218,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           Expanded(
             child: _buildOpportunityCard(
               title: 'Saved Jobs',
-              count: _savedCount != null ? '$_savedCount' : '—',
+              count: _savedCount != null ? '$_savedCount' : 'ΓÇö',
               gradient: LinearGradient(
                 colors: [
                   Color(0xFF11998e).withValues(alpha: 0.8),
@@ -1488,7 +1488,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     );
   }
 
-  /// Estimate progress 0–100 from draft_data / last_saved_screen.
+  /// Estimate progress 0ΓÇô100 from draft_data / last_saved_screen.
   int _progressPercent(Map<String, dynamic>? draftData, String? lastSavedScreen) {
     if (draftData == null || draftData.isEmpty) return lastSavedScreen != null ? 25 : 0;
     final screen = (lastSavedScreen ?? '').toString().toLowerCase();
@@ -2065,7 +2065,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                                     fit: BoxFit.contain),
                                 const SizedBox(width: 20),
                                 Text(
-                                  "© 2025 Khonology. All rights reserved.",
+                                  "┬⌐ 2025 Khonology. All rights reserved.",
                                   style: GoogleFonts.poppins(
                                       color: Colors.white54, fontSize: 12),
                                 ),

@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../providers/theme_provider.dart';
+import '../../utils/api_endpoints.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({Key? key}) : super(key: key);
@@ -37,7 +38,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       if (token == null) return;
 
       final response = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/users"),
+        Uri.parse(ApiEndpoints.getUsers),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -376,9 +377,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               if (token == null)
                                 throw Exception("Token not found");
 
-                              final response = await http.post(
-                                Uri.parse(
-                                    "http://127.0.0.1:5000/api/auth/admin-enroll"),
+                            final response = await http.post(
+                              Uri.parse(ApiEndpoints.adminEnroll),
                                 headers: {
                                   "Content-Type": "application/json",
                                   "Authorization": "Bearer $token",
@@ -618,9 +618,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                               if (userId == null)
                                 throw Exception("User ID not found");
 
-                              final response = await http.put(
-                                Uri.parse(
-                                    "http://127.0.0.1:5000/api/admin/users/$userId"),
+                            final response = await http.put(
+                              Uri.parse("${ApiEndpoints.adminBase}/users/$userId"),
                                 headers: {
                                   "Content-Type": "application/json",
                                   "Authorization": "Bearer $token",

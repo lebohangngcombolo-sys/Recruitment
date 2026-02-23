@@ -1,4 +1,4 @@
-from flask import request, jsonify, current_app, redirect, url_for, make_response
+﻿from flask import request, jsonify, current_app, redirect, url_for, make_response
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -16,7 +16,7 @@ from app.services.file_text_extractor import extract_text_from_file
 from app.utils.decorators import role_required
 from datetime import datetime, timedelta
 import secrets
-import jwt  # ← ADD THIS IMPORT
+import jwt  # ΓåÉ ADD THIS IMPORT
 from app.utils.enrollment_schema import EnrollmentSchema
 from app.services.enrollment_service import EnrollmentService
 from app.services.ai_parser_service import analyse_resume_gemini
@@ -38,7 +38,7 @@ ROLE_DASHBOARD_MAP = {
     "admin": "/api/dashboard/admin",
     "hiring_manager": "/api/dashboard/hiring-manager",
     "candidate": "/dashboard/candidate",
-    "hr": "/api/dashboard/hr"   # ← ADDED
+    "hr": "/api/dashboard/hr"   # ΓåÉ ADDED
 }
 
 # OAuth providers config
@@ -158,11 +158,11 @@ def init_auth_routes(app):
         
             # Redirect to frontend with tokens
             frontend_redirect = (
-                f"{current_app.config['FRONTEND_URL']}/oauth-callback"  # ← CHANGED THIS LINE
+                f"{current_app.config['FRONTEND_URL']}/oauth-callback"  # ΓåÉ CHANGED THIS LINE
                 f"?access_token={access_token}&refresh_token={refresh_token}&role={user.role}"
             )
         
-            current_app.logger.info(f"SSO Login: {user.email} ({user.role}) → {frontend_redirect}")
+            current_app.logger.info(f"SSO Login: {user.email} ({user.role}) ΓåÆ {frontend_redirect}")
             return redirect(frontend_redirect)
         
         except jwt.ExpiredSignatureError:
@@ -210,7 +210,7 @@ def init_auth_routes(app):
             oauth.google.authorize_access_token()
             user_info = oauth.google.get(OAUTH_PROVIDERS["google"]["userinfo"]["url"]).json()
         
-            # ⚡ handle_oauth_callback() already returns redirect()
+            # ΓÜí handle_oauth_callback() already returns redirect()
             return handle_oauth_callback("google", user_info)
 
         except Exception as e:
@@ -291,24 +291,24 @@ def init_auth_routes(app):
             access_token = create_access_token(identity=str(user.id), additional_claims=additional_claims)
             refresh_token = create_refresh_token(identity=str(user.id), additional_claims=additional_claims)
 
-            # ✅ Determine dashboard route safely (fixed)
+            # Γ£à Determine dashboard route safely (fixed)
             dashboard_path = (
                 "/enrollment"
                 if user.role == "candidate" and not getattr(user, "enrollment_completed", False)
                 else ROLE_DASHBOARD_MAP.get(user.role, "/dashboard")
             )
 
-            # ✅ Ensure no accidental /api/ prefix (this is your issue)
+            # Γ£à Ensure no accidental /api/ prefix (this is your issue)
             if dashboard_path.startswith("/api/"):
                 dashboard_path = dashboard_path.replace("/api", "", 1)
 
-            # ✅ Redirect to frontend cleanly
+            # Γ£à Redirect to frontend cleanly
             frontend_redirect = (
                 f"{current_app.config['FRONTEND_URL']}/oauth-callback"
                 f"?access_token={access_token}&refresh_token={refresh_token}&role={user.role}"
             )
 
-            current_app.logger.info(f"Redirecting {user.email} ({user.role}) → {frontend_redirect}")
+            current_app.logger.info(f"Redirecting {user.email} ({user.role}) ΓåÆ {frontend_redirect}")
             return redirect(frontend_redirect)
 
 
@@ -444,7 +444,7 @@ def init_auth_routes(app):
             if not all([email, password]):
                 return jsonify({
                     'error': 'Email and password are required.',
-                    'hint': 'In Postman: Body → raw → JSON, and add Header: Content-Type = application/json'
+                    'hint': 'In Postman: Body ΓåÆ raw ΓåÆ JSON, and add Header: Content-Type = application/json'
                 }), 400
 
             email = email.strip().lower()
@@ -471,7 +471,7 @@ def init_auth_routes(app):
                     'verified': False
                 }), 403
 
-            # 🆕 MFA CHECK - If MFA enabled, return MFA session token instead of final tokens
+            # ≡ƒåò MFA CHECK - If MFA enabled, return MFA session token instead of final tokens
             if user.mfa_enabled:
                 # Create temporary MFA session token (5 minutes)
                 mfa_session_token = create_access_token(

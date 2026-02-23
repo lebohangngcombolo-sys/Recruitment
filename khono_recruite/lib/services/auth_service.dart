@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart' show File;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -107,16 +107,16 @@ class AuthService {
     final data = jsonDecode(response.body);
 
     if (response.statusCode == 200) {
-      // 🆕 Check if MFA is required
+      // ≡ƒåò Check if MFA is required
       if (data['mfa_required'] == true) {
-        // 🆕 FIX: Convert user_id to string to prevent type errors
+        // ≡ƒåò FIX: Convert user_id to string to prevent type errors
         final userId = data['user_id']?.toString() ?? '';
 
         return {
           'success': true,
           'mfa_required': true,
           'mfa_session_token': data['mfa_session_token'],
-          'user_id': userId, // 🆕 Now guaranteed to be string
+          'user_id': userId, // ≡ƒåò Now guaranteed to be string
           'message': data['message'],
         };
       }
@@ -731,7 +731,7 @@ class AuthService {
     await prefs.remove(_keyPendingApplyJob);
   }
 
-  // 🆕 MFA MANAGEMENT METHODS
+  // ≡ƒåò MFA MANAGEMENT METHODS
   static Future<Map<String, dynamic>> enableMfa() async {
     final token = await getAccessToken();
     final response = await http.post(

@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io' show File;
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -9,12 +8,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 
 // ------------------- API Base URL -------------------
-const String candidateBase = "http://127.0.0.1:5000/api/candidate";
+final String candidateBase = ApiEndpoints.candidateBase;
 
 class ProfilePage extends StatefulWidget {
   final String token;
@@ -82,7 +83,7 @@ class _ProfilePageState extends State<ProfilePage>
 
   List<dynamic> documents = [];
 
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  final String apiBase = ApiEndpoints.candidateBase;
 
   @override
   void initState() {
@@ -1733,127 +1734,146 @@ class _ProfilePageState extends State<ProfilePage>
             "Personal Information",
             Column(
               children: [
-                GestureDetector(
-                  onTap: _pickProfileImage,
-                  child: Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: 50,
-                        backgroundImage: _getProfileImageProvider(),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 2,
+                // Profile picture and basic info
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: _pickProfileImage,
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 50,
+                            backgroundImage: _getProfileImageProvider(),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                             ),
                           ),
-                          child: const Icon(
-                            Icons.camera_alt,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Administrator",
+                            style: GoogleFonts.poppins(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.white
+                                  : Colors.grey.shade800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            emailController.text.isNotEmpty
+                                ? emailController.text
+                                : "admin@example.com",
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.grey.shade400
+                                  : Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 30),
+
+                // Two-column form layout
+                Row(
+                  children: [
+                    // Left column
+                    Expanded(
+                      child: Column(
+                        children: [
+                          CustomTextField(
+                            label: "First Name",
+                            controller: fullNameController,
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Surname",
+                            controller: TextEditingController(text: "Radebe"),
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Email Address",
+                            controller: emailController,
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Phone Number",
+                            controller: phoneController,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    // Right column
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _buildDepartmentDropdown(),
+                          const SizedBox(height: 16),
+                          _buildDesignationDropdown(),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Preferred Name",
+                            controller: TextEditingController(
+                                text: "Nathii Nathi SGOOD"),
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Manager",
+                            controller: TextEditingController(
+                                text: "Gladness Mulaudzi"),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 30),
+
+                // Version info
+                Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Text(
+                    "Ver. 2026.02.BA1_SIT",
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: themeProvider.isDarkMode
+                          ? Colors.grey.shade500
+                          : Colors.grey.shade400,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),
-                CustomTextField(
-                    label: "Full Name", controller: fullNameController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Email", controller: emailController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Phone", controller: phoneController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Gender", controller: genderController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Date of Birth", controller: dobController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Nationality", controller: nationalityController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "ID Number", controller: idNumberController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Bio", controller: bioController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Location", controller: locationController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Title", controller: titleController),
-              ],
-            ),
-          ),
 
-          _modernCard(
-            "Education & Skills",
-            Column(
-              children: [
-                CustomTextField(label: "Degree", controller: degreeController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Institution", controller: institutionController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Graduation Year",
-                    controller: graduationYearController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Skills (comma separated)",
-                    controller: skillsController),
-              ],
-            ),
-          ),
-
-          _modernCard(
-            "Work Experience",
-            Column(
-              children: [
-                CustomTextField(
-                    label: "Job Title", controller: jobTitleController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Company", controller: companyController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Years of Experience",
-                    controller: yearsOfExpController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Work Experience Details",
-                    controller: workExpController,
-                    maxLines: 4),
-              ],
-            ),
-          ),
-
-          _modernCard(
-            "Online Profiles & CV",
-            Column(
-              children: [
-                CustomTextField(
-                    label: "LinkedIn", controller: linkedinController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "GitHub", controller: githubController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Portfolio", controller: portfolioController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "CV Text",
-                    controller: cvTextController,
-                    maxLines: 4),
-                const SizedBox(height: 12),
-                CustomTextField(label: "CV URL", controller: cvUrlController),
-                const SizedBox(height: 20),
+                // Save button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -2154,6 +2174,122 @@ class _ProfilePageState extends State<ProfilePage>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDepartmentDropdown() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final departments = [
+      'Finance',
+      'Human Resources',
+      'Information Technology',
+      'Marketing',
+      'Sales',
+      'Operations',
+      'Engineering',
+      'Other',
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: themeProvider.isDarkMode
+              ? Colors.grey.shade600
+              : Colors.grey.shade300,
+        ),
+      ),
+      child: DropdownButtonFormField<String>(
+        initialValue: 'Finance',
+        decoration: InputDecoration(
+          labelText: 'Department',
+          labelStyle: GoogleFonts.inter(
+            color: themeProvider.isDarkMode
+                ? Colors.grey.shade400
+                : Colors.grey.shade600,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+        ),
+        dropdownColor:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        style: GoogleFonts.inter(
+          color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+        ),
+        items: departments.map((String department) {
+          return DropdownMenuItem<String>(
+            value: department,
+            child: Text(department),
+          );
+        }).toList(),
+        onChanged: (String? newValue) {
+          // Handle department change
+        },
+      ),
+    );
+  }
+
+  Widget _buildDesignationDropdown() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final designations = [
+      'Business Analyst',
+      'Software Engineer',
+      'Project Manager',
+      'HR Manager',
+      'Marketing Specialist',
+      'Sales Executive',
+      'CEO',
+      'CTO',
+      'CFO',
+      'Other',
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: themeProvider.isDarkMode
+              ? Colors.grey.shade600
+              : Colors.grey.shade300,
+        ),
+      ),
+      child: DropdownButtonFormField<String>(
+        initialValue: 'Business Analyst',
+        decoration: InputDecoration(
+          labelText: 'Designation',
+          labelStyle: GoogleFonts.inter(
+            color: themeProvider.isDarkMode
+                ? Colors.grey.shade400
+                : Colors.grey.shade600,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+        ),
+        dropdownColor:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        style: GoogleFonts.inter(
+          color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+        ),
+        items: designations.map((String designation) {
+          return DropdownMenuItem<String>(
+            value: designation,
+            child: Text(designation),
+          );
+        }).toList(),
+        onChanged: (String? newValue) {
+          // Handle designation change
+        },
       ),
     );
   }

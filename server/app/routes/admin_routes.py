@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, current_app
+﻿from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.extensions import db
 from app.models import User, Requisition, Candidate, Application, AssessmentResult, Interview, Notification, AuditLog, Conversation, SharedNote, Meeting, CVAnalysis, InterviewFeedback, Offer, OfferStatus
@@ -956,7 +956,7 @@ def dashboard_counts():
 
 
 # =====================================================
-# 📅 INTERVIEW MANAGEMENT ROUTES (with Google Calendar)
+# ≡ƒôà INTERVIEW MANAGEMENT ROUTES (with Google Calendar)
 # =====================================================
 
 @admin_bp.route("/jobs/interviews", methods=["GET", "POST"])
@@ -1122,7 +1122,7 @@ def manage_interviews():
 
 
 # =====================================================
-# ♻️ RESCHEDULE INTERVIEW (with Google Calendar)
+# ΓÖ╗∩╕Å RESCHEDULE INTERVIEW (with Google Calendar)
 # =====================================================
 @admin_bp.route("/interviews/reschedule/<int:interview_id>", methods=["PATCH", "PUT"])
 @role_required(["admin", "hiring_manager", "hr"])
@@ -1244,7 +1244,7 @@ def reschedule_interview(interview_id):
 
 
 # =====================================================
-# ❌ CANCEL INTERVIEW (with Google Calendar)
+# Γ¥î CANCEL INTERVIEW (with Google Calendar)
 # =====================================================
 @admin_bp.route("/interviews/cancel/<int:interview_id>", methods=["DELETE", "OPTIONS"])
 @role_required(["admin", "hiring_manager", "hr"])
@@ -1332,7 +1332,7 @@ def cancel_interview(interview_id):
 
 
 # =====================================================
-# 📅 GOOGLE CALENDAR SYNC ROUTES
+# ≡ƒôà GOOGLE CALENDAR SYNC ROUTES
 # =====================================================
 
 @admin_bp.route("/interviews/calendar/sync", methods=["GET"])
@@ -1469,7 +1469,7 @@ def sync_single_interview(interview_id):
 
 
 # =====================================================
-# 🔄 BULK SYNC INTERVIEWS
+# ≡ƒöä BULK SYNC INTERVIEWS
 # =====================================================
 
 @admin_bp.route("/interviews/calendar/bulk-sync", methods=["POST"])
@@ -1590,7 +1590,7 @@ def bulk_sync_interviews():
 
 
 # =====================================================
-# 🔍 GET INTERVIEW CALENDAR STATUS
+# ≡ƒöì GET INTERVIEW CALENDAR STATUS
 # =====================================================
 
 @admin_bp.route("/interviews/<int:interview_id>/calendar/status", methods=["GET"])
@@ -1651,7 +1651,7 @@ def get_candidate_applications():
                 return jsonify({"error": "Candidate not found"}), 404
             applications = Application.query.filter_by(candidate_id=candidate.id).all()
         else:
-            # No candidate_id → return all applications
+            # No candidate_id ΓåÆ return all applications
             applications = Application.query.all()
 
         result = []
@@ -1675,18 +1675,18 @@ def get_candidate_applications():
         return jsonify({"error": "Internal server error"}), 500
     
 # =====================================================
-# 🔄 UPDATE INTERVIEW STATUS (Completed, No-show, etc.)
+# ≡ƒöä UPDATE INTERVIEW STATUS (Completed, No-show, etc.)
 # =====================================================
 @admin_bp.route("/interviews/<int:interview_id>/status", methods=["PATCH", "PUT"])
 @role_required(["admin", "hiring_manager", "hr"])
 def update_interview_status(interview_id):
     """
     Update interview status:
-    - scheduled → completed
-    - scheduled → no_show
-    - scheduled → cancelled_by_candidate
-    - scheduled → feedback_pending (when interview done, feedback needed)
-    - feedback_pending → feedback_submitted
+    - scheduled ΓåÆ completed
+    - scheduled ΓåÆ no_show
+    - scheduled ΓåÆ cancelled_by_candidate
+    - scheduled ΓåÆ feedback_pending (when interview done, feedback needed)
+    - feedback_pending ΓåÆ feedback_submitted
     """
     try:
         interview = Interview.query.get_or_404(interview_id)
@@ -1718,7 +1718,7 @@ def update_interview_status(interview_id):
             
             # Append status change note with timestamp
             timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-            status_note = f"\n[{timestamp}] Status changed: {old_status} → {new_status}"
+            status_note = f"\n[{timestamp}] Status changed: {old_status} ΓåÆ {new_status}"
             if notes:
                 status_note += f" - {notes}"
             
@@ -1808,7 +1808,7 @@ def update_interview_status(interview_id):
             admin_id=current_user_id,
             action=f"Interview Status Updated to {new_status}",
             target_user_id=interview.candidate_id,
-            details=f"Interview {interview_id}: {old_status} → {new_status}"
+            details=f"Interview {interview_id}: {old_status} ΓåÆ {new_status}"
         )
         
         return jsonify({
@@ -1828,7 +1828,7 @@ def update_interview_status(interview_id):
         return jsonify({"error": "Internal server error"}), 500
     
 # =====================================================
-# 📝 SUBMIT INTERVIEW FEEDBACK
+# ≡ƒô¥ SUBMIT INTERVIEW FEEDBACK
 # =====================================================
 @admin_bp.route("/interviews/<int:interview_id>/feedback", methods=["POST"])
 @role_required(["admin", "hiring_manager", "hr"])
@@ -2000,7 +2000,7 @@ def submit_interview_feedback(interview_id):
 
 
 # =====================================================
-# 📊 GET INTERVIEW FEEDBACK
+# ≡ƒôè GET INTERVIEW FEEDBACK
 # =====================================================
 @admin_bp.route("/interviews/<int:interview_id>/feedback", methods=["GET"])
 @role_required(["admin", "hiring_manager", "hr"])
@@ -2062,7 +2062,7 @@ def get_interview_feedback(interview_id):
         return jsonify({"error": "Internal server error"}), 500
     
 # =====================================================
-# 🔔 INTERVIEW REMINDERS SYSTEM
+# ≡ƒöö INTERVIEW REMINDERS SYSTEM
 # =====================================================
 @admin_bp.route("/interviews/reminders/schedule", methods=["POST"])
 @role_required(["admin", "hiring_manager", "hr"])
@@ -2153,7 +2153,7 @@ def schedule_interview_reminders():
 
 
 # =====================================================
-# ⚙️ BACKGROUND TASK: SEND REMINDERS
+# ΓÜÖ∩╕Å BACKGROUND TASK: SEND REMINDERS
 # =====================================================
 def send_interview_reminders():
     """
@@ -2297,7 +2297,7 @@ def send_1_hour_reminder(interview):
 
 
 # =====================================================
-# 📋 GET SCHEDULED REMINDERS
+# ≡ƒôï GET SCHEDULED REMINDERS
 # =====================================================
 @admin_bp.route("/interviews/<int:interview_id>/reminders", methods=["GET"])
 @role_required(["admin", "hiring_manager", "hr"])
@@ -3550,7 +3550,7 @@ def get_candidates_ready_for_offer():
                 "candidateName": row.candidate_name,
                 "email": row.email,
 
-                # ✅ REQUIRED BY FRONTEND
+                # Γ£à REQUIRED BY FRONTEND
                 "cultureFitScore": culture_fit_score,
 
                 "statistics": {

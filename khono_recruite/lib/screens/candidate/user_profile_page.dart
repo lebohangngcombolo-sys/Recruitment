@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io' show File;
 import 'package:url_launcher/url_launcher.dart';
@@ -77,7 +77,7 @@ class _ProfilePageState extends State<ProfilePage>
   bool profileVisible = true;
   bool enrollmentCompleted = false;
 
-  // 🆕 MFA State
+  // ≡ƒåò MFA State
   bool _mfaEnabled = false;
   bool _mfaLoading = false;
   String? _mfaSecret;
@@ -166,7 +166,7 @@ class _ProfilePageState extends State<ProfilePage>
     _loadMfaStatus();
   }
 
-  // 🆕 MFA METHODS (unchanged)
+  // ≡ƒåò MFA METHODS (unchanged)
   Future<void> _loadMfaStatus() async {
     try {
       final result = await AuthService.getMfaStatus();
@@ -497,7 +497,7 @@ class _ProfilePageState extends State<ProfilePage>
               ),
               const SizedBox(height: 16),
               Text(
-                "⚠️ These codes won't be shown again. Make sure to save them now!",
+                "ΓÜá∩╕Å These codes won't be shown again. Make sure to save them now!",
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   color: Colors.redAccent,
@@ -695,7 +695,7 @@ class _ProfilePageState extends State<ProfilePage>
               final pos = exp['position'] ?? exp['title'] ?? '';
               final co = exp['company'] ?? '';
               final desc = exp['description'] ?? '';
-              text = [if (pos.isNotEmpty) pos, if (co.isNotEmpty) 'at $co', if (desc.isNotEmpty) desc].join(' • ');
+              text = [if (pos.isNotEmpty) pos, if (co.isNotEmpty) 'at $co', if (desc.isNotEmpty) desc].join(' ΓÇó ');
             }
             _workExpControllers.add(TextEditingController(text: text));
           }

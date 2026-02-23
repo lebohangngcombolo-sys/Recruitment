@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -298,7 +298,7 @@ class _LandingPageState extends State<LandingPage>
       if (_isAuthError(e) && mounted) {
         _safeSetState(() => _authToken = null);
         await AuthService.clearAuthState();
-        // Still show jobs: load from public API so the list doesn’t disappear
+        // Still show jobs: load from public API so the list doesnΓÇÖt disappear
         try {
           final jobs = await CandidateService.getPublicJobs();
           if (mounted) {
@@ -705,7 +705,7 @@ class _LandingPageState extends State<LandingPage>
     );
   }
 
-  // Updated to handle real job data — dark theme to match the app
+  // Updated to handle real job data ΓÇö dark theme to match the app
   Widget _buildJobItem(String title, String location, String type,
       String salary, Map<String, dynamic> job) {
     final logoUrl = (job['company_logo']?.toString().trim() ?? '');
@@ -1954,7 +1954,7 @@ class _LandingPageState extends State<LandingPage>
                                           ),
                                         )),
                                     SizedBox(height: 16),
-                                    // Pagination footer — solid background to match app
+                                    // Pagination footer ΓÇö solid background to match app
                                     Container(
                                       padding: EdgeInsets.symmetric(
                                           horizontal: 16, vertical: 14),
@@ -2061,7 +2061,7 @@ class _LandingPageState extends State<LandingPage>
                           ),
                           const SizedBox(height: 20),
                           Text(
-                            "© 2025 Khonology. All rights reserved.",
+                            "┬⌐ 2025 Khonology. All rights reserved.",
                             style: GoogleFonts.poppins(
                                 color: Colors.white54, fontSize: 12),
                           ),
