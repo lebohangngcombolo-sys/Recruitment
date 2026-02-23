@@ -1,4 +1,4 @@
-# app/services/ai_cv_parser.py
+﻿# app/services/ai_cv_parser.py
 import logging
 import re
 from typing import Dict, Any

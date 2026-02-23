@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -190,11 +190,11 @@ class FindTalentPage extends StatelessWidget {
                                       ),
                                       SizedBox(height: 12),
                                       Text(
-                                        'The Academy offers a 12‑month internship where learning happens on the job. '
+                                        'The Academy offers a 12ΓÇæmonth internship where learning happens on the job. '
                                         'Interns build software development skills and a strong base in finance, data, '
                                         'economics, technology and soft skills by delivering projects that use the same '
                                         'tools as South Africa\'s leading firms. We do this because we believe sustainable '
-                                        'growth depends on a support ecosystem that can sustain itself—and that starts '
+                                        'growth depends on a support ecosystem that can sustain itselfΓÇöand that starts '
                                         'with people who are ready to lead it.',
                                         style: GoogleFonts.poppins(
                                           fontSize: 16,

@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -436,8 +436,8 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     final code = currency.toUpperCase();
     if (code == 'ZAR') return 'R';
     if (code == 'USD') return '\$';
-    if (code == 'EUR') return '€';
-    if (code == 'GBP') return '£';
+    if (code == 'EUR') return 'Γé¼';
+    if (code == 'GBP') return '┬ú';
     return '$code ';
   }
 
@@ -566,7 +566,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            "${widget.job["company"] ?? ""} • ${widget.job["location"] ?? ""}",
+                            "${widget.job["company"] ?? ""} ΓÇó ${widget.job["location"] ?? ""}",
                             style: GoogleFonts.poppins(
                               color: Colors.white.withValues(alpha: 0.9),
                               fontSize: 18,
@@ -962,7 +962,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
           ),
           const SizedBox(height: 30),
           Text(
-            "© 2025 Khonology. All rights reserved.",
+            "┬⌐ 2025 Khonology. All rights reserved.",
             style: GoogleFonts.poppins(
               color: _textSecondary,
               fontSize: 14,

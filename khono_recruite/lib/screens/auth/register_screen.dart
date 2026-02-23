@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -115,28 +115,71 @@ class _RegisterScreenState extends State<RegisterScreen>
     final result = await AuthService.register(data);
     setState(() => loading = false);
 
-    final status = result['status'];
-    final body = result['body'];
+    final status = result['status'] as int? ?? 0;
+    final body = result['body'] is Map<String, dynamic> ? result['body'] as Map<String, dynamic> : <String, dynamic>{};
 
-    if (status != 201) {
-      final errorMessage =
-          body["errors"]?.join("\n") ?? body["error"] ?? "Registration failed.";
+    if (status != 201 && status != 200) {
+      final errors = body['errors'];
+      final errorMsg = body['error'];
+      String errorMessage;
+      if (status == 409) {
+        errorMessage = 'An account with this email already exists. Please log in or use a different email.';
+      } else {
+        errorMessage = errors is List
+            ? (errors.isNotEmpty ? errors.join('\n') : (errorMsg is String ? errorMsg : 'Registration failed.'))
+            : (errorMsg is String ? errorMsg : 'Registration failed.');
+      }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            errorMessage,
-            style: GoogleFonts.poppins(),
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              errorMessage,
+              style: GoogleFonts.poppins(),
+            ),
           ),
-        ),
-      );
+        );
+      }
       return;
     }
 
     if (!context.mounted) return;
-    context.go(
-      '/verify-email?email=${Uri.encodeComponent(emailController.text.trim())}',
-    );
+
+    try {
+      // When email is not configured, backend returns access_token and dashboard; log user in and go there.
+      final accessToken = body['access_token'] as String?;
+      if (accessToken != null && accessToken.isNotEmpty) {
+        final refreshToken = body['refresh_token'] as String?;
+        await AuthService.saveTokens(accessToken, refreshToken);
+        final user = body['user'];
+        if (user is Map<String, dynamic>) {
+          await AuthService.saveUserInfo(user);
+        }
+        if (!context.mounted) return;
+        final dashboardPath = body['dashboard'] as String? ?? '/enrollment';
+        final safePath = dashboardPath.startsWith('/') ? dashboardPath : '/$dashboardPath';
+        context.go('$safePath?token=${Uri.encodeComponent(accessToken)}');
+        return;
+      }
+
+      // Email verification required: go to verify-email page (backend sent the code by email)
+      final email = emailController.text.trim();
+      if (!context.mounted) return;
+      context.go(
+        '/verify-email?email=${Uri.encodeComponent(email)}',
+      );
+    } catch (e, st) {
+      // Defensive: any uncaught error (e.g. storage, navigation) — still try to reach verify-email so user can enter code
+      if (context.mounted) {
+        debugPrint('Register post-201 error: $e $st');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Registration succeeded. Please check your email for the verification code.')),
+        );
+        context.go(
+          '/verify-email?email=${Uri.encodeComponent(emailController.text.trim())}',
+        );
+      }
+    }
   }
 
   @override

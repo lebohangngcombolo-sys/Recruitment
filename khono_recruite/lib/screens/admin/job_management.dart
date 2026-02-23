@@ -1,4 +1,4 @@
-import 'package:provider/provider.dart';
+﻿import 'package:provider/provider.dart';
 import 'package:flutter/material.dart' hide SearchBar, FilterChip; // hide both
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
@@ -482,7 +482,7 @@ class _JobManagementState extends State<JobManagement> {
           ...items
               .map((item) => Padding(
                     padding: const EdgeInsets.only(left: 8, bottom: 2),
-                    child: Text("• $item"),
+                    child: Text("ΓÇó $item"),
                   ))
               .toList(),
         ],

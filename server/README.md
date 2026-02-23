@@ -4,8 +4,8 @@ For fluuter fronend : cd khono_recruite
 
 
 for Python backend: cd server
-                  : python -m venv myenv
-                  : myenv\scripts\activate
+                  : python -m venv .venv
+                  : .\.venv\Scripts\Activate.ps1   (Windows PowerShell) or  source .venv/bin/activate  (WSL/Linux)
                   : pip install -r requirements.txt
                   : python run.py
 
@@ -47,6 +47,10 @@ MAIL_PORT=
 MAIL_USE_TLS=
 MAIL_USERNAME=
 MAIL_PASSWORD=
+MAIL_DEFAULT_SENDER=
+MAIL_TIMEOUT=60
+# Optional: use SendGrid HTTP API instead of SMTP (avoids ETIMEDOUT on Render)
+SENDGRID_API_KEY=
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
@@ -79,8 +83,7 @@ http://127.0.0.1:5000/api/admin/powerbi/data
 Authorization Bearer $token
 
 Open another terminal : for Python backend: cd server
-                  : python -m venv myenv
-                  : myenv\scripts\activate
+                  : .\.venv\Scripts\Activate.ps1   (or  source .venv/bin/activate  on WSL)
                   : python test.py
 
 copy the Token and repace "$token" with your actual token

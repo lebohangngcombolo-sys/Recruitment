@@ -1,4 +1,4 @@
-import os
+﻿import os
 import ssl
 import cloudinary
 import cloudinary.uploader
@@ -28,7 +28,7 @@ mail = Mail()
 migrate = Migrate()
 oauth = OAuth()  # <-- Authlib OAuth
 cors = CORS()
-validator = PasswordValidator()   # ← IMPORTANT
+validator = PasswordValidator()   # ΓåÉ IMPORTANT
 bcrypt = Bcrypt()
 socketio = SocketIO()
 

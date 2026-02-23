@@ -1,8 +1,8 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+﻿import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_web_plugins/flutter_web_plugins.dart'; // ⚡ Web URL strategy
+import 'package:flutter_web_plugins/flutter_web_plugins.dart'; // ΓÜí Web URL strategy
 import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
 import 'package:webview_flutter_web/webview_flutter_web.dart';
 
@@ -35,7 +35,7 @@ import 'providers/theme_provider.dart';
 import 'utils/theme_utils.dart';
 
 void main() {
-  // ⚡ Fix Flutter Web initial route handling
+  // ΓÜí Fix Flutter Web initial route handling
   setUrlStrategy(PathUrlStrategy());
 
   // WebView: set web platform implementation so CV preview works in-app on web
@@ -53,7 +53,7 @@ void main() {
   );
 }
 
-// ✅ Persistent router
+// Γ£à Persistent router
 final GoRouter _router = GoRouter(
   initialLocation: '/',
   routes: [
@@ -180,7 +180,7 @@ final GoRouter _router = GoRouter(
       path: '/hiring-manager-offers',
       builder: (context, state) => const AdminOfferListScreen(),
     ),
-    // ✅ Add this new route
+    // Γ£à Add this new route
     GoRoute(
       path: '/hr-dashboard',
       builder: (context, state) {
@@ -195,7 +195,7 @@ final GoRouter _router = GoRouter(
         return ProfilePage(token: token);
       },
     ),
-    // ⚡ OAuth callback screen reads tokens directly from URL
+    // ΓÜí OAuth callback screen reads tokens directly from URL
     GoRoute(
       path: '/oauth-callback',
       builder: (context, state) => const OAuthCallbackScreen(),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../utils/app_config.dart';
 
 class SsoEnterpriseScreen extends StatelessWidget {
   const SsoEnterpriseScreen({super.key});
@@ -11,7 +12,7 @@ class SsoEnterpriseScreen extends StatelessWidget {
       'Okta': 'https://your-domain.okta.com',
       'Google Workspace': 'https://accounts.google.com',
       // Link to your backend SSO route
-      'Other SAML': 'http://127.0.0.1:5000/api/auth/sso',
+      'Other SAML': localhostToEnv('http://127.0.0.1:5000/api/auth/sso'),
     };
 
     final url = urls[provider];

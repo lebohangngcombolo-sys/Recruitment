@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import '../utils/api_endpoints.dart';
 
 /// Support chat panel – open from "Let's chat" for bot/support assistance.
 class SupportChatPanel extends StatefulWidget {
@@ -49,7 +50,7 @@ class _SupportChatPanelState extends State<SupportChatPanel> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://127.0.0.1:5000/api/ai/chat'),
+        Uri.parse(ApiEndpoints.askBot),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'message': text}),
       );
