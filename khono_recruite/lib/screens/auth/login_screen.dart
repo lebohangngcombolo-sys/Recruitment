@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen>
         passwordController.text.trim(),
       );
 
-      if (result['ok'] == true) {
+      if (result['success'] == true) {
         // 🆕 Check if MFA is required
         if (result['mfa_required'] == true) {
           // 🆕 STORE THE MFA SESSION TOKEN IN STATE
@@ -120,7 +120,7 @@ class _LoginScreenState extends State<LoginScreen>
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result['error']?.toString() ?? "Login failed")),
+          SnackBar(content: Text(result['error']?.toString() ?? result['message']?.toString() ?? "Login failed")),
         );
       }
     } catch (e) {
