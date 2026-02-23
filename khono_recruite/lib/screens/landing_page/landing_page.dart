@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -607,35 +607,38 @@ class _LandingPageState extends State<LandingPage>
   void _showLogoutConfirmation(BuildContext context) {
     showDialog(
       context: context,
+      barrierColor: Colors.black54,
       builder: (BuildContext context) {
         return BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Dialog(
             backgroundColor: Colors.white.withOpacity(0.95),
+            insetPadding: const EdgeInsets.symmetric(horizontal: 24),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
               side: BorderSide(
                   color: primaryColor.withOpacity(0.5), width: 1),
             ),
             child: Container(
+              constraints: const BoxConstraints(maxWidth: 320),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
               ),
-              padding: const EdgeInsets.all(20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.logout, color: primaryColor, size: 32),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 12),
                   Text("Logout",
                       style: GoogleFonts.poppins(
                           color: Colors.black87,
                           fontSize: 18,
                           fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 8),
                   Text("Are you sure you want to logout?",
-                      style: GoogleFonts.poppins(color: Colors.black54)),
-                  const SizedBox(height: 20),
+                      style: GoogleFonts.poppins(color: Colors.black87)),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [

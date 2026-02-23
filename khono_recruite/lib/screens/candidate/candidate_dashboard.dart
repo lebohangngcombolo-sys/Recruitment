@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
@@ -622,11 +622,14 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   void _showLogoutConfirmation(BuildContext context) {
     showDialog(
       context: context,
+      barrierColor: Colors.black54,
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.symmetric(horizontal: 24),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
           child: Container(
+            constraints: BoxConstraints(maxWidth: 320),
             padding: EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -640,14 +643,15 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                   style: GoogleFonts.poppins(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
                 ),
-                SizedBox(height: 20),
+                SizedBox(height: 12),
                 Text(
                   'Are you sure you want to logout?',
-                  style: GoogleFonts.poppins(),
+                  style: GoogleFonts.poppins(color: Colors.black87),
                 ),
-                SizedBox(height: 20),
+                SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -1182,7 +1186,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           Expanded(
             child: _buildOpportunityCard(
               title: 'My applications',
-              count: _applicationsCount != null ? '$_applicationsCount' : 'ΓÇö',
+              count: _applicationsCount != null ? '$_applicationsCount' : '—',
               gradient: LinearGradient(
                 colors: [
                   Color(0xFF991A1A).withValues(alpha: 0.8),
@@ -1218,7 +1222,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           Expanded(
             child: _buildOpportunityCard(
               title: 'Saved Jobs',
-              count: _savedCount != null ? '$_savedCount' : 'ΓÇö',
+              count: _savedCount != null ? '$_savedCount' : '—',
               gradient: LinearGradient(
                 colors: [
                   Color(0xFF11998e).withValues(alpha: 0.8),

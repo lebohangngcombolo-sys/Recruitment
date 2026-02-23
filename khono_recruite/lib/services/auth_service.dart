@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart' show File;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -62,6 +62,24 @@ class AuthService {
       "status": response.statusCode, // HTTP status code
       "body": body, // decoded response
     };
+  }
+
+  // ----------------- RESEND VERIFICATION CODE -----------------
+  static Future<Map<String, dynamic>> resendVerificationCode(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.resendVerification),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
+      );
+      final decoded = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        return Map<String, dynamic>.from(decoded as Map);
+      }
+      return {'error': decoded['error'] ?? decoded['message'] ?? 'Failed to resend code'};
+    } catch (e) {
+      return {'error': e.toString()};
+    }
   }
 
   // ----------------- VERIFY EMAIL -----------------

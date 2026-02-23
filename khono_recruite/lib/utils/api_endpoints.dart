@@ -1,4 +1,4 @@
-﻿class ApiEndpoints {
+class ApiEndpoints {
   // ------------------- Base URLs -------------------
   static const authBase = "http://127.0.0.1:5000/api/auth";
   static const candidateBase = "http://127.0.0.1:5000/api/candidate";
@@ -7,6 +7,9 @@
   static const hmBase = "http://127.0.0.1:5000/api/admin";
   static const chatBase = "http://127.0.0.1:5000/api/chat";
   static const analyticsBase = "http://127.0.0.1:5000/api/analytics";
+  static const aiBase = "http://127.0.0.1:5000/api/ai";
+  static const generateJobDetails = "$aiBase/generate_job_details";
+  static const generateQuestions = "$aiBase/generate_questions";
 
   // NEW: Offer management base URL (matches your Flask blueprint)
   static const offerBase = "http://127.0.0.1:5000/api/offer";
@@ -18,6 +21,7 @@
   // ------------------- Auth -------------------
   static const register = "$authBase/register";
   static const verify = "$authBase/verify";
+  static const resendVerification = "$authBase/resend-verification";
   static const login = "$authBase/login";
   static const logout = "$authBase/logout";
   static const forgotPassword = "$authBase/forgot-password";

@@ -1,4 +1,4 @@
-﻿from flask import request, jsonify, current_app, redirect, url_for, make_response
+from flask import request, jsonify, current_app, redirect, url_for, make_response
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -425,6 +425,37 @@ def init_auth_routes(app):
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f'Verification error: {str(e)}', exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+
+    # ------------------- RESEND VERIFICATION CODE -------------------
+    @app.route('/api/auth/resend-verification', methods=['POST'])
+    @limiter.limit("5 per minute")
+    def resend_verification():
+        try:
+            data = request.get_json(silent=True) or {}
+            email = (data.get('email') or '').strip().lower()
+            if not email:
+                return jsonify({'error': 'Email is required'}), 400
+            user = User.query.filter(db.func.lower(User.email) == email).first()
+            if not user:
+                return jsonify({'error': 'No account found for this email'}), 404
+            if user.is_verified:
+                return jsonify({'message': 'Email already verified'}), 200
+            VerificationCode.query.filter_by(email=email, is_used=False).delete()
+            code = f"{secrets.randbelow(1_000_000):06d}"
+            expires_at = datetime.utcnow() + timedelta(minutes=30)
+            verification_code = VerificationCode(
+                email=email,
+                code=code,
+                expires_at=expires_at
+            )
+            db.session.add(verification_code)
+            db.session.commit()
+            EmailService.send_verification_email(email, code)
+            return jsonify({'message': 'Verification code sent'}), 200
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Resend verification error: {str(e)}', exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
 
     # ------------------- LOGIN -------------------
