@@ -86,6 +86,8 @@ class _ProfilePageState extends State<ProfilePage>
   int _backupCodesRemaining = 0;
 
   List<dynamic> documents = [];
+  List<String> _certifications = [];
+  List<String> _languages = [];
   final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
   // Add these helper methods in the _ProfilePageState class (around line 150, after the state variables):
@@ -655,14 +657,26 @@ class _ProfilePageState extends State<ProfilePage>
 
         idNumberController.text = candidate['id_number'] ?? "";
         bioController.text = candidate['bio'] ?? "";
-        locationController.text = candidate['location'] ?? "";
+        // Prefer address (from enrollment) then location
+        locationController.text = (candidate['address'] ?? candidate['location'] ?? "").toString();
 
-        // Initialize education and work experience
-        final degree = candidate['degree'] ?? "";
-        final institution = candidate['institution'] ?? "";
-        final graduationYear = candidate['graduation_year'] ?? "";
-
-        if (degree.isNotEmpty || institution.isNotEmpty) {
+        // Initialize education from enrollment format: education list [{level, institution, graduation_year}]
+        String degree = candidate['degree'] ?? "";
+        String institution = candidate['institution'] ?? "";
+        String graduationYear = candidate['graduation_year'] ?? "";
+        final educationList = candidate['education'];
+        if (educationList is List && educationList.isNotEmpty) {
+          final first = educationList.first;
+          if (first is Map) {
+            degree = (first['level'] ?? first['degree'] ?? degree).toString();
+            institution = (first['institution'] ?? institution).toString();
+            graduationYear = (first['graduation_year'] ?? graduationYear).toString();
+          }
+        }
+        if (degree.isNotEmpty || institution.isNotEmpty || graduationYear.isNotEmpty) {
+          degreeController.text = degree;
+          institutionController.text = institution;
+          graduationYearController.text = graduationYear;
           _educationControllers.clear();
           _educationControllers.add(TextEditingController(
               text:
@@ -671,12 +685,19 @@ class _ProfilePageState extends State<ProfilePage>
           _educationControllers = [TextEditingController()];
         }
 
+        // Work experience from enrollment: list of {position, company, description}
         final workExperience = candidate['work_experience'] ?? [];
         if (workExperience.isNotEmpty && workExperience is List) {
           _workExpControllers.clear();
           for (var exp in workExperience) {
-            _workExpControllers
-                .add(TextEditingController(text: exp.toString()));
+            String text = exp.toString();
+            if (exp is Map) {
+              final pos = exp['position'] ?? exp['title'] ?? '';
+              final co = exp['company'] ?? '';
+              final desc = exp['description'] ?? '';
+              text = [if (pos.isNotEmpty) pos, if (co.isNotEmpty) 'at $co', if (desc.isNotEmpty) desc].join(' • ');
+            }
+            _workExpControllers.add(TextEditingController(text: text));
           }
         } else {
           _workExpControllers = [TextEditingController()];
@@ -696,6 +717,11 @@ class _ProfilePageState extends State<ProfilePage>
         portfolioController.text = candidate['portfolio'] ?? "";
         documents = candidate['documents'] ?? [];
         _profileImageUrl = candidate['profile_picture'] ?? "";
+        // From enrollment: certifications and languages (persisted with profile)
+        _certifications = List<String>.from(
+            (candidate['certifications'] ?? []).map((e) => e.toString()));
+        _languages = List<String>.from(
+            (candidate['languages'] ?? []).map((e) => e.toString()));
       }
 
       final settingsRes = await http.get(
@@ -1779,7 +1805,8 @@ class _ProfilePageState extends State<ProfilePage>
                 _infoRow("Full Name", fullNameController.text),
                 _infoRow("Email", emailController.text),
                 _infoRow("Phone", phoneController.text),
-                _infoRow("Location", locationController.text),
+                if (locationController.text.isNotEmpty)
+                  _infoRow("Address", locationController.text),
                 _infoRow("Nationality", nationalityController.text),
                 _infoRow("Title", titleController.text),
                 if (bioController.text.isNotEmpty) ...[
@@ -1847,6 +1874,82 @@ class _ProfilePageState extends State<ProfilePage>
                         ),
                         child: Text(
                           trimmedSkill,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                if (_certifications.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Divider(color: Colors.grey.shade100),
+                  const SizedBox(height: 16),
+                  Text(
+                    "Certifications",
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _certifications.map((c) {
+                      final t = c.trim();
+                      if (t.isEmpty) return const SizedBox.shrink();
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          t,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                if (_languages.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Divider(color: Colors.grey.shade100),
+                  const SizedBox(height: 16),
+                  Text(
+                    "Languages",
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _languages.map((lang) {
+                      final t = lang.trim();
+                      if (t.isEmpty) return const SizedBox.shrink();
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          t,
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: Colors.redAccent,

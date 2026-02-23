@@ -4,8 +4,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
-import '../../widgets/application_flow_stepper.dart';
-
 class AssessmentResultsPage extends StatefulWidget {
   final int? applicationId;
   final String token;
@@ -85,13 +83,6 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
         ),
         child,
       ],
-    );
-  }
-
-  Widget _buildStepperHeader() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: ApplicationFlowStepper(currentStep: 3),
     );
   }
 
@@ -658,12 +649,17 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
                           color: _surfaceOverlay,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.arrow_back_ios_new_rounded,
-                            size: 18, color: Colors.white),
+                        child: const Icon(Icons.arrow_back,
+                            size: 24, color: Colors.white),
                       ),
                       onPressed: () {
-                        context.go('/candidate-dashboard');
+                        if (Navigator.canPop(context)) {
+                          Navigator.pop(context);
+                        } else {
+                          context.go('/candidate-dashboard');
+                        }
                       },
+                      tooltip: 'Back',
                     ),
                     const SizedBox(width: 12),
                     Text(
@@ -694,8 +690,6 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              _buildStepperHeader(),
               const SizedBox(height: 12),
 
               // Content

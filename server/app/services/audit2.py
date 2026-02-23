@@ -14,11 +14,12 @@ class AuditService:
         action: str,
         target_user_id: int = None,
         details: str = None,
-        extra_data: dict = None  # <-- renamed
+        extra_data: dict = None,
+        actor_label: str = "admin_id",
     ):
         """
-        Log an action performed by an admin or system process.
-        Automatically captures IP and User-Agent from request.
+        Log an action. admin_id is the actor's user id (stored in DB).
+        actor_label is only for the log message (e.g. 'candidate_id' when actor is a candidate).
         """
         try:
             ip_address = request.remote_addr if request else None
@@ -29,7 +30,7 @@ class AuditService:
                 action=action,
                 target_user_id=target_user_id,
                 details=details,
-                extra_data=extra_data,  # <-- use correct field name
+                extra_data=extra_data,
                 ip_address=ip_address,
                 user_agent=user_agent,
                 timestamp=datetime.utcnow()
@@ -37,7 +38,7 @@ class AuditService:
 
             db.session.add(log_entry)
             db.session.commit()
-            logger.info(f"Audit recorded: {action} by admin_id={admin_id}")
+            logger.info(f"Audit recorded: {action} by {actor_label}={admin_id}")
 
         except Exception as e:
             db.session.rollback()
@@ -48,9 +49,13 @@ class AuditService:
         """
         Alias for record_action for backward compatibility.
         Maps old 'metadata' kwarg to 'extra_data'.
+        Pass actor_label='candidate_id' for candidate-initiated actions.
         """
         extra_data = kwargs.get("metadata")  # support old calls
-        AuditService.record_action(admin_id=user_id, action=action, extra_data=extra_data)
+        actor_label = kwargs.get("actor_label", "admin_id")
+        AuditService.record_action(
+            admin_id=user_id, action=action, extra_data=extra_data, actor_label=actor_label
+        )
 
 
 # === Helper Decorators (Optional Integration) ===

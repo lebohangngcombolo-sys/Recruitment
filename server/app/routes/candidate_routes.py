@@ -1,9 +1,11 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, Response
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from app.extensions import db, cloudinary_client
+import requests
 from werkzeug.security import check_password_hash, generate_password_hash
 from app.extensions import bcrypt
 import cloudinary.uploader
+import cloudinary.utils
 from app.models import (
     User, Candidate, Requisition, Application, AssessmentResult, Notification, AuditLog, CVAnalysis
 )
@@ -61,19 +63,27 @@ def apply_job(job_id):
             candidate.profile["cover_letter"] = candidate.cover_letter
         db.session.commit()
 
-        # Check if candidate already applied
+        # Check if candidate already has an application for this job
         existing_app = Application.query.filter_by(
             candidate_id=candidate.id,
             requisition_id=job_id
         ).first()
         if existing_app:
+            # Allow resuming: if application is still in progress (or form submitted, not yet assessment), update details and return it
+            if existing_app.status in ("in_progress", "draft", "applied"):
+                db.session.commit()  # persist candidate info updates above
+                return jsonify({
+                    "message": "Application updated.",
+                    "application_id": existing_app.id
+                }), 200
+            # Already fully applied
             return jsonify({"error": "You have already applied for this job"}), 400
 
-        # Create new application
+        # Create new application (in_progress until assessment + required steps are complete)
         application = Application(
             candidate_id=candidate.id,
             requisition_id=job_id,
-            status="applied",
+            status="in_progress",
             created_at=datetime.utcnow()
         )
         db.session.add(application)
@@ -84,6 +94,7 @@ def apply_job(job_id):
             admin_id=user_id,
             action="Candidate Applied for Job",
             target_user_id=user_id,
+            actor_label="candidate_id",
             details=f"Applied for job ID {job_id}",
             extra_data={"job_id": job_id, "application_id": application.id}
         )
@@ -171,6 +182,7 @@ def get_available_jobs():
             admin_id=user_id,
             action="Candidate Viewed Available Jobs",
             target_user_id=user_id,
+            actor_label="candidate_id",
             details="Retrieved list of available jobs"
         )
 
@@ -242,8 +254,9 @@ def upload_resume(application_id):
         except Exception:
             pass
 
-        # --- Upload to Cloudinary ---
-        resume_url = HybridResumeAnalyzer.upload_cv(file)
+        # --- Upload to Cloudinary (with original filename so it appears correctly in Candidate_CV) ---
+        from app.services.cv_parser_service import HybridResumeAnalyzer
+        resume_url = HybridResumeAnalyzer.upload_cv(file, filename=filename)
         if not resume_url:
             return jsonify({"error": "Failed to upload resume"}), 500
 
@@ -254,7 +267,12 @@ def upload_resume(application_id):
 
         # --- Queue analysis (non-blocking) ---
         application.resume_url = resume_url
+        # Keep candidate-level CV in sync so candidates.cv_url is set (for admin/DB views)
+        candidate.cv_url = resume_url
+        if resume_text:
+            candidate.cv_text = resume_text
         db.session.add(application)
+        db.session.add(candidate)
         db.session.commit()
 
         cv_analysis = CVAnalysis(
@@ -343,6 +361,9 @@ def get_applications():
                 "company": job.company if job else None,
                 "location": job.location if job else None,
                 "status": app.status,
+                "last_saved_screen": getattr(app, "last_saved_screen", None),
+                "saved_at": app.saved_at.isoformat() if getattr(app, "saved_at", None) else None,
+                "draft_data": app.draft_data,
                 "resume_url": app.resume_url,
                 "cv_score": app.cv_score,
                 "cv_parser_result": app.cv_parser_result,
@@ -363,11 +384,72 @@ def get_applications():
             admin_id=user_id,
             action="Candidate Viewed Applications",
             target_user_id=user_id,
+            actor_label="candidate_id",
             details="Retrieved list of candidate applications"
         )
         return jsonify(result)
     except Exception as e:
         current_app.logger.error(f"Get applications error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+def _cloudinary_public_id_from_url(url):
+    """Extract public_id from a Cloudinary raw URL (e.g. .../raw/upload/v123/folder/file.pdf)."""
+    if not url or "/upload/" not in url:
+        return None
+    after_upload = url.split("/upload/")[-1]
+    parts = after_upload.split("/", 1)
+    if len(parts) < 2:
+        return None
+    return parts[1]  # e.g. "Candidate_CV/BongiweM_-_CV.pdf"
+
+
+# ----------------- CV PREVIEW (proxy so app can embed PDF without 401 / new tab) -----------------
+@candidate_bp.route("/applications/<int:application_id>/cv-preview", methods=["GET"])
+@role_required(["candidate"])
+def cv_preview(application_id):
+    """Stream the application's CV PDF so the app can display it inline (avoids Cloudinary 401 in browser)."""
+    try:
+        application = Application.query.get_or_404(application_id)
+        candidate = Candidate.query.filter_by(user_id=get_jwt_identity()).first_or_404()
+        if application.candidate_id != candidate.id:
+            return jsonify({"error": "Unauthorized"}), 403
+        resume_url = getattr(application, "resume_url", None)
+        if not resume_url or not resume_url.strip():
+            return jsonify({"error": "No CV uploaded for this application"}), 404
+
+        fetch_url = resume_url
+        public_id = _cloudinary_public_id_from_url(resume_url)
+        if public_id:
+            try:
+                signed_url, _ = cloudinary.utils.cloudinary_url(
+                    public_id, resource_type="raw", sign_url=True
+                )
+                fetch_url = signed_url
+            except Exception as e:
+                current_app.logger.warning(f"CV preview: could not build signed URL: {e}")
+
+        r = requests.get(
+            fetch_url,
+            timeout=15,
+            stream=True,
+            headers={
+                "User-Agent": "Mozilla/5.0 (compatible; KhonoRecruit/1.0)",
+                "Accept": "application/pdf,*/*",
+            },
+        )
+        r.raise_for_status()
+        headers = {
+            "Content-Type": r.headers.get("Content-Type") or "application/pdf",
+            "Content-Disposition": "inline; filename=\"cv.pdf\"",
+            "Access-Control-Allow-Origin": "*",
+        }
+        return Response(r.iter_content(chunk_size=8192), status=r.status_code, headers=headers)
+    except requests.RequestException as e:
+        current_app.logger.warning(f"CV preview fetch failed: {e}")
+        return jsonify({"error": "Could not load CV"}), 502
+    except Exception as e:
+        current_app.logger.error(f"CV preview error: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
 
 
@@ -583,6 +665,18 @@ def update_profile():
             elif hasattr(user, key):
                 setattr(user, key, value)
 
+        # Keep User.profile in sync with candidate name (for greeting / profile display)
+        name_str = (getattr(candidate, "full_name", None) or "").strip()
+        if name_str:
+            existing = user.profile or {}
+            parts = name_str.split(None, 1)
+            user.profile = {
+                **existing,
+                "full_name": name_str,
+                "first_name": parts[0] if parts else "",
+                "last_name": parts[1] if len(parts) > 1 else "",
+            }
+
         db.session.commit()
 
         return jsonify({
@@ -620,7 +714,7 @@ def upload_document():
         if not ('.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_docs):
             return jsonify({"success": False, "message": "Invalid file type"}), 400
 
-        url = HybridResumeAnalyzer.upload_cv(file)
+        url = HybridResumeAnalyzer.upload_cv(file, filename=filename)
         if not url:
             return jsonify({"success": False, "message": "Failed to upload document"}), 500
 
@@ -835,30 +929,35 @@ def get_settings():
         "data": user.settings or {}
     }), 200
     
-@candidate_bp.route('/notifications', methods=['GET'])
-@jwt_required()
+@candidate_bp.route('/notifications', methods=['GET', 'OPTIONS'])
+@jwt_required(optional=True)
 def get_candidate_notifications():
     """
-    Get all notifications for the current candidate
-    Returns: List of notification objects (matching your Flutter service expectation)
+    Get all notifications for the current candidate.
+    OPTIONS allowed for CORS preflight. Returns 401 if not authenticated.
     """
+    if request.method == 'OPTIONS':
+        return '', 204
+
     try:
         current_user_id = get_jwt_identity()
-        
-        # Get all notifications for the user, ordered by most recent first
+        if current_user_id is None:
+            return jsonify({'error': 'Unauthorized', 'notifications': []}), 401
+
+        current_user_id = int(current_user_id) if current_user_id is not None else None
+        if current_user_id is None:
+            return jsonify({'error': 'Invalid token', 'notifications': []}), 401
+
         notifications = Notification.query.filter_by(
             user_id=current_user_id
         ).order_by(Notification.created_at.desc()).all()
-        
-        # Convert to list of dictionaries using your existing to_dict method
-        notifications_data = [notification.to_dict() for notification in notifications]
-        
-        # Return the list directly (matching your Flutter service expectation)
+
+        notifications_data = [n.to_dict() for n in notifications]
         return jsonify(notifications_data), 200
-        
+
     except Exception as e:
-        current_app.logger.error(f"Get notifications error: {str(e)}")
-        return jsonify({'error': f'Failed to fetch notifications: {str(e)}'}), 500
+        current_app.logger.error("Get notifications error: %s", e, exc_info=True)
+        return jsonify({'error': 'Failed to fetch notifications', 'notifications': []}), 500
 
 
 # ----------------- SAVE APPLICATION DRAFT -----------------
@@ -907,6 +1006,7 @@ def save_application_draft(application_id):
             admin_id=user_id,
             action="Candidate Saved Application Draft",
             target_user_id=user_id,
+            actor_label="candidate_id",
             details=f"Saved draft for application ID {application_id}",
             extra_data={"application_id": application_id, "last_saved_screen": last_saved_screen}
         )
@@ -961,7 +1061,8 @@ def get_application_drafts():
 @role_required(["candidate"])
 def submit_draft(draft_id):
     """
-    Converts a saved draft application into a real (applied) application.
+    Converts a saved draft back to in_progress so the candidate can continue.
+    Application is only considered complete after assessment is submitted (assessment_submitted).
     """
     try:
         user_id = get_jwt_identity()
@@ -976,7 +1077,7 @@ def submit_draft(draft_id):
             return jsonify({"error": "Job is not accepting applications"}), 400
 
         draft.is_draft = False
-        draft.status = "applied"
+        draft.status = "in_progress"  # Stay in progress until assessment is submitted
         draft.created_at = datetime.utcnow()
         db.session.commit()
         
@@ -985,6 +1086,7 @@ def submit_draft(draft_id):
             admin_id=user_id,
             action="Candidate Submitted Draft Application",
             target_user_id=user_id,
+            actor_label="candidate_id",
             details=f"Submitted draft application ID {draft_id}",
             extra_data={"draft_id": draft_id, "application_id": draft.id}
         )

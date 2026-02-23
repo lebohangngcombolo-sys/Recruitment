@@ -86,15 +86,15 @@ class User(db.Model):
             "id": self.id,
             "email": self.email,
             "role": self.role,
-            "profile": self.profile,
-            "settings": self.settings,
+            "profile": self.profile if self.profile is not None else {},
+            "settings": self.settings if self.settings is not None else {},
             "is_verified": self.is_verified,
-            "enrollment_completed": self.enrollment_completed,
-            "dark_mode": self.dark_mode,
-            "is_active": self.is_active,
-            "created_at": self.created_at.isoformat(),
-            "first_login": self.first_login,
-            "mfa_enabled": self.mfa_enabled
+            "enrollment_completed": getattr(self, "enrollment_completed", False),
+            "dark_mode": getattr(self, "dark_mode", False),
+            "is_active": getattr(self, "is_active", True),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "first_login": getattr(self, "first_login", True),
+            "mfa_enabled": getattr(self, "mfa_enabled", False),
         }
 
     def to_dict_with_presence(self):
@@ -917,8 +917,8 @@ class UserPresence(db.Model):
     typing_in_thread = db.Column(db.Integer, nullable=True)
     socket_id = db.Column(db.String(100), nullable=True)
     
-    # Relationship
-    user = db.relationship('User', backref=db.backref('user_presence', uselist=False, overlaps="presence"))
+    # Relationship (back_populates User.presence to avoid duplicate relationship warning)
+    user = db.relationship('User', back_populates='presence', uselist=False)
 
     
     def to_dict(self):

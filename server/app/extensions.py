@@ -35,12 +35,21 @@ socketio = SocketIO()
 # ------------------- Cloudinary Client -------------------
 class CloudinaryClient:
     def init_app(self, app):
-        cloudinary.config(
-            cloud_name=app.config['CLOUDINARY_CLOUD_NAME'],
-            api_key=app.config['CLOUDINARY_API_KEY'],
-            api_secret=app.config['CLOUDINARY_API_SECRET'],
-            secure=True
-        )
+        cloud_name = app.config.get('CLOUDINARY_CLOUD_NAME')
+        api_key = app.config.get('CLOUDINARY_API_KEY')
+        api_secret = app.config.get('CLOUDINARY_API_SECRET')
+        if not all([cloud_name, api_key, api_secret]):
+            import logging
+            logging.getLogger(__name__).warning(
+                "Cloudinary credentials missing (CLOUDINARY_CLOUD_NAME, API_KEY, API_SECRET). CV uploads will fail."
+            )
+        else:
+            cloudinary.config(
+                cloud_name=cloud_name,
+                api_key=api_key,
+                api_secret=api_secret,
+                secure=True
+            )
 
     def upload(self, file_path):
         try:

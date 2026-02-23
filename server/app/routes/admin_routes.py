@@ -562,11 +562,25 @@ def get_job_applications(job_id):
             error_out=False
         )
         
-        # Prepare response
+        # Enrich each application with candidate details (full_name, email, phone) and job info
+        enriched = []
+        for app in applications.items:
+            app_dict = app.to_dict()
+            cand = Candidate.query.get(app.candidate_id) if app.candidate_id else None
+            user = User.query.get(cand.user_id) if cand and cand.user_id else None
+            app_dict["candidate"] = {
+                "full_name": cand.full_name if cand else "Unknown",
+                "email": user.email if user else "",
+                "phone": (cand.phone or "") if cand else "",
+            } if cand else {"full_name": "Unknown", "email": "", "phone": ""}
+            enriched.append(app_dict)
+        
         response = {
             "job_id": job_id,
             "job_title": job.title,
-            "applications": [app.to_dict() for app in applications.items],
+            "company": getattr(job, "company", None) or "",
+            "employment_type": getattr(job, "employment_type", None) or "Full Time",
+            "applications": enriched,
             "pagination": {
                 "page": applications.page,
                 "per_page": applications.per_page,
@@ -2605,11 +2619,29 @@ def download_application_cv(application_id):
 @role_required(["admin", "hiring_manager", "hr"])
 def get_all_candidates():
     """
-    Fetch all candidates with their profile info.
+    Fetch all candidates with user email and applications summary (jobs they applied to).
     """
     try:
         candidates = Candidate.query.all()
-        enriched = [c.to_dict() for c in candidates]
+        enriched = []
+        for c in candidates:
+            c_dict = c.to_dict()
+            user = User.query.get(c.user_id) if c.user_id else None
+            c_dict["email"] = user.email if user else ""
+            # Applications summary: job title, company, employment_type, status per application
+            apps = Application.query.filter_by(candidate_id=c.id).all()
+            c_dict["applications_summary"] = [
+                {
+                    "application_id": a.id,
+                    "job_id": a.requisition_id,
+                    "job_title": a.requisition.title if a.requisition else "",
+                    "company": getattr(a.requisition, "company", None) or "" if a.requisition else "",
+                    "employment_type": getattr(a.requisition, "employment_type", None) or "Full Time" if a.requisition else "",
+                    "status": a.status or "",
+                }
+                for a in apps
+            ]
+            enriched.append(c_dict)
 
         return jsonify({
             "total": len(enriched),
@@ -2618,7 +2650,88 @@ def get_all_candidates():
     except Exception as e:
         current_app.logger.error(f"Error fetching candidates: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
-    
+
+
+@admin_bp.route("/candidates/<int:candidate_id>/applications", methods=["GET"])
+@role_required(["admin", "hiring_manager", "hr"])
+def get_applications_for_candidate(candidate_id):
+    """
+    Get all applications for a candidate with job details (title, company, employment_type).
+    """
+    try:
+        candidate = Candidate.query.get(candidate_id)
+        if not candidate:
+            return jsonify({"error": "Candidate not found"}), 404
+        applications = Application.query.filter_by(candidate_id=candidate_id).all()
+        result = []
+        for a in applications:
+            req = a.requisition
+            result.append({
+                "application": a.to_dict(),
+                "job": {
+                    "id": req.id if req else None,
+                    "title": req.title if req else "",
+                    "company": getattr(req, "company", None) or "" if req else "",
+                    "employment_type": getattr(req, "employment_type", None) or "Full Time" if req else "",
+                    "category": getattr(req, "category", None) or "" if req else "",
+                } if req else {},
+            })
+        return jsonify({"candidate_id": candidate_id, "applications": result}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching candidate applications: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@admin_bp.route("/candidates/database-details", methods=["GET"])
+@role_required(["admin", "hiring_manager", "hr"])
+def get_candidates_database_details():
+    """
+    Return all candidates with their linked user records as stored in the database.
+    Use this for easy retrieval and inspection of stored user + candidate details.
+    """
+    try:
+        candidates = Candidate.query.all()
+        rows = []
+        for c in candidates:
+            user = User.query.get(c.user_id) if c.user_id else None
+            rows.append({
+                "candidate": c.to_dict(),
+                "user": user.to_dict() if user else None,
+            })
+        return jsonify({
+            "total": len(rows),
+            "data": rows,
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching candidates database details: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@admin_bp.route("/users/database-details", methods=["GET"])
+@role_required(["admin", "hiring_manager", "hr"])
+def get_users_database_details():
+    """
+    Return all users as stored in the database (including profile JSON).
+    Use this for easy retrieval and inspection of stored user details.
+    """
+    try:
+        users = User.query.order_by(User.id).all()
+        rows = []
+        for u in users:
+            cand = Candidate.query.filter_by(user_id=u.id).first()
+            rows.append({
+                "user": u.to_dict(),
+                "candidate": cand.to_dict() if cand else None,
+            })
+        return jsonify({
+            "total": len(rows),
+            "data": rows,
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching users database details: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
 @admin_bp.route('/api/auth/enroll_mfa/<int:user_id>', methods=['POST'])
 @jwt_required()
 def enroll_mfa(user_id):

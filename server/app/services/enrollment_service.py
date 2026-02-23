@@ -187,6 +187,23 @@ class EnrollmentService:
                 return {"error": "No valid enrollment data provided"}, 400
 
             # ------------------------------------
+            # Sync display name to User.profile so /api/auth/me and users table stay consistent
+            # (CV upload and manual enrollment both save here; users.profile will have full_name)
+            # ------------------------------------
+            full_name = getattr(candidate, "full_name", None) or payload.get("full_name")
+            if full_name:
+                name_str = (full_name if isinstance(full_name, str) else str(full_name)).strip()
+                if name_str:
+                    existing = dict(user.profile) if user.profile else {}
+                    parts = name_str.split(None, 1)
+                    user.profile = {
+                        **existing,
+                        "full_name": name_str,
+                        "first_name": parts[0] if parts else "",
+                        "last_name": parts[1] if len(parts) > 1 else "",
+                    }
+
+            # ------------------------------------
             # Enrollment state
             # ------------------------------------
             if not user.enrollment_completed:
@@ -204,6 +221,7 @@ class EnrollmentService:
                 AuditService.log(
                     user_id=user.id,
                     action="candidate_enrollment_completed",
+                    actor_label="candidate_id",
                     metadata={
                         "candidate_id": candidate.id,
                         "fields": sorted(saved_fields),

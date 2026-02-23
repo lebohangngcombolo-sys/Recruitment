@@ -281,6 +281,143 @@ class _JobManagementState extends State<JobManagement> {
     );
   }
 
+  void _showJobApplicationsDialog(Map<String, dynamic> job, ThemeProvider themeProvider) async {
+    final jobId = job['id'] as int?;
+    if (jobId == null) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final applications = await admin.getJobApplications(jobId);
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(
+            'Applicants',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+            ),
+          ),
+          content: SizedBox(
+            width: 500,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${job['title'] ?? 'Job'}${(job['company'] != null && (job['company'] as String).isNotEmpty) ? ' at ${job['company']}' : ''}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (applications.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      'No applications yet',
+                      style: TextStyle(
+                        color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                      ),
+                    ),
+                  )
+                else
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 400),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: applications.length,
+                      itemBuilder: (_, i) {
+                        final app = applications[i] is Map ? applications[i] as Map<String, dynamic> : <String, dynamic>{};
+                        final cand = app['candidate'] is Map ? app['candidate'] as Map<String, dynamic> : <String, dynamic>{};
+                        final name = cand['full_name'] ?? 'Unknown';
+                        final email = cand['email'] ?? '';
+                        final phone = cand['phone'] ?? '';
+                        final status = app['status'] ?? '';
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: themeProvider.isDarkMode
+                                  ? Colors.white.withValues(alpha: 0.05)
+                                  : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  name,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                    color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                                  ),
+                                ),
+                                if (email.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      email,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                if (phone.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Text(
+                                      phone,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                if (status.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: Chip(
+                                      label: Text(status, style: const TextStyle(fontSize: 11)),
+                                      backgroundColor: Colors.teal.withValues(alpha: 0.2),
+                                      side: BorderSide(color: Colors.teal, width: 0.5),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load applicants: $e')),
+      );
+    }
+  }
+
   void _showBasicJobDetails(Map<String, dynamic> job) {
     showDialog(
       context: context,
@@ -580,17 +717,38 @@ class _JobManagementState extends State<JobManagement> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Text(
-                      job['title'] ?? 'Untitled Job',
-                      style: TextStyle(
-                        color: themeProvider.isDarkMode
-                            ? Colors.white
-                            : Colors.black87,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 18,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          job['title'] ?? 'Untitled Job',
+                          style: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.white
+                                : Colors.black87,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 18,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (job['company'] != null && (job['company'] as String).isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              job['company'] as String,
+                              style: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.grey.shade400
+                                    : Colors.black54,
+                                fontSize: 14,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   Container(
@@ -634,11 +792,20 @@ class _JobManagementState extends State<JobManagement> {
                 ),
               const SizedBox(height: 8),
 
-              // Job info chips
+              // Job info chips (company + employment type like candidate-facing listing)
               Wrap(
                 spacing: 8,
                 runSpacing: 4,
                 children: [
+                  if (job['employment_type'] != null && (job['employment_type'] as String).isNotEmpty)
+                    Chip(
+                      label: Text(
+                        (job['employment_type'] as String).replaceAll('_', ' '),
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      backgroundColor: Colors.redAccent.withOpacity(0.1),
+                      side: BorderSide(color: Colors.redAccent, width: 0.5),
+                    ),
                   if (job['category'] != null && job['category'].isNotEmpty)
                     Chip(
                       label: Text(job['category']),
@@ -721,6 +888,12 @@ class _JobManagementState extends State<JobManagement> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      IconButton(
+                        icon: const Icon(Icons.people, size: 20),
+                        color: Colors.teal,
+                        tooltip: "View Applicants",
+                        onPressed: () => _showJobApplicationsDialog(job, themeProvider),
+                      ),
                       IconButton(
                         icon: const Icon(Icons.visibility, size: 20),
                         color: Colors.blue,
