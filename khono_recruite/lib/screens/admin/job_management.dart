@@ -7,6 +7,10 @@ import '../../widgets/weighting_configuration_widget.dart';
 import '../../widgets/search_bar.dart'; // your custom SearchBar
 import '../../widgets/filter_chip.dart'; // your custom FilterChip
 import '../../services/admin_service.dart';
+import '../../services/ai_service.dart';
+import '../../services/test_pack_service.dart';
+import '../../models/test_pack.dart';
+import '../../widgets/save_test_pack_dialog.dart';
 import '../../providers/theme_provider.dart';
 
 class JobManagement extends StatefulWidget {
@@ -1616,6 +1620,57 @@ class _JobFormDialogState extends State<JobFormDialog>
         "weight": 1,
       });
     });
+  }
+
+  void _showAIQuestionDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AIQuestionDialog(
+          jobTitle: title,
+          onQuestionsGenerated: (generatedQuestions) {
+            setState(() {
+              questions.clear();
+              questions.addAll(generatedQuestions);
+            });
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _saveAsTestPack() async {
+    if (questions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add at least one question first')),
+      );
+      return;
+    }
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => SaveTestPackDialog(
+        initialQuestions: questions,
+        initialName: title.trim().isEmpty ? null : '$title Assessment Pack',
+      ),
+    );
+    if (result == null || !mounted) return;
+    try {
+      final pack = await _testPackService.createTestPack(result);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Test pack "${pack.name}" created')),
+      );
+      setState(() {
+        _testPacks = [..._testPacks, pack];
+        _useTestPack = true;
+        _testPackId = pack.id;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
   }
 
   List<Map<String, dynamic>> _normalizeKnockoutRules(dynamic raw) {
