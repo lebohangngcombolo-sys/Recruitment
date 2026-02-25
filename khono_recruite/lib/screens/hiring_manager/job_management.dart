@@ -268,6 +268,8 @@ class _JobFormDialogState extends State<JobFormDialog>
   final descriptionController = TextEditingController();
   final categoryController = TextEditingController();
   final companyDetailsController = TextEditingController();
+  final locationController = TextEditingController();
+  final companyNameController = TextEditingController();
   String salaryCurrency = "ZAR";
   String salaryPeriod = "monthly";
   final TextEditingController salaryMinController = TextEditingController();
@@ -323,6 +325,10 @@ class _JobFormDialogState extends State<JobFormDialog>
     jobSummary = widget.job?['job_summary'] ?? '';
     companyDetails = widget.job?['company_details'] ?? '';
     companyDetailsController.text = companyDetails;
+    jobLocation = widget.job?['location']?.toString() ?? '';
+    locationController.text = jobLocation;
+    companyName = widget.job?['company']?.toString() ?? '';
+    companyNameController.text = companyName;
     category = widget.job?['category'] ?? '';
     categoryController.text = category;
 
@@ -519,6 +525,8 @@ class _JobFormDialogState extends State<JobFormDialog>
     minExpController.dispose();
     salaryMinController.dispose();
     salaryMaxController.dispose();
+    locationController.dispose();
+    companyNameController.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -733,8 +741,8 @@ class _JobFormDialogState extends State<JobFormDialog>
         final value = fromController.isNotEmpty ? fromController : fromState;
         return value.isEmpty ? 'No description provided' : value;
       }(),
-      'company': companyName.trim(),
-      'location': jobLocation.trim(),
+      'company': companyNameController.text.trim(),
+      'location': locationController.text.trim(),
       'job_summary': jobSummary.trim(),
       'employment_type': employmentType,
       'responsibilities': responsibilities,
@@ -891,6 +899,20 @@ class _JobFormDialogState extends State<JobFormDialog>
                               hintText: "Comma separated list",
                               maxLines: 4,
                               expands: false,
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Company Name",
+                              controller: companyNameController,
+                              hintText: "Company or organisation name",
+                              onChanged: (v) => companyName = v,
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Location",
+                              controller: locationController,
+                              hintText: "e.g. Johannesburg, Remote",
+                              onChanged: (v) => jobLocation = v,
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
@@ -1061,6 +1083,7 @@ class _JobFormDialogState extends State<JobFormDialog>
                     padding: const EdgeInsets.all(20),
                     child: SingleChildScrollView(
                       child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
@@ -1211,8 +1234,9 @@ class _JobFormDialogState extends State<JobFormDialog>
                             ],
                           ),
                           const SizedBox(height: 16),
-                          Expanded(
-                            child: ListView.builder(
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
                             itemCount: questions.length,
                             itemBuilder: (_, index) {
                               final q = questions[index];
@@ -1430,7 +1454,6 @@ class _JobFormDialogState extends State<JobFormDialog>
                               );
                             },
                           ),
-                        ),
                         const SizedBox(height: 12),
                         CustomButton(
                             text: "Add Question", onPressed: addQuestion),

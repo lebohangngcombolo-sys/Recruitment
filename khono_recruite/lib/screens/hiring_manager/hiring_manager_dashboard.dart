@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import '../../services/admin_service.dart';
@@ -23,7 +23,6 @@ import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
-import '../auth/login_screen.dart';
 import 'pipeline_page.dart';
 
 class HMMainDashboard extends StatefulWidget {
@@ -351,16 +350,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   void _performLogout(BuildContext context) async {
-    Navigator.of(context).pop();
     await AuthService.logout();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (Route<dynamic> route) => false,
-        );
-      }
-    });
+    if (context.mounted) {
+      context.go('/login');
+    }
   }
 
   @override
