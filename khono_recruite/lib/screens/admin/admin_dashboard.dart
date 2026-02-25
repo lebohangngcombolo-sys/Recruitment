@@ -9,8 +9,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-import '../auth/login_screen.dart';
-
 import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
 import '../../utils/api_endpoints.dart';
@@ -21,6 +19,7 @@ import 'candidate_list_screen.dart';
 import 'interviews_list_screen.dart';
 import 'notifications_screen.dart';
 import 'job_management.dart';
+import 'test_pack_management_screen.dart';
 import 'user_management_screen.dart';
 import '../../providers/theme_provider.dart';
 import 'analytics_dashboard.dart';
@@ -344,14 +343,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
   void _performLogout(BuildContext context) async {
     Navigator.of(context).pop();
     await AuthService.logout();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (Route<dynamic> route) => false,
-        );
-      }
-    });
+    if (!mounted) return;
+    context.go('/');
   }
 
   // ---------- UI Build ----------
@@ -446,6 +439,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                               _sidebarEntry(
                                   Icons.home_outlined, 'Home', 'dashboard'),
                               _sidebarEntry(Icons.work_outline, 'Jobs', 'jobs'),
+                              _sidebarEntry(Icons.quiz_outlined, 'Test Packs', 'test_packs'),
                               _sidebarEntry(Icons.people_alt_outlined,
                                   'Shortlisted', 'candidates'),
                               _sidebarEntry(
@@ -870,6 +864,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
             });
           },
         );
+      case "test_packs":
+        return const TestPackManagementScreen();
       case "candidates":
         if (selectedJobId == null) {
           return const Center(

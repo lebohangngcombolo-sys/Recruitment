@@ -1,7 +1,7 @@
 from flask import Flask
 from .extensions import db, jwt, mail, cloudinary_client, mongo_client, migrate, cors, bcrypt, oauth, limiter, socketio
 from .models import *
-from .routes import auth, admin_routes, candidate_routes, ai_routes, mfa_routes, sso_routes, analytics_routes, chat_routes, offer_routes, public_routes
+from .routes import auth, admin_routes, candidate_routes, ai_routes, mfa_routes, sso_routes, analytics_routes, chat_routes, offer_routes, public_routes, test_pack_routes
 from .websocket_handler import register_websocket_handlers
 import firebase_admin
 from firebase_admin import credentials
@@ -71,6 +71,7 @@ def create_app():
     # ---------------- Register Blueprints ----------------
     auth.init_auth_routes(app)  # existing auth routes
     app.register_blueprint(admin_routes.admin_bp, url_prefix="/api/admin")
+    app.register_blueprint(test_pack_routes.test_pack_bp, url_prefix="/api/admin")
     app.register_blueprint(candidate_routes.candidate_bp, url_prefix="/api/candidate")
     app.register_blueprint(ai_routes.ai_bp)
     app.register_blueprint(mfa_routes.mfa_bp, url_prefix="/api/auth")  # MFA routes

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:percent_indicator/percent_indicator.dart'; // Add this package
+import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:percent_indicator/percent_indicator.dart';
 import '../hr/offer_detail_screen.dart';
 import '../hr/offer_analytics_screen.dart';
 import '../../services/offer_service.dart';
@@ -69,7 +70,7 @@ class _HRDashboardState extends State<HRDashboard> {
         _isLoading = false;
       });
     } catch (e) {
-      print('Error loading dashboard data: $e');
+      if (kDebugMode) debugPrint('Error loading dashboard data: $e');
       setState(() {
         _isLoading = false;
       });

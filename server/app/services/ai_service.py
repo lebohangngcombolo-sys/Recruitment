@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 import json
 import logging
@@ -19,6 +20,8 @@ OPENROUTER_URL = os.environ.get(
     "OPENROUTER_URL", "https://openrouter.ai/api/v1/chat/completions"
 )
 DEFAULT_MODEL = os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
 
 
 class AIService:
@@ -97,6 +100,94 @@ class AIService:
 
         raise RuntimeError("Failed to call OpenRouter API after multiple retries")
 
+    def _call_gemini(
+        self, prompt: str, temperature: float = 0.7, max_output_tokens: int = 1024
+    ) -> str:
+        """Call Google Gemini API (Firebase/Google AI). Retries on 429 quota errors."""
+        if not GEMINI_API_KEY or not GEMINI_API_KEY.strip():
+            raise RuntimeError("GEMINI_API_KEY not set (cannot use Gemini fallback)")
+        import google.generativeai as genai
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel(GEMINI_MODEL)
+        try:
+            config = genai.GenerationConfig(
+                temperature=temperature,
+                max_output_tokens=max_output_tokens,
+            )
+        except (AttributeError, TypeError):
+            config = None
+
+        last_error = None
+        for attempt in range(1, self.retries + 1):
+            try:
+                if config is not None:
+                    response = model.generate_content(prompt, generation_config=config)
+                else:
+                    response = model.generate_content(prompt)
+                if not response or not response.text:
+                    raise RuntimeError("Empty response from Gemini")
+                return response.text.strip()
+            except Exception as e:
+                last_error = e
+                err_str = str(e)
+                # 429 quota exceeded: wait and retry
+                if "429" in err_str or "quota" in err_str.lower() or "retry" in err_str.lower():
+                    delay = self.backoff + (attempt * 10)
+                    if "retry in" in err_str.lower():
+                        import re as _re
+                        match = _re.search(r"retry in (\d+)\.?\d*s", err_str, _re.I)
+                        if match:
+                            delay = int(float(match.group(1))) + 5
+                    logger.warning(
+                        "Gemini quota/429 (attempt %d/%d), retrying in %ds...",
+                        attempt, self.retries, delay,
+                    )
+                    time.sleep(min(delay, 60))
+                else:
+                    logger.warning("Gemini failed: %s", e)
+                    raise RuntimeError(f"Gemini fallback failed: {e}") from e
+        raise RuntimeError(f"Gemini fallback failed after retries: {last_error}") from last_error
+
+    def _call_ai(
+        self, prompt: str, temperature: float = 0.7, max_output_tokens: int = 512
+    ) -> str:
+        """Use Firebase/Gemini first when GEMINI_API_KEY is set; fall back to OpenRouter otherwise."""
+        # Prefer Gemini (Firebase AI / Google AI) when configured
+        if GEMINI_API_KEY and GEMINI_API_KEY.strip():
+            try:
+                return self._call_gemini(
+                    prompt, temperature=temperature, max_output_tokens=max_output_tokens
+                )
+            except RuntimeError as e:
+                logger.warning("Gemini (Firebase) failed (%s), trying OpenRouter", e)
+                # Fall through to OpenRouter
+        # Use OpenRouter when no Gemini or Gemini failed
+        try:
+            if self.api_key:
+                return self._call_generation(
+                    prompt, temperature=temperature, max_output_tokens=max_output_tokens
+                )
+        except RuntimeError as e:
+            err_str = str(e).lower()
+            if (
+                "401" in err_str or "403" in err_str or "503" in err_str
+                or "openrouter api error" in err_str
+                or "not set" in err_str
+                or "user not found" in err_str
+                or "failed to call openrouter" in err_str
+            ) and GEMINI_API_KEY and GEMINI_API_KEY.strip():
+                logger.info("OpenRouter failed (%s), retrying Gemini fallback", e)
+                return self._call_gemini(
+                    prompt, temperature=temperature, max_output_tokens=max_output_tokens
+                )
+            raise
+        if GEMINI_API_KEY and GEMINI_API_KEY.strip():
+            logger.info("No OpenRouter key; using Gemini")
+            return self._call_gemini(
+                prompt, temperature=temperature, max_output_tokens=max_output_tokens
+            )
+        raise RuntimeError("No AI provider configured (set GEMINI_API_KEY or OPENROUTER_API_KEY)")
+
     def chat(self, message: str, temperature: float = 0.2) -> str:
         prompt = f"User:\n{message}\n\nAssistant:"
         return self._call_generation(prompt, temperature=temperature, max_output_tokens=400)
@@ -123,10 +214,9 @@ Task:
 
 Return the response strictly as JSON.
 """
-        out = self._call_generation(prompt, temperature=0.0, max_output_tokens=700)
+        out = self._call_ai(prompt, temperature=0.0, max_output_tokens=700)
 
         # Try to parse JSON safely
-        import re
 
         try:
             match = re.search(r"(\{.*\})", out, flags=re.DOTALL)
@@ -171,8 +261,7 @@ Based on the job title "{job_title}", generate comprehensive job details in JSON
 
 IMPORTANT: Return only valid JSON. Responsibilities and qualifications must be arrays of strings. category must be one of the listed values. min_experience must be a number.
 '''
-        out = self._call_generation(prompt, temperature=0.7, max_output_tokens=1024)
-        import re
+        out = self._call_ai(prompt, temperature=0.7, max_output_tokens=1024)
         try:
             match = re.search(r"(\{.*\})", out, flags=re.DOTALL)
             json_text = match.group(1) if match else out
@@ -217,8 +306,7 @@ Requirements:
 
 Return only valid JSON.
 '''
-        out = self._call_generation(prompt, temperature=0.7, max_output_tokens=1024)
-        import re
+        out = self._call_ai(prompt, temperature=0.7, max_output_tokens=1024)
         try:
             match = re.search(r"(\{.*\})", out, flags=re.DOTALL)
             json_text = match.group(1) if match else out

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import '../../../constants/app_colors.dart';
-import '../../widgets/widgets1/glass_card.dart';
+import '../../widgets/glass_card.dart';
 import '../../services/analytics_service.dart';
 import '../../utils/app_config.dart';
 

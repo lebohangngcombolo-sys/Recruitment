@@ -337,8 +337,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   void _performLogout(BuildContext context) async {
     await AuthService.logout();
     if (!mounted) return;
-    // Use GoRouter so we don't pop the last page off the stack (avoids go_router assertion).
-    context.go('/login');
+    context.go('/');
   }
 
   @override

@@ -168,6 +168,42 @@ class JobActivityLog(db.Model):
         }
 
 
+# ------------------- TEST PACK -------------------
+class TestPack(db.Model):
+    """
+    Reusable assessment pack (technical or role-specific) for requisitions.
+    questions: list of {"question_text", "options", "correct_option", "weight"?}
+    """
+    __tablename__ = 'test_packs'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    category = db.Column(db.String(50), nullable=False)  # 'technical' | 'role-specific'
+    description = db.Column(db.Text, default="")
+    questions = db.Column(MutableList.as_mutable(JSON), default=list)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+
+    requisitions = db.relationship(
+        'Requisition',
+        backref=db.backref('test_pack', lazy=True),
+        foreign_keys='Requisition.test_pack_id'
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "category": self.category,
+            "description": self.description or "",
+            "questions": self.questions or [],
+            "question_count": len(self.questions or []),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+        }
+
+
 # ------------------- REQUISITION -------------------
 class Requisition(db.Model):
     __tablename__ = 'requisitions'
@@ -196,6 +232,7 @@ class Requisition(db.Model):
         "references": 0
     })
     assessment_pack = db.Column(JSON, default={"questions": []})
+    test_pack_id = db.Column(db.Integer, db.ForeignKey('test_packs.id'), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     published_on = db.Column(db.DateTime, default=datetime.utcnow)
@@ -237,6 +274,8 @@ class Requisition(db.Model):
             "knockout_rules": self.knockout_rules,
             "weightings": self.weightings,
             "assessment_pack": self.assessment_pack,
+            "test_pack_id": self.test_pack_id,
+            "test_pack": self.test_pack.to_dict() if self.test_pack and not self.test_pack.deleted_at else None,
             "created_by": self.created_by,
             "created_by_user": {
                 "id": creator.id,

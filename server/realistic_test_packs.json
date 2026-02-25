@@ -1,0 +1,669 @@
+[
+  {
+    "name": "Senior Python Developer Assessment Pack",
+    "category": "technical",
+    "description": "Comprehensive assessment for Senior Python Developer roles, covering Python fundamentals, Flask, PostgreSQL, and backend best practices.",
+    "questions": [
+      {
+        "question_text": "What is your primary experience level with Senior Python Developer responsibilities?",
+        "options": ["Beginner", "Intermediate", "Advanced", "Expert"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "How would you handle a challenging situation in this role?",
+        "options": ["Seek help immediately", "Try to solve it myself", "Research and consult", "Delegate to others"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What motivates you most in a Senior Python Developer position?",
+        "options": ["Salary", "Learning opportunities", "Team collaboration", "Autonomy"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "In Python, what is the difference between a list and a tuple?",
+        "options": ["Lists are mutable, tuples are immutable", "Tuples are lists", "No difference", "Lists are used for strings"],
+        "correct_option": 0,
+        "weight": 1
+      },
+      {
+        "question_text": "What is the purpose of Flask's `@app.route` decorator?",
+        "options": ["To define a database model", "To map a URL to a function", "To handle HTTP errors", "To create a template"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "Which SQL command is used to retrieve data from a database?",
+        "options": ["INSERT", "UPDATE", "SELECT", "DELETE"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What does ORM stand for in web development?",
+        "options": ["Object-Relational Mapping", "Operating Resource Module", "Object Request Model", "Online Record Management"],
+        "correct_option": 0,
+        "weight": 1
+      },
+      {
+        "question_text": "What is the average time complexity of searching for an item in a Python dictionary?",
+        "options": ["O(n)", "O(log n)", "O(1)", "O(n²)"],
+        "correct_option": 2,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "name": "Data Analyst Assessment Pack",
+    "category": "technical",
+    "description": "Assessment for Data Analyst roles covering data analysis, SQL, Excel, and reporting skills.",
+    "questions": [
+      {
+        "question_text": "What is your primary experience level with Data Analyst responsibilities?",
+        "options": ["Beginner", "Intermediate", "Advanced", "Expert"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "How would you handle a challenging situation in this role?",
+        "options": ["Seek help immediately", "Try to solve it myself", "Research and consult", "Delegate to others"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What motivates you most in a Data Analyst position?",
+        "options": ["Salary", "Learning opportunities", "Team collaboration", "Autonomy"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "Which SQL clause is used to filter records?",
+        "options": ["ORDER BY", "WHERE", "GROUP BY", "HAVING"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "In Excel, what function would you use to look up a value in a table?",
+        "options": ["SUM", "AVERAGE", "VLOOKUP", "INDEX"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What does a box plot visually represent?",
+        "options": ["Distribution of data", "Correlation", "Time series trend", "Frequency of categories"],
+        "correct_option": 0,
+        "weight": 1
+      },
+      {
+        "question_text": "Which of the following is a measure of central tendency?",
+        "options": ["Standard deviation", "Range", "Median", "Variance"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What is the purpose of a primary key in a database table?",
+        "options": ["To allow NULL values", "To uniquely identify each row", "To speed up queries", "To create relationships"],
+        "correct_option": 1,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "name": "Senior Full Stack Developer Assessment Pack",
+    "category": "technical",
+    "description": "Assessment for Senior Full Stack Developer roles covering frontend, backend, databases, and system design.",
+    "questions": [
+      {
+        "question_text": "What is your primary experience level with Senior Full Stack Developer responsibilities?",
+        "options": ["Beginner", "Intermediate", "Advanced", "Expert"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "How would you handle a challenging situation in this role?",
+        "options": ["Seek help immediately", "Try to solve it myself", "Research and consult", "Delegate to others"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What motivates you most in a Senior Full Stack Developer position?",
+        "options": ["Salary", "Learning opportunities", "Team collaboration", "Autonomy"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "In React, what is the purpose of the `useEffect` hook?",
+        "options": ["To manage component state", "To perform side effects", "To create context", "To handle routing"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "Which of the following is a NoSQL database?",
+        "options": ["PostgreSQL", "MySQL", "MongoDB", "SQLite"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What does the 'M' in MVC stand for?",
+        "options": ["Module", "Middleware", "Model", "Manager"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "Which HTTP method is typically used to update an existing resource?",
+        "options": ["GET", "POST", "PUT", "DELETE"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What is the primary purpose of Docker?",
+        "options": ["Version control", "Containerization", "Continuous integration", "Orchestration"],
+        "correct_option": 1,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "name": "Mid-Level Backend Developer Assessment Pack",
+    "category": "technical",
+    "description": "Assessment for Mid-Level Backend Developer roles covering multiple languages and backend concepts.",
+    "questions": [
+      {
+        "question_text": "What is your primary experience level with Mid-Level Backend Developer responsibilities?",
+        "options": ["Beginner", "Intermediate", "Advanced", "Expert"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "How would you handle a challenging situation in this role?",
+        "options": ["Seek help immediately", "Try to solve it myself", "Research and consult", "Delegate to others"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What motivates you most in a Mid-Level Backend Developer position?",
+        "options": ["Salary", "Learning opportunities", "Team collaboration", "Autonomy"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "In Java, what is the difference between `==` and `.equals()`?",
+        "options": ["They are the same", "`==` compares references, `.equals()` compares values", "`==` compares values, `.equals()` compares references", "None of the above"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "Which of the following is a C++ feature not present in C?",
+        "options": ["Pointers", "Structures", "Classes", "Functions"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What is a RESTful API?",
+        "options": ["An API that uses SOAP", "An API that follows REST architectural constraints", "An API that only returns JSON", "An API that requires authentication"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What is the purpose of an index in a database?",
+        "options": ["To enforce uniqueness", "To speed up data retrieval", "To store large objects", "To backup data"],
+        "correct_option": 1,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "name": "QA Tester Assessment Pack",
+    "category": "technical",
+    "description": "Assessment for QA Tester roles covering test design, tools, and agile methodologies.",
+    "questions": [
+      {
+        "question_text": "What is your primary experience level with QA Tester responsibilities?",
+        "options": ["Beginner", "Intermediate", "Advanced", "Expert"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "How would you handle a challenging situation in this role?",
+        "options": ["Seek help immediately", "Try to solve it myself", "Research and consult", "Delegate to others"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What motivates you most in a QA Tester position?",
+        "options": ["Salary", "Learning opportunities", "Team collaboration", "Autonomy"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What is the main purpose of regression testing?",
+        "options": ["To test new features", "To ensure existing functionality still works", "To validate performance", "To check security"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "Which tool is commonly used for bug tracking?",
+        "options": ["Jira", "Git", "Jenkins", "Docker"],
+        "correct_option": 0,
+        "weight": 1
+      },
+      {
+        "question_text": "What does API testing verify?",
+        "options": ["User interface", "Database schema", "Endpoints and responses", "Load balancing"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "In agile, what is a sprint retrospective?",
+        "options": ["Planning next sprint", "Reviewing completed work", "Reflecting on the sprint to improve", "Daily stand-up"],
+        "correct_option": 2,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "name": "Customer Support Officer Assessment Pack",
+    "category": "role-specific",
+    "description": "Assessment for Customer Support Officer roles focusing on communication, problem-solving, and tools.",
+    "questions": [
+      {
+        "question_text": "What is your primary experience level with Customer Support Officer responsibilities?",
+        "options": ["Beginner", "Intermediate", "Advanced", "Expert"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "How would you handle a challenging situation in this role?",
+        "options": ["Seek help immediately", "Try to solve it myself", "Research and consult", "Delegate to others"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What motivates you most in a Customer Support Officer position?",
+        "options": ["Salary", "Learning opportunities", "Team collaboration", "Autonomy"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What is the first step when dealing with an angry customer?",
+        "options": ["Explain company policy", "Apologize and listen actively", "Transfer to a manager", "End the call"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "Which Excel function would you use to count cells that meet a condition?",
+        "options": ["SUM", "COUNTIF", "AVERAGE", "VLOOKUP"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What does a good troubleshooting process involve?",
+        "options": ["Guessing the cause", "Asking clarifying questions", "Immediate escalation", "Ignoring the issue"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "Which of the following is most important in customer support?",
+        "options": ["Technical knowledge", "Empathy", "Speed", "Multitasking"],
+        "correct_option": 1,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "name": "Frontend Developer Assessment Pack",
+    "category": "technical",
+    "description": "Assessment for Frontend Developer roles covering HTML, CSS, JavaScript, and modern frameworks.",
+    "questions": [
+      {
+        "question_text": "What is your primary experience level with Frontend Developer responsibilities?",
+        "options": ["Beginner", "Intermediate", "Advanced", "Expert"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "How would you handle a challenging situation in this role?",
+        "options": ["Seek help immediately", "Try to solve it myself", "Research and consult", "Delegate to others"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What motivates you most in a Frontend Developer position?",
+        "options": ["Salary", "Learning opportunities", "Team collaboration", "Autonomy"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What does the 'box model' in CSS refer to?",
+        "options": ["Margin, border, padding, content", "Display, position, float, clear", "Flexbox and grid", "Media queries"],
+        "correct_option": 0,
+        "weight": 1
+      },
+      {
+        "question_text": "In JavaScript, what is the difference between `let` and `var`?",
+        "options": ["No difference", "`let` is block-scoped, `var` is function-scoped", "`let` is global, `var` is local", "`let` cannot be reassigned"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "Which React hook is used to manage local state in a functional component?",
+        "options": ["useEffect", "useState", "useContext", "useReducer"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What is the purpose of a bundler like Webpack?",
+        "options": ["To transpile code", "To bundle assets and dependencies", "To run tests", "To start a development server"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What does responsive web design mean?",
+        "options": ["Design that responds to user input", "Design that works on different screen sizes", "Design with animations", "Design that loads quickly"],
+        "correct_option": 1,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "name": "Delivery Lead Assessment Pack",
+    "category": "role-specific",
+    "description": "Assessment for Delivery Lead roles focusing on project management, agile, and team coordination.",
+    "questions": [
+      {
+        "question_text": "What is your primary experience level with Delivery Lead responsibilities?",
+        "options": ["Beginner", "Intermediate", "Advanced", "Expert"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "How would you handle a challenging situation in this role?",
+        "options": ["Seek help immediately", "Try to solve it myself", "Research and consult", "Delegate to others"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What motivates you most in a Delivery Lead position?",
+        "options": ["Salary", "Learning opportunities", "Team collaboration", "Autonomy"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What is the main role of a Delivery Lead in an agile team?",
+        "options": ["Writing code", "Removing impediments and facilitating delivery", "Managing budgets", "Hiring team members"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "Which agile ceremony is used to plan the work for the next sprint?",
+        "options": ["Daily stand-up", "Sprint review", "Sprint planning", "Retrospective"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What does a burndown chart track?",
+        "options": ["Team velocity", "Remaining work over time", "Number of bugs", "Customer satisfaction"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What is a key skill for a Delivery Lead?",
+        "options": ["Deep technical expertise", "Stakeholder communication", "Individual coding", "Testing"],
+        "correct_option": 1,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "name": "Financial Advisor Assessment Pack",
+    "category": "role-specific",
+    "description": "Assessment for Financial Advisor roles covering finance principles, client advisory, and regulations.",
+    "questions": [
+      {
+        "question_text": "What is your primary experience level with Financial Advisor responsibilities?",
+        "options": ["Beginner", "Intermediate", "Advanced", "Expert"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "How would you handle a challenging situation in this role?",
+        "options": ["Seek help immediately", "Try to solve it myself", "Research and consult", "Delegate to others"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What motivates you most in a Financial Advisor position?",
+        "options": ["Salary", "Learning opportunities", "Team collaboration", "Autonomy"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What does the term 'risk tolerance' refer to in financial advising?",
+        "options": ["The client's ability to handle market fluctuations", "The advisor's risk of losing license", "The volatility of a stock", "The inflation rate"],
+        "correct_option": 0,
+        "weight": 1
+      },
+      {
+        "question_text": "Which of the following is a tax-advantaged retirement account in the US?",
+        "options": ["Savings account", "IRA", "Checking account", "Brokerage account"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What is diversification?",
+        "options": ["Investing all money in one stock", "Spreading investments across different assets", "Buying only bonds", "Selling assets quickly"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What is a fiduciary duty?",
+        "options": ["Duty to maximize profits", "Duty to act in the client's best interest", "Duty to follow market trends", "Duty to minimize taxes"],
+        "correct_option": 1,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "name": "Marketing Agent/Sales Assessment Pack",
+    "category": "role-specific",
+    "description": "Assessment for Marketing and Sales roles covering sales techniques, marketing principles, and client interaction.",
+    "questions": [
+      {
+        "question_text": "What is your primary experience level with Marketing Agent/Sales responsibilities?",
+        "options": ["Beginner", "Intermediate", "Advanced", "Expert"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "How would you handle a challenging situation in this role?",
+        "options": ["Seek help immediately", "Try to solve it myself", "Research and consult", "Delegate to others"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What motivates you most in a Marketing Agent/Sales position?",
+        "options": ["Salary", "Learning opportunities", "Team collaboration", "Autonomy"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What does BANT stand for in sales qualification?",
+        "options": ["Budget, Authority, Need, Timeline", "Business, Assets, Network, Trust", "Before After Now Timeline", "Budget, Activity, Needs, Team"],
+        "correct_option": 0,
+        "weight": 1
+      },
+      {
+        "question_text": "What is the first step in a sales discovery call?",
+        "options": ["Pitch the product", "Ask open-ended questions about client needs", "Discuss pricing", "Close the deal"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What is a key performance indicator (KPI) for a marketing campaign?",
+        "options": ["Number of employees", "Conversion rate", "Company revenue", "Stock price"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "Which objection handling technique involves acknowledging the concern and providing evidence?",
+        "options": ["Reframing", "Bridging", "Validation", "Dismissal"],
+        "correct_option": 2,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "name": "Freelancer Tester Assessment Pack",
+    "category": "technical",
+    "description": "Assessment for Freelancer Tester roles covering testing methodologies, independence, and communication.",
+    "questions": [
+      {
+        "question_text": "What is your primary experience level with Freelancer Tester responsibilities?",
+        "options": ["Beginner", "Intermediate", "Advanced", "Expert"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "How would you handle a challenging situation in this role?",
+        "options": ["Seek help immediately", "Try to solve it myself", "Research and consult", "Delegate to others"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What motivates you most in a Freelancer Tester position?",
+        "options": ["Salary", "Learning opportunities", "Team collaboration", "Autonomy"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What is exploratory testing?",
+        "options": ["Testing with predefined scripts", "Testing based on tester's experience and intuition", "Automated testing", "Performance testing"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "As a freelancer, how do you ensure clear communication with clients?",
+        "options": ["Only email", "Regular updates and asking clarifying questions", "Working in isolation", "Assuming requirements"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What tool is commonly used for reporting bugs?",
+        "options": ["Excel", "Jira", "Word", "Photoshop"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What does 'regression testing' ensure?",
+        "options": ["New features work", "Existing features still work after changes", "System performance", "Security"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "How do you prioritize test cases when time is limited?",
+        "options": ["Test randomly", "Focus on high-risk areas", "Test all equally", "Skip testing"],
+        "correct_option": 1,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "name": "DevOps Engineer Assessment Pack",
+    "category": "technical",
+    "description": "Assessment for DevOps Engineer roles covering CI/CD, cloud, containers, and infrastructure as code.",
+    "questions": [
+      {
+        "question_text": "What is your primary experience level with DevOps Engineer responsibilities?",
+        "options": ["Beginner", "Intermediate", "Advanced", "Expert"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "How would you handle a challenging situation in this role?",
+        "options": ["Seek help immediately", "Try to solve it myself", "Research and consult", "Delegate to others"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What motivates you most in a DevOps Engineer position?",
+        "options": ["Salary", "Learning opportunities", "Team collaboration", "Autonomy"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What is the main purpose of CI/CD?",
+        "options": ["Continuous integration and delivery", "Code compilation", "Manual testing", "Infrastructure provisioning"],
+        "correct_option": 0,
+        "weight": 1
+      },
+      {
+        "question_text": "Which tool is commonly used for configuration management?",
+        "options": ["Docker", "Kubernetes", "Ansible", "Git"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What is the difference between Docker and a virtual machine?",
+        "options": ["Docker shares host OS kernel, VM has its own OS", "They are the same", "VM is faster", "Docker is for databases only"],
+        "correct_option": 0,
+        "weight": 1
+      },
+      {
+        "question_text": "What does 'infrastructure as code' mean?",
+        "options": ["Writing code to manage and provision infrastructure", "Using code to build applications", "Manual server setup", "Cloud only"],
+        "correct_option": 0,
+        "weight": 1
+      }
+    ]
+  },
+  {
+    "name": "Product Manager Assessment Pack",
+    "category": "role-specific",
+    "description": "Assessment for Product Manager roles covering product strategy, agile, and market research.",
+    "questions": [
+      {
+        "question_text": "What is your primary experience level with Product Manager responsibilities?",
+        "options": ["Beginner", "Intermediate", "Advanced", "Expert"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "How would you handle a challenging situation in this role?",
+        "options": ["Seek help immediately", "Try to solve it myself", "Research and consult", "Delegate to others"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What motivates you most in a Product Manager position?",
+        "options": ["Salary", "Learning opportunities", "Team collaboration", "Autonomy"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "What is a Minimum Viable Product (MVP)?",
+        "options": ["The product with all features", "A version with just enough features to learn from early customers", "The cheapest product", "A prototype"],
+        "correct_option": 1,
+        "weight": 1
+      },
+      {
+        "question_text": "In agile, who is responsible for prioritizing the backlog?",
+        "options": ["Development team", "Scrum master", "Product owner", "Stakeholders"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What is the purpose of a sprint retrospective?",
+        "options": ["Plan next sprint", "Review completed work", "Identify improvements for the next sprint", "Demo features"],
+        "correct_option": 2,
+        "weight": 1
+      },
+      {
+        "question_text": "What does a product roadmap communicate?",
+        "options": ["Technical architecture", "Planned features over time", "Team performance", "Bug fixes"],
+        "correct_option": 1,
+        "weight": 1
+      }
+    ]
+  }
+]

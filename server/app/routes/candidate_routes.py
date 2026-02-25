@@ -429,9 +429,12 @@ def get_assessment(application_id):
             return jsonify({"error": "Job is not accepting applications"}), 400
 
         result = AssessmentResult.query.filter_by(application_id=application.id).first()
+        from app.services.assessment_service import get_questions_for_requisition
+        req = application.requisition
+        questions = get_questions_for_requisition(req) if req else []
         return jsonify({
             "job_title": application.requisition.title if application.requisition else None,
-            "assessment_pack": application.requisition.assessment_pack if application.requisition else {},
+            "assessment_pack": {"questions": questions},
             "submitted_result": result.to_dict() if result else None
         })
     except Exception as e:
@@ -464,14 +467,19 @@ def submit_assessment(application_id):
         data = request.get_json()
         answers = data.get("answers", {})
 
-        questions = application.requisition.assessment_pack.get("questions", []) if application.requisition else []
+        from app.services.assessment_service import get_questions_for_requisition
+        questions = get_questions_for_requisition(application.requisition) if application.requisition else []
         scores = {}
         total_score = 0
 
         for idx, q in enumerate(questions):
             qid = str(idx)
-            correct_index = q.get("correct_answer", 0)
-            correct_letter = ["A","B","C","D"][correct_index]
+            # Support both correct_option (0-based) and correct_answer (0-3)
+            correct_index = q.get("correct_option", q.get("correct_answer", 0))
+            if correct_index is None:
+                correct_index = 0
+            correct_index = int(correct_index) % 4
+            correct_letter = ["A", "B", "C", "D"][correct_index]
             candidate_answer = answers.get(qid)
             scores[qid] = q.get("weight", 1) if candidate_answer == correct_letter else 0
             total_score += scores[qid]

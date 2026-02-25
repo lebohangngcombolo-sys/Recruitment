@@ -547,13 +547,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   void _performLogout(BuildContext context) async {
-    // Don't use Navigator.pop() here - with GoRouter it pops the route and empties the stack.
-    // context.go('/login') will replace the route and dismiss the dialog.
     await AuthService.logout();
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) return;
-      context.go('/login');
+      context.go('/');
     });
   }
 
@@ -2182,15 +2180,15 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                _socialIcon('assets/icons/Instagram1.png',
+                                _socialIcon('assets/icons/Instagram.png',
                                     'https://www.instagram.com/yourprofile'),
-                                _socialIcon('assets/icons/x1.png',
+                                _socialIcon('assets/icons/LinkedIn.png',
                                     'https://x.com/yourprofile'),
                                 _socialIcon('assets/icons/LinkedIn.png',
                                     'https://www.linkedin.com/in/yourprofile'),
-                                _socialIcon('assets/icons/facebook1.png',
+                                _socialIcon('assets/icons/facebook.png',
                                     'https://www.facebook.com/yourprofile'),
-                                _socialIcon('assets/icons/YouTube1.png',
+                                _socialIcon('assets/icons/YouTube.png',
                                     'https://www.youtube.com/yourchannel'),
                               ],
                             ),

@@ -1,8 +1,17 @@
 import os
 from datetime import timedelta
-from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+# Load .env from server directory so DATABASE_URL is always from the same place
+# (whether running from repo root or server/ via flask db upgrade, run.py, etc.)
+_server_dir = Path(__file__).resolve().parent.parent  # app/config.py -> app -> server
+_env_path = _server_dir / ".env"
+if _env_path.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_env_path)
+else:
+    from dotenv import load_dotenv
+    load_dotenv()
 
 # Are we running in production? Honor common env var flags.
 IS_PRODUCTION = os.getenv("FLASK_ENV", os.getenv("ENV", "development")) == "production"
