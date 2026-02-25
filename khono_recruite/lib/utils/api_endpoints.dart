@@ -139,6 +139,13 @@ class ApiEndpoints {
   static const cvReviews = "$adminBase/cv-reviews";
   static const getUsers = "$adminBase/users";
 
+  // ------------------- Test Packs -------------------
+  static const getTestPacks = "$adminBase/test-packs";
+  static String getTestPackById(int id) => "$adminBase/test-packs/$id";
+  static const createTestPack = "$adminBase/test-packs";
+  static String updateTestPack(int id) => "$adminBase/test-packs/$id";
+  static String deleteTestPack(int id) => "$adminBase/test-packs/$id";
+
   // ==================== INTERVIEW LIFECYCLE ENHANCEMENTS ====================
 
   // ------------------- Interview Status Updates -------------------
