@@ -1,40 +1,15 @@
-# Python
+﻿.env
+.env.*
+**/.env
+**/.env.*
+.venv/
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
+*.pyc
+*.pyo
+*.pyd
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
- 
-# Virtual Environment
-venv/
-myenv/
-env/
-ENV/
-.env
-.venv
- 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
- 
-# Testing
+*.so
+.pytest_cache/
 .coverage
 htmlcov/
 server/scripts/token.pickle
@@ -255,5 +230,5 @@ Basic usage
 For the basic usage introduction we will be installing pendulum, a datetime library.
 If you have not yet installed Poetry, refer to the Introduction chapter.
 Project setup
-First, let’s ...
+First, letΓÇÖs ...
  

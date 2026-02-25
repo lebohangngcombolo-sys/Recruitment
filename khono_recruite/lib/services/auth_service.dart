@@ -1,6 +1,5 @@
 import 'dart:convert';
-import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart'
-    show File;
+import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart' show File;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
@@ -12,33 +11,74 @@ import 'package:khono_recruite/utils/api_endpoints.dart';
 class AuthService {
   static const _storage = FlutterSecureStorage();
 
+  /// Cached display name so the candidate dashboard can show it on first paint after login.
+  static String? _cachedDisplayName;
+  static String? getCachedDisplayName() => _cachedDisplayName;
+  static void setCachedDisplayName(String? name) {
+    _cachedDisplayName = name;
+  }
+
+  static String? _parseDisplayNameFromResponse(Map<String, dynamic> response) {
+    final candidateProfile = response['candidate_profile'];
+    final user = response['user'] ?? response;
+    final profile = user['profile'] is Map ? user['profile'] as Map : null;
+    String? displayName;
+    if (candidateProfile != null &&
+        candidateProfile['full_name']?.toString().trim().isNotEmpty == true) {
+      displayName = candidateProfile['full_name'].toString().trim();
+    }
+    if (displayName == null || displayName.isEmpty) {
+      final fullName = profile?['full_name']?.toString().trim();
+      if (fullName != null && fullName.isNotEmpty) displayName = fullName;
+    }
+    if ((displayName == null || displayName.isEmpty) && profile != null) {
+      final first = profile['first_name']?.toString() ?? '';
+      final last = profile['last_name']?.toString() ?? '';
+      final combined = '$first $last'.trim();
+      if (combined.isNotEmpty) displayName = combined;
+    }
+    return (displayName != null && displayName.isNotEmpty) ? displayName : null;
+  }
+
   // ----------------- REGISTER -----------------
-  /// Returns {status: int, body: Map} so register_screen can show errors and navigate to verify-email on 201.
   static Future<Map<String, dynamic>> register(
     Map<String, dynamic> data,
   ) async {
+    // Only keep email and password
     final requestData = {
       "email": data["email"],
       "password": data["password"],
     };
 
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.register),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(requestData),
+    );
+
+    final body = jsonDecode(response.body);
+
+    return {
+      "status": response.statusCode, // HTTP status code
+      "body": body, // decoded response
+    };
+  }
+
+  // ----------------- RESEND VERIFICATION CODE -----------------
+  static Future<Map<String, dynamic>> resendVerificationCode(String email) async {
     try {
       final response = await http.post(
-        Uri.parse(ApiEndpoints.register),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(requestData),
+        Uri.parse(ApiEndpoints.resendVerification),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email}),
       );
-      Map<String, dynamic> body = {};
-      try {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map<String, dynamic>) body = decoded;
-      } catch (_) {}
-      return {"status": response.statusCode, "body": body};
+      final decoded = jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        return Map<String, dynamic>.from(decoded as Map);
+      }
+      return {'error': decoded['error'] ?? decoded['message'] ?? 'Failed to resend code'};
     } catch (e) {
-      return {
-        "status": 0,
-        "body": {"error": "Network or parsing error: $e"}
-      };
+      return {'error': e.toString()};
     }
   }
 
@@ -51,44 +91,15 @@ class AuthService {
       body: jsonEncode(data),
     );
 
-    Map<String, dynamic> decoded = {};
-    try {
-      final d = jsonDecode(response.body);
-      if (d is Map<String, dynamic>) decoded = d;
-    } catch (_) {}
+    final decoded = jsonDecode(response.body);
 
     if (decoded.containsKey('access_token')) {
-      await saveToken(decoded['access_token'].toString());
+      await clearAuthState();
+      final access = decoded['access_token'].toString();
+      final refresh = decoded['refresh_token']?.toString();
+      await saveTokens(access, refresh);
     }
     return decoded;
-  }
-
-  // ----------------- RESEND VERIFICATION CODE -----------------
-  /// POST /api/auth/resend-verification. Returns { message } or { error }. Optionally { code } if server includes it (e.g. test mode).
-  static Future<Map<String, dynamic>> resendVerificationCode(
-      String email) async {
-    try {
-      final response = await http.post(
-        Uri.parse(ApiEndpoints.resendVerification),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"email": email.trim().toLowerCase()}),
-      );
-      Map<String, dynamic> decoded = {};
-      try {
-        final d = jsonDecode(response.body);
-        if (d is Map<String, dynamic>) decoded = d;
-      } catch (_) {}
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        return decoded;
-      }
-      return {
-        "error": decoded["error"] ??
-            decoded["message"] ??
-            "Failed to resend code (${response.statusCode})",
-      };
-    } catch (e) {
-      return {"error": "Network or parsing error: $e"};
-    }
   }
 
   // Example: fetch stored user info from shared preferences
@@ -105,38 +116,46 @@ class AuthService {
     String email,
     String password,
   ) async {
-    try {
-      final response = await http.post(
-        Uri.parse(ApiEndpoints.login),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'password': password}),
-      );
-      final data = jsonDecode(response.body);
-      if (response.statusCode == 200) {
-        if (data['mfa_required'] == true) {
-          final userId = data['user_id']?.toString() ?? '';
-          return {
-            'ok': true,
-            'mfa_required': true,
-            'mfa_session_token': data['mfa_session_token'],
-            'user_id': userId,
-            'message': data['message'],
-          };
-        }
-        await saveToken(data['access_token']);
-        await saveUserInfo(data['user']);
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.login),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'password': password}),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      // ≡ƒåò Check if MFA is required
+      if (data['mfa_required'] == true) {
+        // ≡ƒåò FIX: Convert user_id to string to prevent type errors
+        final userId = data['user_id']?.toString() ?? '';
+
         return {
-          'ok': true,
-          'access_token': data['access_token'],
-          'refresh_token': data['refresh_token'],
-          'role': data['user']['role'],
-          'dashboard': data['dashboard'],
+          'success': true,
+          'mfa_required': true,
+          'mfa_session_token': data['mfa_session_token'],
+          'user_id': userId, // ≡ƒåò Now guaranteed to be string
+          'message': data['message'],
         };
-      } else {
-        return {'ok': false, 'error': data['error'] ?? 'Login failed'};
       }
-    } catch (e) {
-      return {'ok': false, 'error': 'Network or parsing error: $e'};
+
+      // Clear any previous user's session so this login is a fresh session.
+      await clearAuthState();
+      await saveTokens(
+        data['access_token'].toString(),
+        data['refresh_token']?.toString(),
+      );
+      await saveUserInfo(data['user'] ?? {});
+
+      return {
+        'success': true,
+        'access_token': data['access_token'],
+        'refresh_token': data['refresh_token'],
+        'role': data['user']['role'],
+        'dashboard': data['dashboard'],
+      };
+    } else {
+      return {'success': false, 'message': data['error'] ?? 'Login failed'};
     }
   }
 
@@ -154,8 +173,12 @@ class AuthService {
     final data = jsonDecode(response.body);
 
     if (response.statusCode == 200) {
-      await saveToken(data['access_token']);
-      await saveUserInfo(data['user']);
+      await clearAuthState();
+      await saveTokens(
+        data['access_token'].toString(),
+        data['refresh_token']?.toString(),
+      );
+      await saveUserInfo(data['user'] ?? {});
 
       return {
         'success': true,
@@ -186,7 +209,7 @@ class AuthService {
       );
 
       if (response.statusCode == 200) {
-        await deleteTokens();
+        await clearAuthState();
         return true;
       }
       return false;
@@ -212,8 +235,8 @@ class AuthService {
     final refreshToken = uri.queryParameters['refresh_token'];
     final role = uri.queryParameters['role'];
 
-    // Store tokens and role for future API calls
     if (accessToken != null && role != null) {
+      await AuthService.clearAuthState();
       await AuthService.storeTokens(accessToken, refreshToken, role);
     }
 
@@ -239,6 +262,7 @@ class AuthService {
     final dashboard = uri.queryParameters['dashboard'];
 
     if (accessToken != null) {
+      await clearAuthState();
       await saveTokens(accessToken, refreshToken);
     }
 
@@ -284,7 +308,48 @@ class AuthService {
       },
     );
 
-    return jsonDecode(response.body);
+    // If token expired, try refresh and retry once
+    if (response.statusCode == 401) {
+      final newToken = await refreshAccessToken();
+      if (newToken != null) {
+        return getCurrentUser(token: newToken);
+      }
+      try {
+        final body = jsonDecode(response.body);
+        if (body is Map<String, dynamic>) {
+          body['unauthorized'] = true;
+          body['error'] = body['msg'] ?? body['error'] ?? 'Session expired. Please log in again.';
+          return body;
+        }
+      } catch (_) {}
+      return {'error': 'Session expired. Please log in again.', 'unauthorized': true};
+    }
+
+    final data = jsonDecode(response.body);
+    if (data is! Map<String, dynamic>) {
+      return {'error': 'Invalid response', 'unauthorized': true};
+    }
+
+    // Server might return 200 with error body (e.g. "Token has expired"); don't treat as success
+    final isErrorResponse = (data['unauthorized'] == true) ||
+        (data['msg']?.toString().toLowerCase().contains('expired') == true) ||
+        (data['error'] != null && !data.containsKey('user'));
+    if (isErrorResponse) {
+      final newToken = await refreshAccessToken();
+      if (newToken != null) {
+        return getCurrentUser(token: newToken);
+      }
+      data['unauthorized'] = true;
+      data['error'] = data['msg'] ?? data['error'] ?? 'Session expired. Please log in again.';
+      return data;
+    }
+
+    final name = _parseDisplayNameFromResponse(data);
+    if (name != null) {
+      setCachedDisplayName(name);
+      persistDisplayName(name);
+    }
+    return data;
   }
 
   // ----------------- CV PARSING -----------------
@@ -294,13 +359,19 @@ class AuthService {
     required String fileName,
   }) async {
     try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse(ApiEndpoints.parserCV),
+      if (token.trim().isEmpty) {
+        return {
+          'error': 'Not signed in. Please log in again to parse your CV.',
+        };
+      }
+
+      // Server accepts JWT in header or in query (access_token) for CORS/proxy cases
+      final uri = Uri.parse(ApiEndpoints.parserCV).replace(
+        queryParameters: {'access_token': token},
       );
+      final request = http.MultipartRequest('POST', uri);
 
       request.headers['Authorization'] = 'Bearer $token';
-
       request.files.add(
         http.MultipartFile.fromBytes(
           'cv',
@@ -314,11 +385,31 @@ class AuthService {
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
-      } else {
-        return {
-          'error': 'Failed to parse CV: ${response.statusCode}',
-        };
       }
+      if (response.statusCode == 401) {
+        try {
+          final body = jsonDecode(response.body) as Map<String, dynamic>?;
+          final msg = body?['error'] ?? body?['message'] ?? 'Session expired or invalid.';
+          return {'error': '$msg Please log in again.', 'unauthorized': true};
+        } catch (_) {
+          return {
+            'error': 'Session expired or invalid. Please log in again.',
+            'unauthorized': true,
+          };
+        }
+      }
+      if (response.statusCode == 403) {
+        try {
+          final body = jsonDecode(response.body) as Map<String, dynamic>?;
+          final msg = body?['error'] ?? 'You do not have permission to use this feature.';
+          return {'error': msg, 'forbidden': true};
+        } catch (_) {
+          return {'error': 'You do not have permission to parse CV.', 'forbidden': true};
+        }
+      }
+      return {
+        'error': 'Failed to parse CV: ${response.statusCode}',
+      };
     } catch (e) {
       return {'error': 'Error parsing CV: $e'};
     }
@@ -368,8 +459,11 @@ class AuthService {
       if (streamedResponse.statusCode == 200) {
         return decoded;
       } else {
+        final serverMessage = decoded is Map
+            ? (decoded['error'] ?? decoded['message']?.toString())
+            : null;
         return {
-          'error': 'Enrollment failed (${streamedResponse.statusCode})',
+          'error': serverMessage ?? 'Enrollment failed (${streamedResponse.statusCode})',
           'details': decoded,
         };
       }
@@ -417,50 +511,45 @@ class AuthService {
   }
 
   // ----------------- TOKEN HELPERS -----------------
-  // On web, FlutterSecureStorage is not supported and can throw; use SharedPreferences only.
   static Future<void> saveTokens(
       String accessToken, String? refreshToken) async {
-    if (!kIsWeb) {
-      await _storage.write(key: 'access_token', value: accessToken);
-      if (refreshToken != null) {
-        await _storage.write(key: 'refresh_token', value: refreshToken);
-      }
+    await _storage.write(key: 'access_token', value: accessToken);
+    if (refreshToken != null) {
+      await _storage.write(key: 'refresh_token', value: refreshToken);
     }
     await _persistTokensToPrefs(accessToken, refreshToken);
   }
 
   static Future<String?> getAccessToken() async {
-    if (kIsWeb) {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString('access_token') ?? prefs.getString('token');
-    }
     return await _storage.read(key: 'access_token');
   }
 
   static Future<String?> getRefreshToken() async {
-    if (kIsWeb) {
-      final prefs = await SharedPreferences.getInstance();
-      return prefs.getString('refresh_token');
-    }
     return await _storage.read(key: 'refresh_token');
   }
 
   static Future<void> deleteTokens() async {
-    if (!kIsWeb) {
-      await _storage.delete(key: 'access_token');
-      await _storage.delete(key: 'refresh_token');
-    }
+    await _storage.delete(key: 'access_token');
+    await _storage.delete(key: 'refresh_token');
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
     await prefs.remove('refresh_token');
     await prefs.remove('token');
+    await clearPersistedDisplayName();
+  }
+
+  /// Clear all auth state (tokens, role, user, cache). Call before saving new tokens on login so each new user gets a fresh session. Also call when opening job details from landing so guest users don't see a previous user's session.
+  static Future<void> clearAuthState() async {
+    await deleteTokens();
+    setCachedDisplayName(null);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('role');
+    await prefs.remove('user');
   }
 
 // ----------------- SAVE TOKEN -----------------
   static Future<void> saveToken(String token) async {
-    if (!kIsWeb) {
-      await _storage.write(key: 'access_token', value: token);
-    }
+    await _storage.write(key: 'access_token', value: token);
     await _persistTokensToPrefs(token, null);
   }
 
@@ -539,6 +628,21 @@ class AuthService {
     await prefs.setString('user', jsonEncode(user));
   }
 
+  /// Persist display name so it survives token expiry until re-login.
+  static const String _keyDisplayName = 'display_name';
+  static Future<void> persistDisplayName(String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyDisplayName, name);
+  }
+  static Future<String?> getPersistedDisplayName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyDisplayName);
+  }
+  static Future<void> clearPersistedDisplayName() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyDisplayName);
+  }
+
 // Retrieve saved user info
   static Future<Map<String, dynamic>?> getUserInfo() async {
     final prefs = await SharedPreferences.getInstance();
@@ -546,6 +650,30 @@ class AuthService {
     if (userStr != null) {
       return jsonDecode(userStr) as Map<String, dynamic>;
     }
+    return null;
+  }
+
+  /// Use refresh token to get a new access token. Returns new access token or null on failure.
+  static Future<String?> refreshAccessToken() async {
+    final refreshToken = await getRefreshToken();
+    if (refreshToken == null || refreshToken.isEmpty) return null;
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.refresh),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $refreshToken',
+        },
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map && data['access_token'] != null) {
+          final newToken = data['access_token'].toString();
+          await saveToken(newToken);
+          return newToken;
+        }
+      }
+    } catch (_) {}
     return null;
   }
 
@@ -562,6 +690,10 @@ class AuthService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        if (data is Map<String, dynamic>) {
+          final name = _parseDisplayNameFromResponse(data);
+          if (name != null) setCachedDisplayName(name);
+        }
         return data;
       } else {
         throw Exception('Failed to load profile: ${response.statusCode}');
@@ -575,7 +707,6 @@ class AuthService {
   static Future<void> storeTokens(
       String accessToken, String? refreshToken, String role) async {
     await saveTokens(accessToken, refreshToken);
-
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('role', role);
   }
@@ -596,7 +727,29 @@ class AuthService {
     return prefs.getString('role');
   }
 
-  // 🆕 MFA MANAGEMENT METHODS
+  /// Store job user intended to apply to before being sent to login. Full job stored so after login we can open job details. Cleared after apply or dismiss.
+  static const String _keyPendingApplyJob = 'pending_apply_job';
+  static Future<void> setPendingApplyJob(Map<String, dynamic> job) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (job['id'] == null) return;
+    await prefs.setString(_keyPendingApplyJob, jsonEncode(job));
+  }
+  static Future<Map<String, dynamic>?> getPendingApplyJob() async {
+    final prefs = await SharedPreferences.getInstance();
+    final s = prefs.getString(_keyPendingApplyJob);
+    if (s == null || s.isEmpty) return null;
+    try {
+      return jsonDecode(s) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+  static Future<void> clearPendingApplyJob() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyPendingApplyJob);
+  }
+
+  // ≡ƒåò MFA MANAGEMENT METHODS
   static Future<Map<String, dynamic>> enableMfa() async {
     final token = await getAccessToken();
     final response = await http.post(

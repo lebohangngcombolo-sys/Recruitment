@@ -1,23 +1,20 @@
-// ignore_for_file: deprecated_member_use
-
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io' show File;
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart' as url_launcher;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
 import '../../providers/theme_provider.dart';
-import '../../utils/api_endpoints.dart';
 
 // ------------------- API Base URL -------------------
-final String candidateBase = ApiEndpoints.candidateBase;
+const String candidateBase = "http://127.0.0.1:5000/api/candidate";
 
 class ProfilePage extends StatefulWidget {
   final String token;
@@ -50,10 +47,6 @@ class _ProfilePageState extends State<ProfilePage>
   final TextEditingController bioController = TextEditingController();
   final TextEditingController locationController = TextEditingController();
   final TextEditingController titleController = TextEditingController();
-  final TextEditingController departmentController = TextEditingController();
-  final TextEditingController designationController = TextEditingController();
-  final TextEditingController preferredNameController = TextEditingController();
-  final TextEditingController managerController = TextEditingController();
 
   // Candidate fields
   final TextEditingController degreeController = TextEditingController();
@@ -84,7 +77,7 @@ class _ProfilePageState extends State<ProfilePage>
   bool profileVisible = true;
   bool enrollmentCompleted = false;
 
-  // 🆕 MFA State
+  // ≡ƒåò MFA State
   bool _mfaEnabled = false;
   bool _mfaLoading = false;
   String? _mfaSecret;
@@ -93,7 +86,9 @@ class _ProfilePageState extends State<ProfilePage>
   int _backupCodesRemaining = 0;
 
   List<dynamic> documents = [];
-  final String apiBase = ApiEndpoints.candidateBase;
+  List<String> _certifications = [];
+  List<String> _languages = [];
+  final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
   // Add these helper methods in the _ProfilePageState class (around line 150, after the state variables):
 
@@ -129,32 +124,6 @@ class _ProfilePageState extends State<ProfilePage>
         {'value': 'other', 'label': 'Other'}
       ];
 
-  List<Map<String, String>> get departmentOptions => [
-        {'value': '', 'label': 'Select Department'},
-        {'value': 'finance', 'label': 'Finance'},
-        {'value': 'hr', 'label': 'Human Resources'},
-        {'value': 'it', 'label': 'Information Technology'},
-        {'value': 'marketing', 'label': 'Marketing'},
-        {'value': 'sales', 'label': 'Sales'},
-        {'value': 'operations', 'label': 'Operations'},
-        {'value': 'engineering', 'label': 'Engineering'},
-        {'value': 'other', 'label': 'Other'},
-      ];
-
-  List<Map<String, String>> get designationOptions => [
-        {'value': '', 'label': 'Select Designation'},
-        {'value': 'business_analyst', 'label': 'Business Analyst'},
-        {'value': 'software_engineer', 'label': 'Software Engineer'},
-        {'value': 'project_manager', 'label': 'Project Manager'},
-        {'value': 'hr_manager', 'label': 'HR Manager'},
-        {'value': 'marketing_specialist', 'label': 'Marketing Specialist'},
-        {'value': 'sales_executive', 'label': 'Sales Executive'},
-        {'value': 'ceo', 'label': 'CEO'},
-        {'value': 'cto', 'label': 'CTO'},
-        {'value': 'cfo', 'label': 'CFO'},
-        {'value': 'other', 'label': 'Other'},
-      ];
-
   // Helper method to get value from stored data
   String? _getValueFromStoredData(
       String? storedValue, List<Map<String, String>> options) {
@@ -169,132 +138,6 @@ class _ProfilePageState extends State<ProfilePage>
           option['value'] == lowerValue) {
         return option['value'];
       }
-
-      // ignore: unused_element
-      Widget _buildProfileHeader() {
-        return Column(
-          children: [
-            Stack(
-              children: [
-                Container(
-                  width: 140,
-                  height: 140,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: Colors.redAccent.withOpacity(0.7),
-                      width: 4,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 10,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(70),
-                    child: Image(
-                      image: _getProfileImageProvider(),
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          Icons.person,
-                          color: Colors.grey.shade400,
-                          size: 70,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.redAccent,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.redAccent.withOpacity(0.4),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                      border: Border.all(
-                        color: Colors.white,
-                        width: 3,
-                      ),
-                    ),
-                    child: const Icon(
-                      Icons.camera_alt_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Text(
-              fullNameController.text.isNotEmpty
-                  ? fullNameController.text
-                  : "Your Name",
-              style: GoogleFonts.poppins(
-                fontSize: 28,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              titleController.text.isNotEmpty
-                  ? titleController.text
-                  : "Your Title",
-              style: GoogleFonts.inter(
-                fontSize: 18,
-                color: Colors.white70,
-              ),
-            ),
-            const SizedBox(height: 15),
-            if (_mfaEnabled)
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.verified_user,
-                        color: Colors.greenAccent, size: 18),
-                    const SizedBox(width: 8),
-                    Text(
-                      "2FA Enabled",
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        color: Colors.greenAccent,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 30),
-          ],
-        );
-      }
-
-      // Profile Summary Tab
     }
 
     // If no exact match, try partial match
@@ -323,7 +166,7 @@ class _ProfilePageState extends State<ProfilePage>
     _loadMfaStatus();
   }
 
-  // 🆕 MFA METHODS (unchanged)
+  // ≡ƒåò MFA METHODS (unchanged)
   Future<void> _loadMfaStatus() async {
     try {
       final result = await AuthService.getMfaStatus();
@@ -654,7 +497,7 @@ class _ProfilePageState extends State<ProfilePage>
               ),
               const SizedBox(height: 16),
               Text(
-                "⚠️ These codes won't be shown again. Make sure to save them now!",
+                "ΓÜá∩╕Å These codes won't be shown again. Make sure to save them now!",
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   color: Colors.redAccent,
@@ -814,14 +657,26 @@ class _ProfilePageState extends State<ProfilePage>
 
         idNumberController.text = candidate['id_number'] ?? "";
         bioController.text = candidate['bio'] ?? "";
-        locationController.text = candidate['location'] ?? "";
+        // Prefer address (from enrollment) then location
+        locationController.text = (candidate['address'] ?? candidate['location'] ?? "").toString();
 
-        // Initialize education and work experience
-        final degree = candidate['degree'] ?? "";
-        final institution = candidate['institution'] ?? "";
-        final graduationYear = candidate['graduation_year'] ?? "";
-
-        if (degree.isNotEmpty || institution.isNotEmpty) {
+        // Initialize education from enrollment format: education list [{level, institution, graduation_year}]
+        String degree = candidate['degree'] ?? "";
+        String institution = candidate['institution'] ?? "";
+        String graduationYear = candidate['graduation_year'] ?? "";
+        final educationList = candidate['education'];
+        if (educationList is List && educationList.isNotEmpty) {
+          final first = educationList.first;
+          if (first is Map) {
+            degree = (first['level'] ?? first['degree'] ?? degree).toString();
+            institution = (first['institution'] ?? institution).toString();
+            graduationYear = (first['graduation_year'] ?? graduationYear).toString();
+          }
+        }
+        if (degree.isNotEmpty || institution.isNotEmpty || graduationYear.isNotEmpty) {
+          degreeController.text = degree;
+          institutionController.text = institution;
+          graduationYearController.text = graduationYear;
           _educationControllers.clear();
           _educationControllers.add(TextEditingController(
               text:
@@ -830,12 +685,19 @@ class _ProfilePageState extends State<ProfilePage>
           _educationControllers = [TextEditingController()];
         }
 
+        // Work experience from enrollment: list of {position, company, description}
         final workExperience = candidate['work_experience'] ?? [];
         if (workExperience.isNotEmpty && workExperience is List) {
           _workExpControllers.clear();
           for (var exp in workExperience) {
-            _workExpControllers
-                .add(TextEditingController(text: exp.toString()));
+            String text = exp.toString();
+            if (exp is Map) {
+              final pos = exp['position'] ?? exp['title'] ?? '';
+              final co = exp['company'] ?? '';
+              final desc = exp['description'] ?? '';
+              text = [if (pos.isNotEmpty) pos, if (co.isNotEmpty) 'at $co', if (desc.isNotEmpty) desc].join(' ΓÇó ');
+            }
+            _workExpControllers.add(TextEditingController(text: text));
           }
         } else {
           _workExpControllers = [TextEditingController()];
@@ -855,6 +717,11 @@ class _ProfilePageState extends State<ProfilePage>
         portfolioController.text = candidate['portfolio'] ?? "";
         documents = candidate['documents'] ?? [];
         _profileImageUrl = candidate['profile_picture'] ?? "";
+        // From enrollment: certifications and languages (persisted with profile)
+        _certifications = List<String>.from(
+            (candidate['certifications'] ?? []).map((e) => e.toString()));
+        _languages = List<String>.from(
+            (candidate['languages'] ?? []).map((e) => e.toString()));
       }
 
       final settingsRes = await http.get(
@@ -1041,12 +908,11 @@ class _ProfilePageState extends State<ProfilePage>
     return const AssetImage("assets/images/profile_placeholder.png");
   }
 
-  Widget _modernCard(String title, Widget child,
-      {Color? cardColor, Color? textColor}) {
+  Widget _modernCard(String title, Widget child) {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: cardColor ?? Colors.white.withOpacity(0.5), // Translucent white
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -1071,7 +937,7 @@ class _ProfilePageState extends State<ProfilePage>
                   style: GoogleFonts.poppins(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: textColor ?? Colors.black,
+                    color: Colors.black,
                   ),
                 ),
               ],
@@ -1281,6 +1147,7 @@ class _ProfilePageState extends State<ProfilePage>
                       ),
                       const SizedBox(height: 40),
                       // Navigation buttons
+                      _sidebarButton("Profile", Icons.person_outline_rounded),
                       _sidebarButton("Settings", Icons.settings_outlined),
                       _sidebarButton("2FA", Icons.security_outlined),
                       _sidebarButton(
@@ -1378,29 +1245,11 @@ class _ProfilePageState extends State<ProfilePage>
             ? _buildProfileSummary()
             : _buildProfileForm();
       case "Settings":
+        return _buildSettingsTab();
+      case "2FA":
         return _build2FATab();
       case "Reset Password":
-        return Container(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              Text(
-                "Reset Password",
-                style: GoogleFonts.poppins(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                "Password reset functionality coming soon.",
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        );
+        return _buildResetPasswordTab();
       default:
         return _buildProfileSummary();
     }
@@ -1901,8 +1750,7 @@ class _ProfilePageState extends State<ProfilePage>
                       ),
                     ],
                   ),
-                  child: Icon(Icons.arrow_back,
-                      color: Colors.white), // Changed to white
+                  child: Icon(Icons.arrow_back, color: Colors.redAccent),
                 ),
               ),
               const SizedBox(width: 12),
@@ -1911,7 +1759,7 @@ class _ProfilePageState extends State<ProfilePage>
                 style: GoogleFonts.poppins(
                   fontSize: 24,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white, // Changed to white
+                  color: Colors.black,
                 ),
               ),
               const Spacer(),
@@ -1957,7 +1805,8 @@ class _ProfilePageState extends State<ProfilePage>
                 _infoRow("Full Name", fullNameController.text),
                 _infoRow("Email", emailController.text),
                 _infoRow("Phone", phoneController.text),
-                _infoRow("Location", locationController.text),
+                if (locationController.text.isNotEmpty)
+                  _infoRow("Address", locationController.text),
                 _infoRow("Nationality", nationalityController.text),
                 _infoRow("Title", titleController.text),
                 if (bioController.text.isNotEmpty) ...[
@@ -2025,6 +1874,82 @@ class _ProfilePageState extends State<ProfilePage>
                         ),
                         child: Text(
                           trimmedSkill,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                if (_certifications.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Divider(color: Colors.grey.shade100),
+                  const SizedBox(height: 16),
+                  Text(
+                    "Certifications",
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _certifications.map((c) {
+                      final t = c.trim();
+                      if (t.isEmpty) return const SizedBox.shrink();
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          t,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                if (_languages.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Divider(color: Colors.grey.shade100),
+                  const SizedBox(height: 16),
+                  Text(
+                    "Languages",
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _languages.map((lang) {
+                      final t = lang.trim();
+                      if (t.isEmpty) return const SizedBox.shrink();
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          t,
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: Colors.redAccent,
@@ -2119,7 +2044,7 @@ class _ProfilePageState extends State<ProfilePage>
             child: GestureDetector(
               onTap: () {
                 final uri = Uri.tryParse(value) ?? Uri();
-                url_launcher.launchUrl(uri, mode: url_launcher.LaunchMode.externalApplication);
+                launchUrl(uri, mode: LaunchMode.externalApplication);
               },
               child: Text(
                 value,
@@ -2137,7 +2062,40 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   // Profile Form
+  // Profile Form - Fixed dropdown values
   Widget _buildProfileForm() {
+    // Define dropdown options - Use unique values
+    final List<Map<String, String>> genderOptions = [
+      {'value': '', 'label': 'Select Gender'},
+      {'value': 'male', 'label': 'Male'},
+      {'value': 'female', 'label': 'Female'},
+      {'value': 'other', 'label': 'Other'},
+      {'value': 'prefer_not_to_say', 'label': 'Prefer not to say'}
+    ];
+
+    final List<Map<String, String>> nationalityOptions = [
+      {'value': '', 'label': 'Select Nationality'},
+      {'value': 'south_african', 'label': 'South African'},
+      {'value': 'tanzanian', 'label': 'Tanzanian'},
+      {'value': 'ugandan', 'label': 'Ugandan'},
+      {'value': 'rwandan', 'label': 'Rwandan'},
+      {'value': 'burundian', 'label': 'Burundian'},
+      {'value': 'south_sudanese', 'label': 'South Sudanese'},
+      {'value': 'other', 'label': 'Other'}
+    ];
+
+    final List<Map<String, String>> titleOptions = [
+      {'value': '', 'label': 'Select Title'},
+      {'value': 'mr', 'label': 'Mr.'},
+      {'value': 'mrs', 'label': 'Mrs.'},
+      {'value': 'ms', 'label': 'Ms.'},
+      {'value': 'miss', 'label': 'Miss'},
+      {'value': 'dr', 'label': 'Dr.'},
+      {'value': 'prof', 'label': 'Prof.'},
+      {'value': 'eng', 'label': 'Eng.'},
+      {'value': 'other', 'label': 'Other'}
+    ];
+
     return SingleChildScrollView(
       child: Column(
         children: [
@@ -2235,9 +2193,9 @@ class _ProfilePageState extends State<ProfilePage>
             ),
           ),
 
-          // Personal Information
+          // Profile Picture Section
           _modernCard(
-            "Personal Information",
+            "Profile Picture",
             Column(
               children: [
                 GestureDetector(
@@ -3151,7 +3109,6 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   // Settings Tab
-  // ignore: unused_element
   Widget _buildSettingsTab() {
     return SingleChildScrollView(
       child: Column(
@@ -3298,7 +3255,6 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   // Reset Password Tab
-  // ignore: unused_element
   Widget _buildResetPasswordTab() {
     final TextEditingController currentPassword = TextEditingController();
     final TextEditingController newPassword = TextEditingController();

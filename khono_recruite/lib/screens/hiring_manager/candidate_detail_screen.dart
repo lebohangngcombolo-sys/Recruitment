@@ -193,7 +193,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
               onPressed: () => Navigator.pop(context),
             ),
             title: Text(candidateData?['full_name'] ?? "Candidate Details"),
-            backgroundColor: Colors.black87.withValues(alpha: 0.8),
+            backgroundColor: Colors.black87.withOpacity(0.8),
             elevation: 0,
           ),
           body: loading
@@ -391,7 +391,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
             color: (themeProvider.isDarkMode
                     ? const Color(0xFF14131E)
                     : Colors.white)
-                .withValues(alpha: 0.9),
+                .withOpacity(0.9),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
                 color: themeProvider.isDarkMode ? Colors.white24 : Colors.white,
@@ -488,7 +488,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
     return Drawer(
       backgroundColor:
           (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-              .withValues(alpha: 0.9),
+              .withOpacity(0.9),
       child: SafeArea(
         child: ListView(
           padding: EdgeInsets.zero,

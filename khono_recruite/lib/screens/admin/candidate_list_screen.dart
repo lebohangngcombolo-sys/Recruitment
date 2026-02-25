@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/auth_service.dart';
 import '../../utils/api_endpoints.dart';
 import '../../providers/theme_provider.dart';
+import 'candidate_detail_screen.dart';
 
 class CandidateListScreen extends StatefulWidget {
   const CandidateListScreen({super.key});
@@ -470,6 +471,15 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                                     themeProvider:
                                                         themeProvider,
                                                   ),
+                                                  if (c['applications_summary'] != null && (c['applications_summary'] as List).isNotEmpty) ...[
+                                                    const SizedBox(height: 8),
+                                                    _buildInfoRow(
+                                                      icon: Icons.work,
+                                                      label: "Jobs applied",
+                                                      value: "${(c['applications_summary'] as List).length} job(s): ${(c['applications_summary'] as List).map((a) => a is Map ? (a['job_title'] ?? '') : '').where((s) => s.isNotEmpty).take(3).join(', ')}${(c['applications_summary'] as List).length > 3 ? '...' : ''}",
+                                                      themeProvider: themeProvider,
+                                                    ),
+                                                  ],
                                                   const SizedBox(height: 16),
                                                   // Action buttons
                                                   Row(
@@ -512,7 +522,26 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                                                         .w600,
                                                               ),
                                                             ),
-                                                            onPressed: () {},
+                                                            onPressed: () {
+                                                              final summary = c['applications_summary'] as List?;
+                                                              final firstAppId = summary != null && summary.isNotEmpty && summary.first is Map
+                                                                  ? (summary.first as Map)['application_id']
+                                                                  : null;
+                                                              if (firstAppId != null) {
+                                                                Navigator.of(context).push(
+                                                                  MaterialPageRoute(
+                                                                    builder: (_) => CandidateDetailScreen(
+                                                                      candidateId: c['id'] as int,
+                                                                      applicationId: firstAppId as int,
+                                                                    ),
+                                                                  ),
+                                                                );
+                                                              } else {
+                                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                                  const SnackBar(content: Text('No applications yet')),
+                                                                );
+                                                              }
+                                                            },
                                                             style:
                                                                 ElevatedButton
                                                                     .styleFrom(

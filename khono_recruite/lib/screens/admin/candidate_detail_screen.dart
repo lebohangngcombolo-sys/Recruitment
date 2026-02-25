@@ -34,6 +34,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
 
   Map<String, dynamic>? candidateData;
   List<Map<String, dynamic>> interviews = [];
+  List<Map<String, dynamic>> candidateApplications = [];
   bool loading = true;
   String? errorMessage;
 
@@ -86,6 +87,13 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
       final interviewData =
           await admin.getCandidateInterviews(widget.candidateId);
       interviews = List<Map<String, dynamic>>.from(interviewData);
+
+      try {
+        final apps = await admin.getCandidateApplications(widget.candidateId);
+        candidateApplications = apps;
+      } catch (_) {
+        candidateApplications = [];
+      }
     } catch (e) {
       if (kDebugMode) debugPrint("Error fetching candidate details: $e");
       errorMessage = "Failed to load data: $e";
@@ -371,6 +379,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
                   _buildCVCard(isDark),
                   _buildEducationCard(isDark),
                   _buildAssessmentCard(isDark),
+                  _buildJobsAppliedCard(isDark),
                   _buildInterviewsCard(isDark),
                 ],
               );
@@ -605,6 +614,114 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
         const SizedBox(height: 12),
         _buildInfoRow("Recommendation",
             candidateData!['assessment_recommendation'], isDark),
+      ],
+    );
+  }
+
+  Widget _buildJobsAppliedCard(bool isDark) {
+    return _buildInfoCard(
+      isDark: isDark,
+      icon: Icons.work_outline_rounded,
+      title: "Jobs Applied",
+      children: [
+        if (candidateApplications.isEmpty)
+          Center(
+            child: Text(
+              "No applications yet",
+              style: TextStyle(
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                fontSize: 14,
+              ),
+            ),
+          )
+        else
+          ...candidateApplications.map((item) {
+            final app = item['application'] as Map<String, dynamic>? ?? {};
+            final job = item['job'] as Map<String, dynamic>? ?? {};
+            final title = job['title'] ?? 'Unknown role';
+            final company = job['company'] ?? '';
+            final empType = (job['employment_type'] ?? '').toString().replaceAll('_', ' ');
+            final status = app['status'] ?? '';
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.05)
+                      : Colors.black.withValues(alpha: 0.04),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : Colors.black.withValues(alpha: 0.06),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    if (company.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          company,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        if (empType.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.redAccent.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              empType,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.redAccent,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        if (empType.isNotEmpty && status.isNotEmpty) const SizedBox(width: 8),
+                        if (status.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _getStatusColor(status).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              status,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: _getStatusColor(status),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
       ],
     );
   }

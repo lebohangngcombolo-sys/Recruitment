@@ -1,13 +1,17 @@
-import 'package:flutter/foundation.dart';
+﻿import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_web_plugins/flutter_web_plugins.dart'; // ⚡ Web URL strategy
+import 'package:flutter_web_plugins/flutter_web_plugins.dart'; // ΓÜí Web URL strategy
+import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
+import 'package:webview_flutter_web/webview_flutter_web.dart';
 
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/candidate/candidate_dashboard.dart';
 import 'screens/candidate/find_talent_page.dart';
+import 'screens/candidate/jobs_applied_page.dart';
+import 'screens/candidate/intern_stories_page.dart';
 import 'screens/candidate/job_details_page.dart';
 import 'screens/enrollment/enrollment_screen.dart';
 import 'screens/admin/admin_dashboard.dart';
@@ -29,54 +33,27 @@ import 'screens/hiring_manager/offer_list_screen.dart';
 
 import 'providers/theme_provider.dart';
 import 'utils/theme_utils.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_ai/firebase_ai.dart'; // Import Firebase AI SDK
-import 'firebase_options.dart';
-import 'services/ai_service.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // Initialize Firebase only if config has a valid API key (avoids white screen on invalid-api-key)
-  GenerativeModel? generativeModel;
-  final opts = DefaultFirebaseOptions.currentPlatform;
-  final hasFirebaseConfig = opts.apiKey.isNotEmpty && opts.projectId.isNotEmpty;
-  if (hasFirebaseConfig) {
-    try {
-      await Firebase.initializeApp(options: opts);
-      generativeModel =
-          FirebaseAI.googleAI().generativeModel(model: 'gemini-2.5-flash');
-    } catch (e, st) {
-      if (kDebugMode) {
-        debugPrint('Firebase init skipped or failed: $e');
-        debugPrint('$st');
-      }
-    }
-  } else {
-    if (kDebugMode) {
-      debugPrint(
-          'Firebase not configured (empty apiKey/projectId in firebase_options.dart). '
-          'Run "dart run flutterfire_cli:flutterfire configure" or set options. App will use OpenRouter/DeepSeek for AI.');
-    }
-  }
-
-  AIService.initialize(generativeModel);
-
-  // ⚡ Fix Flutter Web initial route handling
+void main() {
+  // ΓÜí Fix Flutter Web initial route handling
   setUrlStrategy(PathUrlStrategy());
+
+  // WebView: set web platform implementation so CV preview works in-app on web
+  if (kIsWeb) {
+    WebViewPlatform.instance = WebWebViewPlatform();
+  }
 
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        Provider<GenerativeModel?>.value(value: generativeModel),
       ],
       child: const KhonoRecruiteApp(),
     ),
   );
 }
 
-// ✅ Persistent router
+// Γ£à Persistent router
 final GoRouter _router = GoRouter(
   initialLocation: '/',
   routes: [
@@ -110,6 +87,10 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/find-talent',
       builder: (context, state) => const FindTalentPage(),
+    ),
+    GoRoute(
+      path: '/intern-stories',
+      builder: (context, state) => const InternStoriesPage(),
     ),
     GoRoute(
       path: '/about-us',
@@ -161,6 +142,13 @@ final GoRouter _router = GoRouter(
       },
     ),
     GoRoute(
+      path: '/jobs-applied',
+      builder: (context, state) {
+        final token = state.uri.queryParameters['token'] ?? '';
+        return JobsAppliedPage(token: token);
+      },
+    ),
+    GoRoute(
       path: '/enrollment',
       builder: (context, state) {
         final token = state.uri.queryParameters['token'] ?? '';
@@ -192,7 +180,7 @@ final GoRouter _router = GoRouter(
       path: '/hiring-manager-offers',
       builder: (context, state) => const AdminOfferListScreen(),
     ),
-    // ✅ Add this new route
+    // Γ£à Add this new route
     GoRoute(
       path: '/hr-dashboard',
       builder: (context, state) {
@@ -207,7 +195,7 @@ final GoRouter _router = GoRouter(
         return ProfilePage(token: token);
       },
     ),
-    // ⚡ OAuth callback screen reads tokens directly from URL
+    // ΓÜí OAuth callback screen reads tokens directly from URL
     GoRoute(
       path: '/oauth-callback',
       builder: (context, state) => const OAuthCallbackScreen(),

@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen>
         passwordController.text.trim(),
       );
 
-      if (result['ok'] == true) {
+      if (result['success'] == true) {
         // 🆕 Check if MFA is required
         if (result['mfa_required'] == true) {
           // 🆕 STORE THE MFA SESSION TOKEN IN STATE
@@ -108,7 +108,10 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           );
         } else {
-          // Normal login without MFA
+          // Normal login without MFA — prefetch current user so dashboard shows name from first paint
+          try {
+            await AuthService.getCurrentUser(token: result['access_token']);
+          } catch (_) {}
           _navigateToDashboard(
             token: result['access_token'],
             role: result['role'],
@@ -117,7 +120,7 @@ class _LoginScreenState extends State<LoginScreen>
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result['error']?.toString() ?? "Login failed")),
+          SnackBar(content: Text(result['error']?.toString() ?? result['message']?.toString() ?? "Login failed")),
         );
       }
     } catch (e) {
@@ -150,8 +153,11 @@ class _LoginScreenState extends State<LoginScreen>
           _userId = null;
         });
 
-        // Pop MFA screen and navigate to dashboard
+        // Pop MFA screen, prefetch current user so dashboard shows name from first paint, then navigate
         Navigator.pop(context); // Close MFA screen
+        try {
+          await AuthService.getCurrentUser(token: result['access_token']);
+        } catch (_) {}
         _navigateToDashboard(
           token: result['access_token'] as String,
           role: (result['user']?['role'] ?? result['role']) as String? ?? 'candidate',
@@ -197,6 +203,9 @@ class _LoginScreenState extends State<LoginScreen>
             : await AuthService.loginWithGithub();
 
         if (loginResult['access_token'] != null) {
+          try {
+            await AuthService.getCurrentUser(token: loginResult['access_token']);
+          } catch (_) {}
           _navigateToDashboard(
             token: loginResult['access_token'],
             role: loginResult['role'],
@@ -214,11 +223,11 @@ class _LoginScreenState extends State<LoginScreen>
   // ------------------- NAVIGATION HELPER -------------------
   // Use GoRouter (context.go) so we don't trigger Navigator._debugLocked.
   // Defer to next frame so navigation runs after current build completes.
-  void _navigateToDashboard({
+  Future<void> _navigateToDashboard({
     required String token,
     required String role,
     required String dashboard,
-  }) {
+  }) async {
     final encodedToken = Uri.encodeComponent(token);
     final path = switch (role) {
       "admin" => '/admin-dashboard?token=$encodedToken',

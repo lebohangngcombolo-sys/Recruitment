@@ -19,7 +19,6 @@ import 'package:khono_recruite/profile_image_provider_io.dart'
 // Import your existing services
 import '../../services/candidate_service.dart';
 import '../../services/auth_service.dart';
-import '../../utils/api_endpoints.dart';
 
 /// New landing screen: hero, explore by category, job cards. Optional [token] for logged-in state.
 /// Teammate will refine the real "candidate dashboard" (applications, profile, etc.) in candidate_dashboard.dart.
@@ -49,11 +48,17 @@ class _LandingPageState extends State<LandingPage>
     'Business & Consulting',
   ];
 
+  /// Explore By Category uses only real API jobs (no mock data).
+  static List<Map<String, dynamic>> get _categoryMockJobs => [];
+
   final Color primaryColor = Color(0xFF991A1A);
   final Color strokeColor = Color(0xFFC10D00); // Accent (e.g. backgrounds)
   final Color borderColor = Colors.white; // Borders for inputs, buttons, cards
   final Color fillColor =
       Color(0xFFf2f2f2).withOpacity(0.2); // Fill with 20% opacity
+
+  /// Token from AuthService when route doesn't pass one (e.g. user at "/" while logged in).
+  String? _authToken;
 
   // Your existing data states
   List<Map<String, dynamic>> availableJobs = [];
@@ -93,7 +98,7 @@ class _LandingPageState extends State<LandingPage>
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
   String _profileImageUrl = "";
-  final String apiBase = ApiEndpoints.candidateBase;
+  final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
   @override
   void initState() {
@@ -136,12 +141,47 @@ class _LandingPageState extends State<LandingPage>
     });
   }
 
-  bool get _hasToken => widget.token != null && widget.token!.trim().isNotEmpty;
+  bool get _hasToken {
+    if (widget.token != null && widget.token!.trim().isNotEmpty) return true;
+    return _authToken != null && _authToken!.trim().isNotEmpty;
+  }
 
-  void _loadInitialData() {
+  String? get _effectiveToken =>
+      widget.token?.trim().isNotEmpty == true ? widget.token : _authToken;
+
+  /// Job ids the user has already applied to (in progress or completed). Used to show "Applied" instead of "Apply Now".
+  Set<int> get _appliedJobIds {
+    final ids = <int>{};
+    for (final app in applications) {
+      if (app is! Map<String, dynamic>) continue;
+      final jobId = app['job_id'];
+      if (jobId != null) {
+        if (jobId is int) {
+          ids.add(jobId);
+        } else {
+          final n = int.tryParse(jobId.toString());
+          if (n != null) ids.add(n);
+        }
+      }
+    }
+    return ids;
+  }
+
+  Future<void> _loadInitialData() async {
+    String? effectiveToken =
+        widget.token?.trim().isNotEmpty == true ? widget.token : null;
+    if (effectiveToken == null || effectiveToken.isEmpty) {
+      effectiveToken = await AuthService.getAccessToken();
+      if (mounted &&
+          effectiveToken != null &&
+          effectiveToken.trim().isNotEmpty) {
+        _safeSetState(() => _authToken = effectiveToken);
+      }
+    }
+    final hasToken = effectiveToken != null && effectiveToken.trim().isNotEmpty;
     // Always fetch jobs for explore category (public API when not logged in)
     fetchAvailableJobs();
-    if (!_hasToken) {
+    if (!hasToken) {
       _safeSetState(() {
         loadingApplications = false;
         loadingNotifications = false;
@@ -157,6 +197,13 @@ class _LandingPageState extends State<LandingPage>
     fetchCandidateProfile();
   }
 
+  bool _isAuthError(Object e) {
+    final s = e.toString().toLowerCase();
+    return s.contains('401') ||
+        s.contains('missing or invalid jwt') ||
+        s.contains('unauthorized');
+  }
+
   // ---------- Fetch profile image ----------
   Future<void> fetchProfileImage() async {
     if (!_hasToken) return;
@@ -164,7 +211,7 @@ class _LandingPageState extends State<LandingPage>
       final profileRes = await http.get(
         Uri.parse("$apiBase/profile"),
         headers: {
-          'Authorization': 'Bearer ${widget.token}',
+          'Authorization': 'Bearer ${_effectiveToken ?? ''}',
           'Content-Type': 'application/json'
         },
       );
@@ -191,7 +238,7 @@ class _LandingPageState extends State<LandingPage>
         Uri.parse("$apiBase/upload_profile_picture"),
       );
 
-      request.headers['Authorization'] = 'Bearer ${widget.token}';
+      request.headers['Authorization'] = 'Bearer ${_effectiveToken ?? ''}';
 
       request.files.add(
         http.MultipartFile.fromBytes(
@@ -248,16 +295,30 @@ class _LandingPageState extends State<LandingPage>
 
     _safeSetState(() => loadingJobs = true);
     try {
-      final List<Map<String, dynamic>> jobs = _hasToken && widget.token != null
-          ? await CandidateService.getAvailableJobs(widget.token!)
-          : await CandidateService.getPublicJobs();
+      final List<Map<String, dynamic>> jobs =
+          _hasToken && _effectiveToken != null
+              ? await CandidateService.getAvailableJobs(_effectiveToken!)
+              : await CandidateService.getPublicJobs();
       if (!mounted) return;
 
       _safeSetState(() {
         availableJobs = List<Map<String, dynamic>>.from(jobs);
       });
     } catch (e) {
-      debugPrint("Error fetching jobs: $e");
+      if (_isAuthError(e) && mounted) {
+        _safeSetState(() => _authToken = null);
+        await AuthService.clearAuthState();
+        // Still show jobs: load from public API so the list doesnΓÇÖt disappear
+        try {
+          final jobs = await CandidateService.getPublicJobs();
+          if (mounted) {
+            _safeSetState(
+                () => availableJobs = List<Map<String, dynamic>>.from(jobs));
+          }
+        } catch (_) {}
+      } else {
+        debugPrint("Error fetching jobs: $e");
+      }
       if (!mounted) return;
       _safeSetState(() => loadingJobs = false);
     } finally {
@@ -272,14 +333,19 @@ class _LandingPageState extends State<LandingPage>
 
     _safeSetState(() => loadingApplications = true);
     try {
-      final data = await CandidateService.getApplications(widget.token!);
+      final data = await CandidateService.getApplications(_effectiveToken!);
       if (!mounted) return;
 
       _safeSetState(() {
         applications = data;
       });
     } catch (e) {
-      debugPrint("Error fetching applications: $e");
+      if (_isAuthError(e) && mounted) {
+        _safeSetState(() => _authToken = null);
+        await AuthService.clearAuthState();
+      } else {
+        debugPrint("Error fetching applications: $e");
+      }
       if (!mounted) return;
       _safeSetState(() => loadingApplications = false);
     } finally {
@@ -294,14 +360,19 @@ class _LandingPageState extends State<LandingPage>
 
     _safeSetState(() => loadingNotifications = true);
     try {
-      final data = await CandidateService.getNotifications(widget.token!);
+      final data = await CandidateService.getNotifications(_effectiveToken!);
       if (!mounted) return;
 
       _safeSetState(() {
         notifications = data;
       });
     } catch (e) {
-      debugPrint("Error fetching notifications: $e");
+      if (_isAuthError(e) && mounted) {
+        _safeSetState(() => _authToken = null);
+        await AuthService.clearAuthState();
+      } else {
+        debugPrint("Error fetching notifications: $e");
+      }
       if (!mounted) return;
       _safeSetState(() => loadingNotifications = false);
     } finally {
@@ -315,12 +386,17 @@ class _LandingPageState extends State<LandingPage>
     if (!mounted || !_hasToken) return;
 
     try {
-      final data = await CandidateService.getProfile(widget.token!);
+      final data = await CandidateService.getProfile(_effectiveToken!);
       if (!mounted) return;
 
       _safeSetState(() => candidateProfile = data);
     } catch (e) {
-      debugPrint("Error fetching profile: $e");
+      if (_isAuthError(e) && mounted) {
+        _safeSetState(() => _authToken = null);
+        await AuthService.clearAuthState();
+      } else {
+        debugPrint("Error fetching profile: $e");
+      }
     }
   }
 
@@ -465,10 +541,10 @@ class _LandingPageState extends State<LandingPage>
 
     try {
       final response = await http.post(
-        Uri.parse(ApiEndpoints.askBot),
+        Uri.parse("http://127.0.0.1:5000/api/ai/chat"),
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer ${widget.token}",
+          "Authorization": "Bearer ${_effectiveToken ?? ''}",
         },
         body: jsonEncode({"message": text}),
       );
@@ -516,10 +592,10 @@ class _LandingPageState extends State<LandingPage>
     _safeSetState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse(ApiEndpoints.parseCV),
+        Uri.parse("http://127.0.0.1:5000/api/ai/parse_cv"),
         headers: {
           "Content-Type": "application/json",
-          "Authorization": "Bearer ${widget.token}",
+          "Authorization": "Bearer ${_effectiveToken ?? ''}",
         },
         body: jsonEncode({
           "job_description": jobDesc,
@@ -547,34 +623,37 @@ class _LandingPageState extends State<LandingPage>
   void _showLogoutConfirmation(BuildContext context) {
     showDialog(
       context: context,
+      barrierColor: Colors.black54,
       builder: (BuildContext context) {
         return BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Dialog(
             backgroundColor: Colors.white.withOpacity(0.95),
+            insetPadding: const EdgeInsets.symmetric(horizontal: 24),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(20),
               side: BorderSide(color: primaryColor.withOpacity(0.5), width: 1),
             ),
             child: Container(
+              constraints: const BoxConstraints(maxWidth: 320),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(20),
               ),
-              padding: const EdgeInsets.all(20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.logout, color: primaryColor, size: 32),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 12),
                   Text("Logout",
                       style: GoogleFonts.poppins(
                           color: Colors.black87,
                           fontSize: 18,
                           fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 15),
+                  const SizedBox(height: 8),
                   Text("Are you sure you want to logout?",
-                      style: GoogleFonts.poppins(color: Colors.black54)),
-                  const SizedBox(height: 20),
+                      style: GoogleFonts.poppins(color: Colors.black87)),
+                  const SizedBox(height: 16),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
@@ -644,9 +723,13 @@ class _LandingPageState extends State<LandingPage>
     );
   }
 
-  // Updated to handle real job data — dark theme to match the app
+  // Updated to handle real job data ΓÇö dark theme to match the app
   Widget _buildJobItem(String title, String location, String type,
       String salary, Map<String, dynamic> job) {
+    final logoUrl = (job['company_logo']?.toString().trim() ?? '');
+    final jobId = job['id'];
+    final id = jobId is int ? jobId : int.tryParse(jobId?.toString() ?? '');
+    final hasApplied = _hasToken && id != null && _appliedJobIds.contains(id);
     return Card(
       margin: EdgeInsets.symmetric(vertical: 8),
       color: Colors.white.withOpacity(0.06),
@@ -665,10 +748,9 @@ class _LandingPageState extends State<LandingPage>
             CircleAvatar(
               radius: 40,
               backgroundColor: primaryColor.withOpacity(0.2),
-              backgroundImage: job['company_logo'] != null
-                  ? NetworkImage(job['company_logo'])
-                  : null,
-              child: job['company_logo'] == null
+              backgroundImage:
+                  logoUrl.isNotEmpty ? NetworkImage(logoUrl) : null,
+              child: logoUrl.isEmpty
                   ? Icon(Icons.business, color: strokeColor, size: 24)
                   : null,
             ),
@@ -736,15 +818,24 @@ class _LandingPageState extends State<LandingPage>
                     ),
                     SizedBox(width: 4),
                     ElevatedButton(
-                      onPressed: () => context.push('/job-details', extra: job),
+                      onPressed: hasApplied
+                          ? null
+                          : () async {
+                              await AuthService.clearAuthState();
+                              if (!context.mounted) return;
+                              context.push('/job-details', extra: job);
+                            },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryColor,
+                        backgroundColor:
+                            hasApplied ? Colors.grey.shade700 : primaryColor,
                         foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey.shade700,
+                        disabledForegroundColor: Colors.white70,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      child: Text('Apply Now',
+                      child: Text(hasApplied ? 'Applied' : 'Apply Now',
                           style: GoogleFonts.poppins(
                               color: Colors.white,
                               fontWeight: FontWeight.w500)),
@@ -1513,7 +1604,7 @@ class _LandingPageState extends State<LandingPage>
                   ),
                   SizedBox(width: 16),
                   ElevatedButton(
-                    onPressed: () => context.push('/find-talent'),
+                    onPressed: () => context.go('/login'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: strokeColor,
                       foregroundColor: Colors.white,
@@ -1525,7 +1616,7 @@ class _LandingPageState extends State<LandingPage>
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: Text('Find A Talent',
+                    child: Text('Login',
                         style: GoogleFonts.poppins(
                             color: Colors.white,
                             fontSize: 16,
@@ -1651,48 +1742,25 @@ class _LandingPageState extends State<LandingPage>
                           ),
                         ),
                       ),
-                      if (_hasToken) ...[
-                        IconButton(
-                          icon: Icon(Icons.notifications_outlined,
-                              color: Colors.white, size: 22),
-                          onPressed: _showNotificationsDialog,
-                        ),
-                        GestureDetector(
-                          onTap: () => _showLogoutConfirmation(context),
-                          child: CircleAvatar(
-                            radius: 18,
-                            backgroundColor: primaryColor.withOpacity(0.3),
-                            backgroundImage:
-                                _getProfileImageProvider() as ImageProvider?,
-                            child: _profileImage == null &&
-                                    _profileImageUrl.isEmpty
-                                ? Icon(Icons.person,
-                                    color: Colors.white70, size: 20)
-                                : null,
+                      ElevatedButton(
+                        onPressed: () => context.push('/find-talent'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: strokeColor,
+                          foregroundColor: Colors.white,
+                          elevation: 2,
+                          shadowColor: Colors.black.withOpacity(0.25),
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                      ] else ...[
-                        ElevatedButton(
-                          onPressed: () => context.go('/login'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: strokeColor,
-                            foregroundColor: Colors.white,
-                            elevation: 2,
-                            shadowColor: Colors.black.withOpacity(0.25),
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 24, vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                          child: Text('Login',
-                              style: GoogleFonts.poppins(
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600)),
-                        ),
-                      ],
+                        child: Text('The Academy',
+                            style: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600)),
+                      ),
                       const SizedBox(width: 16),
                     ],
                   ),
@@ -1705,7 +1773,7 @@ class _LandingPageState extends State<LandingPage>
                       child: PageView(
                         children: [
                           _buildCarouselItem(
-                            'Find the Perfect Job You Deserve',
+                            'Find The Perfect Job for You',
                             'Discover opportunities tailored to your skills and ambitions. We help you connect with roles that offer growth, purpose, and long-term success.',
                           ),
                           _buildCarouselItem(
@@ -1906,7 +1974,7 @@ class _LandingPageState extends State<LandingPage>
                                               ),
                                             )),
                                     SizedBox(height: 16),
-                                    // Pagination footer — solid background to match app
+                                    // Pagination footer ΓÇö solid background to match app
                                     Container(
                                       padding: EdgeInsets.symmetric(
                                           horizontal: 16, vertical: 14),
@@ -1996,9 +2064,9 @@ class _LandingPageState extends State<LandingPage>
                               children: [
                                 _socialIcon('assets/icons/Instagram.png',
                                     'https://www.instagram.com/yourprofile'),
-                                _socialIcon('assets/icons/LinkedIn.png',
+                                _socialIcon('assets/icons/x1.png',
                                     'https://x.com/yourprofile'),
-                                _socialIcon('assets/icons/LinkedIn.png',
+                                _socialIcon('assets/icons/LinkedIn1.png',
                                     'https://www.linkedin.com/in/yourprofile'),
                                 _socialIcon('assets/icons/facebook.png',
                                     'https://www.facebook.com/yourprofile'),
@@ -2009,7 +2077,7 @@ class _LandingPageState extends State<LandingPage>
                           ),
                           const SizedBox(height: 20),
                           Text(
-                            "© 2025 Khonology. All rights reserved.",
+                            "┬⌐ 2025 Khonology. All rights reserved.",
                             style: GoogleFonts.poppins(
                                 color: Colors.white54, fontSize: 12),
                           ),
