@@ -380,7 +380,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                     height: double.infinity,
                     decoration: BoxDecoration(
                       color: themeProvider.isDarkMode
-                          ? const Color.fromARGB(171, 20, 19, 30)
+                          ? const Color(0xFF1F2840)
                           : const Color.fromARGB(156, 255, 255, 255),
                       border: Border(
                         right:
@@ -410,7 +410,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                                     alignment: Alignment.centerLeft,
                                     child: sidebarCollapsed
                                         ? Image.asset(
-                                            'assets/images/icon.png',
+                                            'assets/images/discs.png',
                                             height: 40,
                                             fit: BoxFit.contain,
                                           )
@@ -437,29 +437,41 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                             ),
                           ),
                         ),
-                        const Divider(height: 1, color: Colors.grey),
                         Expanded(
                           child: ListView(
                             padding: EdgeInsets.zero,
                             children: [
                               _sidebarEntry(
-                                  Icons.home_outlined, 'Home', 'dashboard'),
-                              _sidebarEntry(Icons.work_outline, 'Jobs', 'jobs'),
-                              _sidebarEntry(Icons.people_alt_outlined,
-                                  'Shortlisted', 'candidates'),
+                                  'assets/images/Home_Remote_Work_Red_Badge_White.png',
+                                  'Home',
+                                  'dashboard'),
                               _sidebarEntry(
-                                  Icons.event_note, 'Interviews', 'interviews'),
-                              _sidebarEntry(Icons.assignment_outlined,
-                                  'CV Reviews', 'cv_reviews'),
-                              _sidebarEntry(Icons.history, 'Audits', 'audits'),
+                                  'assets/images/Approval_Red_Badge_White.png',
+                                  'Jobs',
+                                  'jobs'),
                               _sidebarEntry(
-                                  Icons.security, 'Role Access', 'roles'),
-                              _sidebarEntry(Icons.people_outline, 'Candidates',
+                                  'assets/images/Meeting_Red_Badge_White.png',
+                                  'Shortlisted',
+                                  'candidates'),
+                              _sidebarEntry(
+                                  'assets/images/red_Management_Red_Badge_White.png',
+                                  'Interviews',
+                                  'interviews'),
+                              _sidebarEntry(
+                                  'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
+                                  'CV Reviews',
+                                  'cv_reviews'),
+                              _sidebarEntry('assets/images/deadline.png',
+                                  'Audits', 'audits'),
+                              _sidebarEntry(
+                                  'assets/images/Warning_Error_Red_Badge_White.png',
+                                  'Role Access',
+                                  'roles'),
+                              _sidebarEntry('assets/images/candidates.png', 'Candidates',
                                   'all_candidates'),
                             ],
                           ),
                         ),
-                        const Divider(height: 1, color: Colors.grey),
                         Padding(
                           padding: const EdgeInsets.symmetric(
                               vertical: 12.0, horizontal: 8),
@@ -818,7 +830,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
     });
   }
 
-  Widget _sidebarEntry(IconData icon, String label, String screenKey) {
+  Widget _sidebarEntry(dynamic icon, String label, String screenKey) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final selected = currentScreen == screenKey;
     return InkWell(
@@ -830,12 +842,23 @@ class _AdminDAshboardState extends State<AdminDAshboard>
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
           children: [
-            Icon(icon,
-                color: selected
-                    ? const Color.fromRGBO(151, 18, 8, 1)
-                    : themeProvider.isDarkMode
-                        ? Colors.grey.shade400
-                        : Colors.grey.shade800),
+            icon is IconData
+                ? Icon(icon,
+                    color: selected
+                        ? const Color.fromRGBO(151, 18, 8, 1)
+                        : themeProvider.isDarkMode
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade800)
+                : Image.asset(icon as String, width: 32, height: 32,
+                    errorBuilder: (context, error, stackTrace) {
+                    return Icon(Icons.error,
+                        color: selected
+                            ? const Color.fromRGBO(151, 18, 8, 1)
+                            : themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade800,
+                        size: 32);
+                  }),
             const SizedBox(width: 12),
             if (!sidebarCollapsed)
               Expanded(
@@ -846,7 +869,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                     color: selected
                         ? Colors.redAccent
                         : themeProvider.isDarkMode
-                            ? Colors.grey.shade400
+                            ? Colors.white
                             : Colors.grey.shade800,
                     fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                   ),
