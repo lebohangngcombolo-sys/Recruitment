@@ -1,10 +1,11 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 
 class JobDetailsPage extends StatefulWidget {
   final Map<String, dynamic> job;
@@ -177,7 +178,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     try {
       final res = await http.get(
         Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/applications/$applicationId/draft"),
+            "${ApiEndpoints.candidateBase}/applications/$applicationId/draft"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -229,7 +230,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
 
       final res = await http.post(
         Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/applications/$applicationId/draft"),
+            "${ApiEndpoints.candidateBase}/applications/$applicationId/draft"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -272,7 +273,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
     try {
       final res = await http.post(
         Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/apply/${widget.job["id"]}"),
+            "${ApiEndpoints.candidateBase}/apply/${widget.job["id"]}"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",

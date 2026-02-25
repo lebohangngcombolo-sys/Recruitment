@@ -16,7 +16,7 @@ class AppConfig {
     }
     return const String.fromEnvironment(
       'API_BASE',
-      defaultValue: 'http://127.0.0.1:5001',
+      defaultValue: 'http://127.0.0.1:5000',
     );
   }
 
@@ -30,7 +30,7 @@ class AppConfig {
     }
     return const String.fromEnvironment(
       'PUBLIC_API_BASE',
-      defaultValue: 'http://127.0.0.1:5001',
+      defaultValue: 'http://127.0.0.1:5000',
     );
   }
 }
@@ -38,7 +38,7 @@ class AppConfig {
 /// Replace local hardcoded localhost URLs with configured values.
 String localhostToEnv(String url) {
   return url
-      .replaceAll('http://127.0.0.1:5001', AppConfig.apiBase)
+      .replaceAll('http://127.0.0.1:5000', AppConfig.apiBase)
       .replaceAll('http://127.0.0.1:5000', AppConfig.publicApiBase);
 }
 

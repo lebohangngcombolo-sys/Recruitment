@@ -18,6 +18,7 @@ import 'assessments_results_screen.dart';
 import '../../screens/candidate/user_profile_page.dart';
 import 'saved_application_screen.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 import 'offers_screen.dart';
 
 class CandidateDashboard extends StatefulWidget {
@@ -45,7 +46,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   final Color primaryColor = Color(0xFF991A1A);
   final Color strokeColor = Color(0xFFC10D00);
   final Color fillColor = Color(0xFFf2f2f2).withValues(alpha: 0.2);
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  String get apiBase => ApiEndpoints.candidateBase;
 
   List<Map<String, dynamic>> notifications = [];
   Timer? _notificationTimer;
