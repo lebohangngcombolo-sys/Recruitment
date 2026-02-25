@@ -1,4 +1,4 @@
-﻿from flask import Blueprint, request, jsonify, current_app, Response
+from flask import Blueprint, request, jsonify, current_app, Response
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from app.extensions import db, cloudinary_client
 import requests
@@ -111,13 +111,23 @@ def _job_list_item(job):
     deadline_str = ""
     if getattr(job, "application_deadline", None) and job.application_deadline:
         deadline_str = job.application_deadline.strftime("%d %b %Y")
+    salary_range = getattr(job, "salary_range", None) or ""
+    if not salary_range and (getattr(job, "salary_min", None) is not None or getattr(job, "salary_max", None) is not None):
+        smin, smax = getattr(job, "salary_min", None), getattr(job, "salary_max", None)
+        currency = getattr(job, "salary_currency", None) or "ZAR"
+        if smin is not None and smax is not None:
+            salary_range = f"{currency} {smin:.0f} - {smax:.0f}"
+        elif smin is not None:
+            salary_range = f"{currency} {smin:.0f}+"
+        else:
+            salary_range = f"Up to {currency} {smax:.0f}"
     return {
         "id": job.id,
         "title": job.title or "",
         "company": getattr(job, "company", None) or "",
         "location": getattr(job, "location", None) or "Remote",
         "type": getattr(job, "employment_type", None) or "Full Time",
-        "salary": getattr(job, "salary_range", None) or "",
+        "salary": salary_range,
         "deadline": deadline_str,
         "company_logo": getattr(job, "banner", None),
         "role": job.category or "",

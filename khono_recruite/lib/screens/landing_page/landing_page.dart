@@ -6,15 +6,11 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'dart:ui';
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
 import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart'
     show File;
 import 'dart:typed_data';
-import 'package:khono_recruite/profile_image_provider_io.dart'
-    if (dart.library.html) 'package:khono_recruite/profile_image_provider_stub.dart'
-    as profile_image_provider;
 
 // Import your existing services
 import '../../services/candidate_service.dart';
@@ -47,9 +43,6 @@ class _LandingPageState extends State<LandingPage>
     'Data & Digital',
     'Business & Consulting',
   ];
-
-  /// Explore By Category uses only real API jobs (no mock data).
-  static List<Map<String, dynamic>> get _categoryMockJobs => [];
 
   final Color primaryColor = Color(0xFF991A1A);
   final Color strokeColor = Color(0xFFC10D00); // Accent (e.g. backgrounds)
@@ -97,7 +90,6 @@ class _LandingPageState extends State<LandingPage>
 
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
-  String _profileImageUrl = "";
   final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
   @override
@@ -217,11 +209,8 @@ class _LandingPageState extends State<LandingPage>
       );
 
       if (profileRes.statusCode == 200) {
-        final data = json.decode(profileRes.body)['data'];
-        final candidate = data['candidate'] ?? {};
-        setState(() {
-          _profileImageUrl = candidate['profile_picture'] ?? "";
-        });
+        json.decode(profileRes.body);
+        setState(() {});
       }
     } catch (e) {
       debugPrint("Error fetching profile image: $e");
@@ -256,7 +245,6 @@ class _LandingPageState extends State<LandingPage>
 
       if (response.statusCode == 200 && respJson['success'] == true) {
         setState(() {
-          _profileImageUrl = respJson['data']['profile_picture'];
           _profileImage = null;
           _profileImageBytes = null;
         });
@@ -272,21 +260,6 @@ class _LandingPageState extends State<LandingPage>
     } catch (e) {
       debugPrint("Profile image upload error: $e");
     }
-  }
-
-  // ---------- Get correct image provider ----------
-  ImageProvider<Object> _getProfileImageProvider() {
-    if (_profileImage != null) {
-      if (kIsWeb) return MemoryImage(_profileImageBytes!);
-      return profile_image_provider
-          .getProfileImageProviderFromPath(_profileImage!.path);
-    }
-
-    if (_profileImageUrl.isNotEmpty) {
-      return NetworkImage(_profileImageUrl);
-    }
-
-    return const AssetImage("assets/images/profile_placeholder.png");
   }
 
   // Fetch jobs for explore category: public API when not logged in, candidate API when logged in
@@ -620,91 +593,6 @@ class _LandingPageState extends State<LandingPage>
     }
   }
 
-  void _showLogoutConfirmation(BuildContext context) {
-    showDialog(
-      context: context,
-      barrierColor: Colors.black54,
-      builder: (BuildContext context) {
-        return BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Dialog(
-            backgroundColor: Colors.white.withOpacity(0.95),
-            insetPadding: const EdgeInsets.symmetric(horizontal: 24),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-              side: BorderSide(color: primaryColor.withOpacity(0.5), width: 1),
-            ),
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 320),
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.logout, color: primaryColor, size: 32),
-                  const SizedBox(height: 12),
-                  Text("Logout",
-                      style: GoogleFonts.poppins(
-                          color: Colors.black87,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text("Are you sure you want to logout?",
-                      style: GoogleFonts.poppins(color: Colors.black87)),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: Text("Cancel",
-                              style:
-                                  GoogleFonts.poppins(color: Colors.black54)),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [primaryColor, Color(0xFFEF5350)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: TextButton(
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                            _performLogout(context);
-                          },
-                          child: Text("Logout",
-                              style: GoogleFonts.poppins(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold)),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _performLogout(BuildContext context) async {
-    await AuthService.logout();
-    if (mounted) context.go('/');
-  }
-
   // Updated UI methods with your logic
   Widget _buildNavItem(
     String title, {
@@ -721,6 +609,38 @@ class _LandingPageState extends State<LandingPage>
         ),
       ),
     );
+  }
+
+  String _jobLocation(Map<String, dynamic> job) {
+    final loc = job['location']?.toString().trim() ?? '';
+    if (loc.isNotEmpty) return loc;
+    return job['company']?.toString().trim().isNotEmpty == true
+        ? job['company'].toString().trim()
+        : 'Remote';
+  }
+
+  String _jobType(Map<String, dynamic> job) {
+    final t = job['type']?.toString().trim() ??
+        job['employment_type']?.toString().trim() ??
+        '';
+    if (t.isEmpty) return 'Full Time';
+    return t.replaceAll('_', ' ');
+  }
+
+  String _jobSalary(Map<String, dynamic> job) {
+    final range = job['salary_range']?.toString().trim() ??
+        job['salary']?.toString().trim() ??
+        '';
+    if (range.isNotEmpty) return range;
+    final min = job['salary_min'];
+    final max = job['salary_max'];
+    final currency = job['salary_currency']?.toString().trim() ?? 'ZAR';
+    if (min != null && max != null && (min is num) && (max is num)) {
+      return '$currency ${min.toStringAsFixed(0)} - ${max.toStringAsFixed(0)}';
+    }
+    if (min != null && min is num) return '$currency ${min.toStringAsFixed(0)}+';
+    if (max != null && max is num) return 'Up to $currency ${max.toStringAsFixed(0)}';
+    return 'Not specified';
   }
 
   // Updated to handle real job data ΓÇö dark theme to match the app
@@ -791,17 +711,18 @@ class _LandingPageState extends State<LandingPage>
                                   color: Colors.white70, fontSize: 14)),
                         ],
                       ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.attach_money,
-                              size: 16, color: strokeColor),
-                          SizedBox(width: 4),
-                          Text(salary,
-                              style: GoogleFonts.poppins(
-                                  color: Colors.white70, fontSize: 14)),
-                        ],
-                      ),
+                      if (salary.isNotEmpty && salary != 'Not specified')
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.attach_money,
+                                size: 16, color: strokeColor),
+                            SizedBox(width: 4),
+                            Text(salary,
+                                style: GoogleFonts.poppins(
+                                    color: Colors.white70, fontSize: 14)),
+                          ],
+                        ),
                     ],
                   ),
                 ],
@@ -1476,89 +1397,6 @@ class _LandingPageState extends State<LandingPage>
     );
   }
 
-  void _showNotificationsDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
-                  ),
-                ),
-                padding: EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Icon(Icons.notifications, color: primaryColor),
-                    SizedBox(width: 8),
-                    Text('Notifications',
-                        style: GoogleFonts.poppins(
-                            fontSize: 18, fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
-              Container(
-                width: double.maxFinite,
-                height: 300,
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: notifications.length,
-                  itemBuilder: (context, index) {
-                    final notif = notifications[index];
-                    return Container(
-                      decoration: BoxDecoration(),
-                      child: ListTile(
-                        leading: Icon(Icons.notifications, color: primaryColor),
-                        title: Text(notif['title'] ?? 'Notification',
-                            style: GoogleFonts.poppins()),
-                        subtitle: Text(notif['message'] ?? '',
-                            style: GoogleFonts.poppins()),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(20),
-                    bottomRight: Radius.circular(20),
-                  ),
-                ),
-                padding: EdgeInsets.all(16),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text('Close', style: GoogleFonts.poppins()),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildCarouselItem(String title, String description) {
     return Container(
       padding: EdgeInsets.all(32),
@@ -1967,9 +1805,9 @@ class _LandingPageState extends State<LandingPage>
                                                   EdgeInsets.only(bottom: 12),
                                               child: _buildJobItem(
                                                 job['title'] ?? 'Position',
-                                                job['location'] ?? 'Location',
-                                                job['type'] ?? 'Type',
-                                                job['salary'] ?? 'Salary',
+                                                _jobLocation(job),
+                                                _jobType(job),
+                                                _jobSalary(job),
                                                 job,
                                               ),
                                             )),

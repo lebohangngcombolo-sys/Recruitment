@@ -56,7 +56,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   int? _applicationsCount;
   int? _savedCount; // saved drafts count
   Map<String, dynamic>? _pendingApplyJob;
-  bool _continuingApplication = false;
 
   @override
   void initState() {
@@ -194,7 +193,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return status == 'applied';
   }
 
-  Map<String, dynamic>? _inProgressApplication;
   List<Map<String, dynamic>> _inProgressApplications = [];
   List<Map<String, dynamic>> _completedApplications = [];
 
@@ -204,28 +202,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   bool _dashboardCountsLoaded = false;
   static const String _kCachedInProgressApps =
       'candidate_in_progress_applications';
-
-  /// In-memory cache so "Continue Your Application" shows on first paint after login (same session).
-  static List<Map<String, dynamic>>? _cachedInProgressApps;
-
-  Future<void> _loadCachedInProgressApplications() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final json = prefs.getString(_kCachedInProgressApps);
-      if (mounted && json != null && json.isNotEmpty) {
-        final list = jsonDecode(json) as List<dynamic>?;
-        if (list != null && list.isNotEmpty) {
-          final maps = list
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-          if (maps.isNotEmpty)
-            _safeSetState(() => _inProgressApplications = maps);
-        }
-      }
-    } catch (_) {}
-    // Do NOT set _dashboardCountsLoaded here ΓÇö only _fetchDashboardCounts does, so Continue section stays empty until API returns
-  }
 
   Future<void> _saveCachedInProgressApplications(
       List<Map<String, dynamic>> list) async {
@@ -264,18 +240,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             .whereType<Map>()
             .map((e) => Map<String, dynamic>.from(e))
             .toList();
-        final firstInProgress =
-            inProgressMaps.isNotEmpty ? inProgressMaps.first : null;
-        _CandidateDashboardState._cachedInProgressApps = inProgressMaps;
         _safeSetState(() {
           _applicationsCount = submittedOrCompletedMaps.length;
           _savedCount = results[1].length;
-          _inProgressApplication = firstInProgress;
           _inProgressApplications = inProgressMaps;
           _completedApplications = completedMaps;
           _appliedOnlyApplications = appliedOnlyMaps;
-          _interviewsScheduledCount =
-              0; // TODO: fetch from candidate interviews API
+          _interviewsScheduledCount = 0;
           _dashboardCountsLoaded = true;
         });
         _saveCachedInProgressApplications(inProgressMaps);
@@ -303,7 +274,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         _safeSetState(() {
           _applicationsCount = 0;
           _savedCount = 0;
-          _inProgressApplication = null;
           _inProgressApplications = [];
           _completedApplications = [];
           _appliedOnlyApplications = [];
@@ -1258,7 +1228,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           Expanded(
             child: _buildOpportunityCard(
               title: 'Interviews Scheduled',
-              count: '${_interviewsScheduledCount ?? 0}',
+              count: '$_interviewsScheduledCount',
               gradient: LinearGradient(
                 colors: [
                   Color(0xFF2A5298).withValues(alpha: 0.8),
@@ -1312,7 +1282,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       );
       return;
     }
-    _safeSetState(() => _continuingApplication = true);
+    _safeSetState(() {});
     try {
       final res = await http.post(
         Uri.parse('$apiBase/apply/$jobId'),
@@ -1382,7 +1352,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         SnackBar(content: Text('Error: $e')),
       );
     } finally {
-      if (mounted) _safeSetState(() => _continuingApplication = false);
+      if (mounted) _safeSetState(() {});
     }
   }
 
