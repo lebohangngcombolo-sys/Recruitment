@@ -3,6 +3,7 @@ import 'package:percent_indicator/percent_indicator.dart'; // Add this package
 import '../hr/offer_detail_screen.dart';
 import '../hr/offer_analytics_screen.dart';
 import '../../services/offer_service.dart';
+import '../../services/auth_service.dart';
 import '../../models/offer.dart';
 import 'approval_queue_screen.dart';
 import 'pipeline_page.dart';
@@ -22,6 +23,7 @@ class _HRDashboardState extends State<HRDashboard> {
   List<Offer> _pendingOffers = [];
   List<Offer> _sentOffers = [];
   bool _isLoading = true;
+  String? _userName;
 
   final List<String> _pages = [
     'Dashboard',
@@ -44,6 +46,7 @@ class _HRDashboardState extends State<HRDashboard> {
   @override
   void initState() {
     super.initState();
+    _userName = AuthService.getCachedDisplayName();
     _loadDashboardData();
   }
 
@@ -303,8 +306,8 @@ class _HRDashboardState extends State<HRDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Welcome back, HR Manager!',
+            Text(
+              'Welcome back, ${_userName ?? 'HR Manager'}!',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,

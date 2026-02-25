@@ -121,7 +121,9 @@ class CandidateService {
         return data;
       }
       if (data is Map<String, dynamic>) {
-        return List<dynamic>.from(data['applications'] ?? []);
+        final list = data['applications'] ?? data['data'] ?? data['results'];
+        if (list is List) return List<dynamic>.from(list);
+        return [];
       }
       return [];
     }

@@ -46,8 +46,8 @@ def create_app():
         app,
         origins=["*"],  # Allow all origins for development
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
-        supports_credentials=True
+        allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+        supports_credentials=False,  # Required when using origins="*"; auth uses header not cookies
     )
 
     # ---------------- Register Blueprints ----------------

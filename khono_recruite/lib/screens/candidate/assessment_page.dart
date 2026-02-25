@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../services/auth_service.dart';
 import 'cv_upload_page.dart';
-import '../../widgets/application_flow_stepper.dart';
 import 'package:go_router/go_router.dart';
 
 class AssessmentPage extends StatefulWidget {
@@ -16,11 +16,16 @@ class AssessmentPage extends StatefulWidget {
   State<AssessmentPage> createState() => _AssessmentPageState();
 }
 
-class _AssessmentPageState extends State<AssessmentPage> {
+class _AssessmentPageState extends State<AssessmentPage>
+    with SingleTickerProviderStateMixin {
   bool loading = true;
+  bool _showIntro = true;
   List<dynamic> questions = [];
+  String _assessmentTitle = 'Assessment';
   Map<int, String> answers = {}; // index -> selected option
   bool submitting = false;
+  late AnimationController _redirectPulseController;
+  late Animation<double> _redirectPulseAnimation;
 
   String? token;
 
@@ -35,15 +40,34 @@ class _AssessmentPageState extends State<AssessmentPage> {
   @override
   void initState() {
     super.initState();
+    _redirectPulseController = AnimationController(
+      duration: const Duration(milliseconds: 1400),
+      vsync: this,
+    )..repeat(reverse: true);
+    _redirectPulseAnimation = Tween<double>(begin: 0.82, end: 1.08).animate(
+      CurvedAnimation(parent: _redirectPulseController, curve: Curves.easeInOut),
+    );
     loadTokenAndFetch();
 
-    // ✅ Autofill from draft if available
-    if (widget.draftData != null && widget.draftData!['assessment'] != null) {
-      final savedAnswers =
-          Map<String, dynamic>.from(widget.draftData!['assessment']);
-      answers = savedAnswers
-          .map((key, value) => MapEntry(int.parse(key), value.toString()));
+    // ✅ Autofill from draft if available (backend may nest as assessment.assessment)
+    if (widget.draftData != null) {
+      final assessmentData = widget.draftData!['assessment'];
+      final answersMap = assessmentData is Map
+          ? (assessmentData['assessment'] ?? assessmentData) as Map<String, dynamic>?
+          : null;
+      if (answersMap != null) {
+        for (final e in answersMap.entries) {
+          final k = int.tryParse(e.key.toString());
+          if (k != null && k >= 0) answers[k] = e.value.toString();
+        }
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _redirectPulseController.dispose();
+    super.dispose();
   }
 
   Future<void> loadTokenAndFetch() async {
@@ -85,6 +109,9 @@ class _AssessmentPageState extends State<AssessmentPage> {
           questions = (data['assessment_pack']?['questions'] as List? ?? [])
               .take(11)
               .toList();
+          final pack = data['assessment_pack'];
+          final packName = pack is Map ? pack['name'] : null;
+          _assessmentTitle = (packName ?? data['job_title'] ?? 'Assessment').toString();
         });
       } else {
         throw Exception("Failed to load assessment: ${res.body}");
@@ -95,6 +122,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
           .showSnackBar(SnackBar(content: Text("Error: $e")));
     } finally {
       if (!mounted) return;
+      _redirectPulseController.stop();
       setState(() => loading = false);
     }
   }
@@ -164,7 +192,7 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
       final res = await http.post(
         Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/apply/save_draft/${widget.applicationId}"),
+            "http://127.0.0.1:5000/api/candidate/applications/${widget.applicationId}/draft"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token"
@@ -192,29 +220,232 @@ class _AssessmentPageState extends State<AssessmentPage> {
     }
   }
 
-  Widget _buildBackground(Widget child) {
-    return Stack(
-      children: [
-        Container(
-          decoration: const BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage("assets/images/dark.png"),
-              fit: BoxFit.cover,
+  Widget _buildAssessmentIntro() {
+    final estimatedMinutes = (questions.length * 1.5).ceil();
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 2),
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _accentRed.withValues(alpha: 0.2),
+                border: Border.all(color: _accentRed, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: _accentRed.withValues(alpha: 0.35),
+                    blurRadius: 16,
+                    spreadRadius: 0,
+                  ),
+                ],
+              ),
+              child: Icon(Icons.help_outline, size: 36, color: _accentRed),
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            'Assessment',
+            style: GoogleFonts.poppins(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              letterSpacing: -0.5,
+              height: 1.2,
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'This assessment helps us understand your fit for the role. Take your time and answer honestly.',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              height: 1.4,
+              color: Colors.white.withValues(alpha: 0.9),
+            ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              decoration: BoxDecoration(
+                color: _cardDark,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _accentRed.withValues(alpha: 0.9), width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: _accentRed.withValues(alpha: 0.2),
+                    blurRadius: 28,
+                    spreadRadius: 0,
+                    offset: const Offset(0, 4),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: _accentRed.withValues(alpha: 0.3),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(Icons.info_outline, color: _accentRed, size: 14),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'What to expect',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withValues(alpha: 0.95),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: _accentRed.withValues(alpha: 0.5),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _introCardItem(Icons.schedule, 'Duration', 'About $estimatedMinutes minutes'),
+                            const SizedBox(height: 10),
+                                _introCardItem(Icons.gps_fixed, 'Focus', "Based on the job you're applying for"),
+                            const SizedBox(height: 10),
+                            _introCardItem(Icons.save_alt, 'Progress', 'Your answers are saved automatically'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _introCardItem(Icons.help_outline, 'Questions', 'Multiple-choice (one best answer)'),
+                            const SizedBox(height: 10),
+                            _introCardItem(Icons.replay, 'Review', 'You can review answers before submitting'),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: ElevatedButton(
+              onPressed: () => setState(() => _showIntro = false),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _accentRed,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: Text(
+                'Start assessment',
+                style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  Widget _introCardItem(IconData icon, String label, String description) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: _accentRed, size: 20),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                description,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: Colors.white.withValues(alpha: 0.8),
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
         ),
-        Container(
-          color: Colors.black.withValues(alpha: 0.4),
-        ),
-        child,
       ],
     );
   }
 
-  Widget _buildStepperHeader() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: ApplicationFlowStepper(currentStep: 1),
+  Widget _buildBackground(BuildContext context, Widget child) {
+    final topPadding = MediaQuery.of(context).padding.top + kToolbarHeight;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Positioned.fill(
+          child: Container(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage("assets/images/dark.png"),
+                fit: BoxFit.cover,
+              ),
+            ),
+          ),
+        ),
+        Positioned.fill(
+          child: Container(
+            color: Colors.black.withValues(alpha: 0.4),
+          ),
+        ),
+        Positioned.fill(
+          child: Padding(
+            padding: EdgeInsets.only(top: topPadding),
+            child: child,
+          ),
+        ),
+      ],
     );
   }
 
@@ -222,16 +453,97 @@ class _AssessmentPageState extends State<AssessmentPage> {
   Widget build(BuildContext context) {
     if (loading) {
       return Scaffold(
+        extendBodyBehindAppBar: true,
         backgroundColor: _primaryDark,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          iconTheme: IconThemeData(color: Colors.white, size: 28),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 26),
+            onPressed: () => Navigator.pop(context),
+            tooltip: 'Back',
+          ),
+          title: null,
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Center(
+                child: Image.asset(
+                  'assets/icons/khono.png',
+                  height: 32,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ],
+        ),
         body: _buildBackground(
+          context,
           Column(
             children: [
               const SizedBox(height: 16),
-              _buildStepperHeader(),
-              const SizedBox(height: 16),
               Expanded(
                 child: Center(
-                  child: CircularProgressIndicator(color: _accentRed),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ScaleTransition(
+                        scale: _redirectPulseAnimation,
+                        child: Container(
+                          width: 88,
+                          height: 88,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: _accentRed.withValues(alpha: 0.6),
+                              width: 4,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: _accentRed.withValues(alpha: 0.35),
+                                blurRadius: 24,
+                                spreadRadius: 2,
+                              ),
+                            ],
+                          ),
+                          child: Center(
+                            child: SizedBox(
+                              width: 56,
+                              height: 56,
+                              child: CircularProgressIndicator(
+                                color: _accentRed,
+                                strokeWidth: 3,
+                                strokeCap: StrokeCap.round,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 40),
+                      Text(
+                        'Loading your assessment',
+                        style: GoogleFonts.poppins(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: -0.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        "Hang tight — we're setting everything up.",
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          color: Colors.white.withValues(alpha: 0.85),
+                          height: 1.4,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -242,12 +554,36 @@ class _AssessmentPageState extends State<AssessmentPage> {
 
     if (questions.isEmpty) {
       return Scaffold(
+        extendBodyBehindAppBar: true,
         backgroundColor: _primaryDark,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          iconTheme: IconThemeData(color: Colors.white, size: 28),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 26),
+            onPressed: () => Navigator.pop(context),
+            tooltip: 'Back',
+          ),
+          title: null,
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Center(
+                child: Image.asset(
+                  'assets/icons/khono.png',
+                  height: 32,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ],
+        ),
         body: _buildBackground(
+          context,
           Column(
             children: [
-              const SizedBox(height: 16),
-              _buildStepperHeader(),
               const SizedBox(height: 16),
               Expanded(
                 child: Center(
@@ -267,35 +603,104 @@ class _AssessmentPageState extends State<AssessmentPage> {
       );
     }
 
+    // Preparation / instructions screen before starting the assessment
+    if (_showIntro) {
+      return Scaffold(
+        extendBodyBehindAppBar: true,
+        backgroundColor: _primaryDark,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          iconTheme: const IconThemeData(color: Colors.white, size: 28),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 26),
+            onPressed: () => Navigator.pop(context),
+            tooltip: 'Back',
+          ),
+          title: null,
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: Center(
+                child: Image.asset(
+                  'assets/icons/khono.png',
+                  height: 32,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ),
+          ],
+        ),
+        body: _buildBackground(context, _buildAssessmentIntro()),
+      );
+    }
+
     return Scaffold(
+      extendBodyBehindAppBar: true,
       backgroundColor: _primaryDark,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        iconTheme: IconThemeData(color: Colors.white, size: 28),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white, size: 26),
+          onPressed: () => Navigator.pop(context),
+          tooltip: 'Back',
+        ),
+        title: null,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(
+              child: Image.asset(
+                'assets/icons/khono.png',
+                height: 32,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ],
+      ),
       body: _buildBackground(
+        context,
         Column(
-          children: [
-            const SizedBox(height: 16),
-            _buildStepperHeader(),
-            const SizedBox(height: 12),
-            Expanded(
-              child: Padding(
+            children: [
+              SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight + 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  _assessmentTitle,
+                  style: GoogleFonts.poppins(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                  textAlign: TextAlign.left,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: ListView.builder(
-                  itemCount:
-                      questions.length + 2, // ✅ Added 1 more for Save & Exit
+                  itemCount: questions.length + 1,
                   itemBuilder: (context, index) {
                     if (index == questions.length) {
-                      // Submit button
+                      // Submit button - same size/style as Start assessment
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: SizedBox(
-                          width: double.infinity,
+                        child: Center(
                           child: ElevatedButton(
                             onPressed: submitting ? null : submitAssessment,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: _accentRed,
-                              foregroundColor: _textPrimary,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(10),
                               ),
                             ),
                             child: submitting
@@ -303,45 +708,17 @@ class _AssessmentPageState extends State<AssessmentPage> {
                                     height: 20,
                                     width: 20,
                                     child: CircularProgressIndicator(
-                                      color: _textPrimary,
+                                      color: Colors.white,
                                       strokeWidth: 2,
                                     ),
                                   )
                                 : Text(
                                     "Submit Assessment",
-                                    style: TextStyle(
-                                      fontSize: 16,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 15,
                                       fontWeight: FontWeight.w600,
-                                      color: _textPrimary,
-                                      fontFamily: 'Poppins',
                                     ),
                                   ),
-                          ),
-                        ),
-                      );
-                    } else if (index == questions.length + 1) {
-                      // ✅ New Save & Exit button
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: saveDraftAndExit,
-                            icon: Icon(Icons.save, color: _accentRed),
-                            label: Text(
-                              "Save & Exit",
-                              style: TextStyle(
-                                color: _accentRed,
-                                fontFamily: 'Poppins',
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: _accentRed, width: 1.5),
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
                           ),
                         ),
                       );
@@ -374,12 +751,20 @@ class _AssessmentPageState extends State<AssessmentPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "Q${index + 1}: $questionText",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                              'Question ${index + 1}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
                                 color: _textPrimary,
-                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              questionText,
+                              style: GoogleFonts.poppins(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                                color: _textPrimary,
                               ),
                             ),
                             const SizedBox(height: 12),

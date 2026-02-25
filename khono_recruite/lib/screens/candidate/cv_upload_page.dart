@@ -5,8 +5,6 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../services/auth_service.dart';
 import 'assessments_results_screen.dart';
-import '../../widgets/application_flow_stepper.dart';
-
 class CVUploadScreen extends StatefulWidget {
   final int applicationId;
   const CVUploadScreen({super.key, required this.applicationId});
@@ -18,7 +16,6 @@ class CVUploadScreen extends StatefulWidget {
 class _CVUploadScreenState extends State<CVUploadScreen> {
   Uint8List? selectedFileBytes;
   String? selectedFileName;
-  TextEditingController resumeTextController = TextEditingController();
   bool uploading = false;
   String? token;
 
@@ -27,7 +24,6 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
   final Color _cardDark = Colors.black.withOpacity(0.55); // Card background
   final Color _accentRed = const Color(0xFFC10D00); // Main red
   final Color _textSecondary = Colors.grey.shade300; // Secondary text
-  final Color _boxFillColor = const Color(0xFFF2F2F2).withOpacity(0.2);
 
   @override
   void initState() {
@@ -62,13 +58,6 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
     );
   }
 
-  Widget _buildStepperHeader() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: ApplicationFlowStepper(currentStep: 2),
-    );
-  }
-
   Future<void> _pickFile() async {
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -79,9 +68,20 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
 
       if (result != null && result.files.isNotEmpty) {
         final f = result.files.single;
+        if (f.bytes == null || f.bytes!.isEmpty) {
+          setState(() {
+            selectedFileBytes = null;
+            selectedFileName = null;
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text("Could not read the file. Try selecting it again or use a smaller file.")));
+          }
+          return;
+        }
         setState(() {
           selectedFileBytes = f.bytes;
-          selectedFileName = f.name;
+          selectedFileName = f.name.isNotEmpty ? f.name : 'resume.pdf';
         });
       } else {
         ScaffoldMessenger.of(context)
@@ -94,13 +94,21 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
   }
 
   Future<void> _uploadCV() async {
-    final tokenValue = token;
-    if ((selectedFileBytes == null || selectedFileName == null) ||
-        tokenValue == null) {
+    if (selectedFileBytes == null || selectedFileName == null || selectedFileName!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Please select a file and ensure you're logged in.")));
+          content: Text("Please select a file to upload.")));
       return;
     }
+
+    // Always get a fresh token at upload time
+    String? tokenValue = await AuthService.getAccessToken();
+    if (tokenValue == null || tokenValue.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Session expired or not logged in. Please log in again.")));
+      return;
+    }
+    if (mounted) setState(() => token = tokenValue);
 
     setState(() => uploading = true);
 
@@ -117,10 +125,32 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
           filename: selectedFileName!,
         ),
       );
-      request.fields['resume_text'] = resumeTextController.text;
+      request.fields['resume_text'] = '';
 
-      final streamedResponse = await request.send();
-      final responseString = await streamedResponse.stream.bytesToString();
+      var streamedResponse = await request.send();
+      var responseString = await streamedResponse.stream.bytesToString();
+
+      // On 401, try refresh and retry once
+      if (streamedResponse.statusCode == 401) {
+        final newToken = await AuthService.refreshAccessToken();
+        if (newToken != null && newToken.isNotEmpty && mounted) {
+          setState(() => token = newToken);
+          final retryRequest = http.MultipartRequest('POST', uri);
+          retryRequest.headers['Authorization'] = 'Bearer $newToken';
+          retryRequest.files.add(
+            http.MultipartFile.fromBytes(
+              'resume',
+              selectedFileBytes!,
+              filename: selectedFileName!,
+            ),
+          );
+          retryRequest.fields['resume_text'] = '';
+          streamedResponse = await retryRequest.send();
+          responseString = await streamedResponse.stream.bytesToString();
+          tokenValue = newToken;
+        }
+      }
+
       Map<String, dynamic> resp = {};
       if (responseString.isNotEmpty) {
         try {
@@ -143,7 +173,7 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
         final matchScore =
             parserResult?['match_score'] ?? parserResult?['score'];
         final message = streamedResponse.statusCode == 202
-            ? "Resume uploaded; analysis queued."
+            ? "Resume uploaded. You can view results on the next screen."
             : (matchScore != null
                 ? "Resume uploaded! CV Score: $matchScore"
                 : "Resume uploaded!");
@@ -151,30 +181,27 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(message)));
 
-        if (streamedResponse.statusCode == 202) {
-          final analysisIdRaw = resp['analysis_id'];
-          final analysisId =
-              analysisIdRaw is num ? analysisIdRaw.toInt() : null;
-          if (analysisId != null) {
-            await _pollAnalysisStatus(analysisId);
-          }
-        } else {
-          if (!mounted) return;
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AssessmentResultsPage(
-                token: tokenValue,
-                applicationId: widget.applicationId,
-              ),
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AssessmentResultsPage(
+              token: tokenValue!,
+              applicationId: widget.applicationId,
             ),
-          );
-        }
+          ),
+        );
       } else {
         final err = resp['error'] ??
             resp['message'] ??
             (responseString.isNotEmpty ? responseString : 'Upload failed');
-        throw Exception(err);
+        if (streamedResponse.statusCode == 401 && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text("Session expired. Please log in again.")));
+        } else if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text("Error uploading CV: $err")));
+        }
       }
     } catch (e) {
       if (!mounted) return;
@@ -186,80 +213,8 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
     }
   }
 
-  dynamic _safeJsonDecode(String body) {
-    try {
-      return json.decode(body);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<Map<String, dynamic>?> _fetchAnalysisStatus(int analysisId) async {
-    final tokenValue = token;
-    if (tokenValue == null) return null;
-    final uri = Uri.parse(
-        'http://127.0.0.1:5000/api/candidate/cv-analyses/$analysisId');
-    final response = await http.get(
-      uri,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $tokenValue',
-      },
-    );
-    if (response.statusCode != 200) return null;
-    final decoded = _safeJsonDecode(response.body);
-    if (decoded is Map<String, dynamic>) {
-      return Map<String, dynamic>.from(decoded);
-    }
-    return null;
-  }
-
-  Future<void> _pollAnalysisStatus(int analysisId) async {
-    const maxAttempts = 20;
-    const delay = Duration(seconds: 3);
-    final tokenValue = token;
-
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      await Future.delayed(delay);
-      final statusResp = await _fetchAnalysisStatus(analysisId);
-      if (statusResp == null) continue;
-
-      final status = statusResp['status']?.toString();
-      if (status == 'completed') {
-        if (tokenValue == null) return;
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("CV analysis completed.")),
-        );
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AssessmentResultsPage(
-              token: tokenValue,
-              applicationId: widget.applicationId,
-            ),
-          ),
-        );
-        return;
-      }
-      if (status == 'failed') {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("CV analysis failed. Try again later.")),
-        );
-        return;
-      }
-    }
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("CV analysis still processing.")),
-    );
-  }
-
   @override
   void dispose() {
-    resumeTextController.dispose();
     super.dispose();
   }
 
@@ -268,18 +223,41 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
     final fileLabel = selectedFileName ?? 'No file selected';
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       backgroundColor: _primaryDark,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white, size: 28),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white, size: 26),
+          onPressed: () => Navigator.maybePop(context),
+          tooltip: 'Back',
+        ),
+        title: null,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16),
+            child: Center(
+              child: Image.asset(
+                'assets/icons/khono.png',
+                height: 32,
+                fit: BoxFit.contain,
+              ),
+            ),
+          ),
+        ],
+      ),
       body: _buildBackground(
-        SingleChildScrollView(
-          child: Center(
+        Center(
+          child: SingleChildScrollView(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 700),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const SizedBox(height: 16),
-                  _buildStepperHeader(),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 24),
                   Container(
                     margin: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -312,7 +290,7 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            "Select your CV file and optionally paste the text content for analysis.",
+                            "Select your CV file for analysis.",
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: _textSecondary,
@@ -320,32 +298,51 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
                             ),
                           ),
                           const SizedBox(height: 20),
-                          Row(
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Expanded(
+                              Center(
                                 child: OutlinedButton.icon(
                                   onPressed: _pickFile,
-                                  icon: Icon(Icons.folder_open,
-                                      color: _accentRed),
+                                  icon: Icon(
+                                    selectedFileName != null
+                                        ? Icons.check_circle
+                                        : Icons.upload_file,
+                                    color: selectedFileName != null
+                                        ? Colors.green.shade400
+                                        : Colors.white,
+                                    size: 22,
+                                  ),
                                   label: Text(
-                                    "Select File",
+                                    selectedFileName != null
+                                        ? "Uploaded"
+                                        : "Select CV file",
                                     style: TextStyle(
-                                      color: _accentRed,
+                                      color: selectedFileName != null
+                                          ? Colors.green.shade400
+                                          : Colors.white,
+                                      fontWeight: FontWeight.w600,
                                       fontFamily: 'Poppins',
+                                      fontSize: 15,
                                     ),
                                   ),
                                   style: OutlinedButton.styleFrom(
-                                    side: BorderSide(color: _accentRed),
+                                    side: BorderSide(
+                                      color: selectedFileName != null
+                                          ? Colors.green.shade400
+                                          : _accentRed,
+                                      width: 1.5,
+                                    ),
                                     padding: const EdgeInsets.symmetric(
-                                        vertical: 14, horizontal: 16),
+                                        vertical: 14, horizontal: 24),
                                     shape: RoundedRectangleBorder(
                                         borderRadius:
                                             BorderRadius.circular(12)),
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
+                              const SizedBox(height: 8),
+                              Center(
                                 child: Text(
                                   fileLabel,
                                   overflow: TextOverflow.ellipsis,
@@ -353,36 +350,11 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
                                     fontStyle: FontStyle.italic,
                                     color: _textSecondary,
                                     fontFamily: 'Poppins',
+                                    fontSize: 14,
                                   ),
                                 ),
                               ),
                             ],
-                          ),
-                          const SizedBox(height: 12),
-                          Container(
-                            decoration: BoxDecoration(
-                              color: _boxFillColor,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                  color: _accentRed.withOpacity(0.4)),
-                            ),
-                            child: TextField(
-                              controller: resumeTextController,
-                              decoration: InputDecoration(
-                                border: InputBorder.none,
-                                labelText: "Paste your CV text (optional)",
-                                labelStyle: TextStyle(
-                                  color: _textSecondary,
-                                  fontFamily: 'Poppins',
-                                ),
-                                contentPadding: const EdgeInsets.all(16),
-                              ),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontFamily: 'Poppins',
-                              ),
-                              maxLines: 5,
-                            ),
                           ),
                           const SizedBox(height: 20),
                           SizedBox(
@@ -407,7 +379,7 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
                                       ),
                                     )
                                   : const Text(
-                                      "Upload CV/Resume Continue",
+                                      "Upload CV",
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w600,

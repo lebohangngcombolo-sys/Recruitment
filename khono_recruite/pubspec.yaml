@@ -38,7 +38,8 @@ dependencies:
   vector_math: ^2.1.4
   file_picker: ^10.3.3
   qr_flutter: ^4.1.0
-  google_generative_ai: ^0.4.6
+  webview_flutter: ^4.10.0
+  webview_flutter_web: ^0.2.3
 
 dev_dependencies:
   flutter_test:
@@ -48,6 +49,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/icons/
     - assets/images/bg1.jpg
     - assets/images/dark.png
     - assets/images/bg.jpg
@@ -76,7 +78,7 @@ flutter:
     - assets/images/simba.jpg
     - assets/images/team5.jpg
     - assets/images/final.jpg
-    # - assets/icons/LinkedIn1.png (removed — file missing and causing web build failure)
+    - assets/icons/LinkedIn1.png
     - assets/icons/LinkedIn.png
     - assets/icons/Instagram1.png
     - assets/icons/Instagram.png
@@ -123,20 +125,9 @@ flutter:
     - assets/images/office.jpg
     - assets/icons/khono.png
     - assets/images/default.jpeg
-    - assets/images/Home_Remote_Work_Red_Badge_White.png
-    - assets/images/Approval_Red_Badge_White.png
-    - assets/images/Collaboration_Red_Badge_White.png
-    - assets/images/Meeting_Red_Badge_White.png
-    - assets/images/red_Management_Red_Badge_White.png
-    - assets/images/Goal_Target_White_Badge_Red_Badge_White.png
-    - assets/images/Warning_Error_Red_Badge_White.png
-    - assets/images/deadline.png
-    - assets/images/discs.png
-    - assets/images/candidates.png
-
-
-
-
+    - assets/images/DYICT.jpeg
+    - assets/images/Khonology.jpeg
+    - assets/images/Sipho&Charmaine.jpeg
 
   fonts:
     - family: Poppins
