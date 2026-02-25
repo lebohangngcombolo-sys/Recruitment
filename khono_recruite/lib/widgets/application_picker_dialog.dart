@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import '../models/application.dart';
 import '../services/admin_service.dart';
 
@@ -40,8 +41,8 @@ class _ApplicationPickerDialogState extends State<ApplicationPickerDialog> {
             List<Map<String, dynamic>>.from(data['candidates'] ?? []);
 
         // DEBUG: Print first candidate to see structure
-        if (rawCandidates.isNotEmpty) {
-          print('First candidate raw data: ${rawCandidates[0]}');
+        if (rawCandidates.isNotEmpty && kDebugMode) {
+          debugPrint('First candidate raw data: ${rawCandidates[0]}');
         }
 
         // Map backend field names (camelCase) to frontend expected names (snake_case)
@@ -86,11 +87,13 @@ class _ApplicationPickerDialogState extends State<ApplicationPickerDialog> {
         });
 
         // DEBUG: Print counts
-        final readyCount =
-            _candidates.where((c) => c['ready_for_offer'] == true).length;
-        print('Total candidates: ${_candidates.length}');
-        print('Ready candidates: $readyCount');
-        print('Review candidates: ${_candidates.length - readyCount}');
+        if (kDebugMode) {
+          final readyCount =
+              _candidates.where((c) => c['ready_for_offer'] == true).length;
+          debugPrint('Total candidates: ${_candidates.length}');
+          debugPrint('Ready candidates: $readyCount');
+          debugPrint('Review candidates: ${_candidates.length - readyCount}');
+        }
       } else {
         throw Exception(data['error'] ?? 'Failed to load candidates');
       }

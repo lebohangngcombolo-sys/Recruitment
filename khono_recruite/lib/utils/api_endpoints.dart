@@ -125,6 +125,13 @@ class ApiEndpoints {
   static String getJobApplications(int id) =>
       "$adminBase/jobs/$id/applications";
   static String getJobStats = "$adminBase/jobs/stats";
+
+  // Test packs (assessment packs) for requisitions
+  static final getTestPacks = "$adminBase/test-packs";
+  static String getTestPackById(int id) => "$adminBase/test-packs/$id";
+  static final createTestPack = "$adminBase/test-packs";
+  static String updateTestPack(int id) => "$adminBase/test-packs/$id";
+  static String deleteTestPack(int id) => "$adminBase/test-packs/$id";
   static final viewCandidates = "$adminBase/candidates";
   static String getApplicationById(int id) => "$adminBase/applications/$id";
   static String shortlistCandidates(int jobId) =>

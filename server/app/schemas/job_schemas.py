@@ -140,6 +140,12 @@ class JobBaseSchema(Schema):
         dump_default=lambda: {"questions": []}
     )
 
+    test_pack_id = fields.Int(
+        allow_none=True,
+        load_default=None,
+        dump_default=None
+    )
+
     vacancy = fields.Int(
         load_default=1,
         dump_default=1,
@@ -184,6 +190,9 @@ class JobCreateSchema(JobBaseSchema):
 
     @validates_schema
     def validate_assessment_pack(self, data, **kwargs):
+        # When using a test pack, assessment_pack can be empty; otherwise require questions key
+        if data.get("test_pack_id"):
+            return
         assessment_pack = data.get("assessment_pack", {})
 
         if not isinstance(assessment_pack, dict):
@@ -232,6 +241,7 @@ class JobUpdateSchema(Schema):
     knockout_rules = fields.List(fields.Nested(KnockoutRuleSchema))
     weightings = fields.Dict()
     assessment_pack = fields.Dict()
+    test_pack_id = fields.Int(allow_none=True)
     vacancy = fields.Int(validate=Range(min=1))
     is_active = fields.Bool()
     employment_type = fields.Str()

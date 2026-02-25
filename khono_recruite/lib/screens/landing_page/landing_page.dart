@@ -623,7 +623,7 @@ class _LandingPageState extends State<LandingPage>
 
   void _performLogout(BuildContext context) async {
     await AuthService.logout();
-    if (mounted) context.go('/login');
+    if (mounted) context.go('/');
   }
 
   // Updated UI methods with your logic
@@ -1994,15 +1994,15 @@ class _LandingPageState extends State<LandingPage>
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                _socialIcon('assets/icons/Instagram1.png',
+                                _socialIcon('assets/icons/Instagram.png',
                                     'https://www.instagram.com/yourprofile'),
-                                _socialIcon('assets/icons/x1.png',
+                                _socialIcon('assets/icons/LinkedIn.png',
                                     'https://x.com/yourprofile'),
                                 _socialIcon('assets/icons/LinkedIn.png',
                                     'https://www.linkedin.com/in/yourprofile'),
-                                _socialIcon('assets/icons/facebook1.png',
+                                _socialIcon('assets/icons/facebook.png',
                                     'https://www.facebook.com/yourprofile'),
-                                _socialIcon('assets/icons/YouTube1.png',
+                                _socialIcon('assets/icons/YouTube.png',
                                     'https://www.youtube.com/yourchannel'),
                               ],
                             ),

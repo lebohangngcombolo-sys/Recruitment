@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -47,9 +48,9 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
         search: _searchQuery.isEmpty ? null : _searchQuery,
       );
 
-      print("Meetings response: $meetingsResponse");
+      if (kDebugMode) debugPrint("Meetings response: $meetingsResponse");
       final meetingsData = meetingsResponse['meetings'] as List<dynamic>? ?? [];
-      print("Fetched ${meetingsData.length} meetings from API");
+      if (kDebugMode) debugPrint("Fetched ${meetingsData.length} meetings from API");
 
       // Convert to Meeting objects
       final loadedMeetings =
@@ -73,7 +74,7 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
         _meetings.clear();
         _meetings.addAll(filteredMeetings);
       });
-      print("Displayed meetings count: ${_meetings.length}");
+      if (kDebugMode) debugPrint("Displayed meetings count: ${_meetings.length}");
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -594,8 +595,10 @@ class Meeting {
         cancelled: json['cancelled'] ?? false,
       );
     } catch (e) {
-      print('Error parsing meeting JSON: $e');
-      print('JSON data: $json');
+      if (kDebugMode) {
+        debugPrint('Error parsing meeting JSON: $e');
+        debugPrint('JSON data: $json');
+      }
       rethrow;
     }
   }

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:firebase_ai/firebase_ai.dart';
 
@@ -37,7 +38,7 @@ class AIService {
         }
       }
     } catch (e) {
-      print("Backend generateJobDetails failed: $e");
+      if (kDebugMode) debugPrint("Backend generateJobDetails failed: $e");
     }
 
     // Fallback to Gemini if configured (Firebase)
@@ -45,7 +46,7 @@ class AIService {
       final result = await _tryGemini(jobTitle, maxRetries, baseDelay);
       return _ensureAllFieldsFilled(result, jobTitle);
     } catch (e) {
-      print("Gemini failed: $e");
+      if (kDebugMode) debugPrint("Gemini failed: $e");
     }
 
     return _getFallbackJobDetails(jobTitle);
@@ -73,21 +74,15 @@ class AIService {
 
   static Map<String, dynamic> _ensureAllFieldsFilled(
       Map<String, dynamic> jobDetails, String jobTitle) {
-    print("Original jobDetails: $jobDetails");
-
     // Ensure description is filled
     if (jobDetails['description'] == null ||
         jobDetails['description'].toString().trim().isEmpty) {
-      print("Description is empty, generating default");
       jobDetails['description'] = _generateDefaultDescription(jobTitle);
-    } else {
-      print("Description found: ${jobDetails['description']}");
     }
 
     // Ensure responsibilities is filled
     if (jobDetails['responsibilities'] == null ||
         (jobDetails['responsibilities'] as List?)?.isEmpty == true) {
-      print("Responsibilities is empty, generating default");
       jobDetails['responsibilities'] =
           _generateDefaultResponsibilities(jobTitle);
     }
@@ -95,30 +90,24 @@ class AIService {
     // Ensure qualifications is filled
     if (jobDetails['qualifications'] == null ||
         (jobDetails['qualifications'] as List?)?.isEmpty == true) {
-      print("Qualifications is empty, generating default");
       jobDetails['qualifications'] = _generateDefaultQualifications(jobTitle);
     }
 
     // Ensure category is filled
     if (jobDetails['category'] == null ||
         jobDetails['category'].toString().trim().isEmpty) {
-      print("Category is empty, determining category");
       jobDetails['category'] = _determineCategory(jobTitle);
-    } else {
-      print("Category found: ${jobDetails['category']}");
     }
 
     // Ensure required_skills is filled
     if (jobDetails['required_skills'] == null ||
         (jobDetails['required_skills'] as List?)?.isEmpty == true) {
-      print("Required skills is empty, generating default");
       jobDetails['required_skills'] = _generateDefaultSkills(jobTitle);
     }
 
     // Ensure min_experience is filled
     if (jobDetails['min_experience'] == null ||
         jobDetails['min_experience'].toString().trim().isEmpty) {
-      print("Min experience is empty, determining");
       jobDetails['min_experience'] =
           _determineMinExperience(jobTitle).toString();
     }
@@ -129,7 +118,6 @@ class AIService {
       jobDetails['company_details'] = ''; // Leave empty as requested
     }
 
-    print("Final jobDetails: $jobDetails");
     return jobDetails;
   }
 
@@ -324,7 +312,7 @@ class AIService {
         }
       }
     } catch (e) {
-      print("Backend generateQuestions failed: $e");
+      if (kDebugMode) debugPrint("Backend generateQuestions failed: $e");
     }
 
     // Fallback to Gemini if configured
@@ -332,7 +320,7 @@ class AIService {
       return await _tryGenerateQuestionsGemini(
           jobTitle, difficulty, questionCount, maxRetries, baseDelay);
     } catch (e) {
-      print("Gemini questions failed: $e");
+      if (kDebugMode) debugPrint("Gemini questions failed: $e");
     }
 
     return _getFallbackAssessmentQuestions(jobTitle, difficulty, questionCount);

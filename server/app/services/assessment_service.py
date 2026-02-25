@@ -3,14 +3,28 @@ from app.models import Requisition, Application, AssessmentResult
 from datetime import datetime
 
 
+def get_questions_for_requisition(requisition):
+    """
+    Return list of questions for this requisition: from linked TestPack or from assessment_pack JSON.
+    Each question: at least question_text, options; correct_option (0-based) or correct_answer (0-3).
+    """
+    if not requisition:
+        return []
+    if requisition.test_pack_id and requisition.test_pack and not requisition.test_pack.deleted_at:
+        return list(requisition.test_pack.questions or [])
+    pack = requisition.assessment_pack or {}
+    return list(pack.get("questions") or [])
+
+
 class AssessmentService:
 
     @staticmethod
     def create_assessment(requisition_id, questions):
         """
-        Add or update MCQ assessment for a requisition/job.
+        Add or update MCQ assessment for a requisition/job (inline questions only).
         `questions` is a list of dicts:
         {"question_text": str, "options": list[str], "correct_option": int}
+        When a job uses a test pack, questions are resolved via get_questions_for_requisition; this is for custom questions.
         """
         requisition = Requisition.query.get(requisition_id)
         if not requisition:
@@ -30,7 +44,7 @@ class AssessmentService:
         if not application:
             raise ValueError("Application not found")
 
-        questions = application.requisition.assessment_pack.get("questions", [])
+        questions = get_questions_for_requisition(application.requisition)
         if not questions:
             raise ValueError("No assessment found for this requisition")
 
@@ -52,7 +66,11 @@ class AssessmentService:
             if q_index < 0 or q_index >= len(questions):
                 raise ValueError(f"Invalid question index: {q_index}")
 
-            correct = questions[q_index]["correct_option"]
+            q = questions[q_index]
+            correct = q.get("correct_option", q.get("correct_answer", 0))
+            if correct is None:
+                correct = 0
+            correct = int(correct)
             is_correct = selected == correct
             if is_correct:
                 score += 1

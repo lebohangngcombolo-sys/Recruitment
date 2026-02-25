@@ -8,6 +8,9 @@ import '../../widgets/search_bar.dart'; // your custom SearchBar
 import '../../widgets/filter_chip.dart'; // your custom FilterChip
 import '../../services/admin_service.dart';
 import '../../services/ai_service.dart';
+import '../../services/test_pack_service.dart';
+import '../../models/test_pack.dart';
+import '../../widgets/save_test_pack_dialog.dart';
 import '../../providers/theme_provider.dart';
 
 class JobManagement extends StatefulWidget {
@@ -1203,6 +1206,12 @@ class _JobFormDialogState extends State<JobFormDialog>
   final applicationDeadlineController = TextEditingController();
   final bannerController = TextEditingController();
   List<Map<String, dynamic>> questions = [];
+  int? _testPackId;
+  List<TestPack> _testPacks = [];
+  bool _useTestPack = false;
+  bool _loadingTestPacks = false;
+  List<bool> _cherryPickSelected = [];
+  final TestPackService _testPackService = TestPackService();
   Map<String, int> weightings = {
     "cv": 60,
     "assessment": 40,
@@ -1264,8 +1273,133 @@ class _JobFormDialogState extends State<JobFormDialog>
       questions =
           _normalizeQuestions(widget.job!['assessment_pack']['questions']);
     }
+    final tpId = widget.job?['test_pack_id'];
+    if (tpId != null && tpId is int) {
+      _testPackId = tpId;
+      _useTestPack = true;
+    }
 
     _tabController = TabController(length: 2, vsync: this);
+    _loadTestPacks();
+  }
+
+  Future<void> _loadTestPacks() async {
+    setState(() => _loadingTestPacks = true);
+    try {
+      final packs = await _testPackService.getTestPacks();
+      if (mounted) setState(() => _testPacks = packs);
+    } catch (_) {}
+    if (mounted) setState(() => _loadingTestPacks = false);
+  }
+
+  Widget _buildCherryPickSection(dynamic themeProvider) {
+    TestPack? selectedPack;
+    for (final p in _testPacks) {
+      if (p.id == _testPackId) {
+        selectedPack = p;
+        break;
+      }
+    }
+    if (selectedPack == null || selectedPack.questions.isEmpty) return const SizedBox.shrink();
+    if (_cherryPickSelected.length != selectedPack.questions.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _cherryPickSelected = List.filled(selectedPack!.questions.length, true));
+      });
+      return const SizedBox.shrink();
+    }
+    final packQuestions = selectedPack.questions;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Customize questions',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: themeProvider.isDarkMode ? Colors.grey.shade300 : Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Select which questions to use for this job. "Use selected" will copy them as custom questions.',
+          style: TextStyle(
+            fontSize: 12,
+            color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.black54,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          constraints: const BoxConstraints(maxHeight: 180),
+          decoration: BoxDecoration(
+            border: Border.all(color: themeProvider.isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: packQuestions.length,
+            itemBuilder: (_, i) {
+              final q = packQuestions[i];
+              final text = (q['question_text'] ?? q['question'] ?? '').toString();
+              final short = text.length > 60 ? '${text.substring(0, 60)}...' : text;
+              return CheckboxListTile(
+                value: _cherryPickSelected[i],
+                onChanged: (v) => setState(() => _cherryPickSelected[i] = v ?? true),
+                title: Text(
+                  short,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: themeProvider.isDarkMode ? Colors.white70 : Colors.black87,
+                  ),
+                ),
+                controlAffinity: ListTileControlAffinity.leading,
+                dense: true,
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () => _applyCherryPickedQuestions(selectedPack!),
+          icon: const Icon(Icons.checklist, size: 18),
+          label: const Text('Use selected'),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  void _applyCherryPickedQuestions(TestPack pack) {
+    final selected = <Map<String, dynamic>>[];
+    for (var i = 0; i < pack.questions.length; i++) {
+      if (i < _cherryPickSelected.length && _cherryPickSelected[i]) {
+        final q = Map<String, dynamic>.from(pack.questions[i]);
+        selected.add({
+          'question': q['question_text'] ?? q['question'] ?? '',
+          'options': (q['options'] is List)
+              ? List<String>.from((q['options'] as List).map((e) => e.toString()))
+              : ['', '', '', ''],
+          'answer': (q['correct_option'] ?? q['correct_answer'] ?? 0) is num
+              ? ((q['correct_option'] ?? q['correct_answer'] ?? 0) as num).toInt()
+              : 0,
+          'weight': (q['weight'] ?? 1) is num ? (q['weight'] as num).toInt() : 1,
+        });
+      }
+    }
+    if (selected.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select at least one question')),
+      );
+      return;
+    }
+    setState(() {
+      questions = selected;
+      _useTestPack = false;
+      _testPackId = null;
+      _cherryPickSelected = [];
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Using ${selected.length} question(s) as custom assessment')),
+    );
   }
 
   @override
@@ -1325,6 +1459,57 @@ class _JobFormDialogState extends State<JobFormDialog>
         "weight": 1,
       });
     });
+  }
+
+  void _showAIQuestionDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AIQuestionDialog(
+          jobTitle: title,
+          onQuestionsGenerated: (generatedQuestions) {
+            setState(() {
+              questions.clear();
+              questions.addAll(generatedQuestions);
+            });
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _saveAsTestPack() async {
+    if (questions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add at least one question first')),
+      );
+      return;
+    }
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => SaveTestPackDialog(
+        initialQuestions: questions,
+        initialName: title.trim().isEmpty ? null : '$title Assessment Pack',
+      ),
+    );
+    if (result == null || !mounted) return;
+    try {
+      final pack = await _testPackService.createTestPack(result);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Test pack "${pack.name}" created')),
+      );
+      setState(() {
+        _testPacks = [..._testPacks, pack];
+        _useTestPack = true;
+        _testPackId = pack.id;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
   }
 
   Future<void> _generateWithAI() async {
@@ -1431,6 +1616,7 @@ class _JobFormDialogState extends State<JobFormDialog>
       'banner': bannerController.text.trim().isEmpty
           ? null
           : bannerController.text.trim(),
+      'test_pack_id': _useTestPack ? _testPackId : null,
       'assessment_pack': {
         'questions': normalizedQuestions.map((q) {
           return {
@@ -1793,13 +1979,162 @@ class _JobFormDialogState extends State<JobFormDialog>
                   Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: ListView.builder(
-                            itemCount: questions.length,
-                            itemBuilder: (_, index) {
-                              final q = questions[index];
-                              return Card(
+                        Text(
+                          "Assessment source",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: themeProvider.isDarkMode
+                                ? Colors.white
+                                : Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Radio<bool>(
+                              value: true,
+                              groupValue: _useTestPack,
+                              onChanged: (v) =>
+                                  setState(() => _useTestPack = true),
+                              activeColor: Colors.redAccent,
+                            ),
+                            const Text("Use a test pack"),
+                            const SizedBox(width: 24),
+                            Radio<bool>(
+                              value: false,
+                              groupValue: _useTestPack,
+                              onChanged: (v) =>
+                                  setState(() {
+                                    _useTestPack = false;
+                                    _testPackId = null;
+                                  }),
+                              activeColor: Colors.redAccent,
+                            ),
+                            const Text("Create custom questions"),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        if (_useTestPack) ...[
+                          if (_loadingTestPacks)
+                            const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Center(
+                                  child:
+                                      CircularProgressIndicator(color: Colors.redAccent)),
+                            )
+                          else
+                            DropdownButtonFormField<int?>(
+                              value: _testPackId,
+                              decoration: InputDecoration(
+                                labelText: "Select test pack",
+                                border: const OutlineInputBorder(),
+                                labelStyle: TextStyle(
+                                  color: themeProvider.isDarkMode
+                                      ? Colors.grey.shade400
+                                      : Colors.black87,
+                                ),
+                              ),
+                              dropdownColor: themeProvider.isDarkMode
+                                  ? const Color(0xFF14131E)
+                                  : Colors.white,
+                              items: [
+                                const DropdownMenuItem<int?>(
+                                  value: null,
+                                  child: Text("None"),
+                                ),
+                                ..._testPacks.map(
+                                  (p) => DropdownMenuItem<int?>(
+                                    value: p.id,
+                                    child: Text(
+                                      "${p.name} (${p.category}) – ${p.questionCount} questions",
+                                      style: TextStyle(
+                                        color: themeProvider.isDarkMode
+                                            ? Colors.white
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              onChanged: (v) {
+                                setState(() {
+                                  _testPackId = v;
+                                  _cherryPickSelected = [];
+                                  if (v != null) {
+                                    for (final p in _testPacks) {
+                                      if (p.id == v) {
+                                        _cherryPickSelected =
+                                            List.filled(p.questions.length, true);
+                                        break;
+                                      }
+                                    }
+                                  }
+                                });
+                              },
+                            ),
+                          const SizedBox(height: 16),
+                          if (_testPackId != null) ...[
+                            _buildCherryPickSection(themeProvider),
+                          ],
+                        ],
+                        if (!_useTestPack) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                "Assessment Questions",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: themeProvider.isDarkMode
+                                      ? Colors.white
+                                      : Colors.black87,
+                                ),
+                              ),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.green),
+                                    ),
+                                    child: IconButton(
+                                      icon: const Icon(Icons.psychology,
+                                          color: Colors.green),
+                                      onPressed: _showAIQuestionDialog,
+                                      tooltip: "Generate AI Questions",
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.blue),
+                                    ),
+                                    child: IconButton(
+                                      icon: const Icon(Icons.save_alt,
+                                          color: Colors.blue),
+                                      onPressed: _saveAsTestPack,
+                                      tooltip: "Save as Test Pack",
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: questions.length,
+                              itemBuilder: (_, index) {
+                                final q = questions[index];
+                                return Card(
                                 color: (themeProvider.isDarkMode
                                         ? const Color(0xFF14131E)
                                         : Colors.white)
@@ -1893,6 +2228,7 @@ class _JobFormDialogState extends State<JobFormDialog>
                         const SizedBox(height: 12),
                         CustomButton(
                             text: "Add Question", onPressed: addQuestion),
+                        ],
                       ],
                     ),
                   ),
@@ -1921,6 +2257,264 @@ class _JobFormDialogState extends State<JobFormDialog>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// AI Question Generation Dialog
+class AIQuestionDialog extends StatefulWidget {
+  final String jobTitle;
+  final Function(List<Map<String, dynamic>>) onQuestionsGenerated;
+
+  const AIQuestionDialog({
+    super.key,
+    required this.jobTitle,
+    required this.onQuestionsGenerated,
+  });
+
+  @override
+  _AIQuestionDialogState createState() => _AIQuestionDialogState();
+}
+
+class _AIQuestionDialogState extends State<AIQuestionDialog> {
+  final _formKey = GlobalKey<FormState>();
+  String difficulty = 'Medium';
+  int questionCount = 5;
+  bool _isGenerating = false;
+
+  final List<String> difficultyLevels = ['Easy', 'Medium', 'Hard'];
+  final List<int> questionCounts = [3, 5, 8, 10];
+
+  Future<void> _generateQuestions() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isGenerating = true);
+
+    try {
+      final questions = await AIService.generateAssessmentQuestions(
+        jobTitle: widget.jobTitle,
+        difficulty: difficulty,
+        questionCount: questionCount,
+      );
+
+      if (!mounted) return;
+      widget.onQuestionsGenerated(questions);
+      Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Generated $questionCount questions successfully!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error generating questions: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isGenerating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
+    return Dialog(
+      insetPadding: const EdgeInsets.all(20),
+      child: Container(
+        width: 450,
+        height: 400,
+        decoration: BoxDecoration(
+          color: (themeProvider.isDarkMode
+                  ? const Color(0xFF14131E)
+                  : Colors.white)
+              .withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.psychology,
+                      color: Colors.green,
+                      size: 28,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        "Generate AI Questions",
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: themeProvider.isDarkMode
+                              ? Colors.white
+                              : Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.work, size: 20, color: Colors.grey.shade600),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Job: ${widget.jobTitle}",
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: themeProvider.isDarkMode
+                                ? Colors.white
+                                : Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  "Difficulty Level",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: themeProvider.isDarkMode
+                        ? Colors.white
+                        : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: difficulty,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    filled: true,
+                    fillColor: themeProvider.isDarkMode
+                        ? Colors.grey.shade800
+                        : Colors.grey.shade100,
+                  ),
+                  items: difficultyLevels.map((level) {
+                    return DropdownMenuItem(
+                      value: level,
+                      child: Text(level),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() => difficulty = value!);
+                  },
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  "Number of Questions",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: themeProvider.isDarkMode
+                        ? Colors.white
+                        : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<int>(
+                  value: questionCount,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    filled: true,
+                    fillColor: themeProvider.isDarkMode
+                        ? Colors.grey.shade800
+                        : Colors.grey.shade100,
+                  ),
+                  items: questionCounts.map((count) {
+                    return DropdownMenuItem(
+                      value: count,
+                      child: Text("$count questions"),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() => questionCount = value!);
+                  },
+                ),
+                const Spacer(),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          "Cancel",
+                          style: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.black54,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _isGenerating ? null : _generateQuestions,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: _isGenerating
+                            ? Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                          Colors.white),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text("Generating..."),
+                                ],
+                              )
+                            : Text("Generate Questions"),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

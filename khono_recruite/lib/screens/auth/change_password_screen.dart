@@ -44,8 +44,6 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         "confirm_password": _confirmPasswordController.text.trim(),
       };
 
-      print("Sending body: $body"); // Debug print
-
       final response = await http.post(
         Uri.parse(apiUrl),
         headers: {
@@ -54,9 +52,6 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         },
         body: jsonEncode(body),
       );
-
-      print("Status code: ${response.statusCode}");
-      print("Response body: ${response.body}");
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);

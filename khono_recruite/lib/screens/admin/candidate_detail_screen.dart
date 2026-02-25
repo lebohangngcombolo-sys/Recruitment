@@ -1,5 +1,5 @@
 import 'package:web/web.dart' as web; // For web download
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -87,7 +87,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
           await admin.getCandidateInterviews(widget.candidateId);
       interviews = List<Map<String, dynamic>>.from(interviewData);
     } catch (e) {
-      print("Error fetching candidate details: $e");
+      if (kDebugMode) debugPrint("Error fetching candidate details: $e");
       errorMessage = "Failed to load data: $e";
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -172,7 +172,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
       );
 
       if (response.statusCode != 200) {
-        print("Backend error: ${response.statusCode} ${response.body}");
+        if (kDebugMode) debugPrint("Backend error: ${response.statusCode} ${response.body}");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Failed to get CV URL from backend")),
         );

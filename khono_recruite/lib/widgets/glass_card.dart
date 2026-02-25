@@ -6,7 +6,7 @@ class GlassCard extends StatelessWidget {
   final Widget child;
   final double? blur;
   final double? opacity;
-  final Gradient? gradient; // Add optional gradient
+  final Gradient? gradient;
 
   const GlassCard({
     super.key,
@@ -26,7 +26,7 @@ class GlassCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: gradient == null
             ? Colors.white.withValues(alpha: opacity ?? 0.15)
-            : null, // Only use color if gradient is not set
+            : null,
         gradient: gradient,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
