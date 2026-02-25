@@ -198,23 +198,24 @@ class AuthService {
   }
 
   // ----------------- LOGOUT -----------------
+  /// Logs out on the server (when token is valid) and always clears local auth state.
+  /// Returns true so the UI can navigate away; 422 (e.g. expired token) is treated as success.
   static Future<bool> logout() async {
     try {
-      final response = await http.post(
+      final token = await getAccessToken();
+      await http.post(
         Uri.parse(ApiEndpoints.logout),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer ${await getAccessToken()}',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
         },
       );
-
-      if (response.statusCode == 200) {
-        await clearAuthState();
-        return true;
-      }
-      return false;
+      // Clear local state regardless of status (200 or 422) so user is always "logged out" locally.
+      await clearAuthState();
+      return true;
     } catch (_) {
-      return false;
+      await clearAuthState();
+      return true;
     }
   }
 

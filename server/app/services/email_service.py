@@ -95,6 +95,31 @@ class EmailService:
         EmailService.send_async_email(subject, [email], html)
 
     @staticmethod
+    def send_verification_email_sync(email, verification_code):
+        """
+        Send verification email synchronously. Returns True if sent, False if failed
+        (e.g. timeout). Use in register so we can return the code in response when email fails.
+        """
+        subject = "Verify Your Email Address"
+        app_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/") or "http://localhost:3000"
+        try:
+            html = render_template(
+                'email_templates/verification_email.html',
+                verification_code=verification_code,
+                app_url=app_url,
+            )
+        except Exception:
+            logging.error("Failed to render verification email template for %s", email, exc_info=True)
+            html = f"Your verification code is: {verification_code}. Enter it at {app_url}/verify-email"
+        try:
+            current_app.logger.info("Sending verification email to %s", email)
+            send_email_sync(current_app._get_current_object(), subject, [email], html)
+            return True
+        except Exception as e:
+            logging.warning("Verification email send failed for %s: %s", email, e, exc_info=True)
+            return False
+
+    @staticmethod
     def send_password_reset_email(email, reset_token):
         """Send password reset instructions."""
         subject = "Password Reset Request"
