@@ -82,7 +82,7 @@ def parse_cv():
     if "resume" in request.files:
         file = request.files["resume"]
         try:
-            upload_result = cloudinary.uploader.upload(file, folder="resumes", resource_type="raw")
+            upload_result = cloudinary.uploader.upload(file, folder="Candidate_CV", resource_type="raw")
             resume_url = upload_result.get("secure_url")
             candidate.cv_url = resume_url
         except Exception:

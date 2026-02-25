@@ -112,7 +112,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             backgroundColor: (themeProvider.isDarkMode
                     ? const Color(0xFF14131E)
                     : Colors.white)
-                .withValues(alpha: 0.9),
+                .withOpacity(0.9),
             elevation: 1,
             iconTheme: IconThemeData(
               color: themeProvider.isDarkMode ? Colors.white : Colors.black,
@@ -180,7 +180,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     color: (themeProvider.isDarkMode
                                             ? const Color(0xFF14131E)
                                             : Colors.grey[100]!)
-                                        .withValues(alpha: 0.9),
+                                        .withOpacity(0.9),
                                     borderRadius: BorderRadius.circular(16),
                                     border: Border.all(
                                         color: themeProvider.isDarkMode
@@ -188,8 +188,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                             : Colors.grey[300]!),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black
-                                            .withValues(alpha: 0.05),
+                                        color: Colors.black.withOpacity(0.05),
                                         blurRadius: 6,
                                         offset: const Offset(0, 3),
                                       ),

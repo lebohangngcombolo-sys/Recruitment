@@ -93,9 +93,12 @@ class _AdminDAshboardState extends State<AdminDAshboard>
   String _profileImageUrl = "";
   final String apiBase = ApiEndpoints.candidateBase;
 
+  String? _userName;
+
   @override
   void initState() {
     super.initState();
+    _userName = AuthService.getCachedDisplayName();
     _bootstrapAuthFromToken();
     fetchStats();
     fetchPowerBIStatus();
@@ -124,6 +127,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       if (user is Map<String, dynamic>) {
         await AuthService.saveUserInfo(user);
       }
+      if (mounted) setState(() => _userName = AuthService.getCachedDisplayName());
     } catch (_) {
       // Best-effort: avoid blocking dashboard load
     }
@@ -1299,7 +1303,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 8),
-            Text("Welcome Back, Admin",
+            Text("Welcome Back, ${_userName ?? 'Admin'}!",
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 28,

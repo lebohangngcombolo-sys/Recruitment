@@ -1,4 +1,4 @@
-import bcrypt
+﻿import bcrypt
 from app.extensions import db
 from app.models import User
 from flask import current_app
@@ -12,7 +12,6 @@ from sqlalchemy.exc import IntegrityError
 import secrets
 import string
 import logging
-logger = logging.getLogger(__name__)
 
 
 class AuthService:
@@ -26,15 +25,14 @@ class AuthService:
 
     @staticmethod
     def verify_password(password: str, hashed_password: str) -> bool:
-        """Verify a plain-text password against a bcrypt hash. Returns False if hash is missing or invalid."""
-        if not hashed_password or not isinstance(hashed_password, str):
-            return False
-        hashed_password = hashed_password.strip()
-        if not hashed_password.startswith(('$2a$', '$2b$', '$2y$')):
+        """Verify a plain-text password against a hash."""
+        if not password or not hashed_password:
             return False
         try:
+            if isinstance(hashed_password, bytes):
+                hashed_password = hashed_password.decode('utf-8')
             return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
-        except (ValueError, TypeError):
+        except Exception:
             return False
 
     @staticmethod
@@ -127,7 +125,7 @@ class AuthService:
 
         try:
             totp = pyotp.TOTP(user.mfa_secret)
-            # Valid for ±1 time step (30s each)
+            # Valid for ┬▒1 time step (30s each)
             if totp.verify(otp, valid_window=1):
                 logging.info(f"OTP verified successfully for user {user.email}")
                 return True

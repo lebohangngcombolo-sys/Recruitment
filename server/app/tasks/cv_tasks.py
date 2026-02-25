@@ -1,8 +1,12 @@
 from celery_worker import celery
 from app import create_app
 from app.services.ai_cv_parser import analyzer  # singleton instance
-from app.services.cv_extraction_orchestrator import CVExtractionOrchestrator
 from app.extensions import db
+
+try:
+    from app.services.cv_extraction_orchestrator import CVExtractionOrchestrator
+except ImportError:
+    CVExtractionOrchestrator = None
 from app.models import CVAnalysis, Application, Notification, User
 from datetime import datetime
 import logging
@@ -43,16 +47,18 @@ def analyze_cv_task(self, cv_analysis_id: int, application_id: int):
             resume_text = cv.cv_text or ""
             result = analyzer.analyse(resume_text, appn.requisition_id)
 
-            # Build structured extraction output for prepopulation/review UI
-            try:
-                extraction_metadata = {}
-                if isinstance(cv.result, dict):
-                    extraction_metadata = cv.result.get("extraction_metadata") or {}
-                orch = CVExtractionOrchestrator()
-                orch_out = orch.extract(resume_text, extraction_metadata=extraction_metadata)
-            except Exception:
-                logger.exception("Failed to build structured extraction output")
-                orch_out = None
+            # Build structured extraction output for prepopulation/review UI (optional)
+            orch_out = None
+            if CVExtractionOrchestrator is not None:
+                try:
+                    extraction_metadata = {}
+                    if isinstance(cv.result, dict):
+                        extraction_metadata = cv.result.get("extraction_metadata") or {}
+                    orch = CVExtractionOrchestrator()
+                    orch_out = orch.extract(resume_text, extraction_metadata=extraction_metadata)
+                except Exception:
+                    logger.exception("Failed to build structured extraction output")
+                    orch_out = None
 
             # Normalize and persist results
             match_score = int(result.get("match_score", 0) or 0)

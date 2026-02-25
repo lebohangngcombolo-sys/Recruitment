@@ -27,6 +27,13 @@ Run migration press Ctrl + C to stop the terminal
                   : flask db upgrade
                   : python run.py
 
+Using Render (or other remote) PostgreSQL:
+  - Set DATABASE_URL in .env to your Render external connection URL.
+  - Ensure all tables exist (required for enrollment form):
+        python scripts/ensure_render_tables.py
+  - Then start the app: python run.py
+  - Enrollment needs: users, candidates, audit_logs tables (and users.enrollment_completed column).
+
 
 Backend .env :
 

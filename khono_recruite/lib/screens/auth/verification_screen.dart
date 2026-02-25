@@ -81,7 +81,12 @@ class _VerificationScreenState extends State<VerificationScreen>
     } else {
       if (!context.mounted) return;
       final token = response['access_token'] as String? ?? '';
-      context.go('/enrollment?token=${Uri.encodeComponent(token)}');
+      final pendingJob = await AuthService.getPendingApplyJob();
+      if (pendingJob != null && pendingJob['id'] != null) {
+        context.go('/candidate-dashboard?token=${Uri.encodeComponent(token)}');
+      } else {
+        context.go('/enrollment?token=${Uri.encodeComponent(token)}');
+      }
     }
   }
 

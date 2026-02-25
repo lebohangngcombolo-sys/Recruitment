@@ -324,6 +324,20 @@ class AdminService {
     throw Exception('Failed to fetch application: ${res.body}');
   }
 
+  /// All applications for a candidate with job details (title, company, employment_type).
+  Future<List<Map<String, dynamic>>> getCandidateApplications(int candidateId) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.get(
+      Uri.parse(ApiEndpoints.getCandidateApplicationsByCandidateId(candidateId)),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      return List<Map<String, dynamic>>.from(data['applications'] ?? []);
+    }
+    throw Exception('Failed to fetch candidate applications: ${res.body}');
+  }
+
   Future<List<Map<String, dynamic>>> getApplications() async {
     final token = await AuthService.getAccessToken();
     final res = await http.get(

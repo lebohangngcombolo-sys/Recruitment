@@ -213,13 +213,13 @@
     },
     {
       "name": "flutter",
-      "rootUri": "file:///C:/Users/User/Work/flutter/packages/flutter",
+      "rootUri": "file:///C:/src/flutter/packages/flutter",
       "packageUri": "lib/",
       "languageVersion": "3.8"
     },
     {
       "name": "flutter_localizations",
-      "rootUri": "file:///C:/Users/User/Work/flutter/packages/flutter_localizations",
+      "rootUri": "file:///C:/src/flutter/packages/flutter_localizations",
       "packageUri": "lib/",
       "languageVersion": "3.8"
     },
@@ -273,7 +273,7 @@
     },
     {
       "name": "flutter_test",
-      "rootUri": "file:///C:/Users/User/Work/flutter/packages/flutter_test",
+      "rootUri": "file:///C:/src/flutter/packages/flutter_test",
       "packageUri": "lib/",
       "languageVersion": "3.8"
     },
@@ -285,7 +285,7 @@
     },
     {
       "name": "flutter_web_plugins",
-      "rootUri": "file:///C:/Users/User/Work/flutter/packages/flutter_web_plugins",
+      "rootUri": "file:///C:/src/flutter/packages/flutter_web_plugins",
       "packageUri": "lib/",
       "languageVersion": "3.8"
     },
@@ -465,9 +465,9 @@
     },
     {
       "name": "meta",
-      "rootUri": "file:///C:/Users/User/AppData/Local/Pub/Cache/hosted/pub.dev/meta-1.17.0",
+      "rootUri": "file:///C:/Users/User/AppData/Local/Pub/Cache/hosted/pub.dev/meta-1.16.0",
       "packageUri": "lib/",
-      "languageVersion": "3.5"
+      "languageVersion": "2.12"
     },
     {
       "name": "mime",
@@ -687,7 +687,7 @@
     },
     {
       "name": "sky_engine",
-      "rootUri": "file:///C:/Users/User/Work/flutter/bin/cache/pkg/sky_engine",
+      "rootUri": "file:///C:/src/flutter/bin/cache/pkg/sky_engine",
       "packageUri": "lib/",
       "languageVersion": "3.8"
     },
@@ -771,7 +771,7 @@
     },
     {
       "name": "test_api",
-      "rootUri": "file:///C:/Users/User/AppData/Local/Pub/Cache/hosted/pub.dev/test_api-0.7.7",
+      "rootUri": "file:///C:/Users/User/AppData/Local/Pub/Cache/hosted/pub.dev/test_api-0.7.6",
       "packageUri": "lib/",
       "languageVersion": "3.5"
     },
@@ -866,6 +866,36 @@
       "languageVersion": "3.3"
     },
     {
+      "name": "webview_flutter",
+      "rootUri": "file:///C:/Users/User/AppData/Local/Pub/Cache/hosted/pub.dev/webview_flutter-4.13.1",
+      "packageUri": "lib/",
+      "languageVersion": "3.8"
+    },
+    {
+      "name": "webview_flutter_android",
+      "rootUri": "file:///C:/Users/User/AppData/Local/Pub/Cache/hosted/pub.dev/webview_flutter_android-4.10.11",
+      "packageUri": "lib/",
+      "languageVersion": "3.9"
+    },
+    {
+      "name": "webview_flutter_platform_interface",
+      "rootUri": "file:///C:/Users/User/AppData/Local/Pub/Cache/hosted/pub.dev/webview_flutter_platform_interface-2.14.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.6"
+    },
+    {
+      "name": "webview_flutter_web",
+      "rootUri": "file:///C:/Users/User/AppData/Local/Pub/Cache/hosted/pub.dev/webview_flutter_web-0.2.3+4",
+      "packageUri": "lib/",
+      "languageVersion": "3.4"
+    },
+    {
+      "name": "webview_flutter_wkwebview",
+      "rootUri": "file:///C:/Users/User/AppData/Local/Pub/Cache/hosted/pub.dev/webview_flutter_wkwebview-3.23.7",
+      "packageUri": "lib/",
+      "languageVersion": "3.9"
+    },
+    {
       "name": "win32",
       "rootUri": "file:///C:/Users/User/AppData/Local/Pub/Cache/hosted/pub.dev/win32-5.15.0",
       "packageUri": "lib/",
@@ -897,8 +927,8 @@
     }
   ],
   "generator": "pub",
-  "generatorVersion": "3.10.7",
-  "flutterRoot": "file:///C:/Users/User/Work/flutter",
-  "flutterVersion": "3.38.7",
+  "generatorVersion": "3.9.2",
+  "flutterRoot": "file:///C:/src/flutter",
+  "flutterVersion": "3.35.7",
   "pubCache": "file:///C:/Users/User/AppData/Local/Pub/Cache"
 }

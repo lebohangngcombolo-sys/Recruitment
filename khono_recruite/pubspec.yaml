@@ -29,7 +29,7 @@ dependencies:
   image_picker: ^1.2.0
   web_socket_channel: ^3.0.3
   firebase_auth: ^6.1.0
-  firebase_core: ^4.4.0
+  firebase_core: ^4.1.1
   google_sign_in: ^7.2.0
   lottie: ^3.3.1
   go_router: ^17.0.1
@@ -38,7 +38,9 @@ dependencies:
   vector_math: ^2.1.4
   file_picker: ^10.3.3
   qr_flutter: ^4.1.0
-  firebase_ai: ^3.7.0
+  webview_flutter: ^4.10.0
+  webview_flutter_web: ^0.2.3
+  firebase_ai: ^3.6.0
 
 dev_dependencies:
   flutter_test:
@@ -48,82 +50,8 @@ flutter:
   uses-material-design: true
 
   assets:
+    - assets/icons/
     - assets/images/
-    - assets/images/bg1.jpg
-    - assets/images/dark.png
-    - assets/images/bg.jpg
-    - assets/images/wallpaper.jpeg
-    - assets/images/bg2.jpg
-    - assets/images/bg3.jpeg
-    - assets/images/bg4.jpg
-    - assets/images/client0.png
-    - assets/images/client1.png
-    - assets/images/client2.png
-    - assets/images/client3.png
-    - assets/images/client4.png
-    - assets/images/client5.png
-    - assets/images/logo2.png
-    # - assets/images/chatbot.png (removed — file missing)
-    - assets/images/logow.png
-    - assets/images/logo3.png
-    - assets/images/profile_placeholder.png
-    - assets/images/logo.png
-    # - assets/images/icon.png (removed — file missing)
-    - assets/images/team0.jpg
-    - assets/images/team1.jpg
-    - assets/images/team2.jpg
-    - assets/images/team3.jpg
-    - assets/images/team4.jpg
-    - assets/images/simba.jpg
-    - assets/images/team5.jpg
-    - assets/images/final.jpg
-    # - assets/icons/LinkedIn1.png (removed — file missing and causing web build failure)
-    - assets/icons/LinkedIn.png
-    # - assets/icons/Instagram1.png (removed — file missing)
-    - assets/icons/Instagram.png
-    - assets/icons/facebook.png
-    # - assets/icons/facebook1.png (removed — file missing)
-    # - assets/icons/x1.png (removed — file missing)
-    # - assets/icons/YouTube1.png (removed — file missing)
-    - assets/icons/YouTube.png
-    - assets/icons/pbi.png
-    - assets/icons/team_icon.png
-    - assets/icons/calendar_icon.png
-    - assets/icons/red_user_profile.png
-    - assets/icons/Chatbot_Red.png
-    - assets/icons/Approved_Red.png
-    - assets/images/SearchRed.png
-    - assets/icons/Calendar_Date Picker_Red.png
-    - assets/icons/Upload Arrow_Red.png
-    - assets/icons/Logout_Red Badge_White.png
-    - assets/icons/Information_Red Badge_White.png
-    - assets/icons/Growth_Development_Red Badge_White.png
-    - assets/icons/Project Launch_Start_Red Badge_White.png
-    - assets/icons/audits.png
-    - assets/icons/interview.png
-    - assets/icons/review.png
-    - assets/icons/candidates.png
-    - assets/icons/jobs.png
-    - assets/icons/audit.png
-    - assets/icons/notification.png
-    - assets/icons/add.png
-    - assets/icons/data-analytics.png
-    - assets/icons/teamC.png
-    - assets/icons/User_Profile_White_Badge_Red.png
-    - assets/icons/RED_Settings icon badge.png
-    - assets/icons/Lock_Red Badge_White.png
-    - assets/icons/Red_chnage password_badge.png
-    - assets/icons/okta.png
-    - assets/icons/microsoft.png
-    - assets/icons/google.png
-    - assets/icons/saml.png
-    - assets/images/collaggge.jpg
-    - assets/images/thato.png
-    - assets/images/Mosa.jpg
-    - assets/images/Nathi_design_3.png
-    - assets/images/office.jpg
-    - assets/icons/khono.png
-    - assets/images/default.jpeg
 
   fonts:
     - family: Poppins
