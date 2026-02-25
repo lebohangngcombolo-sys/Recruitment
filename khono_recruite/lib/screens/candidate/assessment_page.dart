@@ -1,8 +1,9 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 import 'cv_upload_page.dart';
 import 'package:go_router/go_router.dart';
 
@@ -92,7 +93,7 @@ class _AssessmentPageState extends State<AssessmentPage>
     try {
       final res = await http.get(
         Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/applications/${widget.applicationId}/assessment"),
+            "${ApiEndpoints.candidateBase}/applications/${widget.applicationId}/assessment"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token"
@@ -138,7 +139,7 @@ class _AssessmentPageState extends State<AssessmentPage>
 
       final res = await http.post(
         Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/applications/${widget.applicationId}/assessment"),
+            "${ApiEndpoints.candidateBase}/applications/${widget.applicationId}/assessment"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token"
@@ -192,7 +193,7 @@ class _AssessmentPageState extends State<AssessmentPage>
 
       final res = await http.post(
         Uri.parse(
-            "http://127.0.0.1:5000/api/candidate/applications/${widget.applicationId}/draft"),
+            "${ApiEndpoints.candidateBase}/applications/${widget.applicationId}/draft"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token"

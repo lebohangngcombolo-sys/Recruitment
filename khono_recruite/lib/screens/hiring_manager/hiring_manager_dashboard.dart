@@ -24,6 +24,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 import 'pipeline_page.dart';
+import '../../utils/api_endpoints.dart';
 
 class HMMainDashboard extends StatefulWidget {
   final String token;
@@ -98,7 +99,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   Uint8List? _profileImageBytes;
   String _profileImageUrl = "";
   final ImagePicker _picker = ImagePicker();
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  String get apiBase => ApiEndpoints.candidateBase;
 
   @override
   void initState() {
@@ -244,7 +245,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       if (role == "admin") {
         final token = await AuthService.getAccessToken();
         final res = await http.get(
-          Uri.parse("http://127.0.0.1:5000/api/admin/recent-activities"),
+          Uri.parse("${ApiEndpoints.adminBase}/recent-activities"),
           headers: {"Authorization": "Bearer $token"},
         );
         if (res.statusCode == 200) {
@@ -290,7 +291,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               "${auditEndDate!.year}-${auditEndDate!.month.toString().padLeft(2, '0')}-${auditEndDate!.day.toString().padLeft(2, '0')}",
         if (auditSearchQuery != null) "q": auditSearchQuery!,
       };
-      final uri = Uri.http("127.0.0.1:5000", "/api/admin/audits", queryParams);
+      final queryString = queryParams.entries
+          .map((e) => '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+          .join('&');
+      final uri = Uri.parse(queryString.isEmpty ? ApiEndpoints.auditLogs : "${ApiEndpoints.auditLogs}?$queryString");
       final res =
           await http.get(uri, headers: {"Authorization": "Bearer $token"});
 

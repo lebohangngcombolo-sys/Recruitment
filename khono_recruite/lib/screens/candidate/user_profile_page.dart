@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io' show File;
 import 'package:url_launcher/url_launcher.dart';
@@ -12,9 +12,9 @@ import 'package:provider/provider.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
 import '../../providers/theme_provider.dart';
+import '../../utils/api_endpoints.dart';
 
-// ------------------- API Base URL -------------------
-const String candidateBase = "http://127.0.0.1:5000/api/candidate";
+String get candidateBase => ApiEndpoints.candidateBase;
 
 class ProfilePage extends StatefulWidget {
   final String token;
@@ -88,7 +88,7 @@ class _ProfilePageState extends State<ProfilePage>
   List<dynamic> documents = [];
   List<String> _certifications = [];
   List<String> _languages = [];
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  String get apiBase => ApiEndpoints.candidateBase;
 
   // Add these helper methods in the _ProfilePageState class (around line 150, after the state variables):
 
