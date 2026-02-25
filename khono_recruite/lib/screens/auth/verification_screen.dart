@@ -9,7 +9,9 @@ import '../../providers/theme_provider.dart';
 
 class VerificationScreen extends StatefulWidget {
   final String email;
-  const VerificationScreen({super.key, required this.email});
+  /// When registration returned the code (email failed to send), pre-fill the code field.
+  final String? initialCode;
+  const VerificationScreen({super.key, required this.email, this.initialCode});
 
   @override
   _VerificationScreenState createState() => _VerificationScreenState();
@@ -17,7 +19,7 @@ class VerificationScreen extends StatefulWidget {
 
 class _VerificationScreenState extends State<VerificationScreen>
     with SingleTickerProviderStateMixin {
-  String verificationCode = '';
+  late String verificationCode;
   bool loading = false;
   bool resendLoading = false;
 
@@ -27,6 +29,8 @@ class _VerificationScreenState extends State<VerificationScreen>
   @override
   void initState() {
     super.initState();
+    verificationCode = widget.initialCode?.trim() ?? '';
+    if (verificationCode.length != 6) verificationCode = '';
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 150),
@@ -239,6 +243,7 @@ class _VerificationScreenState extends State<VerificationScreen>
                                 onCodeCompleted: _onCodeCompleted,
                                 onSubmit: verify,
                                 autoFocus: true,
+                                initialCode: widget.initialCode,
                               ),
                             ],
                           ),

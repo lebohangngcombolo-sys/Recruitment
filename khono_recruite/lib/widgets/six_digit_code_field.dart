@@ -5,6 +5,8 @@ class SixDigitCodeField extends StatefulWidget {
   final ValueChanged<String> onCodeCompleted;
   final VoidCallback? onSubmit;
   final bool autoFocus;
+  /// When email could not be sent, backend may return the code; pre-fill the 6 digits.
+  final String? initialCode;
 
   const SixDigitCodeField({
     super.key,
@@ -12,6 +14,7 @@ class SixDigitCodeField extends StatefulWidget {
     required this.onCodeCompleted,
     this.onSubmit,
     this.autoFocus = false,
+    this.initialCode,
   });
 
   @override
@@ -41,6 +44,18 @@ class _SixDigitCodeFieldState extends State<SixDigitCodeField> {
     if (widget.autoFocus) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _focusNodes[0].requestFocus();
+      });
+    }
+    // Pre-fill when backend returned code (e.g. email failed to send)
+    final initial = widget.initialCode?.trim() ?? '';
+    if (initial.length == 6) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        for (int i = 0; i < 6; i++) {
+          _controllers[i].text = initial[i];
+          _code[i] = initial[i];
+        }
+        widget.onCodeChanged(initial);
+        widget.onCodeCompleted(initial);
       });
     }
   }

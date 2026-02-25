@@ -162,12 +162,21 @@ class _RegisterScreenState extends State<RegisterScreen>
         return;
       }
 
-      // Email verification required: go to verify-email page (backend sent the code by email)
+      // Email verification required: go to verify-email page (backend sent the code by email, or returned it if email failed)
       final email = emailController.text.trim();
+      final codeFromServer = body['verification_code'] as String?;
       if (!context.mounted) return;
-      context.go(
-        '/verify-email?email=${Uri.encodeComponent(email)}',
-      );
+      String verifyUrl = '/verify-email?email=${Uri.encodeComponent(email)}';
+      if (codeFromServer != null && codeFromServer.isNotEmpty) {
+        verifyUrl += '&code=${Uri.encodeComponent(codeFromServer)}';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Email could not be sent. Use the code shown on the next screen to verify.'),
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+      context.go(verifyUrl);
     } catch (e, st) {
       // Defensive: any uncaught error (e.g. storage, navigation) — still try to reach verify-email so user can enter code
       if (context.mounted) {

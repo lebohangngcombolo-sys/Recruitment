@@ -176,16 +176,16 @@ def init_auth_routes(app):
 
     # ------------------- LOGOUT -------------------
     @app.route("/api/auth/logout", methods=["POST"])
-    @jwt_required()
-    @limiter.limit("20 per minute")  # Add this line
+    @limiter.limit("20 per minute")
     def logout():
+        # Always return 200 so client can clear local state even when token is missing/expired (avoids 422 on second logout or stale token).
+        response = jsonify({"message": "Successfully logged out"})
         try:
-            response = jsonify({"message": "Successfully logged out"})
+            verify_jwt_in_request(optional=True)
             unset_jwt_cookies(response)
-            return response, 200
-        except Exception as e:
-            current_app.logger.error(f"Logout error: {str(e)}", exc_info=True)
-            return jsonify({"error": "Internal server error"}), 500
+        except Exception:
+            pass  # No valid token; still return success so client clears state
+        return response, 200
 
     # ------------------- GOOGLE LOGIN -------------------
     @app.route("/api/auth/google")
@@ -366,12 +366,19 @@ def init_auth_routes(app):
             db.session.add(verification_code)
             db.session.commit()
 
-            EmailService.send_verification_email(email, code)
+            email_sent = EmailService.send_verification_email_sync(email, code)
             AuditService.log(user_id=user.id, action="register")
 
-            return jsonify({
+            payload = {
                 'message': 'User registered successfully. Please check your email for verification code.'
-            }), 201
+            }
+            if not email_sent:
+                payload['message'] = (
+                    'User registered successfully. Email could not be sent (e.g. timeout). '
+                    'Use the code below to verify your email.'
+                )
+                payload['verification_code'] = code
+            return jsonify(payload), 201
 
         except Exception as e:
             db.session.rollback()

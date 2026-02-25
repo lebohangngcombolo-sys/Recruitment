@@ -1,4 +1,4 @@
-﻿import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -81,7 +81,8 @@ final GoRouter _router = GoRouter(
       path: '/verify-email',
       builder: (context, state) {
         final email = state.uri.queryParameters['email'] ?? '';
-        return VerificationScreen(email: email);
+        final code = state.uri.queryParameters['code'] ?? '';
+        return VerificationScreen(email: email, initialCode: code.isNotEmpty ? code : null);
       },
     ),
     GoRoute(
