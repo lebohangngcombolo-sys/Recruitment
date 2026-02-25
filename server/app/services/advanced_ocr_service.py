@@ -1,91 +1,70 @@
+# app/services/advanced_ocr_service.py
+"""
+Minimal OCR/text extraction service for CV files.
+Provides extract_text_with_metadata() used by ai_cv_parser and candidate_routes.
+Uses pdfplumber and python-docx for PDF/DOCX; plain text for .txt.
+"""
 import os
-import pdfplumber
-from typing import Dict, Any, Optional
 import logging
+import pdfplumber
+import docx
 
 logger = logging.getLogger(__name__)
 
+# Extensions we can extract text from (no heavy OCR by default)
+SUPPORTED_EXTENSIONS = {"pdf", "docx", "doc", "txt"}
+
+
 class AdvancedOCRService:
-    """
-    Advanced OCR Service for extracting text from documents with metadata.
-    Provides fallback OCR capabilities for CV parsing.
-    """
+    """Extract text from CV files (PDF, DOCX, TXT). Returns dict with 'text' and optional metadata."""
 
-    def extract_text_with_metadata(self, file_path: str, file_extension: str) -> Dict[str, Any]:
+    SUPPORTED_EXTENSIONS = SUPPORTED_EXTENSIONS
+
+    def extract_text_with_metadata(self, path: str, ext: str) -> dict:
         """
-        Extract text from a file using OCR and return with metadata.
-
-        Args:
-            file_path: Path to the file
-            file_extension: File extension (e.g., '.pdf', '.docx')
-
-        Returns:
-            Dict containing 'text' and other metadata
+        Extract text from file at path. ext is the extension without dot (e.g. 'pdf', 'docx').
+        Returns dict with at least 'text'; may include extraction_method, confidence, pages, has_scanned_content.
         """
-        try:
-            text = ""
+        ext = (ext or "").lower().lstrip(".")
+        if ext not in SUPPORTED_EXTENSIONS:
+            return {"text": "", "extraction_method": "unsupported", "confidence": 0}
 
-            # Handle PDF files
-            if file_extension.lower() == '.pdf':
-                text = self._extract_pdf_text(file_path)
-            # Handle DOCX files
-            elif file_extension.lower() == '.docx':
-                text = self._extract_docx_text(file_path)
-            # Handle TXT files
-            elif file_extension.lower() == '.txt':
-                text = self._extract_txt_text(file_path)
-            else:
-                logger.warning(f"Unsupported file type for OCR: {file_extension}")
-                return {"text": "", "error": "Unsupported file type"}
-
-            return {
-                "text": text,
-                "success": True,
-                "file_path": file_path,
-                "file_extension": file_extension
-            }
-
-        except Exception as e:
-            logger.error(f"Error in OCR extraction for {file_path}: {str(e)}")
-            return {
-                "text": "",
-                "success": False,
-                "error": str(e),
-                "file_path": file_path,
-                "file_extension": file_extension
-            }
-
-    def _extract_pdf_text(self, file_path: str) -> str:
-        """Extract text from PDF files."""
         text = ""
         try:
-            with pdfplumber.open(file_path) as pdf:
-                for page in pdf.pages:
-                    page_text = page.extract_text()
-                    if page_text:
-                        text += page_text + "\n"
+            if ext == "pdf":
+                with pdfplumber.open(path) as pdf:
+                    pages = getattr(pdf, "pages", [])
+                    text = "\n".join((p.extract_text() or "") for p in pages)
+                    num_pages = len(pages)
+                return {
+                    "text": text,
+                    "extraction_method": "pdfplumber",
+                    "confidence": 0.9,
+                    "pages": num_pages,
+                    "has_scanned_content": False,
+                }
+            if ext in ("docx", "doc"):
+                doc = docx.Document(path)
+                text = "\n".join(p.text for p in doc.paragraphs)
+                return {
+                    "text": text,
+                    "extraction_method": "python-docx",
+                    "confidence": 0.9,
+                    "pages": None,
+                    "has_scanned_content": False,
+                }
+            if ext == "txt":
+                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                    text = f.read()
+                return {
+                    "text": text,
+                    "extraction_method": "plain_text",
+                    "confidence": 1.0,
+                    "pages": None,
+                    "has_scanned_content": False,
+                }
         except Exception as e:
-            logger.error(f"Error extracting PDF text: {str(e)}")
-        return text.strip()
+            logger.warning("AdvancedOCRService extract failed for %s: %s", path, e)
+            return {"text": "", "extraction_method": "error", "confidence": 0}
 
-    def _extract_docx_text(self, file_path: str) -> str:
-        """Extract text from DOCX files."""
-        text = ""
-        try:
-            from docx import Document
-            doc = Document(file_path)
-            for paragraph in doc.paragraphs:
-                text += paragraph.text + "\n"
-        except Exception as e:
-            logger.error(f"Error extracting DOCX text: {str(e)}")
-        return text.strip()
-
-    def _extract_txt_text(self, file_path: str) -> str:
-        """Extract text from TXT files."""
-        text = ""
-        try:
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                text = f.read()
-        except Exception as e:
-            logger.error(f"Error extracting TXT text: {str(e)}")
-        return text.strip()
+        return {"text": "", "extraction_method": "unknown", "confidence": 0}

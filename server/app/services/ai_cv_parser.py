@@ -75,7 +75,8 @@ class AIParser:
 
         except Exception as e:
             logger.exception("AI CV parsing failed: %s", e)
-            return {"cv_text": cv_file.filename, "error": str(e)}
+            fn = getattr(cv_file, "filename", str(cv_file))
+            return {"cv_text": fn, "error": str(e)}
 
     @staticmethod
     def offline_extract(cv_text: str) -> Dict[str, Any]:

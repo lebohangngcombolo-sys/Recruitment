@@ -133,6 +133,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   @override
   void initState() {
     super.initState();
+    userName = AuthService.getCachedDisplayName() ?? "Hiring Manager";
     fetchStats();
     fetchCandidates();
     fetchChartData();

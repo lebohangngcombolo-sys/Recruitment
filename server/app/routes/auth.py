@@ -432,19 +432,34 @@ def init_auth_routes(app):
     @limiter.limit("10 per minute")  # Add this line
     def login():
         try:
-            data = request.get_json()
+            # Accept JSON (Postman: set Body = raw, JSON and Header Content-Type: application/json)
+            # or form data if JSON is not sent
+            data = request.get_json(silent=True)
+            if data is None:
+                data = request.form.to_dict() or {}
             email = data.get('email')
             password = data.get('password')
 
             # ---- Basic validation ----
             if not all([email, password]):
-                return jsonify({'error': 'Email and password are required'}), 400
+                return jsonify({
+                    'error': 'Email and password are required.',
+                    'hint': 'In Postman: Body → raw → JSON, and add Header: Content-Type = application/json'
+                }), 400
 
             email = email.strip().lower()
             user = User.query.filter(db.func.lower(User.email) == email).first()
 
             # ---- Invalid credentials ----
-            if not user or not AuthService.verify_password(password, user.password):
+            if not user:
+                return jsonify({'error': 'Invalid credentials'}), 401
+            if not user.password:
+                return jsonify({'error': 'Account has no password set (e.g. SSO-only). Use the correct sign-in method.'}), 401
+            try:
+                if not AuthService.verify_password(password, user.password):
+                    return jsonify({'error': 'Invalid credentials'}), 401
+            except Exception as pw_err:
+                current_app.logger.warning(f'Password verification failed: {pw_err}')
                 return jsonify({'error': 'Invalid credentials'}), 401
 
             # # ---- Handle unverified user ----
@@ -487,17 +502,31 @@ def init_auth_routes(app):
             AuditService.log(user_id=user.id, action="login_success")
 
             # ---- Return successful response ----
+            try:
+                user_dict = user.to_dict()
+            except Exception as dict_err:
+                current_app.logger.error(f'user.to_dict() failed: {dict_err}', exc_info=True)
+                user_dict = {
+                    'id': user.id,
+                    'email': user.email,
+                    'role': user.role,
+                    'is_verified': user.is_verified,
+                    'enrollment_completed': getattr(user, 'enrollment_completed', False),
+                }
             return jsonify({
                 'access_token': access_token,
                 'refresh_token': refresh_token,
-                'user': user.to_dict(),
+                'user': user_dict,
                 'verified': True,
                 'dashboard': dashboard_url
             }), 200
 
         except Exception as e:
             current_app.logger.error(f'Login error: {str(e)}', exc_info=True)
-            return jsonify({'error': 'Internal server error'}), 500  # 🆕 Changed from 200 to 500
+            err_body = {'error': 'Internal server error'}
+            if current_app.config.get('DEBUG'):
+                err_body['detail'] = str(e)
+            return jsonify(err_body), 500
 
     # ------------------- REFRESH TOKEN -------------------
     @app.route('/api/auth/refresh', methods=['POST'])
@@ -592,9 +621,24 @@ def init_auth_routes(app):
                 return jsonify({"error": "User not found"}), 404
 
             # Get candidate profile if user is a candidate
-            candidate_profile = Candidate.query.filter_by(user_id=user.id).first()
-            if candidate_profile:
-                candidate_profile = candidate_profile.to_dict()
+            candidate_obj = Candidate.query.filter_by(user_id=user.id).first()
+            candidate_profile = candidate_obj.to_dict() if candidate_obj else None
+
+            # Backfill: if User.profile has no full_name but Candidate has full_name, sync to DB
+            # (fixes existing users who enrolled before we synced enrollment to User.profile)
+            if candidate_obj and getattr(candidate_obj, "full_name", None):
+                name_str = (candidate_obj.full_name or "").strip()
+                if name_str:
+                    existing = user.profile or {}
+                    if not (existing.get("full_name") or existing.get("first_name")):
+                        parts = name_str.split(None, 1)
+                        user.profile = {
+                            **existing,
+                            "full_name": name_str,
+                            "first_name": parts[0] if parts else "",
+                            "last_name": parts[1] if len(parts) > 1 else "",
+                        }
+                        db.session.commit()
 
             dashboard_url = "/enrollment" if user.role == "candidate" and not user.enrollment_completed \
                 else ROLE_DASHBOARD_MAP.get(user.role, "/dashboard")
@@ -609,14 +653,12 @@ def init_auth_routes(app):
                     "role": user.role,
                     "enrollment_completed": user.enrollment_completed,
                     "created_at": user.created_at.isoformat() if user.created_at else None,
-                    # 🆕 ADD THIS - Include the JSON profile column
                     "profile": user.profile or {}
                 },
                 "role": user.role,
                 "dashboard": dashboard_url
             }
     
-            # Add full candidate profile data if available
             if candidate_profile:
                 response_data["candidate_profile"] = candidate_profile
 
@@ -672,26 +714,49 @@ def init_auth_routes(app):
             if not user:
                 return jsonify({"error": "User not found"}), 404
 
-            # Accept multipart form
-            json_data = request.form.to_dict()  # manual fields from form
+            # Accept JSON body (Postman) or multipart form (Flutter app)
+            if request.is_json:
+                json_data = request.get_json() or {}
+            else:
+                json_data = request.form.to_dict()
+                # Form sends list/dict as JSON strings; service will parse them
+            current_app.logger.info("Enrollment payload keys: %s", list(json_data.keys()))
 
             cv_file = request.files.get("cv")  # uploaded CV
             if cv_file:
-                # Optionally save CV to server or cloud
                 filename = secure_filename(cv_file.filename)
-                save_path = os.path.join(current_app.config.get("UPLOAD_FOLDER", "/tmp"), filename)
+                save_path = os.path.join(current_app.config.get("CV_UPLOAD_FOLDER", current_app.config.get("UPLOAD_FOLDER", "/tmp")), filename)
+                try:
+                    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                except Exception:
+                    save_path = os.path.join("/tmp", filename)
                 cv_file.save(save_path)
 
-                # Pass file path to service
+                # Pass file path to service for parsing
                 response, status = EnrollmentService.save_candidate_enrollment(
                     user_id, json_data, cv_file=save_path
                 )
+                # Upload to Cloudinary and save URL for easy retrieval
+                if status < 400:
+                    from app.services.cv_parser_service import HybridResumeAnalyzer
+                    resume_url = HybridResumeAnalyzer.upload_cv(save_path, filename=filename)
+                    if resume_url:
+                        candidate = Candidate.query.filter_by(user_id=user_id).first()
+                        if candidate:
+                            candidate.cv_url = resume_url
+                            db.session.commit()
+                try:
+                    if os.path.isfile(save_path):
+                        os.remove(save_path)
+                except Exception:
+                    pass
             else:
-                # No CV uploaded
                 response, status = EnrollmentService.save_candidate_enrollment(
                     user_id, json_data
                 )
 
+            if status >= 400:
+                current_app.logger.warning("Enrollment validation failed: %s", response.get("error"))
             return jsonify(response), status
 
         except Exception as e:

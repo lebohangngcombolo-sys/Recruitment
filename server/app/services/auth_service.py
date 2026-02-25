@@ -26,7 +26,14 @@ class AuthService:
     @staticmethod
     def verify_password(password: str, hashed_password: str) -> bool:
         """Verify a plain-text password against a hash."""
-        return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+        if not password or not hashed_password:
+            return False
+        try:
+            if isinstance(hashed_password, bytes):
+                hashed_password = hashed_password.decode('utf-8')
+            return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+        except Exception:
+            return False
 
     @staticmethod
     def create_user(email: str, password: str) -> User:

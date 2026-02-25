@@ -185,18 +185,52 @@ Return valid JSON only with keys: match_score (int), missing_skills (list), sugg
         return self.analyse_offline_keywords(resume_content, job_description)
 
     # ----------------------------
-    # Cloudinary Upload
+    # Cloudinary Upload (Candidate_CV folder for easy retrieval)
     # ----------------------------
+    CLOUDINARY_CV_FOLDER = "Candidate_CV"
+
     @staticmethod
-    def upload_cv(file):
-        """Upload CV to Cloudinary and return secure URL."""
+    def _sanitize_public_id(name):
+        """Make a safe public_id: alphanumeric, dots, hyphens, underscores only."""
+        if not name or not name.strip():
+            return "cv"
+        base = name.strip()
+        if "/" in base or "\\" in base:
+            base = base.replace("\\", "/").split("/")[-1]
+        safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in base)
+        return safe[:200] or "cv"
+
+    @staticmethod
+    def upload_cv(file, filename=None):
+        """Upload CV to Cloudinary (folder: Candidate_CV) and return secure URL.
+        Accepts file path (str) or file-like object (e.g. Werkzeug FileStorage).
+        Pass filename so the asset is stored with the correct name and format in Cloudinary.
+        """
         try:
-            result = cloudinary_upload(
-                file,
-                resource_type="raw",
-                folder="candidate_cvs"
-            )
-            return result.get("secure_url")
+            if isinstance(file, str):
+                path = file
+                name = filename or path.split("/")[-1].split("\\")[-1] or "cv.pdf"
+                public_id = HybridResumeAnalyzer._sanitize_public_id(name)
+                with open(file, "rb") as f:
+                    result = cloudinary_upload(
+                        f,
+                        resource_type="raw",
+                        folder=HybridResumeAnalyzer.CLOUDINARY_CV_FOLDER,
+                        public_id=public_id,
+                    )
+            else:
+                stream = getattr(file, "stream", file)
+                if hasattr(stream, "seek"):
+                    stream.seek(0)
+                name = filename or getattr(file, "filename", None) or "resume.pdf"
+                public_id = HybridResumeAnalyzer._sanitize_public_id(name)
+                result = cloudinary_upload(
+                    file,
+                    resource_type="raw",
+                    folder=HybridResumeAnalyzer.CLOUDINARY_CV_FOLDER,
+                    public_id=public_id,
+                )
+            return result.get("secure_url") if result else None
         except Exception as e:
-            logger.error(f"Cloudinary upload failed: {e}")
+            logger.error("Cloudinary upload failed: %s", e, exc_info=True)
             return None

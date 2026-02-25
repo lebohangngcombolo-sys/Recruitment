@@ -1,12 +1,17 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart'; // ⚡ Web URL strategy
+import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
+import 'package:webview_flutter_web/webview_flutter_web.dart';
 
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/candidate/candidate_dashboard.dart';
 import 'screens/candidate/find_talent_page.dart';
+import 'screens/candidate/jobs_applied_page.dart';
+import 'screens/candidate/intern_stories_page.dart';
 import 'screens/candidate/job_details_page.dart';
 import 'screens/enrollment/enrollment_screen.dart';
 import 'screens/admin/admin_dashboard.dart';
@@ -43,6 +48,11 @@ void main() async {
 
   // ⚡ Fix Flutter Web initial route handling
   setUrlStrategy(PathUrlStrategy());
+
+  // WebView: set web platform implementation so CV preview works in-app on web
+  if (kIsWeb) {
+    WebViewPlatform.instance = WebWebViewPlatform();
+  }
 
   runApp(
     MultiProvider(
@@ -88,6 +98,10 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/find-talent',
       builder: (context, state) => const FindTalentPage(),
+    ),
+    GoRoute(
+      path: '/intern-stories',
+      builder: (context, state) => const InternStoriesPage(),
     ),
     GoRoute(
       path: '/about-us',
@@ -136,6 +150,13 @@ final GoRouter _router = GoRouter(
       builder: (context, state) {
         final token = state.uri.queryParameters['token'] ?? '';
         return CandidateDashboard(token: token);
+      },
+    ),
+    GoRoute(
+      path: '/jobs-applied',
+      builder: (context, state) {
+        final token = state.uri.queryParameters['token'] ?? '';
+        return JobsAppliedPage(token: token);
       },
     ),
     GoRoute(
