@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/theme_provider.dart';
 
 class Sidebar extends StatelessWidget {
   final Function(String) onTap;
@@ -7,47 +9,94 @@ class Sidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Drawer(
-      child: Container(
-        color: Colors.red,
-        child: ListView(
-          children: [
-            const DrawerHeader(
-              child: Text("Khono Admin",
-                  style: TextStyle(color: Colors.white, fontSize: 24)),
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return Drawer(
+          child: Container(
+            color: themeProvider.isDarkMode
+                ? const Color(0xFF1F2840)
+                : Colors.white,
+            child: ListView(
+              children: [
+                DrawerHeader(
+                  child: Text("Khono Admin",
+                      style: TextStyle(
+                          color: themeProvider.isDarkMode
+                              ? Colors.white
+                              : Colors.black,
+                          fontSize: 24)),
+                ),
+                ListTile(
+                  leading: Image.asset(
+                    'assets/images/Home_Remote_Work_Red_Badge_White.png',
+                    width: 24,
+                    height: 24,
+                    color:
+                        themeProvider.isDarkMode ? Colors.white : Colors.black,
+                  ),
+                  title: Text("Dashboard",
+                      style: TextStyle(
+                          color: themeProvider.isDarkMode
+                              ? Colors.white
+                              : Colors.black)),
+                  onTap: () => onTap("dashboard"),
+                ),
+                ListTile(
+                  leading: Icon(Icons.work,
+                      color: themeProvider.isDarkMode
+                          ? Colors.white
+                          : Colors.black),
+                  title: Text("Jobs",
+                      style: TextStyle(
+                          color: themeProvider.isDarkMode
+                              ? Colors.white
+                              : Colors.black)),
+                  onTap: () => onTap("jobs"),
+                ),
+                ListTile(
+                  leading: Image.asset(
+                    'assets/images/Collaboration_Red_Badge_White.png',
+                    width: 24,
+                    height: 24,
+                    color:
+                        themeProvider.isDarkMode ? Colors.white : Colors.black,
+                  ),
+                  title: Text("Shortlisting",
+                      style: TextStyle(
+                          color: themeProvider.isDarkMode
+                              ? Colors.white
+                              : Colors.black)),
+                  onTap: () => onTap("shortlisting"),
+                ),
+                ListTile(
+                  leading: Icon(Icons.schedule,
+                      color: themeProvider.isDarkMode
+                          ? Colors.white
+                          : Colors.black),
+                  title: Text("Interviews",
+                      style: TextStyle(
+                          color: themeProvider.isDarkMode
+                              ? Colors.white
+                              : Colors.black)),
+                  onTap: () => onTap("interviews"),
+                ),
+                ListTile(
+                  leading: Icon(Icons.description,
+                      color: themeProvider.isDarkMode
+                          ? Colors.white
+                          : Colors.black),
+                  title: Text("CV Review",
+                      style: TextStyle(
+                          color: themeProvider.isDarkMode
+                              ? Colors.white
+                              : Colors.black)),
+                  onTap: () => onTap("cv_review"),
+                ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.dashboard, color: Colors.white),
-              title: const Text("Dashboard",
-                  style: TextStyle(color: Colors.white)),
-              onTap: () => onTap("dashboard"),
-            ),
-            ListTile(
-              leading: const Icon(Icons.work, color: Colors.white),
-              title: const Text("Jobs", style: TextStyle(color: Colors.white)),
-              onTap: () => onTap("jobs"),
-            ),
-            ListTile(
-              leading: const Icon(Icons.people, color: Colors.white),
-              title: const Text("Shortlisting",
-                  style: TextStyle(color: Colors.white)),
-              onTap: () => onTap("shortlisting"),
-            ),
-            ListTile(
-              leading: const Icon(Icons.schedule, color: Colors.white),
-              title: const Text("Interviews",
-                  style: TextStyle(color: Colors.white)),
-              onTap: () => onTap("interviews"),
-            ),
-            ListTile(
-              leading: const Icon(Icons.description, color: Colors.white),
-              title: const Text("CV Review",
-                  style: TextStyle(color: Colors.white)),
-              onTap: () => onTap("cv_review"),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

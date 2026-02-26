@@ -127,7 +127,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       if (user is Map<String, dynamic>) {
         await AuthService.saveUserInfo(user);
       }
-      if (mounted) setState(() => _userName = AuthService.getCachedDisplayName());
+      if (mounted)
+        setState(() => _userName = AuthService.getCachedDisplayName());
     } catch (_) {
       // Best-effort: avoid blocking dashboard load
     }
@@ -471,8 +472,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                                   'assets/images/Warning_Error_Red_Badge_White.png',
                                   'Role Access',
                                   'roles'),
-                              _sidebarEntry('assets/images/candidates.png', 'Candidates',
-                                  'all_candidates'),
+                              _sidebarEntry('assets/images/candidates.png',
+                                  'Candidates', 'all_candidates'),
                             ],
                           ),
                         ),
@@ -1265,31 +1266,31 @@ class _AdminDAshboardState extends State<AdminDAshboard>
         "title": "Jobs",
         "count": jobsCount,
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/jobs.png" // or .svg if using SVG
+        "icon": "assets/images/Approval_Red_Badge_White.png"
       },
       {
         "title": "Candidates",
         "count": candidatesCount,
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/candidates.png"
+        "icon": "assets/images/candidates.png"
       },
       {
         "title": "Interviews",
         "count": interviewsCount,
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/interview.png"
+        "icon": "assets/images/red_Management_Red_Badge_White.png"
       },
       {
         "title": "CV Reviews",
         "count": cvReviewsCount,
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/review.png"
+        "icon": "assets/images/Goal_Target_White_Badge_Red_Badge_White.png"
       },
       {
         "title": "Audits",
         "count": auditsCount,
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/audit.png"
+        "icon": "assets/images/deadline.png"
       },
     ];
     final departmentData = [

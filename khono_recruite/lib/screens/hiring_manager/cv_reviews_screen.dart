@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:percent_indicator/percent_indicator.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/admin_service.dart';
 import '../../providers/theme_provider.dart';
 
@@ -18,6 +18,9 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   List<Map<String, dynamic>> allCVs = [];
   bool loading = true;
   bool showAllCVs = false;
+  String searchQuery = '';
+  String selectedGender = 'All';
+  String selectedScoreFilter = 'All';
 
   @override
   void initState() {
@@ -46,7 +49,49 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   }
 
   List<Map<String, dynamic>> get displayedCVs {
-    return showAllCVs ? allCVs : cvReviews;
+    var base = showAllCVs ? allCVs : cvReviews;
+
+    // Filter by search query
+    if (searchQuery.isNotEmpty) {
+      base = base
+          .where((cv) =>
+              (cv['full_name'] as String?)
+                  ?.toLowerCase()
+                  .contains(searchQuery.toLowerCase()) ??
+              false)
+          .toList();
+    }
+
+    // Filter by gender
+    if (selectedGender != 'All') {
+      base = base.where((cv) => cv['gender'] == selectedGender).toList();
+    }
+
+    // Filter by score
+    if (selectedScoreFilter != 'All') {
+      switch (selectedScoreFilter) {
+        case 'Above 70%':
+          base = base.where((cv) {
+            double score = (cv['cv_score'] as num?)?.toDouble() ?? 0.0;
+            return score >= 70;
+          }).toList();
+          break;
+        case 'Above 50%':
+          base = base.where((cv) {
+            double score = (cv['cv_score'] as num?)?.toDouble() ?? 0.0;
+            return score >= 50;
+          }).toList();
+          break;
+        case 'Below 50%':
+          base = base.where((cv) {
+            double score = (cv['cv_score'] as num?)?.toDouble() ?? 0.0;
+            return score < 50;
+          }).toList();
+          break;
+      }
+    }
+
+    return base;
   }
 
   Color getScoreColor(double score) {
@@ -64,12 +109,6 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final screenWidth = MediaQuery.of(context).size.width;
-    final crossAxisCount = screenWidth > 1000
-        ? 3
-        : screenWidth > 600
-            ? 2
-            : 1;
 
     return Scaffold(
       // 🌆 Dynamic background implementation
@@ -273,12 +312,12 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                 horizontal: 16, vertical: 12),
                                             decoration: BoxDecoration(
                                               color: !showAllCVs
-                                                  ? Colors.redAccent
+                                                  ? const Color(0xFFC10D00)
                                                   : Colors.transparent,
                                               borderRadius:
                                                   BorderRadius.circular(8),
                                               border: Border.all(
-                                                color: Colors.redAccent
+                                                color: const Color(0xFFC10D00)
                                                     .withValues(alpha: 0.3),
                                               ),
                                             ),
@@ -288,7 +327,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                               style: GoogleFonts.inter(
                                                 color: !showAllCVs
                                                     ? Colors.white
-                                                    : Colors.redAccent,
+                                                    : const Color(0xFFC10D00),
                                                 fontWeight: FontWeight.w600,
                                                 fontSize: 14,
                                               ),
@@ -306,12 +345,12 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                 horizontal: 16, vertical: 12),
                                             decoration: BoxDecoration(
                                               color: showAllCVs
-                                                  ? Colors.blue
+                                                  ? const Color(0xFFC10D00)
                                                   : Colors.transparent,
                                               borderRadius:
                                                   BorderRadius.circular(8),
                                               border: Border.all(
-                                                color: Colors.blue
+                                                color: const Color(0xFFC10D00)
                                                     .withValues(alpha: 0.3),
                                               ),
                                             ),
@@ -321,7 +360,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                               style: GoogleFonts.inter(
                                                 color: showAllCVs
                                                     ? Colors.white
-                                                    : Colors.blue,
+                                                    : const Color(0xFFC10D00),
                                                 fontWeight: FontWeight.w600,
                                                 fontSize: 14,
                                               ),
@@ -331,23 +370,144 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                       ),
                                     ],
                                   ),
+                                  const SizedBox(height: 16),
+                                  // Search and filters row
+                                  Row(
+                                    children: [
+                                      // Search bar
+                                      Expanded(
+                                        flex: 2,
+                                        child: TextField(
+                                          onChanged: (value) => setState(
+                                              () => searchQuery = value),
+                                          decoration: InputDecoration(
+                                            hintText: 'Search by name...',
+                                            hintStyle: TextStyle(
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.white54
+                                                    : Colors.black54),
+                                            prefixIcon: Icon(Icons.search,
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.white70
+                                                    : Colors.black54),
+                                            border: OutlineInputBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            filled: true,
+                                            fillColor: themeProvider.isDarkMode
+                                                ? Colors.grey[800]
+                                                : Colors.grey[100],
+                                          ),
+                                          style: TextStyle(
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      // Gender filter
+                                      Expanded(
+                                        child: DropdownButtonFormField<String>(
+                                          value: selectedGender,
+                                          onChanged: (value) => setState(
+                                              () => selectedGender = value!),
+                                          items: ['All', 'Male', 'Female']
+                                              .map((gender) => DropdownMenuItem(
+                                                    value: gender,
+                                                    child: Text(gender,
+                                                        style: TextStyle(
+                                                            color: themeProvider
+                                                                    .isDarkMode
+                                                                ? Colors.white
+                                                                : Colors
+                                                                    .black)),
+                                                  ))
+                                              .toList(),
+                                          decoration: InputDecoration(
+                                            labelText: 'Gender',
+                                            labelStyle: TextStyle(
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.white70
+                                                    : Colors.black54),
+                                            border: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8)),
+                                            filled: true,
+                                            fillColor: themeProvider.isDarkMode
+                                                ? Colors.grey[800]
+                                                : Colors.grey[100],
+                                          ),
+                                          dropdownColor:
+                                              themeProvider.isDarkMode
+                                                  ? Colors.grey[800]
+                                                  : Colors.white,
+                                          style: TextStyle(
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      // Score filter
+                                      Expanded(
+                                        child: DropdownButtonFormField<String>(
+                                          value: selectedScoreFilter,
+                                          onChanged: (value) => setState(() =>
+                                              selectedScoreFilter = value!),
+                                          items: [
+                                            'All',
+                                            'Above 70%',
+                                            'Above 50%',
+                                            'Below 50%'
+                                          ]
+                                              .map((filter) => DropdownMenuItem(
+                                                    value: filter,
+                                                    child: Text(filter,
+                                                        style: TextStyle(
+                                                            color: themeProvider
+                                                                    .isDarkMode
+                                                                ? Colors.white
+                                                                : Colors
+                                                                    .black)),
+                                                  ))
+                                              .toList(),
+                                          decoration: InputDecoration(
+                                            labelText: 'Score',
+                                            labelStyle: TextStyle(
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.white70
+                                                    : Colors.black54),
+                                            border: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8)),
+                                            filled: true,
+                                            fillColor: themeProvider.isDarkMode
+                                                ? Colors.grey[800]
+                                                : Colors.grey[100],
+                                          ),
+                                          dropdownColor:
+                                              themeProvider.isDarkMode
+                                                  ? Colors.grey[800]
+                                                  : Colors.white,
+                                          style: TextStyle(
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ],
                               ),
                             ),
                             const SizedBox(height: 20),
 
-                            // Grid of CV reviews
+                            // Candidate CV Cards
                             Expanded(
-                              child: GridView.builder(
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: crossAxisCount,
-                                  mainAxisSpacing: 20,
-                                  crossAxisSpacing: 20,
-                                  childAspectRatio: 0.75,
-                                ),
+                              child: ListView.builder(
                                 itemCount: displayedCVs.length,
-                                itemBuilder: (_, index) {
+                                itemBuilder: (context, index) {
                                   final review = displayedCVs[index];
                                   final hasScore =
                                       review.containsKey('cv_score') &&
@@ -355,434 +515,252 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                   final score = hasScore
                                       ? (review['cv_score'] ?? 0).toDouble()
                                       : 0.0;
-                                  final scoreColor = hasScore
-                                      ? getScoreColor(score)
-                                      : Colors.grey;
-                                  final scoreLabel = hasScore
-                                      ? getScoreLabel(score)
-                                      : 'Not Reviewed';
+                                  final cvUrl = review['cv_url'] as String?;
 
-                                  final cvParser =
-                                      review['cv_parser_result'] ?? {};
-                                  final skills = cvParser['skills'] ?? [];
-                                  final education = cvParser['education'] ?? [];
-                                  final workExp =
-                                      cvParser['work_experience'] ?? [];
-
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      color: (themeProvider.isDarkMode
-                                              ? const Color(0xFF14131E)
-                                              : Colors.white)
-                                          .withValues(alpha: 0.9),
-                                      borderRadius: BorderRadius.circular(20),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black
-                                              .withValues(alpha: 0.1),
-                                          blurRadius: 15,
-                                          offset: const Offset(0, 6),
-                                        ),
-                                      ],
+                                  return Card(
+                                    margin: const EdgeInsets.symmetric(
+                                        vertical: 8, horizontal: 16),
+                                    elevation: 8,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
                                     ),
-                                    child: Column(
-                                      children: [
-                                        // Header with score
-                                        Container(
-                                          padding: const EdgeInsets.all(20),
-                                          decoration: BoxDecoration(
-                                            color: scoreColor.withValues(
-                                                alpha: 0.1),
-                                            borderRadius:
-                                                const BorderRadius.only(
-                                              topLeft: Radius.circular(20),
-                                              topRight: Radius.circular(20),
-                                            ),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Stack(
-                                                alignment: Alignment.center,
-                                                children: [
-                                                  if (hasScore)
-                                                    CircularPercentIndicator(
-                                                      radius: 30,
-                                                      lineWidth: 6,
-                                                      percent: (score / 100)
-                                                          .clamp(0.0, 1.0),
-                                                      center: Text(
-                                                        "${score.toStringAsFixed(0)}%",
-                                                        style:
-                                                            GoogleFonts.inter(
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 14,
-                                                          color: scoreColor,
-                                                        ),
-                                                      ),
-                                                      progressColor: scoreColor,
-                                                      backgroundColor:
-                                                          themeProvider
-                                                                  .isDarkMode
-                                                              ? Colors
-                                                                  .grey.shade800
-                                                              : Colors.grey
-                                                                  .shade200,
-                                                      circularStrokeCap:
-                                                          CircularStrokeCap
-                                                              .round,
-                                                    )
-                                                  else
-                                                    Container(
-                                                      width: 60,
-                                                      height: 60,
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.grey
-                                                            .withValues(
-                                                                alpha: 0.2),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(30),
-                                                      ),
-                                                      child: Icon(
-                                                        Icons.help_outline,
-                                                        color: Colors.grey,
-                                                        size: 24,
-                                                      ),
-                                                    ),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(16),
+                                        gradient: LinearGradient(
+                                          colors: themeProvider.isDarkMode
+                                              ? [
+                                                  const Color(0xFF1E1E2E)
+                                                      .withValues(alpha: 0.9),
+                                                  const Color(0xFF2A2A3E)
+                                                      .withValues(alpha: 0.9),
+                                                ]
+                                              : [
+                                                  Colors.white
+                                                      .withValues(alpha: 0.95),
+                                                  Colors.grey.shade50
+                                                      .withValues(alpha: 0.95),
                                                 ],
-                                              ),
-                                              const SizedBox(width: 16),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      review['full_name'] ??
-                                                          "Unknown Candidate",
-                                                      style: GoogleFonts.inter(
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        color: themeProvider
-                                                                .isDarkMode
-                                                            ? Colors.white
-                                                            : Colors.black87,
-                                                      ),
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Container(
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          horizontal: 8,
-                                                          vertical: 4),
-                                                      decoration: BoxDecoration(
-                                                        color: scoreColor
-                                                            .withValues(
-                                                                alpha: 0.2),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(6),
-                                                      ),
-                                                      child: Text(
-                                                        scoreLabel,
-                                                        style:
-                                                            GoogleFonts.inter(
-                                                          color: scoreColor,
-                                                          fontSize: 10,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
                                         ),
-
-                                        Expanded(
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(20),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black
+                                                .withValues(alpha: 0.1),
+                                            blurRadius: 12,
+                                            offset: const Offset(0, 6),
+                                          ),
+                                        ],
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(20),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            // Header with Name and Gender
+                                            Row(
                                               children: [
-                                                // CV Fit Score
-                                                Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Row(
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .spaceBetween,
-                                                      children: [
-                                                        Text(
-                                                          "CV Fit Score",
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            fontSize: 12,
-                                                            color: themeProvider
-                                                                    .isDarkMode
-                                                                ? Colors.grey
-                                                                    .shade400
-                                                                : Colors.grey
-                                                                    .shade700,
-                                                          ),
-                                                        ),
-                                                        Text(
-                                                          hasScore
-                                                              ? "${score.toStringAsFixed(1)}%"
-                                                              : "N/A",
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            fontSize: 12,
-                                                            color: scoreColor,
-                                                          ),
-                                                        ),
+                                                Container(
+                                                  width: 48,
+                                                  height: 48,
+                                                  decoration: BoxDecoration(
+                                                    shape: BoxShape.circle,
+                                                    gradient: LinearGradient(
+                                                      colors: [
+                                                        const Color(0xFFC10D00),
+                                                        Colors.red.shade700,
                                                       ],
                                                     ),
-                                                    const SizedBox(height: 8),
-                                                    if (hasScore)
-                                                      LinearPercentIndicator(
-                                                        lineHeight: 6,
-                                                        percent: (score / 100)
-                                                            .clamp(0.0, 1.0),
-                                                        backgroundColor:
-                                                            themeProvider.isDarkMode
-                                                                ? Colors.grey
-                                                                    .shade800
-                                                                : Colors.grey
-                                                                    .shade200,
-                                                        progressColor:
-                                                            scoreColor,
-                                                        barRadius: const Radius
-                                                            .circular(3),
-                                                      )
-                                                    else
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons.person,
+                                                    color: Colors.white,
+                                                    size: 24,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 16),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Text(
+                                                        review['full_name'] ??
+                                                            'Unknown Candidate',
+                                                        style:
+                                                            GoogleFonts.inter(
+                                                          fontSize: 18,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                          color: themeProvider
+                                                                  .isDarkMode
+                                                              ? Colors.white
+                                                              : Colors.black87,
+                                                        ),
+                                                        maxLines: 2,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                      const SizedBox(height: 4),
                                                       Container(
-                                                        height: 6,
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                                horizontal: 10,
+                                                                vertical: 4),
                                                         decoration:
                                                             BoxDecoration(
-                                                          color: Colors.grey
+                                                          color: (review['gender'] ==
+                                                                      'Male'
+                                                                  ? Colors.blue
+                                                                  : review['gender'] ==
+                                                                          'Female'
+                                                                      ? Colors
+                                                                          .pink
+                                                                      : Colors
+                                                                          .grey)
                                                               .withValues(
-                                                                  alpha: 0.3),
+                                                                  alpha: 0.1),
                                                           borderRadius:
                                                               BorderRadius
-                                                                  .circular(3),
-                                                        ),
-                                                      ),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 16),
-
-                                                // Skills
-                                                if (skills.isNotEmpty)
-                                                  Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        "Skills",
-                                                        style:
-                                                            GoogleFonts.inter(
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          fontSize: 12,
-                                                          color: themeProvider
-                                                                  .isDarkMode
-                                                              ? Colors
-                                                                  .grey.shade400
-                                                              : Colors.grey
-                                                                  .shade700,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 8),
-                                                      Wrap(
-                                                        spacing: 6,
-                                                        runSpacing: 6,
-                                                        children: skills
-                                                            .take(4)
-                                                            .map<Widget>(
-                                                                (s) =>
-                                                                    Container(
-                                                                      padding: const EdgeInsets
-                                                                          .symmetric(
-                                                                          horizontal:
-                                                                              8,
-                                                                          vertical:
-                                                                              4),
-                                                                      decoration:
-                                                                          BoxDecoration(
-                                                                        color: Colors
-                                                                            .redAccent
-                                                                            .withValues(alpha: 0.1),
-                                                                        borderRadius:
-                                                                            BorderRadius.circular(12),
-                                                                      ),
-                                                                      child:
-                                                                          Text(
-                                                                        s.toString(),
-                                                                        style: GoogleFonts
-                                                                            .inter(
-                                                                          fontSize:
-                                                                              10,
-                                                                          color:
-                                                                              Colors.redAccent,
-                                                                          fontWeight:
-                                                                              FontWeight.w500,
-                                                                        ),
-                                                                      ),
-                                                                    ))
-                                                            .toList(),
-                                                      ),
-                                                      if (skills.length > 4)
-                                                        Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .only(top: 4),
-                                                          child: Text(
-                                                            "+${skills.length - 4} more",
-                                                            style: GoogleFonts
-                                                                .inter(
-                                                              fontSize: 10,
-                                                              color: themeProvider
-                                                                      .isDarkMode
-                                                                  ? Colors.grey
-                                                                      .shade500
-                                                                  : Colors.grey
-                                                                      .shade500,
-                                                            ),
+                                                                  .circular(12),
+                                                          border: Border.all(
+                                                            color: (review['gender'] ==
+                                                                        'Male'
+                                                                    ? Colors
+                                                                        .blue
+                                                                    : review['gender'] ==
+                                                                            'Female'
+                                                                        ? Colors
+                                                                            .pink
+                                                                        : Colors
+                                                                            .grey)
+                                                                .withValues(
+                                                                    alpha: 0.3),
                                                           ),
                                                         ),
-                                                      const SizedBox(
-                                                          height: 12),
-                                                    ],
-                                                  ),
-
-                                                // Education
-                                                if (education.isNotEmpty)
-                                                  Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        "Education",
-                                                        style:
-                                                            GoogleFonts.inter(
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          fontSize: 12,
-                                                          color: themeProvider
-                                                                  .isDarkMode
-                                                              ? Colors
-                                                                  .grey.shade400
-                                                              : Colors.grey
-                                                                  .shade700,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 6),
-                                                      ...education
-                                                          .take(2)
-                                                          .map<Widget>(
-                                                              (edu) => Padding(
-                                                                    padding: const EdgeInsets
-                                                                        .only(
-                                                                        bottom:
-                                                                            4),
-                                                                    child: Text(
-                                                                      "• ${edu['degree'] ?? ''} - ${edu['institution'] ?? ''}",
-                                                                      style: GoogleFonts
-                                                                          .inter(
-                                                                        fontSize:
-                                                                            10,
-                                                                        color: themeProvider.isDarkMode
-                                                                            ? Colors.grey.shade500
-                                                                            : Colors.grey.shade600,
-                                                                      ),
-                                                                      maxLines:
-                                                                          1,
-                                                                      overflow:
-                                                                          TextOverflow
-                                                                              .ellipsis,
-                                                                    ),
-                                                                  )),
-                                                      const SizedBox(
-                                                          height: 12),
-                                                    ],
-                                                  ),
-
-                                                // Work Experience
-                                                if (workExp.isNotEmpty)
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Text(
-                                                          "Experience",
+                                                        child: Text(
+                                                          review['gender'] ??
+                                                              'N/A',
                                                           style:
                                                               GoogleFonts.inter(
+                                                            fontSize: 12,
                                                             fontWeight:
                                                                 FontWeight.w600,
-                                                            fontSize: 12,
-                                                            color: themeProvider
-                                                                    .isDarkMode
-                                                                ? Colors.grey
-                                                                    .shade400
-                                                                : Colors.grey
-                                                                    .shade700,
+                                                            color: review[
+                                                                        'gender'] ==
+                                                                    'Male'
+                                                                ? Colors.blue
+                                                                    .shade700
+                                                                : review['gender'] ==
+                                                                        'Female'
+                                                                    ? Colors
+                                                                        .pink
+                                                                        .shade700
+                                                                    : Colors
+                                                                        .grey
+                                                                        .shade700,
                                                           ),
                                                         ),
-                                                        const SizedBox(
-                                                            height: 6),
-                                                        ...workExp
-                                                            .take(2)
-                                                            .map<Widget>(
-                                                                (exp) =>
-                                                                    Padding(
-                                                                      padding: const EdgeInsets
-                                                                          .only(
-                                                                          bottom:
-                                                                              4),
-                                                                      child:
-                                                                          Text(
-                                                                        "• ${exp['role'] ?? ''} at ${exp['company'] ?? ''}",
-                                                                        style: GoogleFonts
-                                                                            .inter(
-                                                                          fontSize:
-                                                                              10,
-                                                                          color: themeProvider.isDarkMode
-                                                                              ? Colors.grey.shade500
-                                                                              : Colors.grey.shade600,
-                                                                        ),
-                                                                        maxLines:
-                                                                            1,
-                                                                        overflow:
-                                                                            TextOverflow.ellipsis,
-                                                                      ),
-                                                                    )),
-                                                      ],
-                                                    ),
+                                                      ),
+                                                    ],
                                                   ),
+                                                ),
                                               ],
                                             ),
-                                          ),
+                                            const SizedBox(height: 16),
+                                            // Score Section
+                                            Container(
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: hasScore
+                                                    ? Colors.amber
+                                                        .withValues(alpha: 0.1)
+                                                    : Colors.grey
+                                                        .withValues(alpha: 0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: hasScore
+                                                      ? Colors.amber.withValues(
+                                                          alpha: 0.3)
+                                                      : Colors.grey.withValues(
+                                                          alpha: 0.3),
+                                                ),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    hasScore
+                                                        ? Icons.star
+                                                        : Icons.star_border,
+                                                    color: hasScore
+                                                        ? Colors.amber.shade600
+                                                        : Colors.grey,
+                                                    size: 24,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    hasScore
+                                                        ? 'CV Score: ${score.toStringAsFixed(1)}%'
+                                                        : 'CV Score: Not Available',
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: hasScore
+                                                          ? Colors
+                                                              .amber.shade800
+                                                          : Colors
+                                                              .grey.shade600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(height: 20),
+                                            // Preview Button
+                                            SizedBox(
+                                              width: double.infinity,
+                                              child: ElevatedButton.icon(
+                                                onPressed: cvUrl != null &&
+                                                        cvUrl.isNotEmpty
+                                                    ? () => launch(cvUrl)
+                                                    : null,
+                                                icon: const Icon(
+                                                    Icons.remove_red_eye),
+                                                label: const Text('Preview CV'),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: cvUrl !=
+                                                              null &&
+                                                          cvUrl.isNotEmpty
+                                                      ? const Color(0xFFC10D00)
+                                                      : Colors.grey.shade400,
+                                                  foregroundColor: Colors.white,
+                                                  padding: const EdgeInsets
+                                                      .symmetric(vertical: 14),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
+                                                  ),
+                                                  elevation: cvUrl != null &&
+                                                          cvUrl.isNotEmpty
+                                                      ? 4
+                                                      : 0,
+                                                  shadowColor:
+                                                      const Color(0xFFC10D00)
+                                                          .withValues(
+                                                              alpha: 0.3),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                      ],
+                                      ),
                                     ),
                                   );
                                 },

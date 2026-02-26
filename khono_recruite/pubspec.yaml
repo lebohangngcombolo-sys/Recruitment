@@ -128,6 +128,14 @@ flutter:
     - assets/images/DYICT.jpeg
     - assets/images/Khonology.jpeg
     - assets/images/Sipho&Charmaine.jpeg
+    - assets/images/Home_Remote_Work_Red_Badge_White.png
+    - assets/images/Approval_Red_Badge_White.png
+    - assets/images/Meeting_Red_Badge_White.png
+    - assets/images/red_Management_Red_Badge_White.png
+    - assets/images/Goal_Target_White_Badge_Red_Badge_White.png
+    - assets/images/deadline.png
+    - assets/images/Warning_Error_Red_Badge_White.png
+    - assets/images/candidates.png
 
   fonts:
     - family: Poppins

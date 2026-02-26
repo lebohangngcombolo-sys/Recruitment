@@ -1,3 +1,5 @@
+// ignore_for_file: dead_code
+
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'dart:convert';
@@ -670,6 +672,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 12),
 
                 // Content
                 Expanded(
