@@ -16,7 +16,7 @@ from app.services.file_text_extractor import extract_text_from_file
 from app.utils.decorators import role_required
 from datetime import datetime, timedelta
 import secrets
-import jwt  # ← ADD THIS IMPORT
+import jwt  # ΓåÉ ADD THIS IMPORT
 from app.utils.enrollment_schema import EnrollmentSchema
 from app.services.enrollment_service import EnrollmentService
 from app.services.ai_parser_service import analyse_resume_gemini
@@ -38,7 +38,7 @@ ROLE_DASHBOARD_MAP = {
     "admin": "/api/dashboard/admin",
     "hiring_manager": "/api/dashboard/hiring-manager",
     "candidate": "/dashboard/candidate",
-    "hr": "/api/dashboard/hr"   # ← ADDED
+    "hr": "/api/dashboard/hr"   # ΓåÉ ADDED
 }
 
 # OAuth providers config
@@ -158,11 +158,11 @@ def init_auth_routes(app):
         
             # Redirect to frontend with tokens
             frontend_redirect = (
-                f"{current_app.config['FRONTEND_URL']}/oauth-callback"  # ← CHANGED THIS LINE
+                f"{current_app.config['FRONTEND_URL']}/oauth-callback"  # ΓåÉ CHANGED THIS LINE
                 f"?access_token={access_token}&refresh_token={refresh_token}&role={user.role}"
             )
         
-            current_app.logger.info(f"SSO Login: {user.email} ({user.role}) → {frontend_redirect}")
+            current_app.logger.info(f"SSO Login: {user.email} ({user.role}) ΓåÆ {frontend_redirect}")
             return redirect(frontend_redirect)
         
         except jwt.ExpiredSignatureError:
@@ -210,7 +210,7 @@ def init_auth_routes(app):
             oauth.google.authorize_access_token()
             user_info = oauth.google.get(OAUTH_PROVIDERS["google"]["userinfo"]["url"]).json()
         
-            # ⚡ handle_oauth_callback() already returns redirect()
+            # ΓÜí handle_oauth_callback() already returns redirect()
             return handle_oauth_callback("google", user_info)
 
         except Exception as e:
@@ -291,24 +291,24 @@ def init_auth_routes(app):
             access_token = create_access_token(identity=str(user.id), additional_claims=additional_claims)
             refresh_token = create_refresh_token(identity=str(user.id), additional_claims=additional_claims)
 
-            # ✅ Determine dashboard route safely (fixed)
+            # Γ£à Determine dashboard route safely (fixed)
             dashboard_path = (
                 "/enrollment"
                 if user.role == "candidate" and not getattr(user, "enrollment_completed", False)
                 else ROLE_DASHBOARD_MAP.get(user.role, "/dashboard")
             )
 
-            # ✅ Ensure no accidental /api/ prefix (this is your issue)
+            # Γ£à Ensure no accidental /api/ prefix (this is your issue)
             if dashboard_path.startswith("/api/"):
                 dashboard_path = dashboard_path.replace("/api", "", 1)
 
-            # ✅ Redirect to frontend cleanly
+            # Γ£à Redirect to frontend cleanly
             frontend_redirect = (
                 f"{current_app.config['FRONTEND_URL']}/oauth-callback"
                 f"?access_token={access_token}&refresh_token={refresh_token}&role={user.role}"
             )
 
-            current_app.logger.info(f"Redirecting {user.email} ({user.role}) → {frontend_redirect}")
+            current_app.logger.info(f"Redirecting {user.email} ({user.role}) ΓåÆ {frontend_redirect}")
             return redirect(frontend_redirect)
 
 
@@ -427,6 +427,37 @@ def init_auth_routes(app):
             current_app.logger.error(f'Verification error: {str(e)}', exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
 
+    # ------------------- RESEND VERIFICATION CODE -------------------
+    @app.route('/api/auth/resend-verification', methods=['POST'])
+    @limiter.limit("5 per minute")
+    def resend_verification():
+        try:
+            data = request.get_json(silent=True) or {}
+            email = (data.get('email') or '').strip().lower()
+            if not email:
+                return jsonify({'error': 'Email is required'}), 400
+            user = User.query.filter(db.func.lower(User.email) == email).first()
+            if not user:
+                return jsonify({'error': 'No account found for this email'}), 404
+            if user.is_verified:
+                return jsonify({'message': 'Email already verified'}), 200
+            VerificationCode.query.filter_by(email=email, is_used=False).delete()
+            code = f"{secrets.randbelow(1_000_000):06d}"
+            expires_at = datetime.utcnow() + timedelta(minutes=30)
+            verification_code = VerificationCode(
+                email=email,
+                code=code,
+                expires_at=expires_at
+            )
+            db.session.add(verification_code)
+            db.session.commit()
+            EmailService.send_verification_email(email, code)
+            return jsonify({'message': 'Verification code sent'}), 200
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Resend verification error: {str(e)}', exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+
     # ------------------- LOGIN -------------------
     @app.route('/api/auth/login', methods=['POST'])
     @limiter.limit("10 per minute")  # Add this line
@@ -444,7 +475,7 @@ def init_auth_routes(app):
             if not all([email, password]):
                 return jsonify({
                     'error': 'Email and password are required.',
-                    'hint': 'In Postman: Body → raw → JSON, and add Header: Content-Type = application/json'
+                    'hint': 'In Postman: Body ΓåÆ raw ΓåÆ JSON, and add Header: Content-Type = application/json'
                 }), 400
 
             email = email.strip().lower()
@@ -462,16 +493,16 @@ def init_auth_routes(app):
                 current_app.logger.warning(f'Password verification failed: {pw_err}')
                 return jsonify({'error': 'Invalid credentials'}), 401
 
-            # # ---- Handle unverified user ----
-            # # if not user.is_verified:
-            # #     AuditService.log(user_id=user.id, action="login_attempt_unverified")
-            # #     return jsonify({
-            # #         'message': 'Please verify your email before continuing.',
-            # #         'redirect': '/verify-email',
-            # #         'verified': False
-            #     }), 403
+            # ---- Handle unverified user ----
+            if not user.is_verified:
+                AuditService.log(user_id=user.id, action="login_attempt_unverified")
+                return jsonify({
+                    'message': 'Please verify your email before continuing.',
+                    'redirect': '/verify-email',
+                    'verified': False
+                }), 403
 
-            # 🆕 MFA CHECK - If MFA enabled, return MFA session token instead of final tokens
+            # ≡ƒåò MFA CHECK - If MFA enabled, return MFA session token instead of final tokens
             if user.mfa_enabled:
                 # Create temporary MFA session token (5 minutes)
                 mfa_session_token = create_access_token(

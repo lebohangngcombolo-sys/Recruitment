@@ -54,45 +54,29 @@ server/scripts/token.pickle
 server/token.pickle
 server/scripts/credentials.json
 server/automated-recruitment-workflow-firebase-adminsdk-fbsvc-13e956570a.json
-
-# Flutter/Dart
-khono_recruite/build/
+ 
+# Flutter (root level)
 khono_recruite/.dart_tool/
-khono_recruite/.flutter-plugins
 khono_recruite/.flutter-plugins-dependencies
-khono_recruite/pubspec.lock
-khono_recruite/.packages
+khono_recruite/.flutter-plugins
+khono_recruite/build/
+khono_recruite/ios/.symlinks/
+khono_recruite/ios/Pods/
+khono_recruite/ios/Podfile.lock
+khono_recruite/android/.gradle/
 khono_recruite/android/app/build/
-khono_recruite/ios/build/
-
-# Logs
-*.log
-logs/
-
-# Temporary files
-*.tmp
-*.temp
-temp/
-tmp/
-
-# OS generated files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
-# Environment files (keep .env.example)
+khono_recruite/android/local.properties
+khono_recruite/android/gradlew
+khono_recruite/android/gradlew.bat
+ 
+# Additional secrets
+*.pem
+*.key
+*.p12
+*.p8
 .env.local
-.env.development
-.env.test
 .env.production
-
-# IDE specific files beyond basics
-*.sublime-project
-*.sublime-workspace
-.vscode/settings.json
-.vscode/tasks.json
-.vscode/launch.json
+ 
+# OS
+.DS_Store
+Thumbs.db

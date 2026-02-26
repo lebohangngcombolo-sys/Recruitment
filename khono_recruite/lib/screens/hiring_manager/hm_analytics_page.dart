@@ -4,6 +4,7 @@ import '../../../constants/app_colors.dart';
 import '../../widgets/widgets1/glass_card.dart';
 import '../../services/analytics_service.dart';
 import 'package:intl/intl.dart';
+import '../../utils/app_config.dart';
 
 class HMAnalyticsPage extends StatefulWidget {
   const HMAnalyticsPage({super.key});
@@ -15,8 +16,7 @@ class HMAnalyticsPage extends StatefulWidget {
 class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   bool _isLoading = true;
   String _selectedTimeRange = 'Last 6 Months';
-  final AnalyticsService _service = AnalyticsService(
-      baseUrl: 'http://127.0.0.1:5000'); // <-- set your base URL
+  final AnalyticsService _service = AnalyticsService(baseUrl: AppConfig.apiBase);
 
   // Data holders
   List<Map<String, dynamic>> _monthlyApps = [];

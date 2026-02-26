@@ -452,3 +452,79 @@ Return the response strictly as JSON.
                 parsed[key] = []
 
         return parsed
+
+    def generate_job_details(self, job_title: str) -> Dict[str, Any]:
+        """Generate job description, responsibilities, qualifications, etc. from job title."""
+        prompt = f'''
+Based on the job title "{job_title}", generate comprehensive job details in JSON format with the following structure:
+{{
+  "description": "Detailed job description (2-3 paragraphs) that clearly explains the role, its purpose, and what the candidate will be doing day-to-day",
+  "responsibilities": ["List of 5-7 specific, actionable key responsibilities as separate string items in the array"],
+  "qualifications": ["List of 5-7 required qualifications including education, experience, and specific skills"],
+  "company_details": "Professional company overview (2-3 sentences) that describes the company culture, mission, and what makes it an attractive workplace",
+  "category": "One of: Engineering, Marketing, Sales, HR, Finance, Operations, Customer Service, Product, Design, Data Science, Management",
+  "required_skills": ["List of 5-8 technical/professional skills that are essential for this role"],
+  "min_experience": "Minimum years of experience as a number (0-15+)"
+}}
+
+IMPORTANT: Return only valid JSON. Responsibilities and qualifications must be arrays of strings. category must be one of the listed values. min_experience must be a number.
+'''
+        out = self._call_generation(prompt, temperature=0.7, max_output_tokens=1024)
+        import re
+        try:
+            match = re.search(r"(\{.*\})", out, flags=re.DOTALL)
+            json_text = match.group(1) if match else out
+            parsed = json.loads(json_text)
+        except Exception:
+            logger.exception("Failed to parse job details JSON")
+            raise RuntimeError("AI returned invalid JSON for job details")
+        # Normalize to match Flutter expectations
+        if "min_experience" in parsed and isinstance(parsed["min_experience"], (int, float)):
+            parsed["min_experience"] = str(int(parsed["min_experience"]))
+        for key in ("responsibilities", "qualifications", "required_skills"):
+            if key not in parsed or not isinstance(parsed[key], list):
+                parsed[key] = []
+        return parsed
+
+    def generate_assessment_questions(
+        self, job_title: str, difficulty: str, question_count: int
+    ) -> list:
+        """Generate assessment questions for a job role."""
+        prompt = f'''
+Generate {question_count} assessment questions for a "{job_title}" position with {difficulty} difficulty level.
+
+Return the response in JSON format with this structure:
+{{
+  "questions": [
+    {{
+      "question": "Clear, specific question text",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "answer": 2,
+      "weight": 1
+    }}
+  ]
+}}
+
+Requirements:
+- Questions should be relevant to the job role
+- Difficulty level: {difficulty} (easy, medium, or hard)
+- Each question must have exactly 4 options
+- "answer" field should be the index (0-3) of the correct option
+- Questions should test practical knowledge and skills
+- Make questions specific to {job_title} responsibilities
+
+Return only valid JSON.
+'''
+        out = self._call_generation(prompt, temperature=0.7, max_output_tokens=1024)
+        import re
+        try:
+            match = re.search(r"(\{.*\})", out, flags=re.DOTALL)
+            json_text = match.group(1) if match else out
+            parsed = json.loads(json_text)
+        except Exception:
+            logger.exception("Failed to parse questions JSON")
+            raise RuntimeError("AI returned invalid JSON for questions")
+        questions = parsed.get("questions") or []
+        if not isinstance(questions, list):
+            questions = []
+        return questions

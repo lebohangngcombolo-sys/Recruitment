@@ -28,4 +28,18 @@ class AppColors {
   static const Color textDark = Color(0xFF212121); // Added textDark
   static const Color textGrey = Color(0xFF757575); // Added textGrey
   static const Color primaryWhite = Color(0xFFFFFFFF); // Added primaryWhite
+
+  // Khono Brand Colors (used by app_theme.dart)
+  static const Color khonoRed = Color(0xFFE53935);
+  static const Color khonoRedDark = Color(0xFFB71C1C);
+  static const Color khonoRedLight = Color(0xFFEF9A9A);
+  static const Color errorRed = Color(0xFFD32F2F);
+  static const Color textOnRed = Color(0xFFFFFFFF);
+  static const Color textPrimary = Color(0xFF212121);
+  static const Color textSecondary = Color(0xFF757575);
+  static const Color textDisabled = Color(0xFFBDBDBD);
+  static const Color grey200 = Color(0xFFEEEEEE);
+  static const Color grey400 = Color(0xFFBDBDBD);
+  static const Color cardBackground = Color(0xFFFFFFFF);
+  static const Color dialogBackground = Color(0xFFFFFFFF);
 }

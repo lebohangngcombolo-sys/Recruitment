@@ -167,6 +167,60 @@ def parse_cv():
 
 
 
+@ai_bp.route("/generate_job_details", methods=["POST"])
+@role_required(["admin", "hiring_manager"])
+def generate_job_details():
+    """
+    Generate job details (description, responsibilities, qualifications, etc.) from a job title.
+    Body: {"job_title": "Project Manager"}
+    Uses server-side OpenRouter so API keys are not exposed to the client.
+    """
+    data = request.get_json(silent=True) or {}
+    job_title = (data.get("job_title") or data.get("jobTitle") or "").strip()
+    if not job_title:
+        return jsonify({"error": "job_title is required"}), 400
+    from app.services.ai_service import AIService
+    ai = AIService()
+    try:
+        result = ai.generate_job_details(job_title)
+        return jsonify(result), 200
+    except RuntimeError as e:
+        if "OPENROUTER_API_KEY" in str(e) or "not set" in str(e).lower():
+            return jsonify({"error": "AI not configured (OPENROUTER_API_KEY not set)"}), 503
+        return jsonify({"error": str(e)}), 502
+    except Exception as e:
+        logger.exception("generate_job_details failed")
+        return jsonify({"error": "AI generation failed", "details": str(e)}), 502
+
+
+@ai_bp.route("/generate_questions", methods=["POST"])
+@role_required(["admin", "hiring_manager"])
+def generate_questions():
+    """
+    Generate assessment questions for a job role.
+    Body: {"job_title": "...", "difficulty": "medium", "question_count": 5}
+    """
+    data = request.get_json(silent=True) or {}
+    job_title = (data.get("job_title") or data.get("jobTitle") or "").strip()
+    difficulty = (data.get("difficulty") or "medium").strip()
+    question_count = int(data.get("question_count") or data.get("questionCount") or 5)
+    question_count = max(1, min(20, question_count))
+    if not job_title:
+        return jsonify({"error": "job_title is required"}), 400
+    from app.services.ai_service import AIService
+    ai = AIService()
+    try:
+        questions = ai.generate_assessment_questions(job_title, difficulty, question_count)
+        return jsonify({"questions": questions}), 200
+    except RuntimeError as e:
+        if "OPENROUTER_API_KEY" in str(e) or "not set" in str(e).lower():
+            return jsonify({"error": "AI not configured (OPENROUTER_API_KEY not set)"}), 503
+        return jsonify({"error": str(e)}), 502
+    except Exception as e:
+        logger.exception("generate_questions failed")
+        return jsonify({"error": "AI generation failed", "details": str(e)}), 502
+
+
 @ai_bp.route("/analysis/<int:analysis_id>", methods=["GET"])
 @role_required(["candidate"])
 def get_analysis(analysis_id):

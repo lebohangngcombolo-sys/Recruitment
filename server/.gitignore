@@ -1,4 +1,4 @@
-.env
+﻿.env
 .env.*
 **/.env
 **/.env.*
@@ -230,5 +230,5 @@ Basic usage
 For the basic usage introduction we will be installing pendulum, a datetime library.
 If you have not yet installed Poetry, refer to the Introduction chapter.
 Project setup
-First, let’s ...
+First, letΓÇÖs ...
  
