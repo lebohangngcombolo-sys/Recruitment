@@ -1,8 +1,7 @@
-// ignore_for_file: unused_element
-
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
+import 'package:syncfusion_flutter_calendar/calendar.dart';
 import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
 import 'candidate_management_screen.dart';
@@ -10,9 +9,9 @@ import 'cv_reviews_screen.dart';
 import 'notifications_screen.dart';
 import 'job_management.dart';
 import 'interviews_list_screen.dart';
+import 'offer_list_screen.dart';
 import 'hm_analytics_page.dart';
 import 'hm_team_collaboration_page.dart';
-import 'offer_list_screen.dart';
 import 'pipeline_page.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
@@ -58,6 +57,31 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   int newApplicationsWeek = 0;
   int newInterviewsWeek = 0;
 
+  // Candidate-related variables
+  bool loadingCandidates = true;
+  int candidatePage = 1;
+  int candidatePerPage = 20;
+  List<Map<String, dynamic>> candidates = [];
+  String? candidateSearchQuery;
+  String? candidateStatusFilter;
+
+  // Chart data variables
+  bool loadingChartData = true;
+  List<_ChartData> candidatePipelineData = [];
+  List<_ChartData> timeToFillData = [];
+  List<_ChartData> genderData = [];
+  List<_ChartData> ethnicityData = [];
+  List<_ChartData> sourcePerformanceData = [];
+  List<_ChartData> skillsData = [];
+  List<_ChartData> experienceData = [];
+  List<_ChartData> cvScreeningData = [];
+  List<_ChartData> assessmentData = [];
+  List<_ChartData> auditTrendData = [];
+
+  // Additional data
+  Map<String, dynamic> candidateDemographics = {};
+  List<Map<String, dynamic>> recentCandidates = [];
+
   Map<String, dynamic> applicationStatusBreakdown = {};
 
   int? selectedJobId;
@@ -77,28 +101,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   late final AnimationController _sidebarAnimController;
   late final Animation<double> _sidebarWidthAnimation;
 
-  // --- Candidate Data ---
-  List<Map<String, dynamic>> candidates = [];
-  List<Map<String, dynamic>> recentCandidates = [];
-  Map<String, dynamic> candidateDemographics = {};
-  bool loadingCandidates = true;
-  int candidatePage = 1;
-  int candidatePerPage = 20;
-  String? candidateSearchQuery;
-  String? candidateStatusFilter;
-
-  // --- Chart Data ---
-  List<_ChartData> candidatePipelineData = [];
-  List<_ChartData> timeToFillData = [];
-  List<_ChartData> genderData = [];
-  List<_ChartData> ethnicityData = [];
-  List<_ChartData> sourcePerformanceData = [];
-  List<_ChartData> skillsData = [];
-  List<_ChartData> experienceData = [];
-  List<_ChartData> cvScreeningData = [];
-  List<_ChartData> assessmentData = [];
-  List<_ChartData> auditTrendData = [];
-  bool loadingChartData = true;
+  // --- Team Collaboration mock data (previously audits) ---
+  List<String> teamMessages = [
+    "John: Completed the candidate screening.",
+    "Mary: Scheduled interviews for next week.",
+    "Alex: Uploaded new CVs to review.",
+    "Lisa: Updated job descriptions.",
+  ];
 
   // --- Audits ---
   List<Map<String, dynamic>> audits = [];
@@ -246,16 +255,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             ScaffoldMessenger.of(context).hideCurrentSnackBar();
           },
         ),
-      ),
-    );
-  }
-
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -738,7 +737,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
-      // 🌆 Dynamic background implementation
+      // ≡ƒîå Dynamic background implementation
       body: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
@@ -895,7 +894,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     ),
                                   ),
                                 ),
-                              const SizedBox(height: 6),
+                              const SizedBox(height: 12),
                               if (!sidebarCollapsed)
                                 ElevatedButton.icon(
                                   onPressed: () =>
@@ -1320,18 +1319,43 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       },
     ];
 
-    // Data will be fetched from API
-    final List<_ChartData> candidatePipeline = candidatePipelineData;
+    final candidatePipeline = [
+      _ChartData("Applied", 48),
+      _ChartData("Screened", 34),
+      _ChartData("Interviewed", 22),
+      _ChartData("Offers", 9),
+      _ChartData("Hires", 5),
+    ];
 
-    // Data will be fetched from API
-    final List<_ChartData> timeToFill = timeToFillData;
+    final timeToFill = [
+      _ChartData("Jan", 35),
+      _ChartData("Feb", 32),
+      _ChartData("Mar", 30),
+      _ChartData("Apr", 28),
+      _ChartData("May", 27),
+      _ChartData("Jun", 25),
+    ];
 
-    // Data will be fetched from API
-    final List<_ChartData> genderMetrics = genderData;
-    final List<_ChartData> ethnicityMetrics = ethnicityData;
+    final genderData = [
+      _ChartData("Female", 52),
+      _ChartData("Male", 45),
+      _ChartData("Non-binary", 3),
+    ];
 
-    // Data will be fetched from API
-    final List<_ChartData> sourceMetrics = sourcePerformanceData;
+    final ethnicityData = [
+      _ChartData("Black", 38),
+      _ChartData("White", 32),
+      _ChartData("Indian", 15),
+      _ChartData("Coloured", 10),
+      _ChartData("Other", 5),
+    ];
+
+    final sourcePerformance = [
+      _ChartData("LinkedIn", 40),
+      _ChartData("Referral", 25),
+      _ChartData("Job Boards", 20),
+      _ChartData("Career Site", 15),
+    ];
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -1348,7 +1372,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     color: themeProvider.isDarkMode
                         ? Colors.white
                         : const Color.fromARGB(225, 20, 19, 30))),
-            const SizedBox(height: 6),
+            const SizedBox(height: 12),
 
             // KPI Cards
             // Instead of SizedBox with fixed height, use:
@@ -1402,184 +1426,26 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
             LayoutBuilder(builder: (context, constraints) {
               int crossAxisCount = constraints.maxWidth > 900 ? 2 : 1;
-              return Column(
+              double aspectRatio = constraints.maxWidth > 900 ? 2.7 : 2.2;
+              return GridView.count(
+                crossAxisCount: crossAxisCount,
+                shrinkWrap: true,
+                childAspectRatio: aspectRatio,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                physics: const NeverScrollableScrollPhysics(),
                 children: [
-                  // Row 1
-                  if (crossAxisCount == 2)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                            child: stylishBarChartCard(
-                                "Candidate Pipeline",
-                                candidatePipeline,
-                                const Color.fromARGB(255, 193, 13, 0))),
-                        const SizedBox(width: 16),
-                        Expanded(
-                            child: stylishLineChartCard(
-                                "Time to Fill Trend",
-                                timeToFill,
-                                const Color.fromARGB(255, 193, 13, 0))),
-                      ],
-                    )
-                  else
-                    Column(
-                      children: [
-                        stylishBarChartCard(
-                            "Candidate Pipeline",
-                            candidatePipeline,
-                            const Color.fromARGB(255, 193, 13, 0)),
-                        const SizedBox(height: 16),
-                        stylishLineChartCard("Time to Fill Trend", timeToFill,
-                            const Color.fromARGB(255, 193, 13, 0)),
-                      ],
-                    ),
-
-                  const SizedBox(height: 16),
-
-                  // Row 2
-                  if (crossAxisCount == 2)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                            child: stylishDualDonutCard("Diversity Metrics",
-                                genderMetrics, ethnicityMetrics)),
-                        const SizedBox(width: 16),
-                        Expanded(
-                            child: stylishBarChartCard(
-                                "Source Performance",
-                                sourceMetrics,
-                                const Color.fromARGB(255, 193, 13, 0))),
-                      ],
-                    )
-                  else
-                    Column(
-                      children: [
-                        stylishDualDonutCard("Diversity Metrics", genderMetrics,
-                            ethnicityMetrics),
-                        const SizedBox(height: 16),
-                        stylishBarChartCard("Source Performance", sourceMetrics,
-                            const Color.fromARGB(255, 193, 13, 0)),
-                      ],
-                    ),
-
-                  const SizedBox(height: 16),
-
-                  // Row 3 - Additional Analytics
-                  if (crossAxisCount == 2)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                            child: skillsData.isNotEmpty
-                                ? stylishBarChartCard("Top Skills", skillsData,
-                                    const Color.fromARGB(255, 193, 13, 0))
-                                : stylishBarChartCard("Top Skills", [],
-                                    const Color.fromARGB(255, 193, 13, 0))),
-                        const SizedBox(width: 16),
-                        Expanded(
-                            child: experienceData.isNotEmpty
-                                ? stylishBarChartCard(
-                                    "Experience Distribution",
-                                    experienceData,
-                                    const Color.fromARGB(255, 193, 13, 0))
-                                : stylishBarChartCard("Experience Distribution",
-                                    [], const Color.fromARGB(255, 193, 13, 0))),
-                      ],
-                    )
-                  else
-                    Column(
-                      children: [
-                        skillsData.isNotEmpty
-                            ? stylishBarChartCard("Top Skills", skillsData,
-                                const Color.fromARGB(255, 193, 13, 0))
-                            : stylishBarChartCard("Top Skills", [],
-                                const Color.fromARGB(255, 193, 13, 0)),
-                        const SizedBox(height: 16),
-                        experienceData.isNotEmpty
-                            ? stylishBarChartCard(
-                                "Experience Distribution",
-                                experienceData,
-                                const Color.fromARGB(255, 193, 13, 0))
-                            : stylishBarChartCard("Experience Distribution", [],
-                                const Color.fromARGB(255, 193, 13, 0)),
-                      ],
-                    ),
-
-                  const SizedBox(height: 16),
-
-                  // Row 4
-                  if (crossAxisCount == 2)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                            child: cvScreeningData.isNotEmpty
-                                ? stylishLineChartCard(
-                                    "CV Screening Trends",
-                                    cvScreeningData,
-                                    const Color.fromARGB(255, 193, 13, 0))
-                                : stylishLineChartCard("CV Screening Trends",
-                                    [], const Color.fromARGB(255, 193, 13, 0))),
-                        const SizedBox(width: 16),
-                        Expanded(
-                            child: assessmentData.isNotEmpty
-                                ? stylishLineChartCard(
-                                    "Assessment Pass Rates",
-                                    assessmentData,
-                                    const Color.fromARGB(255, 193, 13, 0))
-                                : stylishLineChartCard("Assessment Pass Rates",
-                                    [], const Color.fromARGB(255, 193, 13, 0))),
-                      ],
-                    )
-                  else
-                    Column(
-                      children: [
-                        cvScreeningData.isNotEmpty
-                            ? stylishLineChartCard(
-                                "CV Screening Trends",
-                                cvScreeningData,
-                                const Color.fromARGB(255, 193, 13, 0))
-                            : stylishLineChartCard("CV Screening Trends", [],
-                                const Color.fromARGB(255, 193, 13, 0)),
-                        const SizedBox(height: 16),
-                        assessmentData.isNotEmpty
-                            ? stylishLineChartCard(
-                                "Assessment Pass Rates",
-                                assessmentData,
-                                const Color.fromARGB(255, 193, 13, 0))
-                            : stylishLineChartCard("Assessment Pass Rates", [],
-                                const Color.fromARGB(255, 193, 13, 0)),
-                      ],
-                    ),
-
-                  const SizedBox(height: 16),
-
-                  // Row 5 - Original Row 3
-                  if (crossAxisCount == 2)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                            child: stylishTeamCollaborationCard(
-                                "Team Collaboration", [])),
-                        const SizedBox(width: 16),
-                        Expanded(child: modernCalendarCard()),
-                      ],
-                    )
-                  else
-                    Column(
-                      children: [
-                        stylishTeamCollaborationCard("Team Collaboration", []),
-                        const SizedBox(height: 16),
-                        modernCalendarCard(),
-                      ],
-                    ),
-
-                  const SizedBox(height: 16),
-
-                  // Activities card (always full width)
+                  stylishBarChartCard("Candidate Pipeline", candidatePipeline,
+                      const Color.fromARGB(255, 193, 13, 0)),
+                  stylishLineChartCard("Time to Fill Trend", timeToFill,
+                      const Color.fromARGB(255, 193, 13, 0)),
+                  stylishDualDonutCard(
+                      "Diversity Metrics", genderData, ethnicityData),
+                  stylishBarChartCard("Source Performance", sourcePerformance,
+                      const Color.fromARGB(255, 193, 13, 0)),
+                  stylishTeamCollaborationCard(
+                      "Team Collaboration", teamMessages),
+                  modernCalendarCard(),
                   stylishActivitiesCard(recentActivities),
                 ],
               );
@@ -1592,7 +1458,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   Widget teamCollaborationWidget() {
-    return stylishTeamCollaborationCard("Team Collaboration", []);
+    return stylishTeamCollaborationCard("Team Collaboration", teamMessages);
   }
 
   // ---------------- Stylish Chart Cards ----------------
@@ -1600,8 +1466,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      height: 200,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -1643,7 +1508,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 16,
                       color: themeProvider.isDarkMode
                           ? Colors.white
                           : Colors.black87)),
@@ -1662,113 +1527,52 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Flexible(
-            child: loadingChartData
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(color),
-                          strokeWidth: 3,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Loading data...',
-                          style: TextStyle(
-                            color: themeProvider.isDarkMode
-                                ? Colors.white70
-                                : Colors.grey.shade600,
-                            fontFamily: 'Poppins',
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
+          const SizedBox(height: 16),
+          Expanded(
+            child: SfCartesianChart(
+              margin: EdgeInsets.zero,
+              plotAreaBorderWidth: 0,
+              primaryXAxis: CategoryAxis(
+                majorGridLines: const MajorGridLines(width: 0),
+                axisLine: const AxisLine(width: 0),
+                labelStyle: TextStyle(
+                  color: themeProvider.isDarkMode
+                      ? Colors.grey.shade400
+                      : Colors.grey.shade700,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+              primaryYAxis: NumericAxis(
+                majorGridLines: const MajorGridLines(width: 0),
+                axisLine: const AxisLine(width: 0),
+                labelStyle: TextStyle(
+                  color: themeProvider.isDarkMode
+                      ? Colors.grey.shade400
+                      : Colors.grey.shade700,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+              series: <ColumnSeries<_ChartData, String>>[
+                ColumnSeries<_ChartData, String>(
+                  dataSource: data,
+                  xValueMapper: (d, _) => d.label,
+                  yValueMapper: (d, _) => d.value,
+                  color: color,
+                  width: 0.6,
+                  borderRadius: BorderRadius.circular(4),
+                  dataLabelSettings: DataLabelSettings(
+                    isVisible: true,
+                    textStyle: TextStyle(
+                      color: themeProvider.isDarkMode
+                          ? Colors.white
+                          : Colors.black87,
+                      fontFamily: 'Poppins',
+                      fontSize: 10,
                     ),
-                  )
-                : data.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.bar_chart_outlined,
-                              size: 48,
-                              color: themeProvider.isDarkMode
-                                  ? Colors.white24
-                                  : Colors.grey.shade300,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No data available',
-                              style: TextStyle(
-                                color: themeProvider.isDarkMode
-                                    ? Colors.white54
-                                    : Colors.grey.shade500,
-                                fontFamily: 'Poppins',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Data will appear here once available',
-                              style: TextStyle(
-                                color: themeProvider.isDarkMode
-                                    ? Colors.white38
-                                    : Colors.grey.shade400,
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : SfCartesianChart(
-                        margin: EdgeInsets.zero,
-                        plotAreaBorderWidth: 0,
-                        primaryXAxis: CategoryAxis(
-                          majorGridLines: const MajorGridLines(width: 0),
-                          axisLine: const AxisLine(width: 0),
-                          labelStyle: TextStyle(
-                            color: themeProvider.isDarkMode
-                                ? Colors.grey.shade400
-                                : Colors.grey.shade700,
-                            fontFamily: 'Poppins',
-                          ),
-                        ),
-                        primaryYAxis: NumericAxis(
-                          majorGridLines: const MajorGridLines(width: 0),
-                          axisLine: const AxisLine(width: 0),
-                          labelStyle: TextStyle(
-                            color: themeProvider.isDarkMode
-                                ? Colors.grey.shade400
-                                : Colors.grey.shade700,
-                            fontFamily: 'Poppins',
-                          ),
-                        ),
-                        series: <ColumnSeries<_ChartData, String>>[
-                          ColumnSeries<_ChartData, String>(
-                            dataSource: data,
-                            xValueMapper: (d, _) => d.label,
-                            yValueMapper: (d, _) => d.value,
-                            color: color,
-                            width: 0.6,
-                            borderRadius: BorderRadius.circular(4),
-                            dataLabelSettings: DataLabelSettings(
-                              isVisible: true,
-                              textStyle: TextStyle(
-                                color: themeProvider.isDarkMode
-                                    ? Colors.white
-                                    : Colors.black87,
-                                fontFamily: 'Poppins',
-                                fontSize: 10,
-                              ),
-                            ),
-                          )
-                        ],
-                      ),
+                  ),
+                )
+              ],
+            ),
           ),
         ],
       ),
@@ -1780,8 +1584,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      height: 200,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -1814,7 +1617,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1823,7 +1625,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 16,
                       color: themeProvider.isDarkMode
                           ? Colors.white
                           : Colors.black87)),
@@ -1848,114 +1650,52 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Flexible(
-            child: loadingChartData
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(color),
-                          strokeWidth: 3,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Loading data...',
-                          style: TextStyle(
-                            color: themeProvider.isDarkMode
-                                ? Colors.white70
-                                : Colors.grey.shade600,
-                            fontFamily: 'Poppins',
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
+          const SizedBox(height: 16),
+          Expanded(
+            child: SfCartesianChart(
+              margin: EdgeInsets.zero,
+              plotAreaBorderWidth: 0,
+              primaryXAxis: CategoryAxis(
+                majorGridLines: const MajorGridLines(width: 0),
+                axisLine: const AxisLine(width: 0),
+                labelStyle: TextStyle(
+                  color: themeProvider.isDarkMode
+                      ? Colors.grey.shade400
+                      : Colors.grey.shade700,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+              primaryYAxis: NumericAxis(
+                majorGridLines: const MajorGridLines(width: 0),
+                axisLine: const AxisLine(width: 0),
+                labelStyle: TextStyle(
+                  color: themeProvider.isDarkMode
+                      ? Colors.grey.shade400
+                      : Colors.grey.shade700,
+                  fontFamily: 'Poppins',
+                ),
+              ),
+              series: <SplineSeries<_ChartData, String>>[
+                SplineSeries<_ChartData, String>(
+                  dataSource: data,
+                  xValueMapper: (d, _) => d.label,
+                  yValueMapper: (d, _) => d.value,
+                  color: color,
+                  width: 3,
+                  markerSettings: const MarkerSettings(isVisible: true),
+                  dataLabelSettings: DataLabelSettings(
+                    isVisible: true,
+                    textStyle: TextStyle(
+                      color: themeProvider.isDarkMode
+                          ? Colors.white
+                          : Colors.black87,
+                      fontFamily: 'Poppins',
+                      fontSize: 10,
                     ),
-                  )
-                : data.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.show_chart,
-                              size: 48,
-                              color: themeProvider.isDarkMode
-                                  ? Colors.white24
-                                  : Colors.grey.shade300,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No data available',
-                              style: TextStyle(
-                                color: themeProvider.isDarkMode
-                                    ? Colors.white54
-                                    : Colors.grey.shade500,
-                                fontFamily: 'Poppins',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Trend data will appear here once available',
-                              style: TextStyle(
-                                color: themeProvider.isDarkMode
-                                    ? Colors.white38
-                                    : Colors.grey.shade400,
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : SfCartesianChart(
-                        margin: EdgeInsets.zero,
-                        plotAreaBorderWidth: 0,
-                        primaryXAxis: CategoryAxis(
-                          majorGridLines: const MajorGridLines(width: 0),
-                          axisLine: const AxisLine(width: 0),
-                          labelStyle: TextStyle(
-                            color: themeProvider.isDarkMode
-                                ? Colors.grey.shade400
-                                : Colors.grey.shade700,
-                            fontFamily: 'Poppins',
-                          ),
-                        ),
-                        primaryYAxis: NumericAxis(
-                          majorGridLines: const MajorGridLines(width: 0),
-                          axisLine: const AxisLine(width: 0),
-                          labelStyle: TextStyle(
-                            color: themeProvider.isDarkMode
-                                ? Colors.grey.shade400
-                                : Colors.grey.shade700,
-                            fontFamily: 'Poppins',
-                          ),
-                        ),
-                        series: <SplineSeries<_ChartData, String>>[
-                          SplineSeries<_ChartData, String>(
-                            dataSource: data,
-                            xValueMapper: (d, _) => d.label,
-                            yValueMapper: (d, _) => d.value,
-                            color: color,
-                            width: 3,
-                            markerSettings:
-                                const MarkerSettings(isVisible: true),
-                            dataLabelSettings: DataLabelSettings(
-                              isVisible: true,
-                              textStyle: TextStyle(
-                                color: themeProvider.isDarkMode
-                                    ? Colors.white
-                                    : Colors.black87,
-                                fontFamily: 'Poppins',
-                                fontSize: 10,
-                              ),
-                            ),
-                          )
-                        ],
-                      ),
+                  ),
+                )
+              ],
+            ),
           ),
         ],
       ),
@@ -1967,8 +1707,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      height: 200,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -2001,166 +1740,99 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
           Text(title,
               style: TextStyle(
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.bold,
-                  fontSize: 14,
+                  fontSize: 16,
                   color: themeProvider.isDarkMode
                       ? Colors.white
                       : Colors.black87)),
-          const SizedBox(height: 6),
-          Flexible(
-            child: loadingChartData
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.purple),
-                          strokeWidth: 3,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Loading diversity data...',
-                          style: TextStyle(
-                            color: themeProvider.isDarkMode
-                                ? Colors.white70
-                                : Colors.grey.shade600,
+          const SizedBox(height: 16),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: SfCircularChart(
+                    margin: EdgeInsets.zero,
+                    title: ChartTitle(
+                        text: "Gender",
+                        textStyle: TextStyle(
                             fontFamily: 'Poppins',
-                            fontSize: 14,
+                            color: themeProvider.isDarkMode
+                                ? Colors.white
+                                : Colors.black87,
+                            fontSize: 12)),
+                    legend: Legend(
+                        isVisible: true,
+                        textStyle: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: themeProvider.isDarkMode
+                                ? Colors.white
+                                : Colors.black87,
+                            fontSize: 10)),
+                    series: <DoughnutSeries<_ChartData, String>>[
+                      DoughnutSeries<_ChartData, String>(
+                        dataSource: data1,
+                        xValueMapper: (d, _) => d.label,
+                        yValueMapper: (d, _) => d.value,
+                        innerRadius: '70%',
+                        dataLabelSettings: DataLabelSettings(
+                          isVisible: true,
+                          textStyle: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 10,
+                            color: themeProvider.isDarkMode
+                                ? Colors.white
+                                : Colors.black87,
                           ),
-                        ),
-                      ],
-                    ),
-                  )
-                : data1.isEmpty && data2.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.donut_large_outlined,
-                              size: 48,
-                              color: themeProvider.isDarkMode
-                                  ? Colors.white24
-                                  : Colors.grey.shade300,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No diversity data available',
-                              style: TextStyle(
-                                color: themeProvider.isDarkMode
-                                    ? Colors.white54
-                                    : Colors.grey.shade500,
-                                fontFamily: 'Poppins',
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Diversity metrics will appear here once available',
-                              style: TextStyle(
-                                color: themeProvider.isDarkMode
-                                    ? Colors.white38
-                                    : Colors.grey.shade400,
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
                         ),
                       )
-                    : Row(
-                        children: [
-                          Expanded(
-                            child: SfCircularChart(
-                              margin: EdgeInsets.zero,
-                              title: ChartTitle(
-                                  text: "Gender",
-                                  textStyle: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87,
-                                      fontSize: 12)),
-                              legend: Legend(
-                                  isVisible: true,
-                                  textStyle: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87,
-                                      fontSize: 10)),
-                              series: <DoughnutSeries<_ChartData, String>>[
-                                DoughnutSeries<_ChartData, String>(
-                                  dataSource: data1.isEmpty
-                                      ? [_ChartData("No Data", 1)]
-                                      : data1,
-                                  xValueMapper: (d, _) => d.label,
-                                  yValueMapper: (d, _) => d.value,
-                                  innerRadius: '70%',
-                                  dataLabelSettings: DataLabelSettings(
-                                    isVisible: true,
-                                    textStyle: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 10,
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87,
-                                    ),
-                                  ),
-                                )
-                              ],
-                            ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: SfCircularChart(
+                    margin: EdgeInsets.zero,
+                    title: ChartTitle(
+                        text: "Ethnicity",
+                        textStyle: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: themeProvider.isDarkMode
+                                ? Colors.white
+                                : Colors.black87,
+                            fontSize: 12)),
+                    legend: Legend(
+                        isVisible: true,
+                        textStyle: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: themeProvider.isDarkMode
+                                ? Colors.white
+                                : Colors.black87,
+                            fontSize: 10)),
+                    series: <DoughnutSeries<_ChartData, String>>[
+                      DoughnutSeries<_ChartData, String>(
+                        dataSource: data2,
+                        xValueMapper: (d, _) => d.label,
+                        yValueMapper: (d, _) => d.value,
+                        innerRadius: '70%',
+                        dataLabelSettings: DataLabelSettings(
+                          isVisible: true,
+                          textStyle: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 10,
+                            color: themeProvider.isDarkMode
+                                ? Colors.white
+                                : Colors.black87,
                           ),
-                          Expanded(
-                            child: SfCircularChart(
-                              margin: EdgeInsets.zero,
-                              title: ChartTitle(
-                                  text: "Ethnicity",
-                                  textStyle: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87,
-                                      fontSize: 12)),
-                              legend: Legend(
-                                  isVisible: true,
-                                  textStyle: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87,
-                                      fontSize: 10)),
-                              series: <DoughnutSeries<_ChartData, String>>[
-                                DoughnutSeries<_ChartData, String>(
-                                  dataSource: data2.isEmpty
-                                      ? [_ChartData("No Data", 1)]
-                                      : data2,
-                                  xValueMapper: (d, _) => d.label,
-                                  yValueMapper: (d, _) => d.value,
-                                  innerRadius: '70%',
-                                  dataLabelSettings: DataLabelSettings(
-                                    isVisible: true,
-                                    textStyle: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 10,
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87,
-                                    ),
-                                  ),
-                                )
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -2171,8 +1843,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      height: 200,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -2213,7 +1884,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 16,
                       color: themeProvider.isDarkMode
                           ? Colors.white
                           : Colors.black87)),
@@ -2289,8 +1960,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      height: 200,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -2408,8 +2078,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
-      height: 220,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -2464,7 +2133,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
-                      fontSize: 14,
+                      fontSize: 16,
                       color: Colors.blueAccent,
                     ),
                   ),
@@ -2510,23 +2179,27 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   ),
                 ],
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Stack(
                 children: [
-                  Text(
-                    "Interview Calendar",
-                    style: Theme.of(context).textTheme.titleMedium,
+                  SfCalendar(
+                    view: CalendarView.month,
+                    monthViewSettings: MonthViewSettings(
+                      appointmentDisplayMode:
+                          MonthAppointmentDisplayMode.appointment,
+                      showAgenda: false,
+                      monthCellStyle: MonthCellStyle(
+                        textStyle: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 14,
+                          color: themeProvider.isDarkMode
+                              ? Colors.grey.shade300
+                              : Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
                   ),
-                  const SizedBox(height: 16),
-                  Container(
-                    height: 300,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Center(
-                      child: Text('Calendar functionality coming soon'),
-                    ),
+                  const Center(
+                    child: Text('Calendar functionality coming soon'),
                   ),
                 ],
               ),
@@ -2543,7 +2216,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
     return Container(
       width: 200,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2593,7 +2266,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
             count.toString(),
             style: TextStyle(

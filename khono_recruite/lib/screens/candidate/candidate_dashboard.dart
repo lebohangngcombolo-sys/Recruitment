@@ -8,6 +8,8 @@ import 'dart:ui';
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Import your existing services
 import 'job_details_page.dart';
@@ -56,6 +58,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   int? _savedCount; // saved drafts count
   Map<String, dynamic>? _pendingApplyJob;
 
+  // Profile image state
+  XFile? _profileImage;
+  Uint8List? _profileImageBytes;
+  final ImagePicker _picker = ImagePicker();
+
   @override
   void initState() {
     super.initState();
@@ -67,7 +74,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     // Use cached name so greeting shows correct name from first paint (set by login/MFA before navigate)
     _userName = AuthService.getCachedDisplayName();
     _loadPersistedNameIfNeeded();
-    // Don't restore from cache on init — show Continue section only after API returns, so no stale "Not started" cards appear
+    // Don't restore from cache on init ΓÇö show Continue section only after API returns, so no stale "Not started" cards appear
     _fetchDashboardCounts();
     _fetchUserProfile();
     _fetchNotifications();
@@ -195,20 +202,29 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   List<Map<String, dynamic>> _inProgressApplications = [];
   List<Map<String, dynamic>> _completedApplications = [];
 
-  /// Form submitted but assessment not done (status 'applied') — show "Applied" on job cards, not in Continue section.
+  /// Form submitted but assessment not done (status 'applied') ΓÇö show "Applied" on job cards, not in Continue section.
   List<Map<String, dynamic>> _appliedOnlyApplications = [];
   int _interviewsScheduledCount = 0;
   bool _dashboardCountsLoaded = false;
+  static const String _kCachedInProgressApps =
+      'candidate_in_progress_applications';
+
+  Future<void> _saveCachedInProgressApplications(
+      List<Map<String, dynamic>> list) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kCachedInProgressApps, jsonEncode(list));
+    } catch (_) {}
+  }
 
   Future<void> _fetchDashboardCounts() async {
     try {
       final results = await Future.wait([
         CandidateService.getApplications(widget.token),
         CandidateService.getDrafts(widget.token),
-        _fetchInterviewsCount(),
       ]);
       if (mounted) {
-        final apps = results[0] as List<dynamic>;
+        final apps = List<dynamic>.from(results[0]);
         final submittedOrCompletedList =
             apps.where(_isSubmittedOrCompletedApplication).toList();
         final submittedOrCompletedMaps = submittedOrCompletedList
@@ -232,13 +248,15 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             .toList();
         _safeSetState(() {
           _applicationsCount = submittedOrCompletedMaps.length;
-          _savedCount = (results[1] as List).length;
+          _savedCount = results[1].length;
           _inProgressApplications = inProgressMaps;
           _completedApplications = completedMaps;
           _appliedOnlyApplications = appliedOnlyMaps;
-          _interviewsScheduledCount = results[2] as int;
+          _interviewsScheduledCount =
+              0; // TODO: fetch from candidate interviews API
           _dashboardCountsLoaded = true;
         });
+        _saveCachedInProgressApplications(inProgressMaps);
         // If pending apply job is for a job we've already applied/completed, clear it so it doesn't show in Continue.
         final pending = await AuthService.getPendingApplyJob();
         if (pending != null && pending['id'] != null) {
@@ -272,24 +290,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     }
   }
 
-  Future<int> _fetchInterviewsCount() async {
-    try {
-      final response = await http.get(
-        Uri.parse('$apiBase/interviews'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data is Map && data['interviews'] is List) {
-          return data['interviews'].length;
-        } else if (data is List) {
-          return data.length;
-        }
-      }
-    } catch (_) {}
-    return 0;
-  }
-
   /// In-progress application for this job, if any (so we can show Continue instead of Apply Now). Only draft/in_progress.
   Map<String, dynamic>? _inProgressForJob(Map<String, dynamic> job) {
     final jobId = job['id'];
@@ -300,7 +300,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return null;
   }
 
-  /// Form submitted (status applied) for this job — show "Applied" on job card, not Continue.
+  /// Form submitted (status applied) for this job ΓÇö show "Applied" on job card, not Continue.
   Map<String, dynamic>? _appliedOnlyForJob(Map<String, dynamic> job) {
     final jobId = job['id'];
     if (jobId == null) return null;
@@ -474,27 +474,22 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   ImageProvider _getProfileImageProvider() {
-    if (kIsWeb) {
-      return const AssetImage('assets/images/profile_placeholder.png');
-    } else {
-      try {
-        final file = File('assets/images/profile.png');
-        if (file.existsSync()) {
-          return FileImage(file);
-        }
-      } catch (e) {
-        print('Error loading profile image: $e');
-      }
-      return const AssetImage('assets/images/profile_placeholder.png');
+    if (_profileImage != null) {
+      if (kIsWeb) return MemoryImage(_profileImageBytes!);
+      return FileImage(File(_profileImage!.path));
     }
+    return const AssetImage('assets/images/profile_placeholder.png');
   }
 
   Future<void> analyzeCV() async {
     try {
-      final picker = ImagePicker();
-      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
 
       if (image != null) {
+        if (kIsWeb) {
+          _profileImageBytes = await image.readAsBytes();
+        }
+        setState(() => _profileImage = image);
         final bytes = await image.readAsBytes();
         final base64Image = base64Encode(bytes);
 
@@ -625,11 +620,14 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   void _showLogoutConfirmation(BuildContext context) {
     showDialog(
       context: context,
+      barrierColor: Colors.black54,
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.symmetric(horizontal: 24),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
           child: Container(
+            constraints: BoxConstraints(maxWidth: 320),
             padding: EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white,
@@ -643,14 +641,15 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                   style: GoogleFonts.poppins(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
+                    color: Colors.black87,
                   ),
                 ),
-                SizedBox(height: 20),
+                SizedBox(height: 12),
                 Text(
                   'Are you sure you want to logout?',
-                  style: GoogleFonts.poppins(),
+                  style: GoogleFonts.poppins(color: Colors.black87),
                 ),
-                SizedBox(height: 20),
+                SizedBox(height: 16),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -756,7 +755,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             Text(
               (job['company']?.toString().trim().isNotEmpty == true)
                   ? (job['company'] ?? '')
-                  : '—',
+                  : 'ΓÇö',
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 color: Colors.white70,
@@ -766,7 +765,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             Text(
               (job['location']?.toString().trim().isNotEmpty == true)
                   ? (job['location'] ?? '')
-                  : '—',
+                  : 'ΓÇö',
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 color: Colors.white70,
@@ -1179,7 +1178,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         children: [
           SizedBox(height: 20),
           Text(
-            'Welcome back, $_userName!',
+            'Welcome back, ${_userName ?? 'Candidate'}!',
             style: GoogleFonts.poppins(
               fontSize: 28,
               fontWeight: FontWeight.bold,
@@ -1231,7 +1230,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           Expanded(
             child: _buildOpportunityCard(
               title: 'Interviews Scheduled',
-              count: '${_interviewsScheduledCount}',
+              count: '$_interviewsScheduledCount',
               gradient: LinearGradient(
                 colors: [
                   Color(0xFF2A5298).withValues(alpha: 0.8),
@@ -1353,7 +1352,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
-    }
+    } finally {}
   }
 
   static String _timeAgo(String? isoDate) {
@@ -1531,7 +1530,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     );
   }
 
-  /// Estimate progress 0–100 from draft_data / last_saved_screen.
+  /// Estimate progress 0ΓÇô100 from draft_data / last_saved_screen.
   int _progressPercent(
       Map<String, dynamic>? draftData, String? lastSavedScreen) {
     if (draftData == null || draftData.isEmpty)
@@ -2118,7 +2117,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                                     fit: BoxFit.contain),
                                 const SizedBox(width: 20),
                                 Text(
-                                  "© 2025 Khonology. All rights reserved.",
+                                  "┬⌐ 2025 Khonology. All rights reserved.",
                                   style: GoogleFonts.poppins(
                                       color: Colors.white54, fontSize: 12),
                                 ),

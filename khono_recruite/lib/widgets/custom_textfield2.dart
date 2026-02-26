@@ -8,6 +8,7 @@ class CustomTextField extends StatelessWidget {
   final Color backgroundColor;
   final Color textColor;
   final Color borderColor;
+  final Color? labelColor;
   final Widget? suffixIcon;
   final String? Function(String?)? validator;
 
@@ -20,6 +21,7 @@ class CustomTextField extends StatelessWidget {
     this.backgroundColor = Colors.transparent,
     this.textColor = Colors.black,
     this.borderColor = Colors.grey,
+    this.labelColor,
     this.suffixIcon,
     this.validator,
   }) : super(key: key);
@@ -33,7 +35,8 @@ class CustomTextField extends StatelessWidget {
       style: TextStyle(color: textColor),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: textColor.withValues(alpha: 0.7)),
+        labelStyle:
+            TextStyle(color: labelColor ?? textColor.withValues(alpha: 0.7)),
         filled: true,
         fillColor: backgroundColor,
         contentPadding:
