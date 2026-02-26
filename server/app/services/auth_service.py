@@ -1,4 +1,4 @@
-import bcrypt
+﻿import bcrypt
 from app.extensions import db
 from app.models import User
 from flask import current_app
@@ -125,7 +125,7 @@ class AuthService:
 
         try:
             totp = pyotp.TOTP(user.mfa_secret)
-            # Valid for ±1 time step (30s each)
+            # Valid for ┬▒1 time step (30s each)
             if totp.verify(otp, valid_window=1):
                 logging.info(f"OTP verified successfully for user {user.email}")
                 return True

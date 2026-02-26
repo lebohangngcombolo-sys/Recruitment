@@ -1,4 +1,4 @@
-# app/services/advanced_ocr_service.py
+﻿# app/services/advanced_ocr_service.py
 """
 Minimal OCR/text extraction service for CV files.
 Provides extract_text_with_metadata() used by ai_cv_parser and candidate_routes.

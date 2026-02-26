@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -49,7 +49,7 @@ class _AssessmentPageState extends State<AssessmentPage>
     );
     loadTokenAndFetch();
 
-    // ✅ Autofill from draft if available (backend may nest as assessment.assessment)
+    // Γ£à Autofill from draft if available (backend may nest as assessment.assessment)
     if (widget.draftData != null) {
       final assessmentData = widget.draftData!['assessment'];
       final answersMap = assessmentData is Map
@@ -176,7 +176,7 @@ class _AssessmentPageState extends State<AssessmentPage>
     }
   }
 
-  // ✅ NEW: Save draft progress and redirect to dashboard
+  // Γ£à NEW: Save draft progress and redirect to dashboard
   Future<void> saveDraftAndExit() async {
     if (token == null) return;
 
@@ -205,7 +205,7 @@ class _AssessmentPageState extends State<AssessmentPage>
           const SnackBar(content: Text("Progress saved successfully.")),
         );
 
-        // ✅ Use GoRouter to navigate
+        // Γ£à Use GoRouter to navigate
         await Future.delayed(const Duration(milliseconds: 700));
         if (context.mounted) {
           GoRouter.of(context).go('/candidate-dashboard');
@@ -534,7 +534,7 @@ class _AssessmentPageState extends State<AssessmentPage>
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        "Hang tight — we're setting everything up.",
+                        "Hang tight ΓÇö we're setting everything up.",
                         style: GoogleFonts.poppins(
                           fontSize: 16,
                           color: Colors.white.withValues(alpha: 0.85),

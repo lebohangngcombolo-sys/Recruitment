@@ -1,23 +1,27 @@
 class ApiEndpoints {
   // ------------------- Base URLs -------------------
-  static const authBase = "http://127.0.0.1:5001/api/auth";
-  static const candidateBase = "http://127.0.0.1:5001/api/candidate";
-  static const adminBase = "http://127.0.0.1:5001/api/admin";
-  static const chatbotBase = "http://127.0.0.1:5001/api/chatbot";
-  static const hmBase = "http://127.0.0.1:5001/api/admin";
-  static const chatBase = "http://127.0.0.1:5001/api/chat";
-  static const analyticsBase = "http://127.0.0.1:5001/api/analytics";
+  static const authBase = "http://127.0.0.1:5000/api/auth";
+  static const candidateBase = "http://127.0.0.1:5000/api/candidate";
+  static const adminBase = "http://127.0.0.1:5000/api/admin";
+  static const chatbotBase = "http://127.0.0.1:5000/api/chatbot";
+  static const hmBase = "http://127.0.0.1:5000/api/admin";
+  static const chatBase = "http://127.0.0.1:5000/api/chat";
+  static const analyticsBase = "http://127.0.0.1:5000/api/analytics";
+  static const aiBase = "http://127.0.0.1:5000/api/ai";
+  static const generateJobDetails = "$aiBase/generate_job_details";
+  static const generateQuestions = "$aiBase/generate_questions";
 
   // NEW: Offer management base URL (matches your Flask blueprint)
-  static const offerBase = "http://127.0.0.1:5001/api/offer";
+  static const offerBase = "http://127.0.0.1:5000/api/offer";
 
   // WebSocket URL (for real-time chat)
   static const webSocketUrl =
-      "ws://127.0.0.1:5001"; // Use wss:// for production with SSL
+      "ws://127.0.0.1:5000"; // Use wss:// for production with SSL
 
   // ------------------- Auth -------------------
   static const register = "$authBase/register";
   static const verify = "$authBase/verify";
+  static const resendVerification = "$authBase/resend-verification";
   static const login = "$authBase/login";
   static const logout = "$authBase/logout";
   static const forgotPassword = "$authBase/forgot-password";
@@ -139,146 +143,146 @@ class ApiEndpoints {
   // ==================== INTERVIEW LIFECYCLE ENHANCEMENTS ====================
 
   // ------------------- Interview Status Updates -------------------
-  /// PATCH – Update interview status (completed, no_show, cancelled_by_candidate, etc.)
+  /// PATCH ΓÇô Update interview status (completed, no_show, cancelled_by_candidate, etc.)
   static String updateInterviewStatus(int interviewId) =>
       "$adminBase/interviews/$interviewId/status";
 
-  /// GET – Get all interviews for a candidate (existing)
+  /// GET ΓÇô Get all interviews for a candidate (existing)
   static String getCandidateInterviews(int candidateId) =>
       "$adminBase/interviews?candidate_id=$candidateId";
 
-  /// PUT/PATCH – Reschedule an interview
+  /// PUT/PATCH ΓÇô Reschedule an interview
   static String rescheduleInterview(int interviewId) =>
       "$adminBase/interviews/reschedule/$interviewId";
 
-  /// DELETE – Cancel an interview
+  /// DELETE ΓÇô Cancel an interview
   static String cancelSingleInterview(int interviewId) =>
       "$adminBase/interviews/cancel/$interviewId";
 
   // ------------------- Interview Feedback -------------------
-  /// POST – Submit interview feedback
+  /// POST ΓÇô Submit interview feedback
   static String submitInterviewFeedback(int interviewId) =>
       "$adminBase/interviews/$interviewId/feedback";
 
-  /// GET – Get all feedback for an interview
+  /// GET ΓÇô Get all feedback for an interview
   static String getInterviewFeedback(int interviewId) =>
       "$adminBase/interviews/$interviewId/feedback";
 
-  /// POST – Request feedback from interviewer (email trigger)
+  /// POST ΓÇô Request feedback from interviewer (email trigger)
   static String requestFeedback(int interviewId) =>
       "$adminBase/interviews/$interviewId/feedback/request";
 
-  /// GET – Get feedback summary for an interview
+  /// GET ΓÇô Get feedback summary for an interview
   static String getFeedbackSummary(int interviewId) =>
       "$adminBase/interviews/$interviewId/feedback/summary";
 
   // ------------------- Interview Reminders -------------------
-  /// POST – Schedule automated reminders for interviews
+  /// POST ΓÇô Schedule automated reminders for interviews
   static const scheduleInterviewReminders =
       "$adminBase/interviews/reminders/schedule";
 
-  /// GET – Get all reminders for an interview
+  /// GET ΓÇô Get all reminders for an interview
   static String getInterviewReminders(int interviewId) =>
       "$adminBase/interviews/$interviewId/reminders";
 
-  /// POST – Send immediate reminder (ad-hoc)
+  /// POST ΓÇô Send immediate reminder (ad-hoc)
   static String sendImmediateReminder(int interviewId) =>
       "$adminBase/interviews/$interviewId/reminders/send";
 
-  /// DELETE – Cancel a scheduled reminder
+  /// DELETE ΓÇô Cancel a scheduled reminder
   static String cancelInterviewReminder(int reminderId) =>
       "$adminBase/interviews/reminders/$reminderId";
 
   // ------------------- Interview Analytics -------------------
-  /// GET – Get interview statistics and metrics
+  /// GET ΓÇô Get interview statistics and metrics
   static const getInterviewAnalytics = "$adminBase/interviews/analytics";
 
-  /// GET – Get no-show statistics
+  /// GET ΓÇô Get no-show statistics
   static const getNoShowAnalytics = "$adminBase/interviews/analytics/no-shows";
 
-  /// GET – Get feedback completion rates
+  /// GET ΓÇô Get feedback completion rates
   static const getFeedbackAnalytics =
       "$adminBase/interviews/analytics/feedback";
 
-  /// GET – Get interviewer performance metrics
+  /// GET ΓÇô Get interviewer performance metrics
   static const getInterviewerAnalytics =
       "$adminBase/interviews/analytics/interviewers";
 
   // ------------------- Interview Notes -------------------
-  /// POST – Add notes to an interview
+  /// POST ΓÇô Add notes to an interview
   static String addInterviewNotes(int interviewId) =>
       "$adminBase/interviews/$interviewId/notes";
 
-  /// GET – Get all notes for an interview
+  /// GET ΓÇô Get all notes for an interview
   static String getInterviewNotes(int interviewId) =>
       "$adminBase/interviews/$interviewId/notes";
 
-  /// PUT – Update interview notes
+  /// PUT ΓÇô Update interview notes
   static String updateInterviewNotes(int noteId) =>
       "$adminBase/interviews/notes/$noteId";
 
-  /// DELETE – Delete interview notes
+  /// DELETE ΓÇô Delete interview notes
   static String deleteInterviewNotes(int noteId) =>
       "$adminBase/interviews/notes/$noteId";
 
   // ------------------- Interview Workflow -------------------
-  /// POST – Move interview to next stage
+  /// POST ΓÇô Move interview to next stage
   static String moveInterviewToNextStage(int interviewId) =>
       "$adminBase/interviews/$interviewId/workflow/next";
 
-  /// POST – Move interview to previous stage
+  /// POST ΓÇô Move interview to previous stage
   static String moveInterviewToPreviousStage(int interviewId) =>
       "$adminBase/interviews/$interviewId/workflow/previous";
 
-  /// GET – Get interview workflow stages
+  /// GET ΓÇô Get interview workflow stages
   static const getInterviewWorkflowStages =
       "$adminBase/interviews/workflow/stages";
 
   // ------------------- Bulk Interview Operations -------------------
-  /// POST – Bulk update interview statuses
+  /// POST ΓÇô Bulk update interview statuses
   static const bulkUpdateInterviewStatus = "$adminBase/interviews/bulk/status";
 
-  /// POST – Bulk schedule reminders
+  /// POST ΓÇô Bulk schedule reminders
   static const bulkScheduleReminders = "$adminBase/interviews/bulk/reminders";
 
-  /// POST – Bulk request feedback
+  /// POST ΓÇô Bulk request feedback
   static const bulkRequestFeedback =
       "$adminBase/interviews/bulk/feedback/request";
 
   // ------------------- Interview Templates -------------------
-  /// GET – Get all interview templates
+  /// GET ΓÇô Get all interview templates
   static const getInterviewTemplates = "$adminBase/interviews/templates";
 
-  /// GET – Get specific interview template
+  /// GET ΓÇô Get specific interview template
   static String getInterviewTemplate(int templateId) =>
       "$adminBase/interviews/templates/$templateId";
 
-  /// POST – Create new interview template
+  /// POST ΓÇô Create new interview template
   static const createInterviewTemplate = "$adminBase/interviews/templates";
 
-  /// PUT – Update interview template
+  /// PUT ΓÇô Update interview template
   static String updateInterviewTemplate(int templateId) =>
       "$adminBase/interviews/templates/$templateId";
 
-  /// DELETE – Delete interview template
+  /// DELETE ΓÇô Delete interview template
   static String deleteInterviewTemplate(int templateId) =>
       "$adminBase/interviews/templates/$templateId";
 
   // ------------------- Candidate Availability -------------------
-  /// GET – Get candidate availability
+  /// GET ΓÇô Get candidate availability
   static String getCandidateAvailability(int candidateId) =>
       "$adminBase/candidates/$candidateId/availability";
 
-  /// POST – Set candidate availability
+  /// POST ΓÇô Set candidate availability
   static String setCandidateAvailability(int candidateId) =>
       "$adminBase/candidates/$candidateId/availability";
 
-  /// POST – Check interview scheduling conflicts
+  /// POST ΓÇô Check interview scheduling conflicts
   static const checkSchedulingConflicts =
       "$adminBase/interviews/conflict-check";
 
   // ------------------- Interview Dashboard -------------------
-  /// GET – Get interviews requiring action
+  /// GET ΓÇô Get interviews requiring action
   static const getInterviewsRequiringAction =
       "$adminBase/interviews/dashboard/action-required";
 
@@ -298,18 +302,18 @@ class ApiEndpoints {
   static const getUpcomingMeetings = "$adminBase/meetings/upcoming";
 
   // ------------------- Interview Calendar (Google Calendar) -------------------
-  /// GET – Sync & compare upcoming interviews with Google Calendar
+  /// GET ΓÇô Sync & compare upcoming interviews with Google Calendar
   static const syncInterviewCalendar = "$adminBase/interviews/calendar/sync";
 
-  /// POST – Sync a single interview to Google Calendar
+  /// POST ΓÇô Sync a single interview to Google Calendar
   static String syncSingleInterviewCalendar(int interviewId) =>
       "$adminBase/interviews/$interviewId/calendar/sync";
 
-  /// POST – Bulk sync multiple interviews
+  /// POST ΓÇô Bulk sync multiple interviews
   static const bulkSyncInterviewCalendar =
       "$adminBase/interviews/calendar/bulk-sync";
 
-  /// GET – Get calendar status for a specific interview
+  /// GET ΓÇô Get calendar status for a specific interview
   static String getInterviewCalendarStatus(int interviewId) =>
       "$adminBase/interviews/$interviewId/calendar/status";
 

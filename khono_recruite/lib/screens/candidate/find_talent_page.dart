@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -73,9 +73,9 @@ class FindTalentPage extends StatelessWidget {
                         backgroundColor: strokeColor,
                         foregroundColor: Colors.white,
                         elevation: 2,
-                        shadowColor: Colors.black.withValues(alpha: 0.25),
-                        padding:
-                            EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shadowColor: Colors.black.withOpacity(0.25),
+                        padding: EdgeInsets.symmetric(
+                            horizontal: 24, vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8),
                         ),
@@ -102,8 +102,7 @@ class FindTalentPage extends StatelessWidget {
                       // Hero heading and subheading (scrolls with content)
                       Container(
                         width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 60, vertical: 48),
+                        padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 48),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
@@ -142,8 +141,8 @@ class FindTalentPage extends StatelessWidget {
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: GridView.count(
-                                  shrinkWrap: true,
-                                  physics: NeverScrollableScrollPhysics(),
+                              shrinkWrap: true,
+                              physics: NeverScrollableScrollPhysics(),
                                   crossAxisCount: 2,
                                   mainAxisSpacing: 8,
                                   crossAxisSpacing: 8,
@@ -163,7 +162,7 @@ class FindTalentPage extends StatelessWidget {
                             SizedBox(width: 24),
                             Expanded(
                               flex: 1,
-                              child: Container(
+                                child: Container(
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(4),
                                 ),
@@ -171,8 +170,7 @@ class FindTalentPage extends StatelessWidget {
                                   padding: EdgeInsets.symmetric(
                                       horizontal: 24, vertical: 16),
                                   child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         "Investing in Africa's talent is what we believe in",
@@ -192,11 +190,11 @@ class FindTalentPage extends StatelessWidget {
                                       ),
                                       SizedBox(height: 12),
                                       Text(
-                                        'The Academy offers a 12‑month internship where learning happens on the job. '
+                                        'The Academy offers a 12ΓÇæmonth internship where learning happens on the job. '
                                         'Interns build software development skills and a strong base in finance, data, '
                                         'economics, technology and soft skills by delivering projects that use the same '
                                         'tools as South Africa\'s leading firms. We do this because we believe sustainable '
-                                        'growth depends on a support ecosystem that can sustain itself—and that starts '
+                                        'growth depends on a support ecosystem that can sustain itselfΓÇöand that starts '
                                         'with people who are ready to lead it.',
                                         style: GoogleFonts.poppins(
                                           fontSize: 16,
@@ -210,8 +208,8 @@ class FindTalentPage extends StatelessWidget {
                                           backgroundColor: strokeColor,
                                           foregroundColor: Colors.white,
                                           elevation: 2,
-                                          shadowColor: Colors.black
-                                              .withValues(alpha: 0.25),
+                                          shadowColor:
+                                              Colors.black.withOpacity(0.25),
                                           padding: EdgeInsets.symmetric(
                                               horizontal: 24, vertical: 14),
                                           shape: RoundedRectangleBorder(

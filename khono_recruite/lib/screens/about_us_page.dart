@@ -257,8 +257,7 @@ class AboutUsPage extends StatelessWidget {
           Column(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 child: Row(
                   children: [
                     GestureDetector(
@@ -285,7 +284,7 @@ class AboutUsPage extends StatelessWidget {
                         backgroundColor: accentRed,
                         foregroundColor: Colors.white,
                         elevation: 2,
-                        shadowColor: Colors.black.withValues(alpha: 0.25),
+                        shadowColor: Colors.black.withOpacity(0.25),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 24, vertical: 12),
                         shape: RoundedRectangleBorder(
@@ -323,7 +322,8 @@ class AboutUsPage extends StatelessWidget {
                       child: useSideBySide
                           ? IntrinsicHeight(
                               child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.stretch,
                                 children: [
                                   Expanded(
                                     flex: 4,
@@ -333,7 +333,8 @@ class AboutUsPage extends StatelessWidget {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.center,
                                       mainAxisSize: MainAxisSize.max,
-                                      children: _buildSideBySideLeftContent(),
+                                      children:
+                                          _buildSideBySideLeftContent(),
                                     ),
                                   ),
                                   Container(

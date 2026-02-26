@@ -11,6 +11,7 @@ import '../../services/admin_service.dart';
 import '../../widgets/custom_button.dart';
 import 'interview_schedule_page.dart';
 import 'package:http/http.dart' as http;
+import '../../utils/api_endpoints.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 
@@ -117,8 +118,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
       }
 
       final response = await http.get(
-        Uri.parse(
-            'http://127.0.0.1:5000/api/admin/applications/$applicationId/download-cv'),
+        Uri.parse('${ApiEndpoints.adminBase}/applications/$applicationId/download-cv'),
         headers: {
           'Authorization': 'Bearer $jwtToken',
           'Content-Type': 'application/json',

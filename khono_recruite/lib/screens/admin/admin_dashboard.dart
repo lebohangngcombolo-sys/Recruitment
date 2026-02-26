@@ -13,6 +13,7 @@ import '../auth/login_screen.dart';
 
 import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 import 'candidate_management_screen.dart';
 import 'cv_reviews_screen.dart';
 import 'hm_team_collaboration_page.dart';
@@ -91,7 +92,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
   String _profileImageUrl = "";
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  final String apiBase = ApiEndpoints.candidateBase;
 
   String? _userName;
 
@@ -221,7 +222,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       final token = await AuthService.getAccessToken();
 
       final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/recent-activities"),
+        Uri.parse(ApiEndpoints.getRecentActivities),
         headers: {"Authorization": "Bearer $token"},
       );
 
@@ -251,7 +252,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
     try {
       final token = await AuthService.getAccessToken();
       final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/powerbi/status"),
+        Uri.parse(ApiEndpoints.getPowerBIStatus),
         headers: {"Authorization": "Bearer $token"},
       );
 
@@ -286,9 +287,9 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               "${auditEndDate!.year}-${auditEndDate!.month.toString().padLeft(2, '0')}-${auditEndDate!.day.toString().padLeft(2, '0')}",
         if (auditSearchQuery != null) "q": auditSearchQuery!,
       };
-      final uri = Uri.http("127.0.0.1:5000", "/api/admin/audits", queryParams);
-      final res =
-          await http.get(uri, headers: {"Authorization": "Bearer $token"});
+      final uri = Uri.parse("${ApiEndpoints.adminBase}/audits")
+          .replace(queryParameters: queryParams);
+      final res = await http.get(uri, headers: {"Authorization": "Bearer $token"});
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
@@ -415,7 +416,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                                     alignment: Alignment.centerLeft,
                                     child: sidebarCollapsed
                                         ? Image.asset(
-                                            'assets/images/discs.png',
+                                            'assets/images/logo2.png',
                                             height: 40,
                                             fit: BoxFit.contain,
                                           )

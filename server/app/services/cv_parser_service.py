@@ -44,7 +44,7 @@ class HybridResumeAnalyzer:
                 self.openai_client = OpenAI(
                     base_url="https://openrouter.ai/api/v1",
                     api_key=api_key,
-                    default_headers={"HTTP-Referer": "http://localhost:5000"},
+                    default_headers={"HTTP-Referer": os.getenv("BACKEND_URL", "http://localhost:5000")},
                     timeout=timeout_value,
                 )
                 logger.info("OpenRouter client initialized.")

@@ -1,4 +1,4 @@
-import 'package:provider/provider.dart';
+﻿import 'package:provider/provider.dart';
 import 'package:flutter/material.dart' hide SearchBar, FilterChip; // hide both
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
@@ -7,7 +7,6 @@ import '../../widgets/weighting_configuration_widget.dart';
 import '../../widgets/search_bar.dart'; // your custom SearchBar
 import '../../widgets/filter_chip.dart'; // your custom FilterChip
 import '../../services/admin_service.dart';
-import '../../services/ai_service.dart';
 import '../../providers/theme_provider.dart';
 
 class JobManagement extends StatefulWidget {
@@ -483,7 +482,7 @@ class _JobManagementState extends State<JobManagement> {
           ...items
               .map((item) => Padding(
                     padding: const EdgeInsets.only(left: 8, bottom: 2),
-                    child: Text("• $item"),
+                    child: Text("ΓÇó $item"),
                   ))
               .toList(),
         ],
@@ -1369,9 +1368,6 @@ class _JobFormDialogState extends State<JobFormDialog>
   String category = "";
   final skillsController = TextEditingController();
   final minExpController = TextEditingController();
-  TextEditingController salaryRangeController = TextEditingController();
-  TextEditingController applicationDeadlineController = TextEditingController();
-  TextEditingController bannerController = TextEditingController();
   final salaryMinController = TextEditingController();
   final salaryMaxController = TextEditingController();
   String salaryCurrency = "ZAR";
@@ -1388,57 +1384,6 @@ class _JobFormDialogState extends State<JobFormDialog>
   String? weightingsError;
   late TabController _tabController;
   final AdminService admin = AdminService();
-  bool _isGeneratingWithAI = false;
-
-  // Generate job description with AI
-  Future<void> _generateWithAI() async {
-    if (title.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter a job title first")),
-      );
-      return;
-    }
-
-    setState(() => _isGeneratingWithAI = true);
-
-    try {
-      // Use AI service to generate content
-      final aiResponse = await AIService.generateJobDetails(
-        title.trim(),
-      );
-
-      if (mounted) {
-        setState(() {
-          description = aiResponse['description'] ?? '';
-          responsibilitiesController.text =
-              aiResponse['responsibilities'] ?? '';
-          qualificationsController.text = aiResponse['qualifications'] ?? '';
-          jobSummary = aiResponse['summary'] ?? '';
-          _isGeneratingWithAI = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Job description generated successfully!")),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isGeneratingWithAI = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Failed to generate: $e")),
-        );
-      }
-    }
-  }
-
-  static const List<String> employmentTypes = [
-    "Full Time",
-    "Part Time",
-    "Contract",
-    "Remote",
-    "Internship",
-  ];
 
   @override
   void initState() {
@@ -1462,22 +1407,19 @@ class _JobFormDialogState extends State<JobFormDialog>
     salaryMaxController.text = (widget.job?['salary_max'] ?? '').toString();
     salaryPeriod = widget.job?['salary_period'] ?? 'monthly';
     category = widget.job?['category'] ?? '';
-    company = widget.job?['company']?.toString() ?? '';
-    location = widget.job?['location']?.toString() ?? '';
-    employmentType = widget.job?['employment_type']?.toString() ??
-        widget.job?['type']?.toString() ??
-        "Full Time";
-    if (!employmentTypes.contains(employmentType)) employmentType = "Full Time";
-    salaryRangeController.text = widget.job?['salary_range']?.toString() ??
-        widget.job?['salary']?.toString() ??
-        '';
-    final deadline =
-        widget.job?['application_deadline'] ?? widget.job?['deadline'];
-    applicationDeadlineController.text = deadline?.toString() ?? '';
-    deadlineStr = deadline?.toString() ?? '';
-    bannerController.text = widget.job?['banner']?.toString() ??
-        widget.job?['company_logo']?.toString() ??
-        '';
+    employmentType = widget.job?['employment_type'] ?? 'full_time';
+
+    final jobWeightings = widget.job?['weightings'];
+    if (jobWeightings is Map) {
+      weightings = {
+        "cv": (jobWeightings["cv"] ?? 60).toInt(),
+        "assessment": (jobWeightings["assessment"] ?? 40).toInt(),
+        "interview": (jobWeightings["interview"] ?? 0).toInt(),
+        "references": (jobWeightings["references"] ?? 0).toInt(),
+      };
+    }
+
+    knockoutRules = _normalizeKnockoutRules(widget.job?['knockout_rules']);
 
     if (widget.job != null &&
         widget.job!['assessment_pack'] != null &&
@@ -1512,6 +1454,21 @@ class _JobFormDialogState extends State<JobFormDialog>
         "weight": 1,
       });
     });
+  }
+
+  List<Map<String, dynamic>> _normalizeKnockoutRules(dynamic raw) {
+    if (raw is! List) return [];
+    return raw.map<Map<String, dynamic>>((rule) {
+      if (rule is Map<String, dynamic>) {
+        return Map<String, dynamic>.from(rule);
+      }
+      return {
+        "type": "skills",
+        "field": "skills",
+        "operator": "==",
+        "value": rule.toString(),
+      };
+    }).toList();
   }
 
   List<Map<String, dynamic>> _normalizeQuestions(dynamic raw) {
@@ -1610,15 +1567,9 @@ class _JobFormDialogState extends State<JobFormDialog>
       'salary_period': salaryPeriod,
       'category': category,
       'required_skills': skills,
-      'min_experience':
-          double.tryParse(minExpController.text.toString().trim()) ?? 0,
-      'vacancy': 1,
-      'weightings': {'cv': 60, 'assessment': 40},
-      'salary_range': salaryRangeController.text.trim(),
-      'application_deadline': deadlineStr.isEmpty ? null : deadlineStr,
-      'banner': bannerController.text.trim().isEmpty
-          ? null
-          : bannerController.text.trim(),
+      'min_experience': double.tryParse(minExpController.text) ?? 0,
+      'weightings': weightings,
+      'knockout_rules': knockoutRules,
       'assessment_pack': {
         'questions': normalizedQuestions.map((q) {
           return {
@@ -1650,10 +1601,8 @@ class _JobFormDialogState extends State<JobFormDialog>
       widget.onSaved();
       Navigator.pop(context);
     } catch (e) {
-      final msg = e.toString().replaceFirst('Exception: ', '');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error saving job: $msg")),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error saving job: $e")));
     }
   }
 
@@ -1700,47 +1649,13 @@ class _JobFormDialogState extends State<JobFormDialog>
                       child: SingleChildScrollView(
                         child: Column(
                           children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: CustomTextField(
-                                    label: "Title",
-                                    initialValue: title,
-                                    hintText: "Enter job title",
-                                    onChanged: (v) => title = v,
-                                    validator: (v) => v == null || v.isEmpty
-                                        ? "Enter title"
-                                        : null,
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.blue.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: Colors.blue),
-                                  ),
-                                  child: IconButton(
-                                    icon: _isGeneratingWithAI
-                                        ? const SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              valueColor:
-                                                  AlwaysStoppedAnimation<Color>(
-                                                      Colors.blue),
-                                            ),
-                                          )
-                                        : const Icon(Icons.auto_awesome,
-                                            color: Colors.blue),
-                                    onPressed: _isGeneratingWithAI
-                                        ? null
-                                        : _generateWithAI,
-                                    tooltip: "Generate with AI",
-                                  ),
-                                ),
-                              ],
+                            CustomTextField(
+                              label: "Title",
+                              initialValue: title,
+                              hintText: "Enter job title",
+                              onChanged: (v) => title = v,
+                              validator: (v) =>
+                                  v == null || v.isEmpty ? "Enter title" : null,
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
@@ -1752,6 +1667,14 @@ class _JobFormDialogState extends State<JobFormDialog>
                               validator: (v) => v == null || v.isEmpty
                                   ? "Enter description"
                                   : null,
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Job Summary",
+                              initialValue: jobSummary,
+                              hintText: "Brief job summary",
+                              maxLines: 3,
+                              onChanged: (v) => jobSummary = v,
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
@@ -1842,52 +1765,6 @@ class _JobFormDialogState extends State<JobFormDialog>
                               initialValue: category,
                               hintText: "Engineering, Marketing...",
                               onChanged: (v) => category = v,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Company (listing)",
-                              controller: companyController,
-                              hintText: "Company name shown on job cards",
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Location",
-                              controller: locationController,
-                              hintText: "e.g. Johannesburg, Cape Town, Remote",
-                            ),
-                            const SizedBox(height: 16),
-                            DropdownButtonFormField<String>(
-                              initialValue: employmentType,
-                              decoration: const InputDecoration(
-                                labelText: "Employment Type",
-                                border: OutlineInputBorder(),
-                              ),
-                              items: employmentTypes
-                                  .map((e) => DropdownMenuItem(
-                                        value: e,
-                                        child: Text(e),
-                                      ))
-                                  .toList(),
-                              onChanged: (v) => setState(
-                                  () => employmentType = v ?? "Full Time"),
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Salary Range",
-                              controller: salaryRangeController,
-                              hintText: "e.g. R850k - R1.2m",
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Application Deadline",
-                              controller: applicationDeadlineController,
-                              hintText: "YYYY-MM-DD (e.g. 2025-03-15)",
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Company Logo URL (optional)",
-                              controller: bannerController,
-                              hintText: "Image URL for job card",
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
