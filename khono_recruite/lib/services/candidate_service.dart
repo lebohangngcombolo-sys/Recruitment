@@ -3,6 +3,14 @@ import 'package:http/http.dart' as http;
 import '../utils/api_endpoints.dart';
 
 class CandidateService {
+  static dynamic _safeJsonDecode(String body) {
+    try {
+      return jsonDecode(body);
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ---------- SUBMIT ENROLLMENT ----------
   static Future<Map<String, dynamic>> submitEnrollment(
       Map<String, dynamic> data, String token) async {
@@ -17,11 +25,11 @@ class CandidateService {
     return jsonDecode(response.body);
   }
 
-  // ----------------- GET AVAILABLE JOBS -----------------
+  // ----------------- GET AVAILABLE JOBS (authenticated) -----------------
   static Future<List<Map<String, dynamic>>> getAvailableJobs(
       String token) async {
     final response = await http.get(
-      Uri.parse("http://127.0.0.1:5000/api/candidate/jobs"),
+      Uri.parse(ApiEndpoints.getAvailableJobs),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
@@ -29,13 +37,50 @@ class CandidateService {
     );
 
     if (response.statusCode == 200) {
-      final List<dynamic> data = jsonDecode(response.body);
-      // Cast each item to Map<String, dynamic>
-      return data
-          .map<Map<String, dynamic>>((item) => Map<String, dynamic>.from(item))
-          .toList();
+      final decoded = _safeJsonDecode(response.body);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map<Map<String, dynamic>>(
+                (item) => Map<String, dynamic>.from(item))
+            .toList();
+      }
+      if (decoded is Map<String, dynamic> && decoded['jobs'] is List) {
+        return List<Map<String, dynamic>>.from(decoded['jobs']);
+      }
+      throw Exception('Invalid jobs response');
     } else {
       throw Exception('Failed to fetch jobs: ${response.statusCode}');
+    }
+  }
+
+  // ----------------- GET PUBLIC JOBS (no auth) -----------------
+  static Future<List<Map<String, dynamic>>> getPublicJobs() async {
+    final response = await http.get(
+      Uri.parse(ApiEndpoints.getPublicJobs),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final decoded = _safeJsonDecode(response.body);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map<Map<String, dynamic>>(
+                (item) => Map<String, dynamic>.from(item))
+            .toList();
+      }
+      if (decoded is Map<String, dynamic>) {
+        final jobs = decoded['jobs'] ?? decoded['data'];
+        if (jobs is List) {
+          return List<Map<String, dynamic>>.from(jobs);
+        }
+      }
+      throw Exception('Invalid public jobs response');
+    } else {
+      throw Exception('Failed to fetch public jobs: ${response.statusCode}');
     }
   }
 
@@ -54,7 +99,11 @@ class CandidateService {
 
     final streamedResponse = await request.send();
     final responseString = await streamedResponse.stream.bytesToString();
-    return jsonDecode(responseString);
+    final decoded = _safeJsonDecode(responseString);
+    if (decoded is Map<String, dynamic>) {
+      return Map<String, dynamic>.from(decoded);
+    }
+    throw Exception('Invalid upload response');
   }
 
   // ---------- GET CANDIDATE APPLICATIONS ----------
@@ -66,7 +115,19 @@ class CandidateService {
         'Authorization': 'Bearer $token'
       },
     );
-    return jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      if (data is List) {
+        return data;
+      }
+      if (data is Map<String, dynamic>) {
+        final list = data['applications'] ?? data['data'] ?? data['results'];
+        if (list is List) return List<dynamic>.from(list);
+        return [];
+      }
+      return [];
+    }
+    throw Exception('Failed to fetch applications: ${response.body}');
   }
 
   // ---------- GET ASSESSMENT FOR APPLICATION ----------

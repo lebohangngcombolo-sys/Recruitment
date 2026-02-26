@@ -4,29 +4,102 @@ from flask_mail import Message
 from threading import Thread
 from app.extensions import redis_client
 import logging
+import time
+import socket
+
+
+def _send_via_sendgrid_api(app, subject, recipients, html_body, text_body, sender):
+    """Send one email via SendGrid v3 HTTP API. Returns True on success, False on failure."""
+    api_key = (app.config.get("SENDGRID_API_KEY") or "").strip()
+    if not api_key:
+        return False
+    url = (app.config.get("SENDGRID_API_URL") or "https://api.sendgrid.com/v3/mail/send").strip()
+    # Parse sender: "Name <email>" or "email"
+    from_email = sender
+    from_name = None
+    if sender and " <" in sender and sender.strip().endswith(">"):
+        parts = sender.strip().rsplit(" <", 1)
+        from_name = (parts[0] or "").strip() or None
+        from_email = (parts[1] or "").rstrip(">").strip()
+    payload = {
+        "personalizations": [{"to": [{"email": r} for r in recipients], "subject": subject}],
+        "from": {"email": from_email, "name": from_name} if from_name else {"email": from_email},
+        "content": [{"type": "text/html", "value": html_body or ""}],
+    }
+    if text_body and (text_body or "").strip():
+        payload["content"].append({"type": "text/plain", "value": (text_body or "").strip()})
+    try:
+        import requests
+        r = requests.post(
+            url,
+            json=payload,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            timeout=30,
+        )
+        if 200 <= r.status_code < 300:
+            return True
+        app.logger.warning("SendGrid API returned %s: %s", r.status_code, r.text[:500])
+        return False
+    except Exception as e:
+        app.logger.warning("SendGrid API request failed: %s", e, exc_info=True)
+        return False
+
+
+def send_email_sync(app, subject, recipients, html_body, text_body=None):
+    """
+    Send one email synchronously: tries SendGrid API if SENDGRID_API_KEY is set,
+    else SMTP with MAIL_TIMEOUT. Raises on failure. Call from within app_context.
+    """
+    sender = app.config.get("MAIL_DEFAULT_SENDER") or app.config.get("MAIL_USERNAME")
+    if (app.config.get("SENDGRID_API_KEY") or "").strip():
+        if _send_via_sendgrid_api(app, subject, recipients, html_body, text_body, sender):
+            return
+        # Fall through to SMTP on API failure
+    timeout_seconds = max(30, int(app.config.get("MAIL_TIMEOUT") or 60))
+    old_timeout = socket.getdefaulttimeout()
+    try:
+        socket.setdefaulttimeout(timeout_seconds)
+        msg = Message(
+            subject=subject,
+            recipients=recipients,
+            html=html_body,
+            body=text_body or "",
+            sender=sender,
+        )
+        mail.send(msg)
+    finally:
+        socket.setdefaulttimeout(old_timeout)
+
 
 class EmailService:
 
     @staticmethod
     def send_verification_email(email, verification_code):
-        """Send email verification code."""
+        """Send email verification code. Candidate receives the 6-digit code in the email."""
         subject = "Verify Your Email Address"
+        app_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/") or "http://localhost:3000"
         try:
             html = render_template(
-                'email_templates/verification_email.html', 
-                verification_code=verification_code
+                'email_templates/verification_email.html',
+                verification_code=verification_code,
+                app_url=app_url,
             )
         except Exception:
             logging.error(f"Failed to render verification email template for {email}", exc_info=True)
-            html = f"Your verification code is: {verification_code}"
+            html = f"Your verification code is: {verification_code}. Enter it at {app_url}/verify-email"
 
+        try:
+            current_app.logger.info("Sending verification email to %s", email)
+        except Exception:
+            logging.info("Sending verification email to %s", email)
         EmailService.send_async_email(subject, [email], html)
 
     @staticmethod
     def send_password_reset_email(email, reset_token):
         """Send password reset instructions."""
         subject = "Password Reset Request"
-        reset_link = f"http://localhost:3000/reset-password?token={reset_token}"
+        base = current_app.config.get("FRONTEND_URL") or "http://localhost:3000"
+        reset_link = f"{base.rstrip('/')}/reset-password?token={reset_token}"
         try:
             html = render_template(
                 'email_templates/password_reset_email.html', 
@@ -113,26 +186,65 @@ class EmailService:
         
     @staticmethod
     def send_async_email(subject, recipients, html_body, text_body=None):
-        """Send email in a background thread safely."""
+        """Send email in a background thread safely. Uses request app when available so mail config/state is correct."""
+        from flask import current_app
         from app import create_app
-        app = create_app()
+        try:
+            app = current_app._get_current_object()
+        except RuntimeError:
+            app = create_app()
 
         # Ensure subject is a string
         subject = str(subject)
 
         def send_email(app, subject, recipients, html_body, text_body):
-            with app.app_context():
+            logger = app.logger
+            sender = app.config.get('MAIL_DEFAULT_SENDER') or app.config.get('MAIL_USERNAME')
+            # Prefer SendGrid HTTP API when configured (avoids SMTP connect timeouts from cloud)
+            if (app.config.get("SENDGRID_API_KEY") or "").strip():
                 try:
-                    msg = Message(
-                        subject=subject,
-                        recipients=recipients,
-                        html=html_body,
-                        body=text_body or "",
-                        sender=app.config['MAIL_USERNAME']
-                    )
-                    mail.send(msg)
+                    with app.app_context():
+                        if _send_via_sendgrid_api(app, subject, recipients, html_body, text_body, sender):
+                            logger.info("Email sent successfully to %s via SendGrid API", recipients)
+                            return
                 except Exception as e:
-                    logging.error(f"Failed to send email to {recipients}: {str(e)}", exc_info=True)
+                    logger.warning("SendGrid API send failed for %s: %s; falling back to SMTP", recipients, e)
+            # SMTP path: use longer timeout so Render → SendGrid connect can complete
+            timeout_seconds = max(30, int(app.config.get("MAIL_TIMEOUT") or 60))
+            max_attempts = 3
+            retry_delay_seconds = 5
+            last_error = None
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    with app.app_context():
+                        old_timeout = socket.getdefaulttimeout()
+                        try:
+                            socket.setdefaulttimeout(timeout_seconds)
+                            msg = Message(
+                                subject=subject,
+                                recipients=recipients,
+                                html=html_body,
+                                body=text_body or "",
+                                sender=sender
+                            )
+                            mail.send(msg)
+                        finally:
+                            socket.setdefaulttimeout(old_timeout)
+                    logger.info("Email sent successfully to %s (attempt %d)", recipients, attempt)
+                    return
+                except Exception as e:
+                    last_error = e
+                    logger.warning(
+                        "Send attempt %d/%d failed for %s: %s (type=%s)",
+                        attempt, max_attempts, recipients, str(e), type(e).__name__,
+                    )
+                    if attempt < max_attempts:
+                        time.sleep(retry_delay_seconds)
+            logger.error(
+                "Failed to send email to %s after %d attempts: %s (type=%s). Check MAIL_* / SENDGRID_API_KEY and sender verification.",
+                recipients, max_attempts, str(last_error), type(last_error).__name__,
+                exc_info=True,
+            )
 
         thread = Thread(target=send_email, args=[app, subject, recipients, html_body, text_body])
         thread.start()

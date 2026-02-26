@@ -3,14 +3,28 @@ from app.models import Requisition, Application, AssessmentResult
 from datetime import datetime
 
 
+def get_questions_for_requisition(requisition):
+    """
+    Return list of questions for this requisition: from linked TestPack or from assessment_pack JSON.
+    Each question: at least question_text, options; correct_option (0-based) or correct_answer (0-3).
+    """
+    if not requisition:
+        return []
+    if requisition.test_pack_id and requisition.test_pack and not requisition.test_pack.deleted_at:
+        return list(requisition.test_pack.questions or [])
+    pack = requisition.assessment_pack or {}
+    return list(pack.get("questions") or [])
+
+
 class AssessmentService:
 
     @staticmethod
     def create_assessment(requisition_id, questions):
         """
-        Add or update MCQ assessment for a requisition/job.
+        Add or update MCQ assessment for a requisition/job (inline questions only).
         `questions` is a list of dicts:
         {"question_text": str, "options": list[str], "correct_option": int}
+        When a job uses a test pack, questions are resolved via get_questions_for_requisition; this is for custom questions.
         """
         requisition = Requisition.query.get(requisition_id)
         if not requisition:
@@ -30,7 +44,7 @@ class AssessmentService:
         if not application:
             raise ValueError("Application not found")
 
-        questions = application.requisition.assessment_pack.get("questions", [])
+        questions = get_questions_for_requisition(application.requisition)
         if not questions:
             raise ValueError("No assessment found for this requisition")
 
@@ -52,7 +66,11 @@ class AssessmentService:
             if q_index < 0 or q_index >= len(questions):
                 raise ValueError(f"Invalid question index: {q_index}")
 
-            correct = questions[q_index]["correct_option"]
+            q = questions[q_index]
+            correct = q.get("correct_option", q.get("correct_answer", 0))
+            if correct is None:
+                correct = 0
+            correct = int(correct)
             is_correct = selected == correct
             if is_correct:
                 score += 1
@@ -81,6 +99,31 @@ class AssessmentService:
 
         # also update the application for shortlisting
         application.assessment_score = percentage_score
+
+        weightings = (application.requisition.weightings if application.requisition else None) or {
+            "cv": 60,
+            "assessment": 40,
+            "interview": 0,
+            "references": 0
+        }
+        cv_score = application.cv_score or 0
+        interview_score = application.interview_feedback_score or 0
+        references_score = 0
+        overall_score = (
+            (cv_score * weightings.get("cv", 0) / 100) +
+            (percentage_score * weightings.get("assessment", 0) / 100) +
+            (interview_score * weightings.get("interview", 0) / 100) +
+            (references_score * weightings.get("references", 0) / 100)
+        )
+        application.overall_score = overall_score
+        application.scoring_breakdown = {
+            "cv": cv_score,
+            "assessment": percentage_score,
+            "interview": interview_score,
+            "references": references_score,
+            "weightings": weightings,
+            "overall": overall_score
+        }
         db.session.commit()
 
         # return clean dict instead of ORM object
@@ -104,9 +147,16 @@ class AssessmentService:
         applications = Application.query.filter_by(requisition_id=requisition_id).all()
         shortlisted = []
         for app in applications:
+            weightings = (app.requisition.weightings if app.requisition else None) or {
+                "cv": cv_weight,
+                "assessment": assessment_weight,
+                "interview": 0,
+                "references": 0
+            }
             overall = (
-                (app.candidate.cv_score * cv_weight / 100) +
-                (app.assessment_score * assessment_weight / 100)
+                (app.candidate.cv_score * weightings.get("cv", 0) / 100) +
+                (app.assessment_score * weightings.get("assessment", 0) / 100) +
+                (app.interview_feedback_score * weightings.get("interview", 0) / 100)
             )
             app.overall_score = overall
             db.session.commit()

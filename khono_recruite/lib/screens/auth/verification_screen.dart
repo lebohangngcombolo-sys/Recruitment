@@ -1,11 +1,11 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/custom_button.dart';
-import '../../widgets/six_digit_code_field.dart'; // Import the custom widget
+import '../../widgets/six_digit_code_field.dart';
 import '../../providers/theme_provider.dart';
-import '../enrollment/enrollment_screen.dart';
 
 class VerificationScreen extends StatefulWidget {
   final String email;
@@ -19,6 +19,7 @@ class _VerificationScreenState extends State<VerificationScreen>
     with SingleTickerProviderStateMixin {
   String verificationCode = '';
   bool loading = false;
+  bool resendLoading = false;
 
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
@@ -78,11 +79,36 @@ class _VerificationScreenState extends State<VerificationScreen>
         SnackBar(content: Text(response['error'])),
       );
     } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => EnrollmentScreen(token: response['access_token']),
-        ),
+      if (!context.mounted) return;
+      final token = response['access_token'] as String? ?? '';
+      final pendingJob = await AuthService.getPendingApplyJob();
+      if (pendingJob != null && pendingJob['id'] != null) {
+        context.go('/candidate-dashboard?token=${Uri.encodeComponent(token)}');
+      } else {
+        context.go('/enrollment?token=${Uri.encodeComponent(token)}');
+      }
+    }
+  }
+
+  Future<void> resendCode() async {
+    if (resendLoading) return;
+    setState(() => resendLoading = true);
+    final response = await AuthService.resendVerificationCode(widget.email);
+    if (!mounted) return;
+    setState(() => resendLoading = false);
+    if (response.containsKey('error')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(response['error'].toString())),
+      );
+    } else {
+      final message =
+          response['message'] as String? ?? 'Verification code sent.';
+      final code = response['code'] as String?;
+      final show = code != null && code.isNotEmpty
+          ? '$message Check your email or use code: $code'
+          : message;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(show)),
       );
     }
   }
@@ -105,27 +131,27 @@ class _VerificationScreenState extends State<VerificationScreen>
             ),
           ),
 
-          // ---------- Top Left Logo ----------
-          Positioned(
-            top: 40,
-            left: 24,
-            child: Image.asset(
-              'assets/images/logo2.png', // Replace with your left logo path
-              width: 300,
-              height: 120,
-              fit: BoxFit.contain,
-            ),
-          ),
-
-          // ---------- Top Right Logo ----------
-          Positioned(
-            top: 40,
-            right: 24,
-            child: Image.asset(
-              'assets/images/logo.png', // Replace with your right logo path
-              width: 300,
-              height: 120,
-              fit: BoxFit.contain,
+          // Top bar: back arrow + logo only
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back,
+                        color: Colors.white, size: 28),
+                    onPressed: () => context.canPop()
+                        ? context.pop()
+                        : context.go('/register'),
+                  ),
+                  const SizedBox(width: 12),
+                  Image.asset(
+                    "assets/icons/khono.png",
+                    height: 40,
+                    fit: BoxFit.contain,
+                  ),
+                ],
+              ),
             ),
           ),
 
@@ -146,18 +172,10 @@ class _VerificationScreenState extends State<VerificationScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const SizedBox(height: 16),
-                        // Modern header with icon
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.verified_user_outlined,
-                            size: 28,
-                            color: Colors.white,
-                          ),
+                        const Icon(
+                          Icons.verified_user_outlined,
+                          size: 36,
+                          color: Colors.white,
                         ),
                         const SizedBox(height: 16),
                         const Text(
@@ -172,14 +190,28 @@ class _VerificationScreenState extends State<VerificationScreen>
                         const SizedBox(height: 6),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Text(
-                            "Code sent to ${widget.email}",
-                            style: const TextStyle(
-                              fontSize: 14,
-                              color: Colors.white70,
-                              fontWeight: FontWeight.w400,
-                            ),
-                            textAlign: TextAlign.center,
+                          child: Column(
+                            children: [
+                              Text(
+                                "Code sent to ${widget.email}",
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.white70,
+                                  fontWeight: FontWeight.w400,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                "Check your spam folder if you don't see it in a few minutes.",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white.withValues(alpha: 0.6),
+                                  fontWeight: FontWeight.w400,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 24),
@@ -196,7 +228,7 @@ class _VerificationScreenState extends State<VerificationScreen>
                                   "Enter verification code",
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: Colors.white70,
+                                    color: Colors.white,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -205,6 +237,7 @@ class _VerificationScreenState extends State<VerificationScreen>
                               SixDigitCodeField(
                                 onCodeChanged: _onCodeChanged,
                                 onCodeCompleted: _onCodeCompleted,
+                                onSubmit: verify,
                                 autoFocus: true,
                               ),
                             ],
@@ -234,26 +267,35 @@ class _VerificationScreenState extends State<VerificationScreen>
                               Text(
                                 "Didn't receive code? ",
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.7),
+                                  color: Colors.white.withValues(alpha: 0.7),
                                   fontSize: 13,
                                 ),
                               ),
                               GestureDetector(
-                                onTap: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                        content:
-                                            Text("Resend code functionality")),
-                                  );
-                                },
-                                child: const Text(
-                                  "Resend",
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    decoration: TextDecoration.underline,
-                                  ),
+                                onTap: resendLoading ? null : resendCode,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (resendLoading)
+                                      const SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    else
+                                      const Text(
+                                        "Resend",
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          decoration: TextDecoration.underline,
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ],
@@ -266,7 +308,7 @@ class _VerificationScreenState extends State<VerificationScreen>
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.1),
+                            color: Colors.white.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: IconButton(
@@ -290,7 +332,7 @@ class _VerificationScreenState extends State<VerificationScreen>
 
           if (loading)
             Container(
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withValues(alpha: 0.5),
               child: const Center(
                 child: CircularProgressIndicator(
                   color: Colors.white,

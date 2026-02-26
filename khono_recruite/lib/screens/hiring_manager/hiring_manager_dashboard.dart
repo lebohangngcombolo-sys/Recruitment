@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import '../../services/admin_service.dart';
@@ -20,11 +19,10 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
-import '../auth/login_screen.dart';
 import 'pipeline_page.dart';
 
 class HMMainDashboard extends StatefulWidget {
@@ -56,6 +54,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
   List<String> recentActivities = [];
 
+  // Display name for the logged-in user (shared with Team Collaboration semantics)
+  String userName = "Hiring Manager";
+
   bool sidebarCollapsed = false;
   late final AnimationController _sidebarAnimController;
   late final Animation<double> _sidebarWidthAnimation;
@@ -67,11 +68,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     "Alex: Uploaded new CVs to review.",
     "Lisa: Updated job descriptions.",
   ];
-
-  // Power BI status
-  bool powerBIConnected = false;
-  bool checkingPowerBI = true;
-  Timer? _statusTimer;
 
   // --- Audits ---
   List<Map<String, dynamic>> audits = [];
@@ -107,14 +103,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   @override
   void initState() {
     super.initState();
+    userName = AuthService.getCachedDisplayName() ?? "Hiring Manager";
     fetchStats();
-    fetchPowerBIStatus();
     fetchAudits(page: 1);
     fetchProfileImage();
-
-    _statusTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      fetchPowerBIStatus();
-    });
+    _loadUserName();
 
     _sidebarAnimController = AnimationController(
       vsync: this,
@@ -128,9 +121,34 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   @override
   void dispose() {
     _sidebarAnimController.dispose();
-    _statusTimer?.cancel();
     auditSearchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadUserName() async {
+    try {
+      final info = await AuthService.getUserInfo();
+      if (info == null) return;
+
+      // Try a few common keys defensively
+      final profile = info['profile'] ?? {};
+      final candidate = info['candidate'] ?? {};
+
+      final name = info['full_name'] ??
+          info['name'] ??
+          profile['full_name'] ??
+          profile['name'] ??
+          candidate['full_name'] ??
+          candidate['name'];
+
+      if (name is String && name.trim().isNotEmpty) {
+        setState(() {
+          userName = name.trim();
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load user name: $e');
+    }
   }
 
   // ---------- Profile Image Methods ----------
@@ -159,7 +177,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   Future<void> _pickProfileImage() async {
     final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
-      if (kIsWeb) _profileImageBytes = await pickedFile.readAsBytes();
+      if (kIsWeb) {
+        _profileImageBytes = await pickedFile.readAsBytes();
+      }
       setState(() => _profileImage = pickedFile);
       await uploadProfileImage();
     }
@@ -213,22 +233,24 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     return const AssetImage("assets/images/profile_placeholder.png");
   }
 
-  // ---------- Dashboard Stats & PowerBI ----------
+  // ---------- Dashboard Stats ----------
   Future<void> fetchStats() async {
     setState(() => loadingStats = true);
     try {
       final counts = await admin.getDashboardCounts();
-      final token = await AuthService.getAccessToken();
-
-      final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/recent-activities"),
-        headers: {"Authorization": "Bearer $token"},
-      );
+      final role = await AuthService.getRole();
 
       List<String> activities = [];
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        activities = List<String>.from(data["recent_activities"] ?? []);
+      if (role == "admin") {
+        final token = await AuthService.getAccessToken();
+        final res = await http.get(
+          Uri.parse("http://127.0.0.1:5000/api/admin/recent-activities"),
+          headers: {"Authorization": "Bearer $token"},
+        );
+        if (res.statusCode == 200) {
+          final data = json.decode(res.body);
+          activities = List<String>.from(data["recent_activities"] ?? []);
+        }
       }
 
       setState(() {
@@ -246,33 +268,15 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     }
   }
 
-  Future<void> fetchPowerBIStatus() async {
-    setState(() => checkingPowerBI = true);
-    try {
-      final token = await AuthService.getAccessToken();
-      final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/powerbi/status"),
-        headers: {"Authorization": "Bearer $token"},
-      );
-
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        setState(() {
-          powerBIConnected = data["connected"] ?? false;
-        });
-      } else {
-        setState(() => powerBIConnected = false);
-      }
-    } catch (e) {
-      setState(() => powerBIConnected = false);
-    } finally {
-      setState(() => checkingPowerBI = false);
-    }
-  }
-
   Future<void> fetchAudits({int page = 1}) async {
     setState(() => loadingAudits = true);
     try {
+      final role = await AuthService.getRole();
+      if (role != "admin") {
+        setState(() => loadingAudits = false);
+        return;
+      }
+
       final token = await AuthService.getAccessToken();
       final queryParams = {
         "page": page.toString(),
@@ -346,26 +350,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   void _performLogout(BuildContext context) async {
-    Navigator.of(context).pop();
     await AuthService.logout();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (Route<dynamic> route) => false,
-        );
-      }
-    });
+    if (context.mounted) {
+      context.go('/login');
+    }
   }
-
-  bool _isLoggingOut = false;
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
-      // 🌆 Dynamic background implementation
+      // ≡ƒîå Dynamic background implementation
       body: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
@@ -480,6 +476,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                         context.push(
                                             '/profile?token=${widget.token}');
                                       },
+                                      onLongPress: _pickProfileImage,
                                       child: CircleAvatar(
                                         radius: 18,
                                         backgroundColor: Colors.grey.shade200,
@@ -491,7 +488,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Text(
-                                        "Admin User",
+                                        userName,
                                         style: TextStyle(
                                           fontFamily: 'Poppins',
                                           color: themeProvider.isDarkMode
@@ -511,6 +508,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                       context.push(
                                           '/profile?token=${widget.token}');
                                     },
+                                    onLongPress: _pickProfileImage,
                                     child: CircleAvatar(
                                       radius: 18,
                                       backgroundColor: Colors.grey.shade200,
@@ -616,6 +614,37 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     contentPadding: const EdgeInsets.symmetric(
                                         vertical: 14, horizontal: 10),
                                   ),
+                                  onSubmitted: (query) {
+                                    final q = query.toLowerCase();
+                                    setState(() {
+                                      if (q.contains('job')) {
+                                        currentScreen = "jobs";
+                                      } else if (q.contains('candidate')) {
+                                        currentScreen = "candidates";
+                                      } else if (q.contains('interview')) {
+                                        currentScreen = "interviews";
+                                      } else if (q.contains('pipeline')) {
+                                        // For now, treat pipeline as analytics view
+                                        currentScreen = "analytics";
+                                      } else if (q.contains('analytics') ||
+                                          q.contains('report')) {
+                                        currentScreen = "analytics";
+                                      } else if (q.contains('notification')) {
+                                        currentScreen = "notifications";
+                                      } else if (q.contains('home') ||
+                                          q.contains('dashboard')) {
+                                        currentScreen = "dashboard";
+                                      } else {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                                "No results found for '$query'"),
+                                          ),
+                                        );
+                                      }
+                                    });
+                                  },
                                   cursorColor: Colors.redAccent,
                                   style: TextStyle(
                                     fontFamily: 'Poppins',
@@ -629,160 +658,134 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                             ),
                             const SizedBox(width: 16),
 
-                            Row(
-                              children: [
-                                // ---------- Theme Toggle Switch ----------
-                                Row(
+                            Flexible(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(
-                                      themeProvider.isDarkMode
-                                          ? Icons.dark_mode
-                                          : Icons.light_mode,
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.amber
-                                          : Colors.grey.shade700,
-                                      size: 20,
+                                    // ---------- Theme Toggle Switch ----------
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          themeProvider.isDarkMode
+                                              ? Icons.dark_mode
+                                              : Icons.light_mode,
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.amber
+                                              : Colors.grey.shade700,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Switch(
+                                          value: themeProvider.isDarkMode,
+                                          onChanged: (value) {
+                                            themeProvider.toggleTheme();
+                                          },
+                                          activeThumbColor: Colors.redAccent,
+                                          inactiveTrackColor:
+                                              Colors.grey.shade400,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(width: 12),
+
+                                    // ---------- Analytics Icon ----------
+                                    IconButton(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                              builder: (context) =>
+                                                  RecruitmentPipelinePage(
+                                                      token: widget.token)),
+                                        );
+                                      },
+                                      icon: Image.asset(
+                                        // Changed from Icon to Image.asset
+                                        'assets/icons/data-analytics.png',
+                                        width: 24,
+                                        height: 24,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                      tooltip: "Analytics Dashboard",
                                     ),
                                     const SizedBox(width: 8),
-                                    Switch(
-                                      value: themeProvider.isDarkMode,
-                                      onChanged: (value) {
-                                        themeProvider.toggleTheme();
+
+                                    // ---------- Team Collaboration Icon ----------
+                                    IconButton(
+                                      onPressed: () => setState(() =>
+                                          currentScreen = "team_collaboration"),
+                                      icon: Image.asset(
+                                        // Changed from Icon to Image.asset
+                                        'assets/icons/teamC.png',
+                                        width: 34,
+                                        height: 34,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                      tooltip: "Team Collaboration",
+                                    ),
+                                    const SizedBox(width: 8),
+
+                                    TextButton.icon(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                              builder: (context) =>
+                                                  AdminOfferListScreen()),
+                                        );
                                       },
-                                      activeThumbColor: Colors.redAccent,
-                                      inactiveTrackColor: Colors.grey.shade400,
+                                      icon: Image.asset(
+                                        'assets/icons/add.png',
+                                        width: 30,
+                                        height: 30,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                      label: Text(
+                                        "Create",
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.white
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    IconButton(
+                                      onPressed: () => setState(() =>
+                                          currentScreen = "notifications"),
+                                      icon: Image.asset(
+                                        // Changed from Icon to Image.asset
+                                        'assets/icons/notification.png',
+                                        width: 45,
+                                        height: 45,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    GestureDetector(
+                                      onTap: () {
+                                        context.push(
+                                            '/profile?token=${widget.token}');
+                                      },
+                                      onLongPress: _pickProfileImage,
+                                      child: CircleAvatar(
+                                        radius: 18,
+                                        backgroundColor: Colors.grey.shade200,
+                                        backgroundImage:
+                                            _getProfileImageProvider(),
+                                        child: null,
+                                      ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(width: 12),
-
-                                // ---------- Analytics Icon ----------
-                                IconButton(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) =>
-                                              RecruitmentPipelinePage(
-                                                  token: widget.token)),
-                                    );
-                                  },
-                                  icon: Image.asset(
-                                    // Changed from Icon to Image.asset
-                                    'assets/icons/data-analytics.png',
-                                    width: 24,
-                                    height: 24,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                  tooltip: "Analytics Dashboard",
-                                ),
-                                const SizedBox(width: 8),
-
-                                // ---------- Power BI Status Icon ----------
-                                Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: powerBIConnected
-                                        ? Colors.green
-                                        : Colors.red,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: powerBIConnected
-                                            ? Colors.green.withOpacity(0.6)
-                                            : Colors.red.withOpacity(0.6),
-                                        blurRadius: 12,
-                                        spreadRadius: 2,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Center(
-                                    child: checkingPowerBI
-                                        ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Icon(Icons.bar_chart,
-                                            color: Colors.white, size: 20),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-
-                                // ---------- Team Collaboration Icon ----------
-                                IconButton(
-                                  onPressed: () => setState(() =>
-                                      currentScreen = "team_collaboration"),
-                                  icon: Image.asset(
-                                    // Changed from Icon to Image.asset
-                                    'assets/icons/teamC.png',
-                                    width: 34,
-                                    height: 34,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                  tooltip: "Team Collaboration",
-                                ),
-                                const SizedBox(width: 8),
-
-                                TextButton.icon(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) =>
-                                              AdminOfferListScreen()),
-                                    );
-                                  },
-                                  icon: Image.asset(
-                                    'assets/icons/add.png',
-                                    width: 30,
-                                    height: 30,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                  label: Text(
-                                    "Create",
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                IconButton(
-                                  onPressed: () => setState(
-                                      () => currentScreen = "notifications"),
-                                  icon: Image.asset(
-                                    // Changed from Icon to Image.asset
-                                    'assets/icons/notification.png',
-                                    width: 45,
-                                    height: 45,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                GestureDetector(
-                                  onTap: () {
-                                    context
-                                        .push('/profile?token=${widget.token}');
-                                  },
-                                  child: CircleAvatar(
-                                    radius: 18,
-                                    backgroundColor: Colors.grey.shade200,
-                                    backgroundImage: _getProfileImageProvider(),
-                                    child: null,
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
                           ],
                         ),
@@ -971,7 +974,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 8),
-            Text("Welcome Back, Admin",
+            Text("Welcome Back, $userName",
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 28,
@@ -1094,6 +1097,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1723,7 +1727,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    "Today's Date",
+                    "Calendar",
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
@@ -1758,49 +1762,64 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             ],
           ),
           const SizedBox(height: 16),
-          Container(
-            height: 140,
-            decoration: BoxDecoration(
-              color: (themeProvider.isDarkMode
-                      ? const Color(0xFF14131E)
-                      : Colors.white)
-                  .withOpacity(0.9),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    DateTime.now().day.toString(),
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 48,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.blueAccent,
-                      height: 1.0,
-                    ),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: (themeProvider.isDarkMode
+                        ? const Color(0xFF14131E)
+                        : Colors.white)
+                    .withOpacity(0.9),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    DateFormat('MMMM yyyy').format(DateTime.now()),
-                    style: TextStyle(
+                ],
+              ),
+              child: SfCalendar(
+                view: CalendarView.month,
+                monthViewSettings: MonthViewSettings(
+                  appointmentDisplayMode:
+                      MonthAppointmentDisplayMode.appointment,
+                  showAgenda: false,
+                  monthCellStyle: MonthCellStyle(
+                    textStyle: TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
                       color: themeProvider.isDarkMode
                           ? Colors.grey.shade300
                           : Colors.grey.shade700,
                     ),
+                    todayTextStyle: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: themeProvider.isDarkMode
+                          ? Colors.blueAccent.withOpacity(0.8)
+                          : Colors.blueAccent,
+                    ),
+                    trailingDatesTextStyle: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      color: Colors.grey.shade400,
+                    ),
+                    leadingDatesTextStyle: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      color: Colors.grey.shade400,
+                    ),
                   ),
-                ],
+                ),
+                dataSource: _MeetingDataSource([]),
+                todayHighlightColor: Colors.blueAccent,
+                selectionDecoration: BoxDecoration(
+                  color: Colors.blueAccent.withOpacity(0.1),
+                  border: Border.all(color: Colors.blueAccent, width: 1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                backgroundColor: Colors.transparent,
               ),
             ),
           ),
@@ -1890,33 +1909,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       ),
     );
   }
-}
-
-// Data classes for charts
-class _DepartmentData {
-  final String department;
-  final int count;
-  final Color color;
-  _DepartmentData(this.department, this.count, this.color);
-}
-
-class _HistogramData {
-  final String jobRole;
-  final int candidateCount;
-  _HistogramData(this.jobRole, this.candidateCount);
-}
-
-class _InterviewData {
-  final String status;
-  final int count;
-  _InterviewData(this.status, this.count);
-}
-
-class _CvReviewData {
-  final String week;
-  final int reviewsCompleted;
-  final int reviewsPending;
-  _CvReviewData(this.week, this.reviewsCompleted, this.reviewsPending);
 }
 
 class StackedLineData {

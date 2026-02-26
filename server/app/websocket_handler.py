@@ -100,8 +100,8 @@ def register_websocket_handlers(app):
     
     @socketio.on('connect')
     @socket_auth_required
-    def handle_connect():
-        """Handle WebSocket connection"""
+    def handle_connect(*args, **kwargs):
+        """Handle WebSocket connection (accepts auth/args from Flask-SocketIO)"""
         try:
             user_id = request.user_id
             

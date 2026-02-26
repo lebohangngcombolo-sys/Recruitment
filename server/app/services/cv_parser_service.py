@@ -1,13 +1,12 @@
 import os
 import re
 import logging
-import subprocess
+import json
 from dotenv import load_dotenv
 from openai import OpenAI
 from app.models import Requisition
 from cloudinary.uploader import upload as cloudinary_upload
-import spacy
-from sentence_transformers import SentenceTransformer, util
+from jsonschema import validate, ValidationError
 
 # ----------------------------
 # Environment & Logging Setup
@@ -17,7 +16,22 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ----------------------------
-# Hybrid Resume Analyzer Class
+# LLM Output Schema
+# ----------------------------
+LLM_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "match_score": {"type": "number", "minimum": 0, "maximum": 100},
+        "missing_skills": {"type": "array", "items": {"type": "string"}},
+        "suggestions": {"type": "array", "items": {"type": "string"}},
+        "recommendation": {"type": "string"},
+        "raw_text": {"type": "string"}
+    },
+    "required": ["match_score", "raw_text"]
+}
+
+# ----------------------------
+# Hybrid Resume Analyzer (Online-first, lightweight fallback)
 # ----------------------------
 class HybridResumeAnalyzer:
     def __init__(self):
@@ -26,40 +40,76 @@ class HybridResumeAnalyzer:
         self.openai_client = None
         if api_key:
             try:
+                timeout_value = float(os.getenv("OPENROUTER_TIMEOUT", "30"))
                 self.openai_client = OpenAI(
                     base_url="https://openrouter.ai/api/v1",
                     api_key=api_key,
-                    default_headers={"HTTP-Referer": "http://localhost:5000"}
+                    default_headers={"HTTP-Referer": os.getenv("BACKEND_URL", "http://localhost:5000")},
+                    timeout=timeout_value,
                 )
                 logger.info("OpenRouter client initialized.")
             except Exception as e:
                 logger.error(f"Failed to initialize OpenRouter client: {e}")
 
-        # --- Offline NLP ---
-        self.nlp = self._load_spacy_model("en_core_web_sm")
+    # ----------------------------
+    # Online Analysis
+    # ----------------------------
+    def analyse_online(self, resume_content, job_description):
+        """Analyse resume using OpenRouter API and validate JSON output."""
+        if not self.openai_client:
+            return None
 
-        # --- Offline embeddings ---
+        prompt = f"""Resume:
+{resume_content}
+
+Job Description:
+{job_description}
+
+Task:
+- Analyze the resume against the job description.
+- Give a match score out of 100.
+- Highlight missing skills or experiences.
+- Suggest improvements.
+
+Return valid JSON only with keys: match_score (int), missing_skills (list), suggestions (list), recommendation (string), raw_text (string).
+"""
         try:
-            self.embed_model = SentenceTransformer('all-MiniLM-L6-v2')
-            logger.info("SentenceTransformer embedding model loaded.")
+            response = self.openai_client.chat.completions.create(
+                model=os.getenv("OPENROUTER_MODEL", "openrouter/auto"),
+                messages=[
+                    {"role": "system", "content": "You are an AI recruitment assistant. Always return results in valid JSON format only."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.0,
+                max_tokens=int(os.getenv("OPENROUTER_MAX_TOKENS", "1024")),
+            )
+            text = getattr(response.choices[0].message, "content", "") or ""
+
+            # Try to parse JSON from the response
+            try:
+                parsed = json.loads(text)
+                # Validate against schema
+                validate(parsed, LLM_OUTPUT_SCHEMA)
+                parsed.setdefault("missing_skills", [])
+                parsed.setdefault("suggestions", [])
+                parsed.setdefault("recommendation", "")
+                parsed["raw_text"] = text
+                return parsed
+            except (json.JSONDecodeError, ValidationError) as e:
+                logger.warning(f"LLM returned invalid JSON, falling back to regex parse: {e}")
+                return self._parse_openrouter_response(text)
         except Exception as e:
-            logger.error(f"Failed to load embedding model: {e}")
-            self.embed_model = None
-
-    # ----------------------------
-    # Private Methods
-    # ----------------------------
-    def _load_spacy_model(self, model_name):
-        """Load spaCy model, download if not found."""
-        try:
-            return spacy.load(model_name)
-        except OSError:
-            logger.info(f"{model_name} not found. Downloading...")
-            subprocess.run(["python", "-m", "spacy", "download", model_name], check=True)
-            return spacy.load(model_name)
+            logger.error(f"Online analysis failed: {e}")
+            return {
+                "match_score": 0,
+                "missing_skills": [],
+                "suggestions": [],
+                "recommendation": "",
+                "raw_text": f"Error during online analysis: {str(e)}"
+            }
 
     def _parse_openrouter_response(self, text):
-        """Parse OpenRouter AI response for score, missing skills, suggestions."""
+        """Fallback parser for legacy OpenRouter text outputs."""
         score_match = re.search(r"(\d{1,3})(?:/100|%)", text)
         match_score = int(score_match.group(1)) if score_match else 0
 
@@ -75,113 +125,27 @@ class HybridResumeAnalyzer:
             suggestions_text = suggestions_match.group(1)
             suggestions = [line.strip("- ").strip() for line in suggestions_text.strip().splitlines() if line.strip()]
 
-        return match_score, missing_skills, suggestions
-
-    # ----------------------------
-    # Online Analysis
-    # ----------------------------
-    def analyse_online(self, resume_content, job_description):
-        """Analyse resume using OpenRouter API."""
-        if not self.openai_client:
-            return None
-
-        prompt = f"""
-Resume:
-{resume_content}
-
-Job Description:
-{job_description}
-
-Task:
-- Analyze the resume against the job description.
-- Give a match score out of 100.
-- Highlight missing skills or experiences.
-- Suggest improvements.
-
-Return in format:
-Match Score: XX/100
-Missing Skills:
-- ...
-Suggestions:
-- ...
-"""
-        try:
-            response = self.openai_client.chat.completions.create(
-                model="openrouter/auto",
-                messages=[
-                    {"role": "system", "content": "You are an AI recruitment assistant. Always return results in the required format only."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                top_p=0.9,
-                max_tokens=1024,
-                request_timeout=10
-            )
-            text = getattr(response.choices[0].message, "content", "") or ""
-            match_score, missing_skills, suggestions = self._parse_openrouter_response(text)
-
-            return {
-                "match_score": match_score,
-                "missing_skills": missing_skills,
-                "suggestions": suggestions,
-                "raw_text": text
-            }
-
-        except Exception as e:
-            logger.error(f"Online analysis failed: {e}")
-            return {
-                "match_score": 0,
-                "missing_skills": [],
-                "suggestions": [],
-                "raw_text": f"Error during online analysis: {str(e)}"
-            }
-
-    # ----------------------------
-    # Embedding-based Offline Analysis
-    # ----------------------------
-    def analyse_offline_embedding(self, resume_content, job_description):
-        """Offline embedding-based NLP analysis."""
-        # --- Keyword extraction ---
-        resume_doc = self.nlp(resume_content.lower())
-        job_doc = self.nlp(job_description.lower())
-
-        resume_skills = set(token.lemma_ for token in resume_doc if token.pos_ in ["NOUN", "PROPN", "VERB", "ADJ"])
-        job_skills = set(token.lemma_ for token in job_doc if token.pos_ in ["NOUN", "PROPN", "VERB", "ADJ"])
-        missing_skills = list(job_skills - resume_skills)
-
-        # --- Embedding similarity ---
-        if self.embed_model:
-            embeddings = self.embed_model.encode([resume_content, job_description], convert_to_tensor=True)
-            similarity_score = float(util.cos_sim(embeddings[0], embeddings[1]).item())
-            match_score = int(similarity_score * 100)
-        else:
-            # fallback to keyword match if embeddings fail
-            total_skills = len(job_skills)
-            matched_skills = total_skills - len(missing_skills)
-            match_score = int((matched_skills / total_skills) * 100) if total_skills else 0
-
-        suggestions = ["Consider highlighting missing skills in your resume."] if missing_skills else []
-
         return {
             "match_score": match_score,
             "missing_skills": missing_skills,
             "suggestions": suggestions,
-            "raw_text": "Offline embedding-based analysis performed" if self.embed_model else "Offline keyword-based analysis performed"
+            "recommendation": "",
+            "raw_text": text
         }
 
     # ----------------------------
-    # Keyword-only Offline Analysis
+    # Lightweight Offline Analysis (Keyword-only)
     # ----------------------------
     def analyse_offline_keywords(self, resume_content, job_description):
-        """Simple keyword-only offline NLP analysis as final fallback."""
-        resume_doc = self.nlp(resume_content.lower())
-        job_doc = self.nlp(job_description.lower())
+        """Simple keyword-only offline NLP analysis as a low-cost fallback."""
+        resume_lower = (resume_content or "").lower()
+        job_lower = (job_description or "").lower()
 
-        resume_skills = set(token.lemma_ for token in resume_doc if token.pos_ in ["NOUN", "PROPN"])
-        job_skills = set(token.lemma_ for token in job_doc if token.pos_ in ["NOUN", "PROPN"])
-        missing_skills = list(job_skills - resume_skills)
+        resume_words = set(re.findall(r'\b[a-z]{3,}\b', resume_lower))
+        job_words = set(re.findall(r'\b[a-z]{3,}\b', job_lower))
 
-        total_skills = len(job_skills)
+        missing_skills = list(job_words - resume_words)
+        total_skills = len(job_words)
         matched_skills = total_skills - len(missing_skills)
         match_score = int((matched_skills / total_skills) * 100) if total_skills else 0
 
@@ -191,52 +155,82 @@ Suggestions:
             "match_score": match_score,
             "missing_skills": missing_skills,
             "suggestions": suggestions,
+            "recommendation": "",
             "raw_text": "Offline keyword-only analysis performed"
         }
 
     # ----------------------------
-    # Hybrid Wrapper with 3-level Fallback
+    # Hybrid Wrapper (online -> keyword fallback)
     # ----------------------------
     def analyse(self, resume_content, job_id):
-        """Hybrid analysis: online -> embedding offline -> keyword offline."""
         job = Requisition.query.get(job_id)
         if not job:
             return {
                 "match_score": 0,
                 "missing_skills": [],
                 "suggestions": [],
+                "recommendation": "",
                 "raw_text": "Job not found"
             }
 
         job_description = job.description or ""
 
-        # --- 1. Online OpenRouter ---
+        # Try online first
         if self.openai_client:
             result = self.analyse_online(resume_content, job_description)
-            if result and "Error during online analysis" not in result["raw_text"]:
+            if result and "Error during online analysis" not in result.get("raw_text", ""):
                 return result
 
-        # --- 2. Offline Embedding ---
-        result = self.analyse_offline_embedding(resume_content, job_description)
-        if self.embed_model or result["match_score"] > 0:
-            return result
-
-        # --- 3. Offline Keyword-only ---
+        # Fallback to lightweight keyword-only analysis
         return self.analyse_offline_keywords(resume_content, job_description)
 
     # ----------------------------
-    # Cloudinary Upload
+    # Cloudinary Upload (Candidate_CV folder for easy retrieval)
     # ----------------------------
+    CLOUDINARY_CV_FOLDER = "Candidate_CV"
+
     @staticmethod
-    def upload_cv(file):
-        """Upload CV to Cloudinary and return secure URL."""
+    def _sanitize_public_id(name):
+        """Make a safe public_id: alphanumeric, dots, hyphens, underscores only."""
+        if not name or not name.strip():
+            return "cv"
+        base = name.strip()
+        if "/" in base or "\\" in base:
+            base = base.replace("\\", "/").split("/")[-1]
+        safe = "".join(c if c.isalnum() or c in "._-" else "_" for c in base)
+        return safe[:200] or "cv"
+
+    @staticmethod
+    def upload_cv(file, filename=None):
+        """Upload CV to Cloudinary (folder: Candidate_CV) and return secure URL.
+        Accepts file path (str) or file-like object (e.g. Werkzeug FileStorage).
+        Pass filename so the asset is stored with the correct name and format in Cloudinary.
+        """
         try:
-            result = cloudinary_upload(
-                file,
-                resource_type="raw",
-                folder="candidate_cvs"
-            )
-            return result.get("secure_url")
+            if isinstance(file, str):
+                path = file
+                name = filename or path.split("/")[-1].split("\\")[-1] or "cv.pdf"
+                public_id = HybridResumeAnalyzer._sanitize_public_id(name)
+                with open(file, "rb") as f:
+                    result = cloudinary_upload(
+                        f,
+                        resource_type="raw",
+                        folder=HybridResumeAnalyzer.CLOUDINARY_CV_FOLDER,
+                        public_id=public_id,
+                    )
+            else:
+                stream = getattr(file, "stream", file)
+                if hasattr(stream, "seek"):
+                    stream.seek(0)
+                name = filename or getattr(file, "filename", None) or "resume.pdf"
+                public_id = HybridResumeAnalyzer._sanitize_public_id(name)
+                result = cloudinary_upload(
+                    file,
+                    resource_type="raw",
+                    folder=HybridResumeAnalyzer.CLOUDINARY_CV_FOLDER,
+                    public_id=public_id,
+                )
+            return result.get("secure_url") if result else None
         except Exception as e:
-            logger.error(f"Cloudinary upload failed: {e}")
+            logger.error("Cloudinary upload failed: %s", e, exc_info=True)
             return None

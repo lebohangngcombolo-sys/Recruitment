@@ -1,11 +1,10 @@
-from flask import Blueprint, request, jsonify, current_app
+﻿from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.extensions import db
 from app.models import User, Requisition, Candidate, Application, AssessmentResult, Interview, Notification, AuditLog, Conversation, SharedNote, Meeting, CVAnalysis, InterviewFeedback, Offer, OfferStatus
 from datetime import datetime, timedelta
 from app.utils.decorators import role_required
 from app.services.email_service import EmailService
-from app.services.audit_service import AuditService
 from app.services.audit2 import AuditService
 from flask_cors import cross_origin
 from sqlalchemy import func, and_, or_
@@ -17,6 +16,27 @@ from app.schemas.job_schemas import (
     job_list_schema, job_filter_schema, job_activity_log_schema
 )
 
+
+def _normalize_application_deadline(value):
+    """Parse date string into ISO format for Marshmallow, or return None. Accepts YYYY-MM-DD, DD Mon YYYY, etc."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%dT%H:%M:%S")
+    s = (value if isinstance(value, str) else str(value)).strip()
+    if not s or s.lower() in ("null", "none"):
+        return None
+    # Already ISO date or datetime
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return s if len(s) > 10 else f"{s}T00:00:00"
+    # Try common formats (use full string; some formats need more than 10 chars)
+    for fmt in ("%d %b %Y", "%d %B %Y", "%d/%m/%Y", "%m/%d/%Y", "%Y-%m-%d", "%d-%m-%Y", "%b %d %Y", "%B %d %Y"):
+        try:
+            dt = datetime.strptime(s[:50].strip(), fmt)
+            return dt.strftime("%Y-%m-%dT00:00:00")
+        except ValueError:
+            continue
+    return None
 
 
 
@@ -264,11 +284,21 @@ def create_job():
     """Create a new job posting"""
     try:
         data = request.get_json()
-        
+        if data is None:
+            return jsonify({
+                "error": "Invalid request",
+                "details": {"_schema": ["Request body must be valid JSON"]}
+            }), 400
+
+        # Normalize application_deadline: accept any common date format, output ISO for schema
+        raw_deadline = data.get("application_deadline")
+        data["application_deadline"] = _normalize_application_deadline(raw_deadline)
+
         # Validate input using schema
         try:
             validated_data = job_create_schema.load(data)
         except ValidationError as e:
+            current_app.logger.warning(f"Job create validation failed: {e.messages}")
             return jsonify({
                 "error": "Validation failed",
                 "details": e.messages
@@ -304,7 +334,13 @@ def update_job(job_id):
     """Update a job posting (partial updates allowed)"""
     try:
         data = request.get_json()
-        
+        if data is None:
+            return jsonify({"error": "Invalid request", "details": {"_schema": ["Request body must be valid JSON"]}}), 400
+
+        # Normalize application_deadline for schema
+        if "application_deadline" in data:
+            data["application_deadline"] = _normalize_application_deadline(data["application_deadline"])
+
         # Validate update data
         try:
             validated_data = job_update_schema.load(data, partial=True)
@@ -526,11 +562,25 @@ def get_job_applications(job_id):
             error_out=False
         )
         
-        # Prepare response
+        # Enrich each application with candidate details (full_name, email, phone) and job info
+        enriched = []
+        for app in applications.items:
+            app_dict = app.to_dict()
+            cand = Candidate.query.get(app.candidate_id) if app.candidate_id else None
+            user = User.query.get(cand.user_id) if cand and cand.user_id else None
+            app_dict["candidate"] = {
+                "full_name": cand.full_name if cand else "Unknown",
+                "email": user.email if user else "",
+                "phone": (cand.phone or "") if cand else "",
+            } if cand else {"full_name": "Unknown", "email": "", "phone": ""}
+            enriched.append(app_dict)
+        
         response = {
             "job_id": job_id,
             "job_title": job.title,
-            "applications": [app.to_dict() for app in applications.items],
+            "company": getattr(job, "company", None) or "",
+            "employment_type": getattr(job, "employment_type", None) or "Full Time",
+            "applications": enriched,
             "pagination": {
                 "page": applications.page,
                 "per_page": applications.per_page,
@@ -669,9 +719,19 @@ def shortlist_candidates(job_id):
         assessment_score = app.assessment_score or 0
 
         try:
+            weightings = job.weightings or {
+                "cv": 60,
+                "assessment": 40,
+                "interview": 0,
+                "references": 0
+            }
+            interview_score = app.interview_feedback_score or 0
+            references_score = 0
             overall = (
-                (cv_score * job.weightings.get("cv", 60) / 100) +
-                (assessment_score * job.weightings.get("assessment", 40) / 100)
+                (cv_score * weightings.get("cv", 0) / 100) +
+                (assessment_score * weightings.get("assessment", 0) / 100) +
+                (interview_score * weightings.get("interview", 0) / 100) +
+                (references_score * weightings.get("references", 0) / 100)
             )
         except Exception:
             overall = 0
@@ -896,7 +956,7 @@ def dashboard_counts():
 
 
 # =====================================================
-# 📅 INTERVIEW MANAGEMENT ROUTES (with Google Calendar)
+# ≡ƒôà INTERVIEW MANAGEMENT ROUTES (with Google Calendar)
 # =====================================================
 
 @admin_bp.route("/jobs/interviews", methods=["GET", "POST"])
@@ -1062,7 +1122,7 @@ def manage_interviews():
 
 
 # =====================================================
-# ♻️ RESCHEDULE INTERVIEW (with Google Calendar)
+# ΓÖ╗∩╕Å RESCHEDULE INTERVIEW (with Google Calendar)
 # =====================================================
 @admin_bp.route("/interviews/reschedule/<int:interview_id>", methods=["PATCH", "PUT"])
 @role_required(["admin", "hiring_manager", "hr"])
@@ -1184,7 +1244,7 @@ def reschedule_interview(interview_id):
 
 
 # =====================================================
-# ❌ CANCEL INTERVIEW (with Google Calendar)
+# Γ¥î CANCEL INTERVIEW (with Google Calendar)
 # =====================================================
 @admin_bp.route("/interviews/cancel/<int:interview_id>", methods=["DELETE", "OPTIONS"])
 @role_required(["admin", "hiring_manager", "hr"])
@@ -1272,7 +1332,7 @@ def cancel_interview(interview_id):
 
 
 # =====================================================
-# 📅 GOOGLE CALENDAR SYNC ROUTES
+# ≡ƒôà GOOGLE CALENDAR SYNC ROUTES
 # =====================================================
 
 @admin_bp.route("/interviews/calendar/sync", methods=["GET"])
@@ -1409,7 +1469,7 @@ def sync_single_interview(interview_id):
 
 
 # =====================================================
-# 🔄 BULK SYNC INTERVIEWS
+# ≡ƒöä BULK SYNC INTERVIEWS
 # =====================================================
 
 @admin_bp.route("/interviews/calendar/bulk-sync", methods=["POST"])
@@ -1530,7 +1590,7 @@ def bulk_sync_interviews():
 
 
 # =====================================================
-# 🔍 GET INTERVIEW CALENDAR STATUS
+# ≡ƒöì GET INTERVIEW CALENDAR STATUS
 # =====================================================
 
 @admin_bp.route("/interviews/<int:interview_id>/calendar/status", methods=["GET"])
@@ -1591,7 +1651,7 @@ def get_candidate_applications():
                 return jsonify({"error": "Candidate not found"}), 404
             applications = Application.query.filter_by(candidate_id=candidate.id).all()
         else:
-            # No candidate_id → return all applications
+            # No candidate_id ΓåÆ return all applications
             applications = Application.query.all()
 
         result = []
@@ -1615,18 +1675,18 @@ def get_candidate_applications():
         return jsonify({"error": "Internal server error"}), 500
     
 # =====================================================
-# 🔄 UPDATE INTERVIEW STATUS (Completed, No-show, etc.)
+# ≡ƒöä UPDATE INTERVIEW STATUS (Completed, No-show, etc.)
 # =====================================================
 @admin_bp.route("/interviews/<int:interview_id>/status", methods=["PATCH", "PUT"])
 @role_required(["admin", "hiring_manager", "hr"])
 def update_interview_status(interview_id):
     """
     Update interview status:
-    - scheduled → completed
-    - scheduled → no_show
-    - scheduled → cancelled_by_candidate
-    - scheduled → feedback_pending (when interview done, feedback needed)
-    - feedback_pending → feedback_submitted
+    - scheduled ΓåÆ completed
+    - scheduled ΓåÆ no_show
+    - scheduled ΓåÆ cancelled_by_candidate
+    - scheduled ΓåÆ feedback_pending (when interview done, feedback needed)
+    - feedback_pending ΓåÆ feedback_submitted
     """
     try:
         interview = Interview.query.get_or_404(interview_id)
@@ -1658,7 +1718,7 @@ def update_interview_status(interview_id):
             
             # Append status change note with timestamp
             timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-            status_note = f"\n[{timestamp}] Status changed: {old_status} → {new_status}"
+            status_note = f"\n[{timestamp}] Status changed: {old_status} ΓåÆ {new_status}"
             if notes:
                 status_note += f" - {notes}"
             
@@ -1748,7 +1808,7 @@ def update_interview_status(interview_id):
             admin_id=current_user_id,
             action=f"Interview Status Updated to {new_status}",
             target_user_id=interview.candidate_id,
-            details=f"Interview {interview_id}: {old_status} → {new_status}"
+            details=f"Interview {interview_id}: {old_status} ΓåÆ {new_status}"
         )
         
         return jsonify({
@@ -1768,7 +1828,7 @@ def update_interview_status(interview_id):
         return jsonify({"error": "Internal server error"}), 500
     
 # =====================================================
-# 📝 SUBMIT INTERVIEW FEEDBACK
+# ≡ƒô¥ SUBMIT INTERVIEW FEEDBACK
 # =====================================================
 @admin_bp.route("/interviews/<int:interview_id>/feedback", methods=["POST"])
 @role_required(["admin", "hiring_manager", "hr"])
@@ -1940,7 +2000,7 @@ def submit_interview_feedback(interview_id):
 
 
 # =====================================================
-# 📊 GET INTERVIEW FEEDBACK
+# ≡ƒôè GET INTERVIEW FEEDBACK
 # =====================================================
 @admin_bp.route("/interviews/<int:interview_id>/feedback", methods=["GET"])
 @role_required(["admin", "hiring_manager", "hr"])
@@ -2002,7 +2062,7 @@ def get_interview_feedback(interview_id):
         return jsonify({"error": "Internal server error"}), 500
     
 # =====================================================
-# 🔔 INTERVIEW REMINDERS SYSTEM
+# ≡ƒöö INTERVIEW REMINDERS SYSTEM
 # =====================================================
 @admin_bp.route("/interviews/reminders/schedule", methods=["POST"])
 @role_required(["admin", "hiring_manager", "hr"])
@@ -2093,7 +2153,7 @@ def schedule_interview_reminders():
 
 
 # =====================================================
-# ⚙️ BACKGROUND TASK: SEND REMINDERS
+# ΓÜÖ∩╕Å BACKGROUND TASK: SEND REMINDERS
 # =====================================================
 def send_interview_reminders():
     """
@@ -2237,7 +2297,7 @@ def send_1_hour_reminder(interview):
 
 
 # =====================================================
-# 📋 GET SCHEDULED REMINDERS
+# ≡ƒôï GET SCHEDULED REMINDERS
 # =====================================================
 @admin_bp.route("/interviews/<int:interview_id>/reminders", methods=["GET"])
 @role_required(["admin", "hiring_manager", "hr"])
@@ -2559,11 +2619,29 @@ def download_application_cv(application_id):
 @role_required(["admin", "hiring_manager", "hr"])
 def get_all_candidates():
     """
-    Fetch all candidates with their profile info.
+    Fetch all candidates with user email and applications summary (jobs they applied to).
     """
     try:
         candidates = Candidate.query.all()
-        enriched = [c.to_dict() for c in candidates]
+        enriched = []
+        for c in candidates:
+            c_dict = c.to_dict()
+            user = User.query.get(c.user_id) if c.user_id else None
+            c_dict["email"] = user.email if user else ""
+            # Applications summary: job title, company, employment_type, status per application
+            apps = Application.query.filter_by(candidate_id=c.id).all()
+            c_dict["applications_summary"] = [
+                {
+                    "application_id": a.id,
+                    "job_id": a.requisition_id,
+                    "job_title": a.requisition.title if a.requisition else "",
+                    "company": getattr(a.requisition, "company", None) or "" if a.requisition else "",
+                    "employment_type": getattr(a.requisition, "employment_type", None) or "Full Time" if a.requisition else "",
+                    "status": a.status or "",
+                }
+                for a in apps
+            ]
+            enriched.append(c_dict)
 
         return jsonify({
             "total": len(enriched),
@@ -2572,7 +2650,88 @@ def get_all_candidates():
     except Exception as e:
         current_app.logger.error(f"Error fetching candidates: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
-    
+
+
+@admin_bp.route("/candidates/<int:candidate_id>/applications", methods=["GET"])
+@role_required(["admin", "hiring_manager", "hr"])
+def get_applications_for_candidate(candidate_id):
+    """
+    Get all applications for a candidate with job details (title, company, employment_type).
+    """
+    try:
+        candidate = Candidate.query.get(candidate_id)
+        if not candidate:
+            return jsonify({"error": "Candidate not found"}), 404
+        applications = Application.query.filter_by(candidate_id=candidate_id).all()
+        result = []
+        for a in applications:
+            req = a.requisition
+            result.append({
+                "application": a.to_dict(),
+                "job": {
+                    "id": req.id if req else None,
+                    "title": req.title if req else "",
+                    "company": getattr(req, "company", None) or "" if req else "",
+                    "employment_type": getattr(req, "employment_type", None) or "Full Time" if req else "",
+                    "category": getattr(req, "category", None) or "" if req else "",
+                } if req else {},
+            })
+        return jsonify({"candidate_id": candidate_id, "applications": result}), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching candidate applications: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@admin_bp.route("/candidates/database-details", methods=["GET"])
+@role_required(["admin", "hiring_manager", "hr"])
+def get_candidates_database_details():
+    """
+    Return all candidates with their linked user records as stored in the database.
+    Use this for easy retrieval and inspection of stored user + candidate details.
+    """
+    try:
+        candidates = Candidate.query.all()
+        rows = []
+        for c in candidates:
+            user = User.query.get(c.user_id) if c.user_id else None
+            rows.append({
+                "candidate": c.to_dict(),
+                "user": user.to_dict() if user else None,
+            })
+        return jsonify({
+            "total": len(rows),
+            "data": rows,
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching candidates database details: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@admin_bp.route("/users/database-details", methods=["GET"])
+@role_required(["admin", "hiring_manager", "hr"])
+def get_users_database_details():
+    """
+    Return all users as stored in the database (including profile JSON).
+    Use this for easy retrieval and inspection of stored user details.
+    """
+    try:
+        users = User.query.order_by(User.id).all()
+        rows = []
+        for u in users:
+            cand = Candidate.query.filter_by(user_id=u.id).first()
+            rows.append({
+                "user": u.to_dict(),
+                "candidate": cand.to_dict() if cand else None,
+            })
+        return jsonify({
+            "total": len(rows),
+            "data": rows,
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching users database details: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
 @admin_bp.route('/api/auth/enroll_mfa/<int:user_id>', methods=['POST'])
 @jwt_required()
 def enroll_mfa(user_id):
@@ -3391,7 +3550,7 @@ def get_candidates_ready_for_offer():
                 "candidateName": row.candidate_name,
                 "email": row.email,
 
-                # ✅ REQUIRED BY FRONTEND
+                # Γ£à REQUIRED BY FRONTEND
                 "cultureFitScore": culture_fit_score,
 
                 "statistics": {

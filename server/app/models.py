@@ -1,7 +1,6 @@
 from app.extensions import db
 from datetime import datetime
-from sqlalchemy.dialects.postgresql import JSON
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSON, JSONB
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 import enum
 
@@ -86,15 +85,15 @@ class User(db.Model):
             "id": self.id,
             "email": self.email,
             "role": self.role,
-            "profile": self.profile,
-            "settings": self.settings,
+            "profile": self.profile if self.profile is not None else {},
+            "settings": self.settings if self.settings is not None else {},
             "is_verified": self.is_verified,
-            "enrollment_completed": self.enrollment_completed,
-            "dark_mode": self.dark_mode,
-            "is_active": self.is_active,
-            "created_at": self.created_at.isoformat(),
-            "first_login": self.first_login,
-            "mfa_enabled": self.mfa_enabled
+            "enrollment_completed": getattr(self, "enrollment_completed", False),
+            "dark_mode": getattr(self, "dark_mode", False),
+            "is_active": getattr(self, "is_active", True),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "first_login": getattr(self, "first_login", True),
+            "mfa_enabled": getattr(self, "mfa_enabled", False),
         }
 
     def to_dict_with_presence(self):
@@ -169,13 +168,56 @@ class JobActivityLog(db.Model):
         }
 
 
+# ------------------- TEST PACK -------------------
+class TestPack(db.Model):
+    """
+    Reusable assessment pack (technical or role-specific) for requisitions.
+    questions: list of {"question_text", "options", "correct_option", "weight"?}
+    """
+    __tablename__ = 'test_packs'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    category = db.Column(db.String(50), nullable=False)  # 'technical' | 'role-specific'
+    description = db.Column(db.Text, default="")
+    questions = db.Column(MutableList.as_mutable(JSON), default=list)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+
+    requisitions = db.relationship(
+        'Requisition',
+        backref=db.backref('test_pack', lazy=True),
+        foreign_keys='Requisition.test_pack_id'
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "category": self.category,
+            "description": self.description or "",
+            "questions": self.questions or [],
+            "question_count": len(self.questions or []),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+        }
+
+
 # ------------------- REQUISITION -------------------
 class Requisition(db.Model):
     __tablename__ = 'requisitions'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     description = db.Column(db.Text)
+    company = db.Column(db.String(150), default="")
+    location = db.Column(db.String(150), default="")
+    salary_min = db.Column(db.Float, nullable=True)
+    salary_max = db.Column(db.Float, nullable=True)
+    salary_currency = db.Column(db.String(10), default="ZAR")
+    salary_period = db.Column(db.String(20), default="monthly")
     job_summary = db.Column(db.Text, default="")
+    employment_type = db.Column(db.String(50), nullable=False, default="full_time")
     responsibilities = db.Column(JSON, default=[])
     company_details = db.Column(db.Text, default="")
     qualifications = db.Column(JSON, default=[])
@@ -183,8 +225,14 @@ class Requisition(db.Model):
     required_skills = db.Column(JSON, default=[])
     min_experience = db.Column(db.Float, default=0)
     knockout_rules = db.Column(JSON, default=[])
-    weightings = db.Column(JSON, default={'cv': 60, 'assessment': 40})
+    weightings = db.Column(JSON, default={
+        "cv": 60,
+        "assessment": 40,
+        "interview": 0,
+        "references": 0
+    })
     assessment_pack = db.Column(JSON, default={"questions": []})
+    test_pack_id = db.Column(db.Integer, db.ForeignKey('test_packs.id'), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     published_on = db.Column(db.DateTime, default=datetime.utcnow)
@@ -195,14 +243,28 @@ class Requisition(db.Model):
     deleted_at = db.Column(db.DateTime, nullable=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Additional display fields for job listing (non-duplicating)
+    salary_range = db.Column(db.String(100), default="", nullable=True)  # e.g. R850k - R1.2m
+    application_deadline = db.Column(db.DateTime, nullable=True)
+    banner = db.Column(db.String(500), nullable=True)  # company logo / image URL
+
     applications = db.relationship('Application', back_populates='requisition', lazy=True)
+    creator = db.relationship('User', foreign_keys=[created_by], lazy=True)
 
     def to_dict(self):
+        creator = self.creator
         return {
             "id": self.id,
             "title": self.title,
             "description": self.description,
+            "company": self.company,
+            "location": self.location,
+            "salary_min": self.salary_min,
+            "salary_max": self.salary_max,
+            "salary_currency": self.salary_currency,
+            "salary_period": self.salary_period,
             "job_summary": self.job_summary,
+            "employment_type": self.employment_type,
             "responsibilities": self.responsibilities,
             "company_details": self.company_details,
             "qualifications": self.qualifications,
@@ -212,13 +274,27 @@ class Requisition(db.Model):
             "knockout_rules": self.knockout_rules,
             "weightings": self.weightings,
             "assessment_pack": self.assessment_pack,
+            "test_pack_id": self.test_pack_id,
+            "test_pack": self.test_pack.to_dict() if self.test_pack and not self.test_pack.deleted_at else None,
             "created_by": self.created_by,
+            "created_by_user": {
+                "id": creator.id,
+                "name": creator.full_name,
+                "email": creator.email,
+                "role": creator.role,
+            } if creator else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "published_on": self.published_on.isoformat(),
             "vacancy": self.vacancy,
             "is_active": self.is_active,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+            "location": self.location or "",
+            "employment_type": self.employment_type or "Full Time",
+            "salary_range": self.salary_range or "",
+            "application_deadline": self.application_deadline.isoformat() if self.application_deadline else None,
+            "company": self.company or "",
+            "banner": self.banner,
         }
     
     def to_dict_with_stats(self):
@@ -344,7 +420,9 @@ class Application(db.Model):
     cv_parser_result = db.Column(JSON, default={})
     assessment_score = db.Column(db.Float, default=0)
     overall_score = db.Column(db.Float, default=0)
-    recommendation = db.Column(db.String(50))
+    scoring_breakdown = db.Column(JSON, default={})
+    knockout_rule_violations = db.Column(JSON, default=[])
+    recommendation = db.Column(db.String(500))
     assessed_date = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_saved_screen = db.Column(db.String(50))
@@ -371,6 +449,8 @@ class Application(db.Model):
             "cv_parser_result": self.cv_parser_result,
             "assessment_score": self.assessment_score,
             "overall_score": self.overall_score,
+            "scoring_breakdown": self.scoring_breakdown,
+            "knockout_rule_violations": self.knockout_rule_violations,
             "recommendation": self.recommendation,
             "assessed_date": self.assessed_date.isoformat() if self.assessed_date else None,
             "created_at": self.created_at.isoformat(),
@@ -534,6 +614,9 @@ class CVAnalysis(db.Model):
     job_description = db.Column(db.Text)
     cv_text = db.Column(db.Text)
     result = db.Column(JSON, default={})
+    status = db.Column(db.String(20), default="pending")
+    started_at = db.Column(db.DateTime, nullable=True)
+    finished_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     candidate = db.relationship('Candidate', back_populates='analyses')
@@ -869,8 +952,8 @@ class UserPresence(db.Model):
     typing_in_thread = db.Column(db.Integer, nullable=True)
     socket_id = db.Column(db.String(100), nullable=True)
     
-    # Relationship
-    user = db.relationship('User', backref=db.backref('user_presence', uselist=False))
+    # Relationship (back_populates User.presence to avoid duplicate relationship warning)
+    user = db.relationship('User', back_populates='presence', uselist=False)
 
     
     def to_dict(self):

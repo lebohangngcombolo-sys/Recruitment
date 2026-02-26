@@ -4,10 +4,11 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/custom_textfield2.dart';
 import '../../widgets/custom_button.dart';
-import 'package:go_router/go_router.dart';
+import '../../utils/api_endpoints.dart';
 
 class ResetPasswordPage extends StatefulWidget {
   final String? token;
@@ -24,6 +25,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
   final TextEditingController confirmPasswordController =
       TextEditingController();
   bool loading = false;
+  bool _obscureNewPassword = true;
+  bool _obscureConfirmPassword = true;
   String? token;
 
   late AnimationController _animationController;
@@ -75,7 +78,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
 
     try {
       final res = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/auth/reset-password"),
+        Uri.parse(ApiEndpoints.resetPassword),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'token': token,
@@ -133,17 +136,22 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
             ),
           ),
 
-          // Two logos
+          // Top bar: back arrow + logo only
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Image.asset("assets/images/logo2.png",
-                      width: size.width > 600 ? 200 : 120),
-                  Image.asset("assets/images/logo.png",
-                      width: size.width > 600 ? 200 : 120),
+                  IconButton(
+                    icon: Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                    onPressed: () => context.go('/login'),
+                  ),
+                  SizedBox(width: 12),
+                  Image.asset(
+                    "assets/icons/khono.png",
+                    height: 40,
+                    fit: BoxFit.contain,
+                  ),
                 ],
               ),
             ),
@@ -159,8 +167,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                   scale: _scaleAnimation,
                   child: Container(
                     width: size.width > 800 ? 400 : size.width * 0.9,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 32),
+                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.08),
                       borderRadius: BorderRadius.circular(18),
@@ -173,8 +180,8 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const SizedBox(height: 16),
-                            const Text(
+                            SizedBox(height: 16),
+                            Text(
                               "RESET PASSWORD",
                               style: TextStyle(
                                 fontSize: 28,
@@ -188,22 +195,37 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 16),
+                            SizedBox(height: 16),
 
-                            const Text(
+                            Text(
                               "Enter your new password",
                               style: TextStyle(
                                   fontSize: 16, color: Colors.white70),
                             ),
-                            const SizedBox(height: 24),
+                            SizedBox(height: 24),
 
-                            // Password fields
+                            // Password fields (white)
                             CustomTextField(
                               label: "New Password",
                               controller: newPasswordController,
                               inputType: TextInputType.visiblePassword,
-                              textColor: Colors.white,
-                              backgroundColor: Colors.transparent,
+                              obscureText: _obscureNewPassword,
+                              textColor: Colors.black,
+                              backgroundColor: Colors.white,
+                              borderColor: Colors.grey.shade300,
+                              labelColor: Colors.white,
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscureNewPassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  color: Colors.grey.shade600,
+                                ),
+                                onPressed: () {
+                                  setState(() => _obscureNewPassword =
+                                      !_obscureNewPassword);
+                                },
+                              ),
                             ),
                             const SizedBox(height: 12),
 
@@ -211,8 +233,23 @@ class _ResetPasswordPageState extends State<ResetPasswordPage>
                               label: "Confirm Password",
                               controller: confirmPasswordController,
                               inputType: TextInputType.visiblePassword,
-                              textColor: Colors.white,
-                              backgroundColor: Colors.transparent,
+                              obscureText: _obscureConfirmPassword,
+                              textColor: Colors.black,
+                              backgroundColor: Colors.white,
+                              borderColor: Colors.grey.shade300,
+                              labelColor: Colors.white,
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscureConfirmPassword
+                                      ? Icons.visibility_off
+                                      : Icons.visibility,
+                                  color: Colors.grey.shade600,
+                                ),
+                                onPressed: () {
+                                  setState(() => _obscureConfirmPassword =
+                                      !_obscureConfirmPassword);
+                                },
+                              ),
                             ),
 
                             const SizedBox(height: 24),

@@ -1,27 +1,47 @@
+﻿import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_web_plugins/flutter_web_plugins.dart'; // ⚡ Web URL strategy
+import 'package:flutter_web_plugins/flutter_web_plugins.dart'; // ΓÜí Web URL strategy
+import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
+import 'package:webview_flutter_web/webview_flutter_web.dart';
 
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/register_screen.dart';
 import 'screens/candidate/candidate_dashboard.dart';
+import 'screens/candidate/find_talent_page.dart';
+import 'screens/candidate/jobs_applied_page.dart';
+import 'screens/candidate/intern_stories_page.dart';
+import 'screens/candidate/job_details_page.dart';
 import 'screens/enrollment/enrollment_screen.dart';
 import 'screens/admin/admin_dashboard.dart';
 import 'screens/hiring_manager/hiring_manager_dashboard.dart';
 import 'screens/landing_page/landing_page.dart';
+import 'screens/about_us_page.dart';
+import 'screens/contact_page.dart';
 import 'screens/auth/reset_password.dart';
 import 'screens/admin/profile_page.dart';
 import 'screens/auth/oath_callback_screen.dart';
 import 'screens/auth/mfa_verification_screen.dart';
 import 'screens/auth/sso_handler_screen.dart';
+import 'screens/auth/verification_screen.dart';
+import 'screens/auth/forgot_password_screen.dart';
+import 'screens/auth/sso_enterprise_screen.dart';
 import 'screens/hr/hr_dashboard.dart';
+import 'screens/hiring_manager/pipeline_page.dart';
+import 'screens/hiring_manager/offer_list_screen.dart';
 
 import 'providers/theme_provider.dart';
 import 'utils/theme_utils.dart';
 
 void main() {
-  // ⚡ Fix Flutter Web initial route handling
+  // ΓÜí Fix Flutter Web initial route handling
   setUrlStrategy(PathUrlStrategy());
+
+  // WebView: set web platform implementation so CV preview works in-app on web
+  if (kIsWeb) {
+    WebViewPlatform.instance = WebWebViewPlatform();
+  }
 
   runApp(
     MultiProvider(
@@ -33,7 +53,7 @@ void main() {
   );
 }
 
-// ✅ Persistent router
+// Γ£à Persistent router
 final GoRouter _router = GoRouter(
   initialLocation: '/',
   routes: [
@@ -44,6 +64,51 @@ final GoRouter _router = GoRouter(
     GoRoute(
       path: '/login',
       builder: (context, state) => const LoginScreen(),
+    ),
+    GoRoute(
+      path: '/forgot-password',
+      builder: (context, state) => const ForgotPasswordScreen(),
+    ),
+    GoRoute(
+      path: '/sso-enterprise',
+      builder: (context, state) => const SsoEnterpriseScreen(),
+    ),
+    GoRoute(
+      path: '/register',
+      builder: (context, state) => const RegisterScreen(),
+    ),
+    GoRoute(
+      path: '/verify-email',
+      builder: (context, state) {
+        final email = state.uri.queryParameters['email'] ?? '';
+        return VerificationScreen(email: email);
+      },
+    ),
+    GoRoute(
+      path: '/find-talent',
+      builder: (context, state) => const FindTalentPage(),
+    ),
+    GoRoute(
+      path: '/intern-stories',
+      builder: (context, state) => const InternStoriesPage(),
+    ),
+    GoRoute(
+      path: '/about-us',
+      builder: (context, state) => const AboutUsPage(),
+    ),
+    GoRoute(
+      path: '/contact',
+      builder: (context, state) => const ContactPage(),
+    ),
+    GoRoute(
+      path: '/job-details',
+      builder: (context, state) {
+        final job = state.extra as Map<String, dynamic>?;
+        if (job == null) {
+          return const LandingPage();
+        }
+        return JobDetailsPage(job: job);
+      },
     ),
     GoRoute(
       path: '/mfa-verification',
@@ -77,6 +142,13 @@ final GoRouter _router = GoRouter(
       },
     ),
     GoRoute(
+      path: '/jobs-applied',
+      builder: (context, state) {
+        final token = state.uri.queryParameters['token'] ?? '';
+        return JobsAppliedPage(token: token);
+      },
+    ),
+    GoRoute(
       path: '/enrollment',
       builder: (context, state) {
         final token = state.uri.queryParameters['token'] ?? '';
@@ -91,12 +163,24 @@ final GoRouter _router = GoRouter(
       },
     ),
     GoRoute(
-        path: '/hiring-manager-dashboard',
-        builder: (context, state) {
-          final token = state.uri.queryParameters['token'] ?? '';
-          return HMMainDashboard(token: token);
-        }),
-    // ✅ Add this new route
+      path: '/hiring-manager-dashboard',
+      builder: (context, state) {
+        final token = state.uri.queryParameters['token'] ?? '';
+        return HMMainDashboard(token: token);
+      },
+    ),
+    GoRoute(
+      path: '/hiring-manager-pipeline',
+      builder: (context, state) {
+        final token = state.uri.queryParameters['token'] ?? '';
+        return RecruitmentPipelinePage(token: token);
+      },
+    ),
+    GoRoute(
+      path: '/hiring-manager-offers',
+      builder: (context, state) => const AdminOfferListScreen(),
+    ),
+    // Γ£à Add this new route
     GoRoute(
       path: '/hr-dashboard',
       builder: (context, state) {
@@ -111,7 +195,7 @@ final GoRouter _router = GoRouter(
         return ProfilePage(token: token);
       },
     ),
-    // ⚡ OAuth callback screen reads tokens directly from URL
+    // ΓÜí OAuth callback screen reads tokens directly from URL
     GoRoute(
       path: '/oauth-callback',
       builder: (context, state) => const OAuthCallbackScreen(),

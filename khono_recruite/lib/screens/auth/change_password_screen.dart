@@ -4,6 +4,7 @@ import 'dart:convert';
 import '../admin/admin_dashboard.dart';
 import '../candidate/candidate_dashboard.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 
 class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({Key? key}) : super(key: key);
@@ -34,16 +35,14 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       final token = await AuthService.getAccessToken();
       if (token == null) throw Exception("Token not found");
 
-      // Use 10.0.2.2 for Android emulator, replace with your PC IP on device
-      const String apiUrl = "http://127.0.0.1:5000/api/auth/change-password";
+      // Use configured API endpoint
+      final String apiUrl = ApiEndpoints.changePassword;
 
       final body = {
         "temporary_password": _oldPasswordController.text.trim(),
         "new_password": _newPasswordController.text.trim(),
         "confirm_password": _confirmPasswordController.text.trim(),
       };
-
-      print("Sending body: $body"); // Debug print
 
       final response = await http.post(
         Uri.parse(apiUrl),
@@ -53,9 +52,6 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         },
         body: jsonEncode(body),
       );
-
-      print("Status code: ${response.statusCode}");
-      print("Response body: ${response.body}");
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -102,7 +98,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
           child: Card(
-            color: Colors.white.withOpacity(0.1),
+            color: Colors.white.withValues(alpha: 0.1),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),

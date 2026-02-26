@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import '../../../constants/app_colors.dart';
-import '../../widgets/widgets1/glass_card.dart';
+import '../../widgets/glass_card.dart';
 import '../../services/analytics_service.dart';
 import 'package:intl/intl.dart';
+import '../../utils/app_config.dart';
 
 class HMAnalyticsPage extends StatefulWidget {
   const HMAnalyticsPage({super.key});
@@ -15,20 +16,15 @@ class HMAnalyticsPage extends StatefulWidget {
 class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   bool _isLoading = true;
   String _selectedTimeRange = 'Last 6 Months';
-  final AnalyticsService _service = AnalyticsService(
-      baseUrl: 'http://127.0.0.1:5000'); // <-- set your base URL
+  final AnalyticsService _service = AnalyticsService(baseUrl: AppConfig.apiBase);
 
   // Data holders
   List<Map<String, dynamic>> _monthlyApps = [];
   List<Map<String, dynamic>> _offersByCategory = [];
   Map<String, dynamic> _skillsFreq = {};
   Map<String, dynamic> _expDist = {};
-  Map<String, dynamic> _cvScore = {};
-  Map<String, dynamic> _assessmentScore = {};
   List<Map<String, dynamic>> _appsPerReq = [];
   List<Map<String, dynamic>> _assessmentTrend = [];
-  List<Map<String, dynamic>> _interviewScheduled = [];
-  List<Map<String, dynamic>> _cvDrop = [];
 
   String? _error;
 
@@ -49,12 +45,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         _service.offersByCategory(),
         _service.skillsFrequency(),
         _service.experienceDistribution(),
-        _service.avgCvScore(),
-        _service.avgAssessmentScore(),
         _service.applicationsPerRequisition(),
         _service.assessmentPassRate(),
-        _service.interviewsScheduled(),
-        _service.cvScreeningDrop(),
       ]);
 
       _monthlyApps = List<Map<String, dynamic>>.from(
@@ -63,16 +55,10 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
           (results[1] as List).map((e) => Map<String, dynamic>.from(e)));
       _skillsFreq = Map<String, dynamic>.from(results[2] as Map);
       _expDist = Map<String, dynamic>.from(results[3] as Map);
-      _cvScore = Map<String, dynamic>.from(results[4] as Map);
-      _assessmentScore = Map<String, dynamic>.from(results[5] as Map);
       _appsPerReq = List<Map<String, dynamic>>.from(
-          (results[6] as List).map((e) => Map<String, dynamic>.from(e)));
+          (results[4] as List).map((e) => Map<String, dynamic>.from(e)));
       _assessmentTrend = List<Map<String, dynamic>>.from(
-          (results[7] as List).map((e) => Map<String, dynamic>.from(e)));
-      _interviewScheduled = List<Map<String, dynamic>>.from(
-          (results[8] as List).map((e) => Map<String, dynamic>.from(e)));
-      _cvDrop = List<Map<String, dynamic>>.from(
-          (results[9] as List).map((e) => Map<String, dynamic>.from(e)));
+          (results[5] as List).map((e) => Map<String, dynamic>.from(e)));
     } catch (e, st) {
       _error = e.toString();
       debugPrint('Analytics load error: $e\n$st');
@@ -227,8 +213,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          AppColors.primaryRed.withOpacity(0.05),
-          Colors.blue.withOpacity(0.05),
+          AppColors.primaryRed.withValues(alpha: 0.05),
+          Colors.blue.withValues(alpha: 0.05),
         ],
       ),
       child: Padding(
@@ -248,7 +234,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryRed.withOpacity(0.1),
+                    color: AppColors.primaryRed.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${_monthlyApps.length} months',
@@ -313,8 +299,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Colors.green.withOpacity(0.05),
-          Colors.teal.withOpacity(0.05),
+          Colors.green.withValues(alpha: 0.05),
+          Colors.teal.withValues(alpha: 0.05),
         ],
       ),
       child: Padding(
@@ -334,7 +320,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
+                    color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${data.length} roles',
@@ -395,8 +381,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Colors.purple.withOpacity(0.05),
-          Colors.blue.withOpacity(0.05),
+          Colors.purple.withValues(alpha: 0.05),
+          Colors.blue.withValues(alpha: 0.05),
         ],
       ),
       child: Padding(
@@ -416,7 +402,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.purple.withOpacity(0.1),
+                    color: Colors.purple.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Text('Trend',
@@ -484,8 +470,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Colors.orange.withOpacity(0.05),
-          Colors.amber.withOpacity(0.05),
+          Colors.orange.withValues(alpha: 0.05),
+          Colors.amber.withValues(alpha: 0.05),
         ],
       ),
       child: Padding(
@@ -505,7 +491,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
+                    color: Colors.orange.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${data.length} categories',
@@ -556,8 +542,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Colors.blue.withOpacity(0.05),
-          Colors.indigo.withOpacity(0.05),
+          Colors.blue.withValues(alpha: 0.05),
+          Colors.indigo.withValues(alpha: 0.05),
         ],
       ),
       child: Padding(
@@ -577,7 +563,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${topSkills.length} skills',
@@ -642,8 +628,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          Colors.teal.withOpacity(0.05),
-          Colors.green.withOpacity(0.05),
+          Colors.teal.withValues(alpha: 0.05),
+          Colors.green.withValues(alpha: 0.05),
         ],
       ),
       child: Padding(
@@ -663,7 +649,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.teal.withOpacity(0.1),
+                    color: Colors.teal.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${items.length} ranges',

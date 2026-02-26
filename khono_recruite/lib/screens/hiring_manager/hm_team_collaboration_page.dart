@@ -160,7 +160,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -174,7 +174,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryRed.withOpacity(0.1),
+                  color: AppColors.primaryRed.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Image.asset(
@@ -224,7 +224,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     BoxShadow(
                       color:
                           (_isConnected ? Colors.green : AppColors.primaryRed)
-                              .withOpacity(0.3),
+                              .withValues(alpha: 0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -282,7 +282,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.2),
+            color: color.withValues(alpha: 0.2),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -315,7 +315,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -344,7 +344,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryRed.withOpacity(0.1),
+                    color: AppColors.primaryRed.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -388,7 +388,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                 : Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -402,7 +402,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: AppColors.primaryRed.withOpacity(0.1),
+                  color: AppColors.primaryRed.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -478,7 +478,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -508,7 +508,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primaryRed.withOpacity(0.2),
+                        color: AppColors.primaryRed.withValues(alpha: 0.2),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
@@ -545,38 +545,42 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
   Widget _buildEmptyNotesState(ThemeProvider themeProvider) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.note_add_outlined,
-            size: 64,
-            color: themeProvider.isDarkMode
-                ? Colors.grey.shade600
-                : Colors.grey.shade300,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No shared notes yet',
-            style: GoogleFonts.inter(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.note_add_outlined,
+              size: 64,
               color: themeProvider.isDarkMode
-                  ? Colors.grey.shade400
-                  : Colors.grey.shade500,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+                  ? Colors.grey.shade600
+                  : Colors.grey.shade300,
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Create your first shared note to collaborate',
-            style: GoogleFonts.inter(
-              color: themeProvider.isDarkMode
-                  ? Colors.grey.shade500
-                  : Colors.grey.shade400,
-              fontSize: 12,
+            const SizedBox(height: 16),
+            Text(
+              'No shared notes yet',
+              style: GoogleFonts.inter(
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade400
+                    : Colors.grey.shade500,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              'Create your first shared note to collaborate',
+              style: GoogleFonts.inter(
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade500
+                    : Colors.grey.shade400,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -594,7 +598,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                 : Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -629,7 +633,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: AppColors.primaryRed.withOpacity(0.1),
+                        color: AppColors.primaryRed.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -662,7 +666,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                       width: 24,
                       height: 24,
                       decoration: BoxDecoration(
-                        color: AppColors.primaryRed.withOpacity(0.1),
+                        color: AppColors.primaryRed.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Center(
@@ -705,7 +709,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -833,7 +837,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: AppColors.primaryRed.withOpacity(0.1),
+                color: AppColors.primaryRed.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -880,7 +884,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -978,7 +982,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -1087,7 +1091,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -1301,7 +1305,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -1402,7 +1406,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),

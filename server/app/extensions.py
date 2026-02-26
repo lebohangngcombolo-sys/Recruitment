@@ -1,3 +1,5 @@
+﻿import os
+import ssl
 import cloudinary
 import cloudinary.uploader
 from flask_sqlalchemy import SQLAlchemy
@@ -26,19 +28,28 @@ mail = Mail()
 migrate = Migrate()
 oauth = OAuth()  # <-- Authlib OAuth
 cors = CORS()
-validator = PasswordValidator()   # ← IMPORTANT
+validator = PasswordValidator()   # ΓåÉ IMPORTANT
 bcrypt = Bcrypt()
 socketio = SocketIO()
 
 # ------------------- Cloudinary Client -------------------
 class CloudinaryClient:
     def init_app(self, app):
-        cloudinary.config(
-            cloud_name=app.config['CLOUDINARY_CLOUD_NAME'],
-            api_key=app.config['CLOUDINARY_API_KEY'],
-            api_secret=app.config['CLOUDINARY_API_SECRET'],
-            secure=True
-        )
+        cloud_name = app.config.get('CLOUDINARY_CLOUD_NAME')
+        api_key = app.config.get('CLOUDINARY_API_KEY')
+        api_secret = app.config.get('CLOUDINARY_API_SECRET')
+        if not all([cloud_name, api_key, api_secret]):
+            import logging
+            logging.getLogger(__name__).warning(
+                "Cloudinary credentials missing (CLOUDINARY_CLOUD_NAME, API_KEY, API_SECRET). CV uploads will fail."
+            )
+        else:
+            cloudinary.config(
+                cloud_name=cloud_name,
+                api_key=api_key,
+                api_secret=api_secret,
+                secure=True
+            )
 
     def upload(self, file_path):
         try:
@@ -56,11 +67,24 @@ mongo_db = mongo_client['recruitment_cv']
 
 
 # ------------------- Redis Client -------------------
-redis_client = redis.Redis(
-    host='localhost',  # update if using a different host
-    port=6379,         # default Redis port
-    db=0,
-    decode_responses=True  # makes Redis return strings instead of bytes
+# Supports local Redis (redis://) and Upstash/TLS (rediss://)
+redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+redis_ssl_required = redis_url.startswith("rediss://")
+ssl_cert_reqs_env = os.getenv("REDIS_SSL_CERT_REQS", "required").lower()
+if redis_ssl_required:
+    if ssl_cert_reqs_env == "none":
+        ssl_cert_reqs = ssl.CERT_NONE
+    elif ssl_cert_reqs_env == "optional":
+        ssl_cert_reqs = ssl.CERT_OPTIONAL
+    else:
+        ssl_cert_reqs = ssl.CERT_REQUIRED
+else:
+    ssl_cert_reqs = None
+
+redis_client = redis.from_url(
+    redis_url,
+    decode_responses=True,
+    ssl_cert_reqs=ssl_cert_reqs,
 )
 
 

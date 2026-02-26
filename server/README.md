@@ -4,10 +4,21 @@ For fluuter fronend : cd khono_recruite
 
 
 for Python backend: cd server
-                  : python -m venv myenv
-                  : myenv\scripts\activate
+                  : python -m venv .venv
+                  : .\.venv\Scripts\Activate.ps1   (Windows PowerShell) or  source .venv/bin/activate  (WSL/Linux)
                   : pip install -r requirements.txt
                   : python run.py
+
+Render deployment (recommended):
+1) Use the repo root `render.yaml` (Render Blueprint) to create:
+   - recruitment-api (web)
+   - recruitment-worker (celery)
+   - recruitment-web (static)
+2) Fill env vars in Render using `render.env.template` as a local guide.
+3) Health check endpoint: GET /api/public/healthz
+4) Production Gunicorn settings are read from:
+   GUNICORN_WORKERS, GUNICORN_TIMEOUT, GUNICORN_GRACEFUL_TIMEOUT, GUNICORN_KEEPALIVE
+   (defaults are set in server/render_start.sh)
 
 Run migration press Ctrl + C to stop the terminal  
 
@@ -15,6 +26,13 @@ Run migration press Ctrl + C to stop the terminal
                   : flask db migrate
                   : flask db upgrade
                   : python run.py
+
+Using Render (or other remote) PostgreSQL:
+  - Set DATABASE_URL in .env to your Render external connection URL.
+  - Ensure all tables exist (required for enrollment form):
+        python scripts/ensure_render_tables.py
+  - Then start the app: python run.py
+  - Enrollment needs: users, candidates, audit_logs tables (and users.enrollment_completed column).
 
 
 Backend .env :
@@ -29,6 +47,10 @@ MAIL_PORT=
 MAIL_USE_TLS=
 MAIL_USERNAME=
 MAIL_PASSWORD=
+MAIL_DEFAULT_SENDER=
+MAIL_TIMEOUT=60
+# Optional: use SendGrid HTTP API instead of SMTP (avoids ETIMEDOUT on Render)
+SENDGRID_API_KEY=
 CLOUDINARY_CLOUD_NAME=
 CLOUDINARY_API_KEY=
 CLOUDINARY_API_SECRET=
@@ -61,8 +83,7 @@ http://127.0.0.1:5000/api/admin/powerbi/data
 Authorization Bearer $token
 
 Open another terminal : for Python backend: cd server
-                  : python -m venv myenv
-                  : myenv\scripts\activate
+                  : .\.venv\Scripts\Activate.ps1   (or  source .venv/bin/activate  on WSL)
                   : python test.py
 
 copy the Token and repace "$token" with your actual token

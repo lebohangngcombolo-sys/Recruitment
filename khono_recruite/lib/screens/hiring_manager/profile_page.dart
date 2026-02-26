@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io' show File;
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -9,12 +8,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 
 // ------------------- API Base URL -------------------
-const String candidateBase = "http://127.0.0.1:5000/api/candidate";
+final String candidateBase = ApiEndpoints.candidateBase;
 
 class ProfilePage extends StatefulWidget {
   final String token;
@@ -82,7 +83,7 @@ class _ProfilePageState extends State<ProfilePage>
 
   List<dynamic> documents = [];
 
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  final String apiBase = ApiEndpoints.candidateBase;
 
   @override
   void initState() {
@@ -655,7 +656,7 @@ class _ProfilePageState extends State<ProfilePage>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 16,
             offset: const Offset(0, 8),
           ),
@@ -668,7 +669,7 @@ class _ProfilePageState extends State<ProfilePage>
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: headerColor ?? Colors.redAccent.withOpacity(0.1),
+              color: headerColor ?? Colors.redAccent.withValues(alpha: 0.1),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(20),
                 topRight: Radius.circular(20),
@@ -743,7 +744,7 @@ class _ProfilePageState extends State<ProfilePage>
                     : Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 8,
                     offset: const Offset(2, 0),
                   ),
@@ -821,7 +822,7 @@ class _ProfilePageState extends State<ProfilePage>
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.1),
+                              color: Colors.green.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: Colors.green),
                             ),
@@ -874,8 +875,9 @@ class _ProfilePageState extends State<ProfilePage>
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Material(
-        color:
-            isSelected ? Colors.redAccent.withOpacity(0.1) : Colors.transparent,
+        color: isSelected
+            ? Colors.redAccent.withValues(alpha: 0.1)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: () {
@@ -968,7 +970,7 @@ class _ProfilePageState extends State<ProfilePage>
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                       ),
                     ],
@@ -1003,8 +1005,8 @@ class _ProfilePageState extends State<ProfilePage>
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: _mfaEnabled
-                            ? Colors.green.withOpacity(0.1)
-                            : Colors.orange.withOpacity(0.1),
+                            ? Colors.green.withValues(alpha: 0.1)
+                            : Colors.orange.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
@@ -1207,7 +1209,7 @@ class _ProfilePageState extends State<ProfilePage>
                   ),
                 ],
               ),
-              headerColor: Colors.blue.withOpacity(0.1),
+              headerColor: Colors.blue.withValues(alpha: 0.1),
             ),
           ],
 
@@ -1228,7 +1230,7 @@ class _ProfilePageState extends State<ProfilePage>
                     "Your account is now protected with 2FA"),
               ],
             ),
-            headerColor: Colors.purple.withOpacity(0.1),
+            headerColor: Colors.purple.withValues(alpha: 0.1),
           ),
         ],
       ),
@@ -1258,7 +1260,7 @@ class _ProfilePageState extends State<ProfilePage>
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: Colors.blue, size: 20),
@@ -1311,7 +1313,7 @@ class _ProfilePageState extends State<ProfilePage>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 18),
@@ -1411,17 +1413,6 @@ class _ProfilePageState extends State<ProfilePage>
   Widget _buildProfileSummary() {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
-    Future<void> _launchUrl(String url) async {
-      final uri = Uri.tryParse(url) ?? Uri();
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Could not launch URL")),
-        );
-      }
-    }
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -1441,7 +1432,7 @@ class _ProfilePageState extends State<ProfilePage>
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                       ),
                     ],
@@ -1465,7 +1456,7 @@ class _ProfilePageState extends State<ProfilePage>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: Colors.redAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -1527,7 +1518,7 @@ class _ProfilePageState extends State<ProfilePage>
                 ],
               ],
             ),
-            headerColor: Colors.blue.withOpacity(0.1),
+            headerColor: Colors.blue.withValues(alpha: 0.1),
           ),
 
           // Education & Skills Card
@@ -1565,7 +1556,7 @@ class _ProfilePageState extends State<ProfilePage>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.redAccent.withOpacity(0.1),
+                          color: Colors.redAccent.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: Text(
@@ -1582,7 +1573,7 @@ class _ProfilePageState extends State<ProfilePage>
                 ],
               ],
             ),
-            headerColor: Colors.green.withOpacity(0.1),
+            headerColor: Colors.green.withValues(alpha: 0.1),
           ),
 
           // Online Profiles Card
@@ -1604,7 +1595,7 @@ class _ProfilePageState extends State<ProfilePage>
                         "Portfolio", portfolioController.text, Icons.public),
                 ],
               ),
-              headerColor: Colors.purple.withOpacity(0.1),
+              headerColor: Colors.purple.withValues(alpha: 0.1),
             ),
         ],
       ),
@@ -1716,7 +1707,7 @@ class _ProfilePageState extends State<ProfilePage>
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                       ),
                     ],
@@ -1743,62 +1734,167 @@ class _ProfilePageState extends State<ProfilePage>
             "Personal Information",
             Column(
               children: [
-                GestureDetector(
-                  onTap: _pickProfileImage,
-                  child: Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: 50,
-                        backgroundImage: _getProfileImageProvider(),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 2,
+                // Profile picture and basic info
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: _pickProfileImage,
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 50,
+                            backgroundImage: _getProfileImageProvider(),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                             ),
                           ),
-                          child: const Icon(
-                            Icons.camera_alt,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Hiring Manager",
+                            style: GoogleFonts.poppins(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.white
+                                  : Colors.grey.shade800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            emailController.text.isNotEmpty
+                                ? emailController.text
+                                : "hiring@example.com",
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.grey.shade400
+                                  : Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 30),
+
+                // Two-column form layout
+                Row(
+                  children: [
+                    // Left column
+                    Expanded(
+                      child: Column(
+                        children: [
+                          CustomTextField(
+                            label: "First Name",
+                            controller: fullNameController,
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Surname",
+                            controller: TextEditingController(text: "Radebe"),
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Email Address",
+                            controller: emailController,
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Phone Number",
+                            controller: phoneController,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    // Right column
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _buildDepartmentDropdown(),
+                          const SizedBox(height: 16),
+                          _buildDesignationDropdown(),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Preferred Name",
+                            controller: TextEditingController(
+                                text: "Nathii Nathi SGOOD"),
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Manager",
+                            controller: TextEditingController(
+                                text: "Gladness Mulaudzi"),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 30),
+
+                // Version info
+                Align(
+                  alignment: Alignment.bottomLeft,
+                  child: Text(
+                    "Ver. 2026.02.BA1_SIT",
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: themeProvider.isDarkMode
+                          ? Colors.grey.shade500
+                          : Colors.grey.shade400,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),
-                CustomTextField(
-                    label: "Full Name", controller: fullNameController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Email", controller: emailController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Phone", controller: phoneController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Gender", controller: genderController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Date of Birth", controller: dobController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Nationality", controller: nationalityController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "ID Number", controller: idNumberController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Bio", controller: bioController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Location", controller: locationController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Title", controller: titleController),
+
+                // Save button
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: updateProfile,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      "Save Profile",
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -1993,7 +2089,7 @@ class _ProfilePageState extends State<ProfilePage>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.redAccent.withOpacity(0.1),
+              color: Colors.redAccent.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: Colors.redAccent, size: 20),
@@ -2164,6 +2260,122 @@ class _ProfilePageState extends State<ProfilePage>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDepartmentDropdown() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final departments = [
+      'Finance',
+      'Human Resources',
+      'Information Technology',
+      'Marketing',
+      'Sales',
+      'Operations',
+      'Engineering',
+      'Other',
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: themeProvider.isDarkMode
+              ? Colors.grey.shade600
+              : Colors.grey.shade300,
+        ),
+      ),
+      child: DropdownButtonFormField<String>(
+        initialValue: 'Finance',
+        decoration: InputDecoration(
+          labelText: 'Department',
+          labelStyle: GoogleFonts.inter(
+            color: themeProvider.isDarkMode
+                ? Colors.grey.shade400
+                : Colors.grey.shade600,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+        ),
+        dropdownColor:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        style: GoogleFonts.inter(
+          color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+        ),
+        items: departments.map((String department) {
+          return DropdownMenuItem<String>(
+            value: department,
+            child: Text(department),
+          );
+        }).toList(),
+        onChanged: (String? newValue) {
+          // Handle department change
+        },
+      ),
+    );
+  }
+
+  Widget _buildDesignationDropdown() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final designations = [
+      'Business Analyst',
+      'Software Engineer',
+      'Project Manager',
+      'HR Manager',
+      'Marketing Specialist',
+      'Sales Executive',
+      'CEO',
+      'CTO',
+      'CFO',
+      'Other',
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: themeProvider.isDarkMode
+              ? Colors.grey.shade600
+              : Colors.grey.shade300,
+        ),
+      ),
+      child: DropdownButtonFormField<String>(
+        initialValue: 'Business Analyst',
+        decoration: InputDecoration(
+          labelText: 'Designation',
+          labelStyle: GoogleFonts.inter(
+            color: themeProvider.isDarkMode
+                ? Colors.grey.shade400
+                : Colors.grey.shade600,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+        ),
+        dropdownColor:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        style: GoogleFonts.inter(
+          color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+        ),
+        items: designations.map((String designation) {
+          return DropdownMenuItem<String>(
+            value: designation,
+            child: Text(designation),
+          );
+        }).toList(),
+        onChanged: (String? newValue) {
+          // Handle designation change
+        },
       ),
     );
   }

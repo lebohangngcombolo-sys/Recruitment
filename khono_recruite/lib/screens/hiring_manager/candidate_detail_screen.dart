@@ -1,7 +1,6 @@
 import 'dart:html' as html; // For web download
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -12,6 +11,7 @@ import '../../services/admin_service.dart';
 import '../../widgets/custom_button.dart';
 import 'interview_schedule_page.dart';
 import 'package:http/http.dart' as http;
+import '../../utils/api_endpoints.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 
@@ -95,7 +95,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
           await admin.getCandidateInterviews(widget.candidateId);
       interviews = List<Map<String, dynamic>>.from(interviewData);
     } catch (e) {
-      debugPrint("Error fetching candidate details: $e");
+      if (kDebugMode) debugPrint("Error fetching candidate details: $e");
       errorMessage = "Failed to load data: $e";
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -118,8 +118,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
       }
 
       final response = await http.get(
-        Uri.parse(
-            'http://127.0.0.1:5000/api/admin/applications/$applicationId/download-cv'),
+        Uri.parse('${ApiEndpoints.adminBase}/applications/$applicationId/download-cv'),
         headers: {
           'Authorization': 'Bearer $jwtToken',
           'Content-Type': 'application/json',
@@ -127,7 +126,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
       );
 
       if (response.statusCode != 200) {
-        print("Backend error: ${response.statusCode} ${response.body}");
+        if (kDebugMode) debugPrint("Backend error: ${response.statusCode} ${response.body}");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Failed to get CV URL from backend")),
         );
@@ -146,7 +145,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
       }
 
       if (kIsWeb) {
-        final anchor = html.AnchorElement(href: cvUrl)
+        html.AnchorElement(href: cvUrl)
           ..setAttribute("download", "cv_$fullName.pdf")
           ..click();
 
