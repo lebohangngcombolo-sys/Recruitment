@@ -841,16 +841,14 @@ class _AdminDAshboardState extends State<AdminDAshboard>
     return InkWell(
       onTap: () => setState(() => currentScreen = screenKey),
       child: Container(
-        color: selected
-            ? const Color.fromRGBO(151, 18, 8, 1).withValues(alpha: 0.06)
-            : Colors.transparent,
+        color: selected ? const Color(0xFFC10D00) : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
           children: [
             icon is IconData
                 ? Icon(icon,
                     color: selected
-                        ? const Color.fromRGBO(151, 18, 8, 1)
+                        ? const Color(0xFFC10D00)
                         : themeProvider.isDarkMode
                             ? Colors.grey.shade400
                             : Colors.grey.shade800)
@@ -858,7 +856,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                     errorBuilder: (context, error, stackTrace) {
                     return Icon(Icons.error,
                         color: selected
-                            ? const Color.fromRGBO(151, 18, 8, 1)
+                            ? const Color(0xFFC10D00)
                             : themeProvider.isDarkMode
                                 ? Colors.grey.shade400
                                 : Colors.grey.shade800,
@@ -872,7 +870,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     color: selected
-                        ? Colors.redAccent
+                        ? Colors.white
                         : themeProvider.isDarkMode
                             ? Colors.white
                             : Colors.grey.shade800,
