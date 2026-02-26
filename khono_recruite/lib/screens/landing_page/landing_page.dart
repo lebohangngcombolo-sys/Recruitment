@@ -5,11 +5,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 // ignore: unnecessary_import
 import 'dart:ui';
 import 'dart:async';
-// ignore: unused_import
+import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart'
+    show File;
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 // Import your existing services
 import '../../services/candidate_service.dart';
@@ -86,6 +89,10 @@ class _LandingPageState extends State<LandingPage>
   // Your existing state management
   bool _isDisposed = false;
   final PageController _pageController = PageController();
+
+  // Profile image state
+  XFile? _profileImage;
+  Uint8List? _profileImageBytes;
 
   final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
@@ -192,6 +199,77 @@ class _LandingPageState extends State<LandingPage>
         s.contains('unauthorized');
   }
 
+  // ---------- Fetch profile image ----------
+  Future<void> fetchProfileImage() async {
+    if (!_hasToken) return;
+    try {
+      final profileRes = await http.get(
+        Uri.parse("$apiBase/profile"),
+        headers: {
+          'Authorization': 'Bearer ${_effectiveToken ?? ''}',
+          'Content-Type': 'application/json'
+        },
+      );
+
+      if (profileRes.statusCode == 200) {
+        final data = json.decode(profileRes.body)['data'];
+        // ignore: unused_local_variable
+        final candidate = data['candidate'] ?? {};
+        setState(() {
+          // Profile image URL fetched but not used
+        });
+      }
+    } catch (e) {
+      debugPrint("Error fetching profile image: $e");
+    }
+  }
+
+  // ---------- Upload profile picture ----------
+  Future<void> uploadProfileImage() async {
+    if (_profileImage == null || !_hasToken) return;
+
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse("$apiBase/upload_profile_picture"),
+      );
+
+      request.headers['Authorization'] = 'Bearer ${_effectiveToken ?? ''}';
+
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'image',
+          kIsWeb
+              ? _profileImageBytes!
+              : File(_profileImage!.path).readAsBytesSync(),
+          filename: _profileImage!.name,
+        ),
+      );
+
+      var response = await request.send();
+      final respStr = await response.stream.bytesToString();
+      final respJson = json.decode(respStr);
+
+      if (response.statusCode == 200 && respJson['success'] == true) {
+        setState(() {
+          // Profile image uploaded successfully
+          _profileImage = null;
+          _profileImageBytes = null;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Profile picture updated")),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Upload failed: ${response.statusCode}")),
+        );
+      }
+    } catch (e) {
+      debugPrint("Profile image upload error: $e");
+    }
+  }
+
   // Fetch jobs for explore category: public API when not logged in, candidate API when logged in
   Future<void> fetchAvailableJobs() async {
     if (!mounted) return;
@@ -211,7 +289,7 @@ class _LandingPageState extends State<LandingPage>
       if (_isAuthError(e) && mounted) {
         _safeSetState(() => _authToken = null);
         await AuthService.clearAuthState();
-        // Still show jobs: load from public API so the list doesn’t disappear
+        // Still show jobs: load from public API so the list doesnΓÇÖt disappear
         try {
           final jobs = await CandidateService.getPublicJobs();
           if (mounted) {
@@ -541,7 +619,7 @@ class _LandingPageState extends State<LandingPage>
     );
   }
 
-  // Updated to handle real job data — dark theme to match the app
+  // Updated to handle real job data ΓÇö dark theme to match the app
   Widget _buildJobItem(String title, String location, String type,
       String salary, Map<String, dynamic> job) {
     final logoUrl = (job['company_logo']?.toString().trim() ?? '');
@@ -1709,7 +1787,7 @@ class _LandingPageState extends State<LandingPage>
                                               ),
                                             )),
                                     SizedBox(height: 16),
-                                    // Pagination footer — solid background to match app
+                                    // Pagination footer ΓÇö solid background to match app
                                     Container(
                                       padding: EdgeInsets.symmetric(
                                           horizontal: 16, vertical: 14),
@@ -1812,7 +1890,7 @@ class _LandingPageState extends State<LandingPage>
                           ),
                           const SizedBox(height: 20),
                           Text(
-                            "© 2025 Khonology. All rights reserved.",
+                            "┬⌐ 2025 Khonology. All rights reserved.",
                             style: GoogleFonts.poppins(
                                 color: Colors.white54, fontSize: 12),
                           ),
