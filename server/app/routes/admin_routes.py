@@ -1,4 +1,4 @@
-﻿from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.extensions import db
 from app.models import User, Requisition, Candidate, Application, AssessmentResult, Interview, Notification, AuditLog, Conversation, SharedNote, Meeting, CVAnalysis, InterviewFeedback, Offer, OfferStatus
@@ -756,6 +756,15 @@ def shortlist_candidates(job_id):
 @admin_bp.route("/notifications/<int:user_id>", methods=["GET"])
 @role_required(["admin", "hiring_manager"])
 def get_notifications(user_id):
+    """Get notifications for a user. Hiring managers can only request their own."""
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+    # Enforce: hiring_manager can only see their own notifications
+    if current_user.role == "hiring_manager" and int(user_id) != int(current_user_id):
+        return jsonify({"error": "Forbidden: you can only view your own notifications"}), 403
+
     user = User.query.get(user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
@@ -763,9 +772,7 @@ def get_notifications(user_id):
     notifications = Notification.query.filter_by(user_id=user_id)\
                                       .order_by(Notification.created_at.desc())\
                                       .all()
-    
     unread_count = Notification.query.filter_by(user_id=user_id, is_read=False).count()
-
     data = [n.to_dict() for n in notifications]
 
     return jsonify({
@@ -773,6 +780,21 @@ def get_notifications(user_id):
         "unread_count": unread_count,
         "notifications": data
     }), 200
+
+
+@admin_bp.route("/notifications/<int:notification_id>/read", methods=["PATCH", "POST"])
+@role_required(["admin", "hiring_manager"])
+def mark_notification_read(notification_id):
+    """Mark a notification as read. User can only mark their own."""
+    current_user_id = get_jwt_identity()
+    notification = Notification.query.get(notification_id)
+    if not notification:
+        return jsonify({"error": "Notification not found"}), 404
+    if int(notification.user_id) != int(current_user_id):
+        return jsonify({"error": "Forbidden: you can only mark your own notifications"}), 403
+    notification.is_read = True
+    db.session.commit()
+    return jsonify({"message": "Marked as read", "notification": notification.to_dict()}), 200
 
 
 

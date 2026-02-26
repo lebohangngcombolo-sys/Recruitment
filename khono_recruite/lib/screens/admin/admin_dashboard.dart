@@ -17,7 +17,7 @@ import 'cv_reviews_screen.dart';
 import 'hm_team_collaboration_page.dart';
 import 'candidate_list_screen.dart';
 import 'interviews_list_screen.dart';
-import 'notifications_screen.dart';
+import '../notifications/notifications_screen.dart';
 import 'job_management.dart';
 import 'test_pack_management_screen.dart';
 import 'user_management_screen.dart';
@@ -127,7 +127,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       if (user is Map<String, dynamic>) {
         await AuthService.saveUserInfo(user);
       }
-      if (mounted) setState(() => _userName = AuthService.getCachedDisplayName());
+      if (mounted)
+        setState(() => _userName = AuthService.getCachedDisplayName());
     } catch (_) {
       // Best-effort: avoid blocking dashboard load
     }
@@ -378,7 +379,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                     height: double.infinity,
                     decoration: BoxDecoration(
                       color: themeProvider.isDarkMode
-                          ? const Color.fromARGB(171, 20, 19, 30)
+                          ? const Color(0xFF1F2840)
                           : const Color.fromARGB(156, 255, 255, 255),
                       border: Border(
                         right:
@@ -435,7 +436,6 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                             ),
                           ),
                         ),
-                        const Divider(height: 1, color: Colors.grey),
                         Expanded(
                           child: ListView(
                             padding: EdgeInsets.zero,
@@ -447,18 +447,24 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                               _sidebarEntry(Icons.people_alt_outlined,
                                   'Shortlisted', 'candidates'),
                               _sidebarEntry(
-                                  Icons.event_note, 'Interviews', 'interviews'),
-                              _sidebarEntry(Icons.assignment_outlined,
-                                  'CV Reviews', 'cv_reviews'),
-                              _sidebarEntry(Icons.history, 'Audits', 'audits'),
+                                  'assets/images/red_Management_Red_Badge_White.png',
+                                  'Interviews',
+                                  'interviews'),
                               _sidebarEntry(
-                                  Icons.security, 'Role Access', 'roles'),
-                              _sidebarEntry(Icons.people_outline, 'Candidates',
-                                  'all_candidates'),
+                                  'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
+                                  'CV Reviews',
+                                  'cv_reviews'),
+                              _sidebarEntry('assets/images/deadline.png',
+                                  'Audits', 'audits'),
+                              _sidebarEntry(
+                                  'assets/images/Warning_Error_Red_Badge_White.png',
+                                  'Role Access',
+                                  'roles'),
+                              _sidebarEntry('assets/images/candidates.png',
+                                  'Candidates', 'all_candidates'),
                             ],
                           ),
                         ),
-                        const Divider(height: 1, color: Colors.grey),
                         Padding(
                           padding: const EdgeInsets.symmetric(
                               vertical: 12.0, horizontal: 8),
@@ -799,9 +805,9 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.redAccent,
-        child: const Icon(Icons.refresh),
         onPressed: fetchStats,
         tooltip: "Refresh stats",
+        child: const Icon(Icons.refresh),
       ),
     );
   }
@@ -817,7 +823,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
     });
   }
 
-  Widget _sidebarEntry(IconData icon, String label, String screenKey) {
+  Widget _sidebarEntry(dynamic icon, String label, String screenKey) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final selected = currentScreen == screenKey;
     return InkWell(
@@ -829,12 +835,23 @@ class _AdminDAshboardState extends State<AdminDAshboard>
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
           children: [
-            Icon(icon,
-                color: selected
-                    ? const Color.fromRGBO(151, 18, 8, 1)
-                    : themeProvider.isDarkMode
-                        ? Colors.grey.shade400
-                        : Colors.grey.shade800),
+            icon is IconData
+                ? Icon(icon,
+                    color: selected
+                        ? const Color.fromRGBO(151, 18, 8, 1)
+                        : themeProvider.isDarkMode
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade800)
+                : Image.asset(icon as String, width: 32, height: 32,
+                    errorBuilder: (context, error, stackTrace) {
+                    return Icon(Icons.error,
+                        color: selected
+                            ? const Color.fromRGBO(151, 18, 8, 1)
+                            : themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade800,
+                        size: 32);
+                  }),
             const SizedBox(width: 12),
             if (!sidebarCollapsed)
               Expanded(
@@ -845,7 +862,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                     color: selected
                         ? Colors.redAccent
                         : themeProvider.isDarkMode
-                            ? Colors.grey.shade400
+                            ? Colors.white
                             : Colors.grey.shade800,
                     fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                   ),
@@ -1239,31 +1256,31 @@ class _AdminDAshboardState extends State<AdminDAshboard>
         "title": "Jobs",
         "count": jobsCount,
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/jobs.png" // or .svg if using SVG
+        "icon": "assets/images/Approval_Red_Badge_White.png"
       },
       {
         "title": "Candidates",
         "count": candidatesCount,
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/candidates.png"
+        "icon": "assets/images/candidates.png"
       },
       {
         "title": "Interviews",
         "count": interviewsCount,
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/interview.png"
+        "icon": "assets/images/red_Management_Red_Badge_White.png"
       },
       {
         "title": "CV Reviews",
         "count": cvReviewsCount,
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/review.png"
+        "icon": "assets/images/Goal_Target_White_Badge_Red_Badge_White.png"
       },
       {
         "title": "Audits",
         "count": auditsCount,
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/audit.png"
+        "icon": "assets/images/deadline.png"
       },
     ];
     final departmentData = [
