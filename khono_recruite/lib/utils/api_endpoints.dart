@@ -131,6 +131,8 @@ class ApiEndpoints {
   static String cancelInterview(int interviewId) =>
       "$adminBase/interviews/cancel/$interviewId";
   static String get getNotifications => "$adminBase/notifications";
+  static String markNotificationRead(int notificationId) =>
+      "$adminBase/notifications/$notificationId/read";
   static String get auditLogs => "$adminBase/audits";
   static String get parseResume => "$adminBase/cv/parse";
   static String get cvReviews => "$adminBase/cv-reviews";

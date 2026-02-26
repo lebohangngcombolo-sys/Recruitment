@@ -5,7 +5,7 @@ import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
 import 'candidate_management_screen.dart';
 import 'cv_reviews_screen.dart';
-import 'notifications_screen.dart';
+import '../notifications/notifications_screen.dart';
 import 'job_management.dart';
 import 'interviews_list_screen.dart';
 import 'offer_list_screen.dart';

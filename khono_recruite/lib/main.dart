@@ -33,9 +33,30 @@ import 'screens/hiring_manager/offer_list_screen.dart';
 
 import 'providers/theme_provider.dart';
 import 'utils/theme_utils.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_ai/firebase_ai.dart' show FirebaseAI, GenerativeModel;
+import 'firebase_options.dart';
+import 'services/ai_service.dart';
 
-void main() {
-  // ΓÜí Fix Flutter Web initial route handling
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Firebase: init only if options are configured (non-empty apiKey). Otherwise app still runs without Firebase/Gemini.
+  GenerativeModel? generativeModel;
+  try {
+    final options = DefaultFirebaseOptions.currentPlatform;
+    if (options.apiKey.isNotEmpty && options.projectId.isNotEmpty) {
+      await Firebase.initializeApp(options: options);
+      generativeModel =
+          FirebaseAI.googleAI().generativeModel(model: 'gemini-2.5-flash');
+    }
+  } catch (e) {
+    assert(true, 'Firebase init failed (e.g. invalid-api-key): $e');
+    // Continue without Firebase so the app UI still loads
+  }
+  AIService.initialize(generativeModel);
+
+  // ⚡ Fix Flutter Web initial route handling
   setUrlStrategy(PathUrlStrategy());
 
   // WebView: set web platform implementation so CV preview works in-app on web

@@ -1,10 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:http/http.dart' as http;
-import 'package:firebase_ai/firebase_ai.dart';
-
 import '../utils/api_endpoints.dart';
 import 'auth_service.dart';
+import 'package:firebase_ai/firebase_ai.dart';
 
 class AIService {
   static GenerativeModel? _generativeModel;
@@ -43,8 +42,7 @@ class AIService {
 
     // Fallback to Gemini if configured (Firebase)
     try {
-      final result = await _tryGemini(jobTitle, maxRetries, baseDelay);
-      return _ensureAllFieldsFilled(result, jobTitle);
+      return await _tryGemini(jobTitle, maxRetries, baseDelay);
     } catch (e) {
       if (kDebugMode) debugPrint("Gemini failed: $e");
     }
@@ -434,45 +432,7 @@ class AIService {
         "answer": 1,
         "weight": 1
       },
-      {
-        "question": "How do you stay updated with industry trends?",
-        "options": [
-          "Social media",
-          "Professional networks",
-          "Courses and certifications",
-          "Word of mouth"
-        ],
-        "answer": 2,
-        "weight": 1
-      },
-      {
-        "question": "What is your approach to problem-solving?",
-        "options": ["Intuitive", "Analytical", "Collaborative", "Experimental"],
-        "answer": 1,
-        "weight": 1
-      }
     ];
-
-    // Adjust questions based on difficulty
-    if (difficulty.toLowerCase().contains('easy')) {
-      return baseQuestions.take(questionCount.clamp(1, 3)).toList();
-    } else if (difficulty.toLowerCase().contains('hard')) {
-      // Add more complex questions for hard difficulty
-      baseQuestions.addAll([
-        {
-          "question":
-              "Describe a complex project you've managed and the outcome.",
-          "options": [
-            "Successful completion",
-            "Partial success",
-            "Failed but learned",
-            "Ongoing project"
-          ],
-          "answer": 0,
-          "weight": 2
-        }
-      ]);
-    }
 
     return baseQuestions.take(questionCount).toList();
   }
