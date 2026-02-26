@@ -4542,3 +4542,26 @@ def search_all():
     except Exception as e:
         current_app.logger.error(f"Search error: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
+
+# ----------------- CV MANAGEMENT -----------------
+@admin_bp.route('/cvs/all', methods=['GET'])
+@role_required(["admin", "hiring_manager"])
+def list_all_cvs():
+    """Get all candidates with CV information"""
+    try:
+        candidates = Candidate.query.filter(Candidate.cv_url.isnot(None), Candidate.cv_url != '').all()
+        result = []
+        for candidate in candidates:
+            user = User.query.get(candidate.user_id) if candidate.user_id else None
+            result.append({
+                'id': candidate.id,
+                'candidate_id': candidate.id,
+                'full_name': candidate.full_name,
+                'gender': candidate.gender,
+                'cv_url': candidate.cv_url,
+                'cv_score': candidate.cv_score,
+            })
+        return jsonify(result), 200
+    except Exception as e:
+        current_app.logger.error(f"Error fetching all CVs: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
