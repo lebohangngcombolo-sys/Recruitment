@@ -619,10 +619,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   void _showLogoutConfirmation(BuildContext context) {
+    final navigatorContext = context;
     showDialog(
       context: context,
       barrierColor: Colors.black54,
-      builder: (context) => Dialog(
+      builder: (dialogContext) => Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: EdgeInsets.symmetric(horizontal: 24),
         child: BackdropFilter(
@@ -655,7 +656,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () => Navigator.of(dialogContext).pop(),
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(color: Colors.grey),
                         shape: RoundedRectangleBorder(
@@ -669,10 +670,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                     ),
                     ElevatedButton(
                       onPressed: () async {
-                        Navigator.of(context).pop();
+                        Navigator.of(dialogContext).pop();
                         await AuthService.logout();
-                        if (!context.mounted) return;
-                        context.go('/login');
+                        if (!navigatorContext.mounted) return;
+                        navigatorContext.go('/login');
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,

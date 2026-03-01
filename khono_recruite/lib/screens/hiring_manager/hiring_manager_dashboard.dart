@@ -814,23 +814,24 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   void _showLogoutConfirmation(BuildContext context) {
+    final navigatorContext = context;
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text("Logout", style: TextStyle(fontFamily: 'Poppins')),
           content: const Text("Are you sure you want to logout?",
               style: TextStyle(fontFamily: 'Poppins')),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child:
                   const Text("Cancel", style: TextStyle(fontFamily: 'Poppins')),
             ),
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop();
-                _performLogout(context);
+                Navigator.of(dialogContext).pop();
+                _performLogout(navigatorContext);
               },
               child: const Text("Logout",
                   style: TextStyle(color: Colors.red, fontFamily: 'Poppins')),

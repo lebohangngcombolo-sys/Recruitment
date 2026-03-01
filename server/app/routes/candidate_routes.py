@@ -396,6 +396,10 @@ def get_applications():
         candidate = Candidate.query.filter_by(user_id=user_id).first()
         if not candidate:
             return jsonify([])
+        # Only show applications for jobs as "applied" when the candidate has logged in at least once
+        candidate_user = candidate.user
+        if not candidate_user or getattr(candidate_user, "last_login_at", None) is None:
+            return jsonify([])
 
         applications = Application.query.filter_by(candidate_id=candidate.id).all()
         result = []

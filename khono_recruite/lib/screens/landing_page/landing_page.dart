@@ -718,8 +718,7 @@ class _LandingPageState extends State<LandingPage>
                     ElevatedButton(
                       onPressed: hasApplied
                           ? null
-                          : () async {
-                              await AuthService.clearAuthState();
+                          : () {
                               if (!context.mounted) return;
                               context.push('/job-details', extra: job);
                             },

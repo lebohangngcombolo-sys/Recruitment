@@ -1497,23 +1497,28 @@ def reschedule_interview(interview_id):
             db.session.add(notif)
             db.session.commit()
 
-        # Send reschedule email
-        if candidate_user and candidate_user.email:
-            candidate_name = candidate_user.profile.get("full_name")
-            if not candidate_name:
-                candidate_name = f"{candidate_user.profile.get('first_name', '')} {candidate_user.profile.get('last_name', '')}".strip()
-
-            # Get updated calendar link
+        # Send reschedule email to candidate (always when we have an email)
+        if not candidate_user and interview.candidate and getattr(interview.candidate, "user_id", None):
+            candidate_user = User.query.get(interview.candidate.user_id)
+        candidate_email = (candidate_user and getattr(candidate_user, "email", None)) or None
+        if candidate_email:
+            candidate_name = (candidate_user.profile or {}).get("full_name") if candidate_user else None
+            if not candidate_name and candidate_user:
+                candidate_name = f"{(candidate_user.profile or {}).get('first_name', '')} {(candidate_user.profile or {}).get('last_name', '')}".strip()
             calendar_link = interview.google_calendar_event_link if interview.google_calendar_event_link else None
-
             EmailService.send_interview_reschedule_email(
-                email=candidate_user.email,
+                email=candidate_email,
                 candidate_name=candidate_name or "Candidate",
                 old_time=old_time.strftime("%A, %d %B %Y at %H:%M"),
                 new_time=new_time.strftime("%A, %d %B %Y at %H:%M"),
                 interview_type=interview.interview_type or "Online",
                 meeting_link=interview.meeting_link,
                 calendar_link=calendar_link
+            )
+        elif interview.candidate:
+            current_app.logger.warning(
+                "Reschedule: no candidate email for interview %s (candidate_id=%s)",
+                interview_id, interview.candidate_id
             )
 
         # Audit log

@@ -22,6 +22,7 @@ class User(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     first_login = db.Column(db.Boolean, default=True)
+    last_login_at = db.Column(db.DateTime, nullable=True)
 
     # MFA Fields
     mfa_secret = db.Column(db.String(32), nullable=True)
@@ -93,6 +94,7 @@ class User(db.Model):
             "is_active": getattr(self, "is_active", True),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "first_login": getattr(self, "first_login", True),
+            "last_login_at": self.last_login_at.isoformat() if getattr(self, "last_login_at", None) else None,
             "mfa_enabled": getattr(self, "mfa_enabled", False),
         }
 

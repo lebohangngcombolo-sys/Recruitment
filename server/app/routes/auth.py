@@ -140,11 +140,18 @@ def init_auth_routes(app):
                 db.session.commit()
                 current_app.logger.info(f"Auto-created user via SSO: {email}")
         
+            try:
+                user.last_login_at = datetime.utcnow()
+                db.session.commit()
+            except Exception as e:
+                current_app.logger.warning("SSO: failed to set last_login_at: %s", e)
+                db.session.rollback()
+
             # Create JWT tokens for our app
             additional_claims = {"role": user.role}
             access_token = create_access_token(identity=str(user.id), additional_claims=additional_claims)
             refresh_token = create_refresh_token(identity=str(user.id), additional_claims=additional_claims)
-        
+
             # Determine dashboard URL
             dashboard_path = (
                 "/enrollment"
@@ -284,6 +291,7 @@ def init_auth_routes(app):
                     access_token=secrets.token_urlsafe(32)
                 )
                 db.session.add(oauth_conn)
+            user.last_login_at = datetime.utcnow()
             db.session.commit()
 
             # Tokens
@@ -538,6 +546,12 @@ def init_auth_routes(app):
 
             # ---- Log successful login ----
             AuditService.log(user_id=user.id, action="login_success")
+            try:
+                user.last_login_at = datetime.utcnow()
+                db.session.commit()
+            except Exception as e:
+                current_app.logger.warning("Failed to set last_login_at: %s", e)
+                db.session.rollback()
 
             # ---- Return successful response ----
             try:
@@ -936,6 +950,7 @@ def init_auth_routes(app):
 
             user.password = AuthService.hash_password(new_password)
             user.first_login = False
+            user.last_login_at = datetime.utcnow()
             db.session.commit()
 
             return jsonify({"message": "Password changed successfully", "role": user.role}), 200
