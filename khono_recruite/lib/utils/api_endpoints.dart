@@ -463,34 +463,35 @@ class ApiEndpoints {
   static String get getPowerBIData => "$adminBase/powerbi/data";
   static String get getPowerBIStatus => "$adminBase/powerbi/status";
 
-  // Analytics blueprint routes
+  // Analytics blueprint routes (prefix /api, routes under /analytics/...)
   static String get getApplicationsPerRequisition =>
-      "$analyticsBase/analytics/applications-per-requisition";
+      "$analyticsBase/applications-per-requisition";
   static String get getApplicationToInterviewConversion =>
-      "$analyticsBase/analytics/conversion/application-to-interview";
+      "$analyticsBase/conversion/application-to-interview";
   static String get getInterviewToOfferConversion =>
-      "$analyticsBase/analytics/conversion/interview-to-offer";
-  static String get getStageDropoff => "$analyticsBase/analytics/dropoff";
-  static String get getTimePerStage =>
-      "$analyticsBase/analytics/time-per-stage";
+      "$analyticsBase/conversion/interview-to-offer";
+  static String get getStageDropoff => "$analyticsBase/dropoff";
+  static String get getTimePerStage => "$analyticsBase/time-per-stage";
   static String get getMonthlyApplications =>
-      "$analyticsBase/analytics/applications/monthly";
-  static String get getCVScreeningDrop =>
-      "$analyticsBase/analytics/cv-screening-drop";
+      "$analyticsBase/applications/monthly";
+  static String get getCVScreeningDrop => "$analyticsBase/cv-screening-drop";
   static String get getAssessmentPassRate =>
-      "$analyticsBase/analytics/assessments/pass-rate";
+      "$analyticsBase/assessments/pass-rate";
   static String get getInterviewScheduling =>
-      "$analyticsBase/analytics/interviews/scheduled";
-  static String get getOffersByCategory =>
-      "$analyticsBase/analytics/offers-by-category";
+      "$analyticsBase/interviews/scheduled";
+  static String get getOffersByCategory => "$analyticsBase/offers-by-category";
   static String get getAvgCVScore =>
-      "$analyticsBase/analytics/candidate/avg-cv-score";
+      "$analyticsBase/candidate/avg-cv-score";
   static String get getAvgAssessmentScore =>
-      "$analyticsBase/analytics/candidate/avg-assessment-score";
+      "$analyticsBase/candidate/avg-assessment-score";
   static String get getSkillsFrequency =>
-      "$analyticsBase/analytics/candidate/skills-frequency";
+      "$analyticsBase/candidate/skills-frequency";
   static String get getExperienceDistribution =>
-      "$analyticsBase/analytics/candidate/experience-distribution";
+      "$analyticsBase/candidate/experience-distribution";
+  static String get getGenderDistribution =>
+      "$analyticsBase/candidate/gender-distribution";
+  static String get getEthnicityDistribution =>
+      "$analyticsBase/candidate/ethnicity-distribution";
 
   // ==================== CANDIDATE ENDPOINTS ====================
   static String get getCandidateProfile => "$candidateBase/profile";

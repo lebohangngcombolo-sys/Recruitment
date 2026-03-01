@@ -22,6 +22,8 @@ import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../utils/api_endpoints.dart';
+import '../../utils/app_config.dart';
 
 class _DashboardCalendarDataSource extends CalendarDataSource {
   _DashboardCalendarDataSource(List<Appointment> source) {
@@ -139,7 +141,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
   String _profileImageUrl = "";
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  String get apiBase => AppConfig.apiBase + "/api/candidate";
   final ImagePicker _picker = ImagePicker();
 
   // Calendar appointments (interviews + meetings)
@@ -442,7 +444,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       if (role == "admin") {
         final token = await AuthService.getAccessToken();
         final res = await http.get(
-          Uri.parse("http://127.0.0.1:5000/api/admin/audits/recent"),
+          Uri.parse(AppConfig.apiBase + "/api/admin/audits/recent"),
           headers: {"Authorization": "Bearer $token"},
         );
         if (res.statusCode == 200) {
@@ -497,8 +499,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
       // Fetch candidate pipeline data (applications per requisition)
       final pipelineRes = await http.get(
-        Uri.parse(
-            "http://127.0.0.1:5000/api/analytics/applications-per-requisition"),
+        Uri.parse(ApiEndpoints.getApplicationsPerRequisition),
         headers: headers,
       );
       if (pipelineRes.statusCode == 200) {
@@ -513,7 +514,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
       // Fetch time to fill data (time per stage)
       final timeRes = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/analytics/time-per-stage"),
+        Uri.parse(ApiEndpoints.getTimePerStage),
         headers: headers,
       );
       if (timeRes.statusCode == 200) {
@@ -537,7 +538,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       try {
         final genderRes = await http.get(
           Uri.parse(
-              "http://127.0.0.1:5000/api/analytics/candidate/gender-distribution"),
+              ApiEndpoints.getGenderDistribution),
           headers: headers,
         );
         if (genderRes.statusCode == 200) {
@@ -552,7 +553,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           // Fallback to conversion rate if gender endpoint not available
           final conversionRes = await http.get(
             Uri.parse(
-                "http://127.0.0.1:5000/api/analytics/conversion/application-to-interview"),
+                ApiEndpoints.getApplicationToInterviewConversion),
             headers: headers,
           );
           if (conversionRes.statusCode == 200) {
@@ -567,7 +568,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         // Use fallback data
         final conversionRes = await http.get(
           Uri.parse(
-              "http://127.0.0.1:5000/api/analytics/conversion/application-to-interview"),
+              ApiEndpoints.getApplicationToInterviewConversion),
           headers: headers,
         );
         if (conversionRes.statusCode == 200) {
@@ -583,7 +584,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       try {
         final ethnicityRes = await http.get(
           Uri.parse(
-              "http://127.0.0.1:5000/api/analytics/candidate/ethnicity-distribution"),
+              ApiEndpoints.getEthnicityDistribution),
           headers: headers,
         );
         if (ethnicityRes.statusCode == 200) {
@@ -597,7 +598,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         } else {
           // Fallback to dropoff data
           final dropoffRes = await http.get(
-            Uri.parse("http://127.0.0.1:5000/api/analytics/dropoff"),
+            Uri.parse(ApiEndpoints.getStageDropoff),
             headers: headers,
           );
           if (dropoffRes.statusCode == 200) {
@@ -612,7 +613,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       } catch (e) {
         // Use fallback data
         final dropoffRes = await http.get(
-          Uri.parse("http://127.0.0.1:5000/api/analytics/dropoff"),
+          Uri.parse(ApiEndpoints.getStageDropoff),
           headers: headers,
         );
         if (dropoffRes.statusCode == 200) {
@@ -627,7 +628,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
       // Fetch source performance data (applications per month)
       final monthlyRes = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/analytics/applications/monthly"),
+        Uri.parse(ApiEndpoints.getMonthlyApplications),
         headers: headers,
       );
       if (monthlyRes.statusCode == 200) {
@@ -646,7 +647,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         // Skills frequency data (API returns Map<String, int>: skill name -> count)
         final skillsRes = await http.get(
           Uri.parse(
-              "http://127.0.0.1:5000/api/analytics/candidate/skills-frequency"),
+              ApiEndpoints.getSkillsFrequency),
           headers: headers,
         );
         if (skillsRes.statusCode == 200) {
@@ -679,7 +680,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         // Experience distribution (API returns Map: years/key -> count)
         final experienceRes = await http.get(
           Uri.parse(
-              "http://127.0.0.1:5000/api/analytics/candidate/experience-distribution"),
+              ApiEndpoints.getExperienceDistribution),
           headers: headers,
         );
         if (experienceRes.statusCode == 200) {
@@ -716,7 +717,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       try {
         // CV screening drop trends
         final cvDropRes = await http.get(
-          Uri.parse("http://127.0.0.1:5000/api/analytics/cv-screening-drop"),
+          Uri.parse(ApiEndpoints.getCVScreeningDrop),
           headers: headers,
         );
         if (cvDropRes.statusCode == 200) {
@@ -736,7 +737,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         // Assessment pass rates
         final assessmentRes = await http.get(
           Uri.parse(
-              "http://127.0.0.1:5000/api/analytics/assessments/pass-rate"),
+              ApiEndpoints.getAssessmentPassRate),
           headers: headers,
         );
         if (assessmentRes.statusCode == 200) {
@@ -780,7 +781,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               "${auditEndDate!.year}-${auditEndDate!.month.toString().padLeft(2, '0')}-${auditEndDate!.day.toString().padLeft(2, '0')}",
         if (auditSearchQuery != null) "q": auditSearchQuery!,
       };
-      final uri = Uri.http("127.0.0.1:5000", "/api/admin/audits", queryParams);
+      final uri = Uri.parse(AppConfig.apiBase + "/api/admin/audits")
+          .replace(queryParameters: queryParams);
       final res =
           await http.get(uri, headers: {"Authorization": "Bearer $token"});
 

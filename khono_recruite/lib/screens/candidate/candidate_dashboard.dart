@@ -20,6 +20,7 @@ import '../../screens/candidate/user_profile_page.dart';
 import 'saved_application_screen.dart';
 import '../../services/auth_service.dart';
 import 'offers_screen.dart';
+import '../../utils/api_endpoints.dart';
 
 class CandidateDashboard extends StatefulWidget {
   final String token;
@@ -46,7 +47,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   final Color primaryColor = Color(0xFF991A1A);
   final Color strokeColor = Color(0xFFC10D00);
   final Color fillColor = Color(0xFFf2f2f2).withValues(alpha: 0.2);
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  String get apiBase => ApiEndpoints.candidateBase;
 
   List<Map<String, dynamic>> notifications = [];
   Timer? _notificationTimer;
@@ -344,7 +345,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     if (widget.token.isEmpty) return;
     try {
       final response = await http.get(
-        Uri.parse('$apiBase/notifications'),
+        Uri.parse(ApiEndpoints.getCandidateNotifications),
         headers: {'Authorization': 'Bearer ${widget.token}'},
       );
 

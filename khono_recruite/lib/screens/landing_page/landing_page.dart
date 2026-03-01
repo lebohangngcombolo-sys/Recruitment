@@ -17,6 +17,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 // Import your existing services
 import '../../services/candidate_service.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
+import '../../utils/app_config.dart';
 
 /// New landing screen: hero, explore by category, job cards. Optional [token] for logged-in state.
 /// Teammate will refine the real "candidate dashboard" (applications, profile, etc.) in candidate_dashboard.dart.
@@ -94,7 +96,7 @@ class _LandingPageState extends State<LandingPage>
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
 
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  String get apiBase => AppConfig.apiBase + "/api/candidate";
 
   @override
   void initState() {
@@ -522,7 +524,7 @@ class _LandingPageState extends State<LandingPage>
 
     try {
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/ai/chat"),
+        Uri.parse(ApiEndpoints.aiBase + "/chat"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer ${_effectiveToken ?? ''}",
@@ -573,7 +575,7 @@ class _LandingPageState extends State<LandingPage>
     _safeSetState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/ai/parse_cv"),
+        Uri.parse(ApiEndpoints.aiBase + "/parse_cv"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer ${_effectiveToken ?? ''}",
