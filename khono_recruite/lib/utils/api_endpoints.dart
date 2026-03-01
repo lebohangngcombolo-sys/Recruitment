@@ -31,6 +31,7 @@ class ApiEndpoints {
   static String get resetPassword => "$authBase/reset-password";
   static String get changePassword => "$authBase/change-password";
   static String get currentUser => "$authBase/me";
+  static String get updateAuthProfile => "$authBase/profile";
   static String get refresh => "$authBase/refresh";
   static String get adminEnroll => "$authBase/admin-enroll";
   static String get firebaseLogin => "$authBase/firebase-login";
@@ -109,6 +110,7 @@ class ApiEndpoints {
   static String get getUpcomingInterviews =>
       "$adminBase/interviews/dashboard/upcoming";
   static String get getPastInterviews => "$adminBase/interviews/dashboard/past";
+  static String get getInterviewsForCalendar => "$adminBase/interviews/calendar";
 
   // ------------------- Update Application Status -------------------
   static String updateApplicationStatus(int applicationId) =>
@@ -147,6 +149,7 @@ class ApiEndpoints {
   static String get auditLogs => "$adminBase/audits";
   static String get parseResume => "$adminBase/cv/parse";
   static String get cvReviews => "$adminBase/cv-reviews";
+  static String get allCVs => "$adminBase/cv-reviews";
   static String get getUsers => "$adminBase/users";
 
   // ------------------- Test Packs -------------------

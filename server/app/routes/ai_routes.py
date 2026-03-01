@@ -3,8 +3,11 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity
 from app.utils.decorators import role_required
 from app.services.ai_service import AIService
+from app.services.job_service import JobService
+from app.services.cv_analysis_utils import truncate_for_cv_prompt, apply_cv_score_baseline
 import json
 import logging
+import datetime
 
 logger = logging.getLogger(__name__)
 ai_bp = Blueprint("ai_bp", __name__, url_prefix="/api/ai")
@@ -58,32 +61,27 @@ def chat():
 @role_required(["admin", "hiring_manager"])
 def generate_job_details():
     """
-    Generate comprehensive job details using AI
-    body: {"job_title": "Software Engineer"}
+    Generate comprehensive job details using AI.
+    Body: {"job_title": "Software Engineer"} or {"jobTitle": "..."}
     """
     data = request.get_json(silent=True) or {}
-    job_title = (data.get("job_title") or "").strip()
-    
+    job_title = (data.get("job_title") or data.get("jobTitle") or "").strip()
     if not job_title:
         return jsonify({"error": "job_title is required"}), 400
-
     try:
         ai = AIService()
-        
-        # Generate job details using AI hierarchy
         result = ai.generate_job_details(job_title)
-        
         return jsonify({
             "message": "Job details generated successfully",
             "job_details": result
         }), 200
-        
+    except RuntimeError as e:
+        if "OPENROUTER_API_KEY" in str(e) or "not set" in str(e).lower():
+            return jsonify({"error": "AI not configured (OPENROUTER_API_KEY not set)"}), 503
+        return jsonify({"error": str(e)}), 502
     except Exception as e:
         logger.exception("Job details generation error")
-        return jsonify({
-            "error": "AI job generation failed",
-            "details": str(e)
-        }), 502
+        return jsonify({"error": "AI job generation failed", "details": str(e)}), 502
 
 
 @ai_bp.route("/parse_cv", methods=["POST"])
@@ -102,9 +100,18 @@ def parse_cv():
         db.session.add(candidate)
         db.session.commit()
 
-    # Accept cv_text and job_description
+    # Accept cv_text, job_description, or job_id (to build full job spec server-side)
     cv_text = request.form.get("cv_text") or (request.json and request.json.get("cv_text"))
     job_description = request.form.get("job_description") or (request.json and request.json.get("job_description"))
+    job_id_raw = request.form.get("job_id") or (request.json and request.json.get("job_id"))
+
+    if job_id_raw is not None:
+        try:
+            job_id = int(job_id_raw)
+        except (TypeError, ValueError):
+            job_id = None
+    else:
+        job_id = None
 
     # If a file is uploaded, push to Cloudinary
     resume_url = None
@@ -117,16 +124,29 @@ def parse_cv():
         except Exception:
             logger.exception("Cloudinary upload failed")
 
+    if job_id and not job_description:
+        from app.models import Requisition
+        job = Requisition.query.get(job_id)
+        if job:
+            job_description = JobService.build_job_spec_for_cv(job)
     if not job_description:
-        return jsonify({"error": "job_description is required"}), 400
+        return jsonify({"error": "job_description or job_id is required"}), 400
 
     if not cv_text:
         cv_text = candidate.cv_text or ""
         if not cv_text:
             return jsonify({"error": "cv_text is required (or upload text)"}), 400
 
+    cv_text, job_description = truncate_for_cv_prompt(cv_text, job_description)
+
     # Run Gemini CV analysis with safe fallback
     parser_result = analyse_resume_gemini(cv_text=cv_text, job_description=job_description)
+
+    raw_score = parser_result.get("match_score", 0) or 0
+    final_score = apply_cv_score_baseline(raw_score)
+    parser_result["match_score"] = final_score
+    if parser_result.get("raw_score") is None:
+        parser_result["raw_score"] = raw_score
 
     # Save analysis record
     try:
@@ -141,7 +161,7 @@ def parse_cv():
 
         candidate.profile = candidate.profile or {}
         candidate.profile["cv_parser_result"] = parser_result
-        candidate.cv_score = parser_result.get("match_score", candidate.cv_score or 0)
+        candidate.cv_score = final_score
         db.session.commit()
     except Exception:
         db.session.rollback()
@@ -166,33 +186,6 @@ def parse_cv():
     }), 200
 
 
-
-@ai_bp.route("/generate_job_details", methods=["POST"])
-@role_required(["admin", "hiring_manager"])
-def generate_job_details():
-    """
-    Generate job details (description, responsibilities, qualifications, etc.) from a job title.
-    Body: {"job_title": "Project Manager"}
-    Uses server-side OpenRouter so API keys are not exposed to the client.
-    """
-    data = request.get_json(silent=True) or {}
-    job_title = (data.get("job_title") or data.get("jobTitle") or "").strip()
-    if not job_title:
-        return jsonify({"error": "job_title is required"}), 400
-    from app.services.ai_service import AIService
-    ai = AIService()
-    try:
-        result = ai.generate_job_details(job_title)
-        return jsonify(result), 200
-    except RuntimeError as e:
-        if "OPENROUTER_API_KEY" in str(e) or "not set" in str(e).lower():
-            return jsonify({"error": "AI not configured (OPENROUTER_API_KEY not set)"}), 503
-        return jsonify({"error": str(e)}), 502
-    except Exception as e:
-        logger.exception("generate_job_details failed")
-        return jsonify({"error": "AI generation failed", "details": str(e)}), 502
-
-
 @ai_bp.route("/generate_questions", methods=["POST"])
 @role_required(["admin", "hiring_manager"])
 def generate_questions():
@@ -213,12 +206,15 @@ def generate_questions():
         questions = ai.generate_assessment_questions(job_title, difficulty, question_count)
         return jsonify({"questions": questions}), 200
     except RuntimeError as e:
-        if "OPENROUTER_API_KEY" in str(e) or "not set" in str(e).lower():
-            return jsonify({"error": "AI not configured (OPENROUTER_API_KEY not set)"}), 503
-        return jsonify({"error": str(e)}), 502
+        logger.warning("generate_questions AI failed: %s", e)
+        return jsonify({
+            "error": "AI service temporarily unavailable. Try again later or check API configuration.",
+        }), 503
     except Exception as e:
         logger.exception("generate_questions failed")
-        return jsonify({"error": "AI generation failed", "details": str(e)}), 502
+        return jsonify({
+            "error": "AI service temporarily unavailable. Try again later.",
+        }), 503
 
 
 @ai_bp.route("/analysis/<int:analysis_id>", methods=["GET"])

@@ -95,7 +95,7 @@ def time_per_stage():
         SELECT
             a.id AS application_id,
             a.created_at,
-            MIN(i.scheduled_at) AS first_interview,
+            MIN(i.scheduled_time) AS first_interview,
             (SELECT ar.created_at FROM assessment_results ar WHERE ar.application_id = a.id ORDER BY ar.created_at LIMIT 1) AS first_assessment
         FROM applications a
         LEFT JOIN interviews i ON i.application_id = a.id
@@ -264,6 +264,38 @@ def avg_assessment_score():
 
 
 # ------------------------------------------------------------
+# 12b. GENDER DISTRIBUTION (for diversity charts)
+# ------------------------------------------------------------
+@analytics_bp.route("/analytics/candidate/gender-distribution")
+def gender_distribution():
+    rows = (
+        db.session.query(Candidate.gender, func.count(Candidate.id))
+        .group_by(Candidate.gender)
+        .all()
+    )
+    return jsonify([
+        {"gender": (g or "Unknown"), "count": c}
+        for g, c in rows
+    ])
+
+
+# ------------------------------------------------------------
+# 12c. ETHNICITY / NATIONALITY DISTRIBUTION (for diversity charts)
+# ------------------------------------------------------------
+@analytics_bp.route("/analytics/candidate/ethnicity-distribution")
+def ethnicity_distribution():
+    rows = (
+        db.session.query(Candidate.nationality, func.count(Candidate.id))
+        .group_by(Candidate.nationality)
+        .all()
+    )
+    return jsonify([
+        {"ethnicity": (n or "Unknown"), "count": c}
+        for n, c in rows
+    ])
+
+
+# ------------------------------------------------------------
 # 13. SKILL FREQUENCY FROM CANDIDATE.SKILLS
 # ------------------------------------------------------------
 @analytics_bp.route("/analytics/candidate/skills-frequency")
@@ -285,6 +317,7 @@ def skill_frequency():
 # ------------------------------------------------------------
 @analytics_bp.route("/analytics/candidate/experience-distribution")
 def experience_distribution():
+    import re
     candidates = Candidate.query.all()
     distribution = {}
 
@@ -292,7 +325,6 @@ def experience_distribution():
         if not c.work_experience:
             continue
 
-        # Ensure we have a list of dicts
         try:
             jobs = c.work_experience
             if isinstance(jobs, str):
@@ -300,9 +332,21 @@ def experience_distribution():
         except Exception:
             continue
 
-        for j in jobs:
-            if isinstance(j, dict):
-                years = j.get("years", 0)
-                distribution[years] = distribution.get(years, 0) + 1
+        for j in jobs if isinstance(jobs, list) else []:
+            if not isinstance(j, dict):
+                continue
+            years = j.get("years")
+            if years is None and isinstance(j.get("duration"), str):
+                dur = j.get("duration", "")
+                num_match = re.search(r"(\d+)\s*(?:year|yr)", dur, re.I)
+                years = int(num_match.group(1)) if num_match else 0
+            if years is None:
+                years = 0
+            try:
+                years = int(years)
+            except (TypeError, ValueError):
+                years = 0
+            key = str(years)
+            distribution[key] = distribution.get(key, 0) + 1
 
     return jsonify(distribution)

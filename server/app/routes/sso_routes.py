@@ -31,7 +31,7 @@ def validate_sso_config(app):
     required_configs = ["SSO_CLIENT_ID", "SSO_CLIENT_SECRET", "SSO_METADATA_URL"]
     missing = [config for config in required_configs if not app.config.get(config)]
     if missing:
-        app.logger.error(f"Missing SSO configuration: {missing}")
+        app.logger.warning(f"Missing SSO configuration: {missing}")
         return False
 
     metadata_url = app.config["SSO_METADATA_URL"]
@@ -68,7 +68,7 @@ def register_sso_provider(app):
             app.oauth_initialized = True
 
         if not validate_sso_config(app):
-            app.logger.error("SSO config invalid. Skipping registration.")
+            app.logger.warning("SSO config invalid. Skipping registration.")
             return False
 
         oauth.register(

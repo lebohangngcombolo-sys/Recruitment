@@ -41,4 +41,3 @@ String localhostToEnv(String url) {
       .replaceAll('http://127.0.0.1:5000', AppConfig.apiBase)
       .replaceAll('http://127.0.0.1:5000', AppConfig.publicApiBase);
 }
-

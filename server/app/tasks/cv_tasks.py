@@ -7,7 +7,10 @@ try:
     from app.services.cv_extraction_orchestrator import CVExtractionOrchestrator
 except ImportError:
     CVExtractionOrchestrator = None
-from app.models import CVAnalysis, Application, Notification, User
+from app.models import CVAnalysis, Application, Notification, User, Requisition
+from app.services.job_service import JobService
+from app.services.cv_analysis_utils import apply_cv_score_baseline
+from app.services.assessment_service import AssessmentService
 from datetime import datetime
 import logging
 
@@ -43,9 +46,33 @@ def analyze_cv_task(self, cv_analysis_id: int, application_id: int):
             cv.started_at = datetime.utcnow()
             db.session.add(cv)
             db.session.commit()
-            # Run analysis using singleton analyzer
             resume_text = cv.cv_text or ""
-            result = analyzer.analyse(resume_text, appn.requisition_id)
+            requisition = Requisition.query.get(appn.requisition_id)
+            job_spec = JobService.build_job_spec_for_cv(requisition) if requisition else ""
+
+            # Try Gemini (AIService) first, then OpenRouter (HybridResumeAnalyzer), then offline
+            result = None
+            try:
+                from app.services.ai_service import AIService
+                ai = AIService()
+                result = ai.analyze_cv_vs_job(cv_text=resume_text, job_description=job_spec)
+                if result and result.get("match_score") is not None:
+                    pass  # use result
+                else:
+                    result = None
+            except Exception as e:
+                logger.warning("AIService CV analysis failed, falling back to HybridResumeAnalyzer: %s", e)
+                result = None
+
+            if result is None:
+                result = analyzer.analyse(resume_text, appn.requisition_id)
+
+            # Apply baseline floor to score
+            raw_score = int(result.get("match_score", 0) or 0)
+            match_score = apply_cv_score_baseline(raw_score)
+            result["match_score"] = match_score
+            if result.get("raw_score") is None:
+                result["raw_score"] = raw_score
 
             # Build structured extraction output for prepopulation/review UI (optional)
             orch_out = None
@@ -60,14 +87,9 @@ def analyze_cv_task(self, cv_analysis_id: int, application_id: int):
                     logger.exception("Failed to build structured extraction output")
                     orch_out = None
 
-            # Normalize and persist results
-            match_score = int(result.get("match_score", 0) or 0)
-            if match_score < 0:
-                match_score = 0
-            if match_score > 100:
-                match_score = 100
-
+            # Persist results (match_score already has baseline applied above)
             appn.cv_score = match_score
+            AssessmentService.recompute_application_scores(appn)
             appn.cv_parser_result = result
             appn.recommendation = result.get("recommendation", "")
             db.session.add(appn)
@@ -83,6 +105,54 @@ def analyze_cv_task(self, cv_analysis_id: int, application_id: int):
                 final_cv_result["confidence_scores"] = orch_out.confidence_scores
                 final_cv_result["warnings"] = orch_out.warnings
                 final_cv_result["suggestions"] = orch_out.suggestions
+
+                # Map extracted data to Candidate so information is stored in the right places
+                try:
+                    from app.services.cv_to_candidate_mapper import map_extraction_to_candidate, extraction_user_fields
+                    from app.models import User
+
+                    structured = orch_out.structured_data
+                    work_structured = None
+                    raw_exp = (structured.get("experience") or "") if isinstance(structured.get("experience"), str) else ""
+                    if raw_exp and len(raw_exp.strip()) > 20:
+                        try:
+                            from app.services.ai_service import AIService
+                            ai = AIService()
+                            work_structured = ai.structure_cv_experience(
+                                raw_exp,
+                                position_hint=structured.get("position") or "",
+                                companies_hint=structured.get("previous_companies") if isinstance(structured.get("previous_companies"), list) else None,
+                            )
+                        except Exception:
+                            work_structured = None
+
+                    candidate_updates = map_extraction_to_candidate(structured, work_experience_structured=work_structured)
+                    cand = appn.candidate
+                    if cand and candidate_updates:
+                        for key, value in candidate_updates.items():
+                            if hasattr(cand, key):
+                                if key == "dob" and isinstance(value, str):
+                                    from app.services.enrollment_service import EnrollmentService
+                                    parsed_dob = EnrollmentService._parse_dob(value)
+                                    if parsed_dob:
+                                        setattr(cand, key, parsed_dob)
+                                else:
+                                    setattr(cand, key, value)
+                        db.session.add(cand)
+
+                        user_fields = extraction_user_fields(structured)
+                        if user_fields.get("full_name") and cand.user_id:
+                            user = User.query.get(cand.user_id)
+                            if user and user.profile is not None:
+                                profile = dict(user.profile)
+                                profile["full_name"] = user_fields["full_name"]
+                                parts = user_fields["full_name"].split(None, 1)
+                                profile["first_name"] = parts[0] if parts else ""
+                                profile["last_name"] = parts[1] if len(parts) > 1 else ""
+                                user.profile = profile
+                                db.session.add(user)
+                except Exception as e:
+                    logger.warning("Failed to map CV extraction to candidate: %s", e, exc_info=True)
 
             cv.result = final_cv_result
             cv.status = "completed"

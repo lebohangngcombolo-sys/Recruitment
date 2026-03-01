@@ -32,7 +32,10 @@ class AIService {
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
           if (data is Map<String, dynamic>) {
-            return _ensureAllFieldsFilled(data, jobTitle);
+            final details = data['job_details'] ?? data;
+            return _ensureAllFieldsFilled(
+                details is Map<String, dynamic> ? details : <String, dynamic>{},
+                jobTitle);
           }
         }
       }
@@ -304,13 +307,28 @@ class AIService {
           final data = jsonDecode(response.body);
           final questions = data['questions'];
           if (questions is List) {
-            return List<Map<String, dynamic>>.from(
-                questions.map((e) => e is Map<String, dynamic> ? e : <String, dynamic>{}));
+            return List<Map<String, dynamic>>.from(questions.map(
+                (e) => e is Map<String, dynamic> ? e : <String, dynamic>{}));
           }
+        }
+        if (response.statusCode == 502 || response.statusCode == 503) {
+          String msg = 'AI is temporarily unavailable. Try again later.';
+          try {
+            final data = jsonDecode(response.body);
+            if (data is Map && data['error'] != null) {
+              msg = data['error'].toString();
+            }
+          } catch (_) {}
+          throw Exception(msg);
         }
       }
     } catch (e) {
       if (kDebugMode) debugPrint("Backend generateQuestions failed: $e");
+      // Propagate user-facing AI unavailable message so caller can show it
+      if (e.toString().contains('temporarily unavailable') ||
+          e.toString().contains('Try again later')) {
+        rethrow;
+      }
     }
 
     // Fallback to Gemini if configured
@@ -331,7 +349,8 @@ class AIService {
       int maxRetries,
       Duration baseDelay) async {
     if (_generativeModel == null) {
-      throw Exception('Gemini not configured (Firebase API key missing or invalid)');
+      throw Exception(
+          'Gemini not configured (Firebase API key missing or invalid)');
     }
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -433,15 +452,40 @@ class AIService {
         "weight": 1
       },
     ];
-    ];
 
     return baseQuestions.take(questionCount).toList();
+  }
+
+  /// Parse a JSON string into a map, with a defensive fallback that tries to
+  /// strip leading/trailing noise (e.g. markdown) before decode.
+  static Future<Map<String, dynamic>> _parseJson(String jsonStr) async {
+    try {
+      return jsonDecode(jsonStr) as Map<String, dynamic>;
+    } catch (_) {
+      // Try to recover by trimming to the first/last brace pair.
+      final start = jsonStr.indexOf('{');
+      final end = jsonStr.lastIndexOf('}');
+      if (start != -1 && end != -1 && end > start) {
+        final sliced = jsonStr.substring(start, end + 1);
+        return jsonDecode(sliced) as Map<String, dynamic>;
+      }
+      rethrow;
+    }
+  }
+
+  /// Very defensive fallback for when the model responds with text instead of
+  /// strict JSON. Tries to extract reasonable fields using simple heuristics.
+  static Map<String, dynamic> _parseManually(String text) {
+    // Minimal, safe fallback: return an empty map so callers can fall back
+    // to _getFallbackJobDetails or _getFallbackAssessmentQuestions.
+    return <String, dynamic>{};
   }
 
   static Future<Map<String, dynamic>> _tryGemini(
       String jobTitle, int maxRetries, Duration baseDelay) async {
     if (_generativeModel == null) {
-      throw Exception('Gemini not configured (Firebase API key missing or invalid)');
+      throw Exception(
+          'Gemini not configured (Firebase API key missing or invalid)');
     }
     for (int attempt = 1; attempt <= maxRetries; attempt++) {
       try {

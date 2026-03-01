@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -308,6 +308,16 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
           const SnackBar(
               content: Text("Session expired. Please sign in to apply.")),
         );
+      } else if (res.statusCode == 403) {
+        final data = _safeJsonDecode(res.body);
+        final message = data is Map
+            ? (data["error"] ?? "Complete your enrollment before applying to jobs")
+            : "Complete your enrollment before applying to jobs";
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message.toString())),
+        );
+        context.go("/enrollment");
       } else {
         final data = _safeJsonDecode(res.body);
         if (!mounted) return;
@@ -499,320 +509,331 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
           Container(
             color: Colors.black.withOpacity(0.4),
           ),
-          SingleChildScrollView(
-            child: Column(
-              children: [
-                const SizedBox(height: 24),
-                // Banner - UNCHANGED
-                Stack(
-                  children: [
-                    Image.asset(
-                      widget.job["banner"] ?? "assets/images/team1.jpg",
-                      width: double.infinity,
-                      height: 400,
-                      fit: BoxFit.cover,
-                    ),
-                    Container(
-                      height: 400,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.black.withValues(alpha: 0.6),
-                            Colors.transparent,
-                            Colors.black.withValues(alpha: 0.3),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 40,
-                      left: 16,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(30),
-                          border: Border.all(
-                              color: _accentRed.withOpacity(0.6), width: 1.5),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.2),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: IconButton(
-                          icon:
-                              const Icon(Icons.arrow_back, color: Colors.white),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 40,
-                      left: 24,
-                      right: 24,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.job["title"] ?? "",
-                            style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            "${widget.job["company"] ?? ""} ΓÇó ${widget.job["location"] ?? ""}",
-                            style: GoogleFonts.poppins(
-                              color: Colors.white.withValues(alpha: 0.9),
-                              fontSize: 18,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          Positioned.fill(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 24),
+                  // Banner - UNCHANGED
+                  Stack(
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Main Column
-                          Expanded(
-                            flex: 2,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildEnhancedCard(
-                                  Icons.description_outlined,
-                                  "Job Description",
-                                  _accentRed,
-                                  [
-                                    Text(
-                                      widget.job["description"] ??
-                                          "No description available.",
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 14,
-                                        color: _textPrimary,
-                                        height: 1.6,
-                                      ),
-                                    )
-                                  ],
-                                ),
-                                _buildEnhancedCard(
-                                  Icons.checklist_outlined,
-                                  "Responsibilities",
-                                  _accentRed,
-                                  responsibilitiesList
-                                      .map((r) => Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: 4),
-                                            child: Row(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Icon(Icons.circle,
-                                                    size: 8, color: _accentRed),
-                                                const SizedBox(width: 12),
-                                                Expanded(
-                                                  child: Text(
-                                                    r,
-                                                    style: GoogleFonts.poppins(
-                                                      fontSize: 14,
-                                                      color: _textPrimary,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ))
-                                      .toList(),
-                                ),
-                                _buildEnhancedCard(
-                                  Icons.school_outlined,
-                                  "Qualifications",
-                                  _accentRed,
-                                  qualificationsList
-                                      .map((q) => Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                vertical: 4),
-                                            child: Row(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Icon(Icons.verified,
-                                                    size: 16,
-                                                    color: _accentRed),
-                                                const SizedBox(width: 12),
-                                                Expanded(
-                                                  child: Text(
-                                                    q,
-                                                    style: GoogleFonts.poppins(
-                                                      fontSize: 14,
-                                                      color: _textPrimary,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ))
-                                      .toList(),
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Right Column
-                          const SizedBox(width: 24),
-                          Expanded(
-                            flex: 1,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildEnhancedCard(
-                                  Icons.assignment_outlined,
-                                  "Job Summary",
-                                  _accentRed,
-                                  [
-                                    _buildSummaryRow(
-                                        Icons.calendar_today_outlined,
-                                        "Published On",
-                                        widget.job["published_on"] ??
-                                            "01 Jan, 2045"),
-                                    _buildSummaryRow(
-                                        Icons.people_outlined,
-                                        "Vacancy",
-                                        widget.job["vacancy"]?.toString() ??
-                                            "1"),
-                                    _buildSummaryRow(
-                                        Icons.schedule_outlined,
-                                        "Job Nature",
-                                        _formatEmploymentType(
-                                            widget.job["employment_type"] ??
-                                                widget.job["type"])),
-                                    _buildSummaryRow(
-                                        Icons.attach_money_outlined,
-                                        "Salary",
-                                        _formatSalary(widget.job)),
-                                    _buildSummaryRow(
-                                        Icons.location_on_outlined,
-                                        "Location",
-                                        widget.job["location"] ?? "New York"),
-                                  ],
-                                ),
-                                const SizedBox(height: 16),
-                                _buildEnhancedCard(
-                                  Icons.business_outlined,
-                                  "Company Details",
-                                  _accentRed,
-                                  [
-                                    Text(
-                                      widget.job["company_details"] ??
-                                          "No details available.",
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 14,
-                                        color: _textPrimary,
-                                        height: 1.6,
-                                      ),
-                                    )
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      SizedBox(
+                      Image.asset(
+                        widget.job["banner"] ?? "assets/images/team1.jpg",
                         width: double.infinity,
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 24.0),
-                            child: loadingProfile
-                                ? Padding(
-                                    padding: const EdgeInsets.all(20.0),
-                                    child: CircularProgressIndicator(
-                                        color: _accentRed),
-                                  )
-                                : Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    children: [
-                                      SizedBox(
-                                        width: 320,
-                                        child: ElevatedButton(
-                                          onPressed:
-                                              submitting ? null : applyJob,
-                                          style: ElevatedButton.styleFrom(
-                                            backgroundColor: _accentRed,
-                                            foregroundColor: Colors.white,
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 24, vertical: 14),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                            elevation: 2,
-                                          ),
-                                          child: submitting
-                                              ? SizedBox(
-                                                  height: 20,
-                                                  width: 20,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                    strokeWidth: 2,
-                                                    color: Colors.white,
-                                                  ),
-                                                )
-                                              : Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    Icon(Icons.send_outlined,
-                                                        size: 20,
-                                                        color: Colors.white),
-                                                    const SizedBox(width: 8),
-                                                    Flexible(
-                                                      child: Text(
-                                                        "Proceed With Application",
-                                                        style:
-                                                            GoogleFonts.poppins(
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          fontSize: 16,
-                                                          color: Colors.white,
-                                                        ),
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                        height: 400,
+                        fit: BoxFit.cover,
+                      ),
+                      Container(
+                        height: 400,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.black.withValues(alpha: 0.6),
+                              Colors.transparent,
+                              Colors.black.withValues(alpha: 0.3),
+                            ],
                           ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 40,
+                        left: 16,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(30),
+                            border: Border.all(
+                                color: _accentRed.withOpacity(0.6), width: 1.5),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.2),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.arrow_back,
+                                color: Colors.white),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 40,
+                        left: 24,
+                        right: 24,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.job["title"] ?? "",
+                              style: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              "${widget.job["company"] ?? ""} ΓÇó ${widget.job["location"] ?? ""}",
+                              style: GoogleFonts.poppins(
+                                color: Colors.white.withValues(alpha: 0.9),
+                                fontSize: 18,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 40),
-                _buildEnhancedFooter(),
-              ],
+                  const SizedBox(height: 32),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Main Column
+                            Expanded(
+                              flex: 2,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildEnhancedCard(
+                                    Icons.description_outlined,
+                                    "Job Description",
+                                    _accentRed,
+                                    [
+                                      Text(
+                                        widget.job["description"] ??
+                                            "No description available.",
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          color: _textPrimary,
+                                          height: 1.6,
+                                        ),
+                                      )
+                                    ],
+                                  ),
+                                  _buildEnhancedCard(
+                                    Icons.checklist_outlined,
+                                    "Responsibilities",
+                                    _accentRed,
+                                    responsibilitiesList
+                                        .map((r) => Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      vertical: 4),
+                                              child: Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Icon(Icons.circle,
+                                                      size: 8,
+                                                      color: _accentRed),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Text(
+                                                      r,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        fontSize: 14,
+                                                        color: _textPrimary,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ))
+                                        .toList(),
+                                  ),
+                                  _buildEnhancedCard(
+                                    Icons.school_outlined,
+                                    "Qualifications",
+                                    _accentRed,
+                                    qualificationsList
+                                        .map((q) => Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      vertical: 4),
+                                              child: Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Icon(Icons.verified,
+                                                      size: 16,
+                                                      color: _accentRed),
+                                                  const SizedBox(width: 12),
+                                                  Expanded(
+                                                    child: Text(
+                                                      q,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        fontSize: 14,
+                                                        color: _textPrimary,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ))
+                                        .toList(),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // Right Column
+                            const SizedBox(width: 24),
+                            Expanded(
+                              flex: 1,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildEnhancedCard(
+                                    Icons.assignment_outlined,
+                                    "Job Summary",
+                                    _accentRed,
+                                    [
+                                      _buildSummaryRow(
+                                          Icons.calendar_today_outlined,
+                                          "Published On",
+                                          widget.job["published_on"] ??
+                                              "01 Jan, 2045"),
+                                      _buildSummaryRow(
+                                          Icons.people_outlined,
+                                          "Vacancy",
+                                          widget.job["vacancy"]?.toString() ??
+                                              "1"),
+                                      _buildSummaryRow(
+                                          Icons.schedule_outlined,
+                                          "Job Nature",
+                                          _formatEmploymentType(
+                                              widget.job["employment_type"] ??
+                                                  widget.job["type"])),
+                                      _buildSummaryRow(
+                                          Icons.attach_money_outlined,
+                                          "Salary",
+                                          _formatSalary(widget.job)),
+                                      _buildSummaryRow(
+                                          Icons.location_on_outlined,
+                                          "Location",
+                                          widget.job["location"] ?? "New York"),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildEnhancedCard(
+                                    Icons.business_outlined,
+                                    "Company Details",
+                                    _accentRed,
+                                    [
+                                      Text(
+                                        widget.job["company_details"] ??
+                                            "No details available.",
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          color: _textPrimary,
+                                          height: 1.6,
+                                        ),
+                                      )
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          child: Center(
+                            child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 24.0),
+                              child: loadingProfile
+                                  ? Padding(
+                                      padding: const EdgeInsets.all(20.0),
+                                      child: CircularProgressIndicator(
+                                          color: _accentRed),
+                                    )
+                                  : Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: [
+                                        SizedBox(
+                                          width: 320,
+                                          child: ElevatedButton(
+                                            onPressed:
+                                                submitting ? null : applyJob,
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: _accentRed,
+                                              foregroundColor: Colors.white,
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 24,
+                                                      vertical: 14),
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              elevation: 2,
+                                            ),
+                                            child: submitting
+                                                ? SizedBox(
+                                                    height: 20,
+                                                    width: 20,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: Colors.white,
+                                                    ),
+                                                  )
+                                                : Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Icon(Icons.send_outlined,
+                                                          size: 20,
+                                                          color: Colors.white),
+                                                      const SizedBox(width: 8),
+                                                      Flexible(
+                                                        child: Text(
+                                                          "Proceed With Application",
+                                                          style: GoogleFonts
+                                                              .poppins(
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            fontSize: 16,
+                                                            color: Colors.white,
+                                                          ),
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  _buildEnhancedFooter(),
+                ],
+              ),
             ),
           ),
         ],

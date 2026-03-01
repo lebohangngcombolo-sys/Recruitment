@@ -1,8 +1,7 @@
-﻿import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
-import 'package:flutter_web_plugins/flutter_web_plugins.dart'; // ΓÜí Web URL strategy
 import 'package:flutter_web_plugins/flutter_web_plugins.dart'; // ΓÜí Web URL strategy
 import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
 import 'package:webview_flutter_web/webview_flutter_web.dart';
@@ -184,7 +183,7 @@ final GoRouter _router = GoRouter(
       path: '/admin-dashboard',
       builder: (context, state) {
         final token = state.uri.queryParameters['token'] ?? '';
-        return AdminDAshboard(token: token);
+        return AdminDashboard(token: token);
       },
     ),
     GoRoute(
@@ -203,7 +202,10 @@ final GoRouter _router = GoRouter(
     ),
     GoRoute(
       path: '/hiring-manager-offers',
-      builder: (context, state) => const AdminOfferListScreen(),
+      builder: (context, state) {
+        final token = state.uri.queryParameters['token'] ?? '';
+        return AdminOfferListScreen(token: token.isNotEmpty ? token : null);
+      },
     ),
     // Γ£à Add this new route
     // Γ£à Add this new route

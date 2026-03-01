@@ -5,6 +5,8 @@ import json
 from dotenv import load_dotenv
 from openai import OpenAI
 from app.models import Requisition
+from app.services.job_service import JobService
+from app.services.cv_analysis_utils import truncate_for_cv_prompt
 from cloudinary.uploader import upload as cloudinary_upload
 from jsonschema import validate, ValidationError
 
@@ -59,20 +61,26 @@ class HybridResumeAnalyzer:
         if not self.openai_client:
             return None
 
+        resume_content, job_description = truncate_for_cv_prompt(
+            resume_content or "", job_description or ""
+        )
         prompt = f"""Resume:
 {resume_content}
 
-Job Description:
+Job spec (may include role, description, responsibilities, qualifications, required skills, minimum experience):
 {job_description}
 
 Task:
-- Analyze the resume against the job description.
+- Analyze the resume against the full job spec. Consider skills, qualifications, experience, and responsibilities.
 - Give a match score out of 100.
-- Highlight missing skills or experiences.
+- Highlight missing skills or experiences from the job spec.
 - Suggest improvements.
 
 Return valid JSON only with keys: match_score (int), missing_skills (list), suggestions (list), recommendation (string), raw_text (string).
 """
+        requested = int(os.getenv("OPENROUTER_MAX_TOKENS", "1024"))
+        cap = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "600"))
+        max_tokens = min(requested, cap)
         try:
             response = self.openai_client.chat.completions.create(
                 model=os.getenv("OPENROUTER_MODEL", "openrouter/auto"),
@@ -81,7 +89,7 @@ Return valid JSON only with keys: match_score (int), missing_skills (list), sugg
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.0,
-                max_tokens=int(os.getenv("OPENROUTER_MAX_TOKENS", "1024")),
+                max_tokens=max_tokens,
             )
             text = getattr(response.choices[0].message, "content", "") or ""
 
@@ -109,9 +117,10 @@ Return valid JSON only with keys: match_score (int), missing_skills (list), sugg
             }
 
     def _parse_openrouter_response(self, text):
-        """Fallback parser for legacy OpenRouter text outputs."""
+        """Fallback parser for legacy OpenRouter text outputs. match_score clamped to 0-100."""
         score_match = re.search(r"(\d{1,3})(?:/100|%)", text)
         match_score = int(score_match.group(1)) if score_match else 0
+        match_score = max(0, min(100, match_score))
 
         missing_skills_match = re.search(r"Missing Skills:\s*(.*?)(?:Suggestions:|$)", text, re.DOTALL)
         missing_skills = []
@@ -134,26 +143,49 @@ Return valid JSON only with keys: match_score (int), missing_skills (list), sugg
         }
 
     # ----------------------------
-    # Lightweight Offline Analysis (Keyword-only)
+    # Lightweight Offline Analysis (curated terms when job available, else keyword-only)
     # ----------------------------
-    def analyse_offline_keywords(self, resume_content, job_description):
-        """Simple keyword-only offline NLP analysis as a low-cost fallback."""
+    def analyse_offline_keywords(self, resume_content, job_description, job=None):
+        """Offline analysis: compare against curated job terms (required_skills, qualifications, responsibilities) when job is provided; otherwise bag-of-words from job_description. match_score always 0-100."""
+        resume_content, job_description = truncate_for_cv_prompt(resume_content or "", job_description or "")
         resume_lower = (resume_content or "").lower()
-        job_lower = (job_description or "").lower()
+        resume_words = set(re.findall(r'\b[a-z0-9]{2,}\b', resume_lower))
 
-        resume_words = set(re.findall(r'\b[a-z]{3,}\b', resume_lower))
-        job_words = set(re.findall(r'\b[a-z]{3,}\b', job_lower))
+        if job and (getattr(job, "required_skills", None) or getattr(job, "qualifications", None) or getattr(job, "responsibilities", None)):
+            job_terms = set()
+            for attr in ("required_skills", "qualifications", "responsibilities"):
+                val = getattr(job, attr, None)
+                if not val:
+                    continue
+                items = val if isinstance(val, list) else [val]
+                for item in items:
+                    s = (item if isinstance(item, str) else str(item)).lower()
+                    tokens = re.findall(r'\b[a-z0-9]{2,}\b', s)
+                    job_terms.update(tokens)
+            if not job_terms:
+                job_lower = (job_description or "").lower()
+                job_terms = set(re.findall(r'\b[a-z0-9]{2,}\b', job_lower))
+        else:
+            job_lower = (job_description or "").lower()
+            job_terms = set(re.findall(r'\b[a-z0-9]{2,}\b', job_lower))
 
-        missing_skills = list(job_words - resume_words)
-        total_skills = len(job_words)
-        matched_skills = total_skills - len(missing_skills)
-        match_score = int((matched_skills / total_skills) * 100) if total_skills else 0
+        missing_skills = list(job_terms - resume_words)
+        total_terms = len(job_terms)
+        matched = total_terms - len(missing_skills)
+        if total_terms:
+            match_score = int((matched / total_terms) * 100)
+            match_score = max(0, min(100, match_score))
+        else:
+            # No job spec to compare: use 30% baseline so a non-empty CV does not get 0
+            resume_len = len((resume_content or "").strip())
+            match_score = 30 if resume_len > 100 else (min(30, (resume_len // 3)) if resume_len else 0)
+            match_score = max(0, min(100, match_score))
 
         suggestions = ["Consider highlighting missing skills in your resume."] if missing_skills else []
 
         return {
             "match_score": match_score,
-            "missing_skills": missing_skills,
+            "missing_skills": missing_skills[:50],
             "suggestions": suggestions,
             "recommendation": "",
             "raw_text": "Offline keyword-only analysis performed"
@@ -173,16 +205,16 @@ Return valid JSON only with keys: match_score (int), missing_skills (list), sugg
                 "raw_text": "Job not found"
             }
 
-        job_description = job.description or ""
+        job_spec = JobService.build_job_spec_for_cv(job)
 
         # Try online first
         if self.openai_client:
-            result = self.analyse_online(resume_content, job_description)
+            result = self.analyse_online(resume_content, job_spec)
             if result and "Error during online analysis" not in result.get("raw_text", ""):
                 return result
 
         # Fallback to lightweight keyword-only analysis
-        return self.analyse_offline_keywords(resume_content, job_description)
+        return self.analyse_offline_keywords(resume_content, job_spec, job=job)
 
     # ----------------------------
     # Cloudinary Upload (Candidate_CV folder for easy retrieval)

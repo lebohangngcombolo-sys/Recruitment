@@ -61,7 +61,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         if (role == "admin") {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => AdminDAshboard(token: token)),
+            MaterialPageRoute(builder: (_) => AdminDashboard(token: token)),
           );
         } else {
           Navigator.pushReplacement(

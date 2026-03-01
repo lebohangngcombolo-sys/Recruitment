@@ -16,7 +16,8 @@ class HMAnalyticsPage extends StatefulWidget {
 class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   bool _isLoading = true;
   String _selectedTimeRange = 'Last 6 Months';
-  final AnalyticsService _service = AnalyticsService(baseUrl: AppConfig.apiBase);
+  final AnalyticsService _service =
+      AnalyticsService(baseUrl: AppConfig.apiBase);
 
   // Data holders
   List<Map<String, dynamic>> _monthlyApps = [];
@@ -71,21 +72,30 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildHeader(),
-          const SizedBox(height: 16),
-          _buildTimeRangeSelector(),
-          const SizedBox(height: 16),
-          Expanded(
-            child: _isLoading
-                ? _buildLoadingState()
-                : (_error != null ? _buildError() : _buildAnalyticsContent()),
-          ),
-        ],
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildHeader(),
+            const SizedBox(height: 16),
+            _buildTimeRangeSelector(),
+            const SizedBox(height: 16),
+            _isLoading
+                ? SizedBox(
+                    height: 400,
+                    child: _buildLoadingState(),
+                  )
+                : _error != null
+                    ? SizedBox(
+                        height: 200,
+                        child: _buildError(),
+                      )
+                    : _buildAnalyticsContent(),
+          ],
+        ),
       ),
     );
   }

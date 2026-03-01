@@ -1,4 +1,4 @@
-﻿from flask import Blueprint, request, jsonify, current_app, Response
+from flask import Blueprint, request, jsonify, current_app, Response
 from flask_jwt_extended import get_jwt_identity, jwt_required
 from app.extensions import db, cloudinary_client
 import requests
@@ -16,6 +16,7 @@ from werkzeug.utils import secure_filename
 # NOTE: import analyze_cv_task lazily inside upload_resume to avoid circular import
 from app.services.cv_parser_service import HybridResumeAnalyzer
 from app.services.job_service import JobService
+from app.services.assessment_service import AssessmentService
 from app.utils.decorators import role_required
 from app.utils.helper import get_current_candidate
 from app.services.audit2 import AuditService
@@ -28,6 +29,28 @@ import re
 
 candidate_bp = Blueprint("candidate_bp", __name__)
 
+
+def _cv_analysis_state_for_application(application):
+    """
+    Derive CV-analysis readiness from application-level fields.
+    We only treat CV scoring as complete once:
+    - a resume was uploaded for this application, and
+    - Celery persisted cv_parser_result on the application.
+    """
+    has_resume = bool((getattr(application, "resume_url", "") or "").strip())
+    parser_result = (
+        application.cv_parser_result
+        if isinstance(application.cv_parser_result, dict)
+        else {}
+    )
+    has_parser_result = bool(parser_result)
+
+    if not has_resume:
+        return "not_started"
+    if has_parser_result:
+        return "completed"
+    return "processing"
+
 # ----------------- APPLY FOR JOB -----------------
 @candidate_bp.route("/apply/<int:job_id>", methods=["POST"])
 @role_required(["candidate"])
@@ -35,6 +58,12 @@ def apply_job(job_id):
     try:
         user_id = get_jwt_identity()
         user = User.query.get_or_404(user_id)
+        if user.role == "candidate" and not getattr(user, "enrollment_completed", False):
+            return jsonify({
+                "error": "Complete your enrollment before applying to jobs",
+                "redirect": "/enrollment",
+            }), 403
+
         data = request.get_json() or {}
 
         job = Requisition.query.get(job_id)
@@ -98,6 +127,15 @@ def apply_job(job_id):
             details=f"Applied for job ID {job_id}",
             extra_data={"job_id": job_id, "application_id": application.id}
         )
+
+        # Notify job creator and admins (User.id only)
+        candidate_name = getattr(candidate, "full_name", None) or "a candidate"
+        msg = f"New application for {job.title} from {candidate_name}."
+        if job.created_by:
+            db.session.add(Notification(user_id=job.created_by, message=msg, type="new_application"))
+        for admin in User.query.filter_by(role="admin").all():
+            db.session.add(Notification(user_id=admin.id, message=msg, type="new_application"))
+        db.session.commit()
 
         return jsonify({"message": "Applied successfully!", "application_id": application.id}), 201
 
@@ -287,7 +325,7 @@ def upload_resume(application_id):
 
         cv_analysis = CVAnalysis(
             candidate_id=candidate.id,
-            job_description=job.description or "",
+            job_description=JobService.build_job_spec_for_cv(job),
             cv_text=resume_text or "",
             result={
                 "extraction_metadata": {
@@ -364,6 +402,15 @@ def get_applications():
         for app in applications:
             assessment_result = AssessmentResult.query.filter_by(application_id=app.id).first()
             job = app.requisition
+            cv_analysis_status = _cv_analysis_state_for_application(app)
+            score_ready = cv_analysis_status == "completed"
+            breakdown = app.scoring_breakdown if isinstance(app.scoring_breakdown, dict) else {}
+            breakdown_cv = breakdown.get("cv")
+            cv_score = app.cv_score or 0
+            breakdown_missing = not breakdown
+            breakdown_stale = breakdown_cv is None or float(breakdown_cv) != float(cv_score)
+            if score_ready and (breakdown_missing or breakdown_stale):
+                _, breakdown = AssessmentService.recompute_application_scores(app)
             result.append({
                 "application_id": app.id,
                 "job_id": app.requisition_id,
@@ -375,11 +422,13 @@ def get_applications():
                 "saved_at": app.saved_at.isoformat() if getattr(app, "saved_at", None) else None,
                 "draft_data": app.draft_data,
                 "resume_url": app.resume_url,
-                "cv_score": app.cv_score,
+                "cv_score": cv_score,
                 "cv_parser_result": app.cv_parser_result,
+                "cv_analysis_status": cv_analysis_status,
+                "score_ready": score_ready,
                 "assessment_score": app.assessment_score,
-                "overall_score": app.overall_score,
-                "scoring_breakdown": app.scoring_breakdown,
+                "overall_score": app.overall_score if score_ready else None,
+                "scoring_breakdown": breakdown if score_ready else {},
                 "knockout_rule_violations": app.knockout_rule_violations,
                 "recommendation": app.recommendation,
                 "assessed_date": app.assessed_date.isoformat() if app.assessed_date else None,
@@ -431,6 +480,14 @@ def cv_preview(application_id):
         fetch_url = resume_url
         public_id = _cloudinary_public_id_from_url(resume_url)
         if public_id:
+            api_secret = current_app.config.get("CLOUDINARY_API_SECRET")
+            if not api_secret:
+                current_app.logger.warning(
+                    "CV preview: CLOUDINARY_API_SECRET not set; signed URLs unavailable."
+                )
+                return jsonify({
+                    "error": "CV preview is temporarily unavailable. Please try again later.",
+                }), 503
             try:
                 signed_url, _ = cloudinary.utils.cloudinary_url(
                     public_id, resource_type="raw", sign_url=True
@@ -438,6 +495,9 @@ def cv_preview(application_id):
                 fetch_url = signed_url
             except Exception as e:
                 current_app.logger.warning(f"CV preview: could not build signed URL: {e}")
+                return jsonify({
+                    "error": "CV preview is temporarily unavailable. Please try again later.",
+                }), 503
 
         r = requests.get(
             fetch_url,
@@ -457,7 +517,9 @@ def cv_preview(application_id):
         return Response(r.iter_content(chunk_size=8192), status=r.status_code, headers=headers)
     except requests.RequestException as e:
         current_app.logger.warning(f"CV preview fetch failed: {e}")
-        return jsonify({"error": "Could not load CV"}), 502
+        return jsonify({
+            "error": "CV preview is temporarily unavailable. Please try again later.",
+        }), 503
     except Exception as e:
         current_app.logger.error(f"CV preview error: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
@@ -546,33 +608,23 @@ def submit_assessment(application_id):
         # Update application with assessment score
         application.assessment_score = percentage_score
 
-        weightings = (job.weightings if job else None) or {
-            "cv": 60,
-            "assessment": 40,
-            "interview": 0,
-            "references": 0
-        }
-
-        cv_score = application.cv_score or 0
-        interview_score = application.interview_feedback_score or 0
-        references_score = 0
-
-        overall_score = (
-            (cv_score * weightings.get("cv", 0) / 100) +
-            (percentage_score * weightings.get("assessment", 0) / 100) +
-            (interview_score * weightings.get("interview", 0) / 100) +
-            (references_score * weightings.get("references", 0) / 100)
-        )
-
-        application.overall_score = overall_score
-        application.scoring_breakdown = {
-            "cv": cv_score,
-            "assessment": percentage_score,
-            "interview": interview_score,
-            "references": references_score,
-            "weightings": weightings,
-            "overall": overall_score
-        }
+        cv_analysis_status = _cv_analysis_state_for_application(application)
+        score_ready = cv_analysis_status == "completed"
+        if score_ready:
+            AssessmentService.recompute_application_scores(application)
+        else:
+            # Keep scoring transparent while CV is still pending.
+            application.overall_score = None
+            application.scoring_breakdown = {
+                "assessment": percentage_score,
+                "cv_pending": True,
+                "weightings": (job.weightings if job else None) or {
+                    "cv": 60,
+                    "assessment": 40,
+                    "interview": 0,
+                    "references": 0,
+                },
+            }
 
         violations = []
         if job:
@@ -586,7 +638,14 @@ def submit_assessment(application_id):
         return jsonify({
             "message": "Assessment submitted",
             "assessment_score": percentage_score,
-            "overall_score": application.overall_score,
+            "overall_score": application.overall_score if score_ready else None,
+            "score_ready": score_ready,
+            "cv_analysis_status": cv_analysis_status,
+            "score_message": (
+                "Final weighted score will be available after CV analysis completes."
+                if not score_ready
+                else "Final weighted score is ready."
+            ),
             "recommendation": result.recommendation,
             "knockout_rule_violations": violations
         }), 201

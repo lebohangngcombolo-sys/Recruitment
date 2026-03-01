@@ -436,12 +436,12 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                   label: const Text('Date Applied'),
                 ),
                 DataColumn(
-                  columnWidth: const FixedColumnWidth(100),
+                  columnWidth: const FlexColumnWidth(1.0),
                   label: const Text('Application Status'),
                 ),
                 if (!_drawerVisible)
                   DataColumn(
-                    columnWidth: const FixedColumnWidth(110),
+                    columnWidth: const FlexColumnWidth(1.0),
                     label: const Text('Action'),
                   ),
               ],
@@ -459,22 +459,31 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                   overflow: TextOverflow.ellipsis,
                 )),
                 DataCell(Text(_dateApplied(app))),
-                DataCell(_buildStatusPill(displayStatus)),
+                DataCell(
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: _buildStatusPill(displayStatus),
+                  ),
+                ),
               ];
-              if (!_drawerVisible) {
+                if (!_drawerVisible) {
                 cells.add(
                   DataCell(
-                    Align(
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: TextButton(
                         onPressed: () => _openDrawer(app),
                         style: TextButton.styleFrom(
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                         ),
                         child: Text(
                           'View Application',
-                          style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white),
+                          style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                         ),
                       ),
                     ),

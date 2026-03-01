@@ -691,12 +691,13 @@ def init_auth_routes(app):
                     "role": user.role,
                     "enrollment_completed": user.enrollment_completed,
                     "created_at": user.created_at.isoformat() if user.created_at else None,
-                    "profile": user.profile or {}
+                    "profile": user.profile or {},
+                    "settings": user.settings if getattr(user, "settings", None) is not None else {}
                 },
                 "role": user.role,
                 "dashboard": dashboard_url
             }
-    
+
             if candidate_profile:
                 response_data["candidate_profile"] = candidate_profile
 
@@ -705,6 +706,32 @@ def init_auth_routes(app):
         except Exception as e:
             current_app.logger.error(f"Get current user error: {str(e)}", exc_info=True)
             return jsonify({"error": "Internal server error"}), 500
+
+    @app.route("/api/auth/profile", methods=["PUT"])
+    @jwt_required()
+    def update_auth_profile():
+        """Update current user's profile (for admin/HM; candidates use candidate profile)."""
+        try:
+            user_id = int(get_jwt_identity())
+            user = User.query.get(user_id)
+            if not user:
+                return jsonify({"error": "User not found"}), 404
+            data = request.get_json()
+            if not data or not isinstance(data.get("profile"), dict):
+                return jsonify({"error": "Body must include 'profile' object"}), 400
+            new_profile = data["profile"]
+            existing = dict(user.profile or {})
+            allowed = {"full_name", "first_name", "last_name", "phone", "profile_picture"}
+            for key in allowed:
+                if key in new_profile:
+                    existing[key] = new_profile[key]
+            user.profile = existing
+            db.session.commit()
+            return jsonify({"message": "Profile updated", "profile": user.profile}), 200
+        except Exception as e:
+            current_app.logger.error(f"Update profile error: {str(e)}", exc_info=True)
+            return jsonify({"error": "Internal server error"}), 500
+
     # ------------------- DASHBOARDS -------------------
     @app.route("/api/dashboard/admin", methods=["GET"])
     @role_required("admin")

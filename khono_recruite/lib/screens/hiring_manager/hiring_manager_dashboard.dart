@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
@@ -6,9 +6,9 @@ import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
 import 'candidate_management_screen.dart';
 import 'cv_reviews_screen.dart';
-import 'notifications_screen.dart';
+import '../notifications/notifications_screen.dart';
 import 'job_management.dart';
-import 'interviews_list_screen.dart';
+import '../admin/interviews_list_screen.dart';
 import 'offer_list_screen.dart';
 import 'hm_analytics_page.dart';
 import 'hm_team_collaboration_page.dart';
@@ -22,9 +22,12 @@ import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
-import '../auth/login_screen.dart';
 
-// Simple meeting data source class
+class _DashboardCalendarDataSource extends CalendarDataSource {
+  _DashboardCalendarDataSource(List<Appointment> source) {
+    appointments = source;
+  }
+}
 
 class HMMainDashboard extends StatefulWidget {
   final String token;
@@ -139,6 +142,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   final String apiBase = "http://127.0.0.1:5000/api/candidate";
   final ImagePicker _picker = ImagePicker();
 
+  // Calendar appointments (interviews + meetings)
+  List<Appointment> _calendarAppointments = [];
+  bool _calendarLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -149,6 +156,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     fetchAudits(page: 1);
     fetchProfileImage();
     _loadUserName();
+    _loadCalendarData();
 
     _sidebarAnimController = AnimationController(
       vsync: this,
@@ -238,6 +246,88 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       }
     } catch (e) {
       debugPrint('Failed to load user name: $e');
+    }
+  }
+
+  Future<void> _loadCalendarData() async {
+    if (_calendarLoading) return;
+    setState(() => _calendarLoading = true);
+    final start = DateTime(focusedDay.year, focusedDay.month, 1);
+    final end = DateTime(focusedDay.year, focusedDay.month + 1, 0);
+    final startStr =
+        "${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}";
+    final endStr =
+        "${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}";
+    try {
+      final meetingsRes = await admin.getUpcomingMeetings(
+        limit: 100,
+        startDate: startStr,
+        endDate: endStr,
+      );
+      final meetings = meetingsRes['meetings'] as List<dynamic>? ?? [];
+      List<Map<String, dynamic>> interviews = [];
+      try {
+        interviews = await admin.getInterviewsForCalendar(
+            startDate: startStr, endDate: endStr);
+      } catch (_) {}
+      final List<Appointment> appointments = [];
+      for (final m in meetings) {
+        final map = m as Map<String, dynamic>;
+        final startTimeStr = map['start_time'] as String?;
+        final endTimeStr = map['end_time'] as String?;
+        if (startTimeStr == null) continue;
+        DateTime startTime;
+        DateTime endTime;
+        try {
+          startTime = DateTime.parse(startTimeStr);
+          endTime = endTimeStr != null
+              ? DateTime.parse(endTimeStr)
+              : startTime.add(const Duration(hours: 1));
+          if (!endTime.isAfter(startTime)) {
+            endTime = startTime.add(const Duration(minutes: 15));
+          }
+        } catch (_) {
+          continue;
+        }
+        appointments.add(Appointment(
+          startTime: startTime,
+          endTime: endTime,
+          subject: map['title'] as String? ?? 'Meeting',
+          color: Colors.blue,
+        ));
+      }
+      for (final i in interviews) {
+        final scheduledStr = i['scheduled_time'] as String?;
+        if (scheduledStr == null) continue;
+        DateTime startTime;
+        try {
+          startTime = DateTime.parse(scheduledStr);
+        } catch (_) {
+          continue;
+        }
+        DateTime endTime = startTime.add(const Duration(hours: 1));
+        if (!endTime.isAfter(startTime)) {
+          endTime = startTime.add(const Duration(minutes: 15));
+        }
+        final jobTitle = i['job_title'] as String? ?? 'Interview';
+        final candidateName = i['candidate_name'] as String? ?? '';
+        appointments.add(Appointment(
+          startTime: startTime,
+          endTime: endTime,
+          subject:
+              'Interview: $jobTitle${candidateName.isNotEmpty ? ' – $candidateName' : ''}',
+          color: Colors.deepOrange,
+        ));
+      }
+      if (!mounted) return;
+      setState(() {
+        _calendarAppointments = appointments;
+        _calendarLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Calendar load error: $e');
+      if (!mounted) return;
+      setState(() => _calendarLoading = false);
     }
   }
 
@@ -553,41 +643,71 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
       // Fetch additional analytics data for comprehensive dashboard
       try {
-        // Skills frequency data
+        // Skills frequency data (API returns Map<String, int>: skill name -> count)
         final skillsRes = await http.get(
           Uri.parse(
               "http://127.0.0.1:5000/api/analytics/candidate/skills-frequency"),
           headers: headers,
         );
         if (skillsRes.statusCode == 200) {
-          final data = json.decode(skillsRes.body) as List;
-          skillsData = data
-              .take(10)
-              .map((item) => _ChartData(
-                    item['skill'] ?? 'Unknown',
-                    item['frequency'] ?? 0,
-                  ))
-              .toList();
+          final raw = json.decode(skillsRes.body);
+          if (raw is Map<String, dynamic>) {
+            skillsData = raw.entries
+                .take(10)
+                .map((e) => _ChartData(
+                      e.key,
+                      (e.value is num) ? (e.value as num).toInt() : 0,
+                    ))
+                .toList();
+          } else if (raw is List) {
+            skillsData = raw
+                .take(10)
+                .map((item) => _ChartData(
+                      item['skill']?.toString() ?? 'Unknown',
+                      (item['frequency'] is num)
+                          ? (item['frequency'] as num).toInt()
+                          : 0,
+                    ))
+                .toList();
+          }
         }
       } catch (e) {
         debugPrint("Error fetching skills data: $e");
       }
 
       try {
-        // Experience distribution data
+        // Experience distribution (API returns Map: years/key -> count)
         final experienceRes = await http.get(
           Uri.parse(
               "http://127.0.0.1:5000/api/analytics/candidate/experience-distribution"),
           headers: headers,
         );
         if (experienceRes.statusCode == 200) {
-          final data = json.decode(experienceRes.body) as List;
-          experienceData = data
-              .map((item) => _ChartData(
-                    item['experience_level'] ?? 'Unknown',
-                    item['count'] ?? 0,
-                  ))
-              .toList();
+          final raw = json.decode(experienceRes.body);
+          if (raw is Map<String, dynamic>) {
+            experienceData = raw.entries
+                .map((e) => _ChartData(
+                      '${e.key} yrs',
+                      (e.value is num) ? (e.value as num).toInt() : 0,
+                    ))
+                .toList();
+          } else if (raw is Map) {
+            experienceData = raw.entries
+                .map((e) => _ChartData(
+                      '${e.key} yrs',
+                      (e.value is num) ? (e.value as num).toInt() : 0,
+                    ))
+                .toList();
+          } else if (raw is List) {
+            experienceData = raw
+                .map((item) => _ChartData(
+                      item['experience_level']?.toString() ?? 'Unknown',
+                      (item['count'] is num)
+                          ? (item['count'] as num).toInt()
+                          : 0,
+                    ))
+                .toList();
+          }
         }
       } catch (e) {
         debugPrint("Error fetching experience data: $e");
@@ -720,16 +840,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   void _performLogout(BuildContext context) async {
-    Navigator.of(context).pop();
+    // Do not pop here: confirmation dialog already closed by onPressed. Popping again would remove the last route (dashboard) and break go_router.
     await AuthService.logout();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (Route<dynamic> route) => false,
-        );
-      }
-    });
+    if (!mounted) return;
+    context.go('/login');
   }
 
   @override
@@ -1426,7 +1540,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
             LayoutBuilder(builder: (context, constraints) {
               int crossAxisCount = constraints.maxWidth > 900 ? 2 : 1;
-              double aspectRatio = constraints.maxWidth > 900 ? 2.7 : 2.2;
+              // Lower aspect ratio so chart cards (220px chart + header) fit without overflow
+              double aspectRatio = constraints.maxWidth > 900 ? 1.35 : 1.15;
               return GridView.count(
                 crossAxisCount: crossAxisCount,
                 shrinkWrap: true,
@@ -1435,18 +1550,28 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 mainAxisSpacing: 16,
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
-                  stylishBarChartCard("Candidate Pipeline", candidatePipeline,
-                      const Color.fromARGB(255, 193, 13, 0)),
-                  stylishLineChartCard("Time to Fill Trend", timeToFill,
-                      const Color.fromARGB(255, 193, 13, 0)),
-                  stylishDualDonutCard(
-                      "Diversity Metrics", genderData, ethnicityData),
-                  stylishBarChartCard("Source Performance", sourcePerformance,
-                      const Color.fromARGB(255, 193, 13, 0)),
-                  stylishTeamCollaborationCard(
-                      "Team Collaboration", teamMessages),
-                  modernCalendarCard(),
-                  stylishActivitiesCard(recentActivities),
+                  SingleChildScrollView(
+                      child: stylishBarChartCard(
+                          "Candidate Pipeline",
+                          candidatePipeline,
+                          const Color.fromARGB(255, 193, 13, 0))),
+                  SingleChildScrollView(
+                      child: stylishLineChartCard("Time to Fill Trend",
+                          timeToFill, const Color.fromARGB(255, 193, 13, 0))),
+                  SingleChildScrollView(
+                      child: stylishDualDonutCard(
+                          "Diversity Metrics", genderData, ethnicityData)),
+                  SingleChildScrollView(
+                      child: stylishBarChartCard(
+                          "Source Performance",
+                          sourcePerformance,
+                          const Color.fromARGB(255, 193, 13, 0))),
+                  SingleChildScrollView(
+                      child: stylishTeamCollaborationCard(
+                          "Team Collaboration", teamMessages)),
+                  SingleChildScrollView(child: modernCalendarCard()),
+                  SingleChildScrollView(
+                      child: stylishActivitiesCard(recentActivities)),
                 ],
               );
             }),
@@ -1528,7 +1653,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             ],
           ),
           const SizedBox(height: 16),
-          Expanded(
+          SizedBox(
+            height: 220,
             child: SfCartesianChart(
               margin: EdgeInsets.zero,
               plotAreaBorderWidth: 0,
@@ -1651,7 +1777,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             ],
           ),
           const SizedBox(height: 16),
-          Expanded(
+          SizedBox(
+            height: 220,
             child: SfCartesianChart(
               margin: EdgeInsets.zero,
               plotAreaBorderWidth: 0,
@@ -1750,7 +1877,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                       ? Colors.white
                       : Colors.black87)),
           const SizedBox(height: 16),
-          Expanded(
+          SizedBox(
+            height: 220,
             child: Row(
               children: [
                 Expanded(
@@ -1904,8 +2032,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             ],
           ),
           const SizedBox(height: 16),
-          Expanded(
+          SizedBox(
+            height: 200,
             child: ListView.builder(
+              shrinkWrap: true,
+              physics: const ClampingScrollPhysics(),
               itemCount: messages.length,
               itemBuilder: (context, index) {
                 return Container(
@@ -2018,7 +2149,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             ],
           ),
           const SizedBox(height: 16),
-          Expanded(
+          SizedBox(
+            height: 200,
             child: activities.isEmpty
                 ? Center(
                     child: Text("No recent activities",
@@ -2029,6 +2161,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                 : Colors.grey.shade600)),
                   )
                 : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const ClampingScrollPhysics(),
                     itemCount: activities.length,
                     itemBuilder: (context, index) {
                       return Container(
@@ -2164,9 +2298,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             ],
           ),
           const SizedBox(height: 16),
-          Expanded(
+          SizedBox(
+            height: 400,
             child: Container(
-              height: 400,
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.9),
@@ -2179,30 +2313,39 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   ),
                 ],
               ),
-              child: Stack(
-                children: [
-                  SfCalendar(
-                    view: CalendarView.month,
-                    monthViewSettings: MonthViewSettings(
-                      appointmentDisplayMode:
-                          MonthAppointmentDisplayMode.appointment,
-                      showAgenda: false,
-                      monthCellStyle: MonthCellStyle(
-                        textStyle: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontSize: 14,
-                          color: themeProvider.isDarkMode
-                              ? Colors.grey.shade300
-                              : Colors.grey.shade700,
+              clipBehavior: Clip.antiAlias,
+              child: _calendarLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : SfCalendar(
+                      view: CalendarView.month,
+                      dataSource:
+                          _DashboardCalendarDataSource(_calendarAppointments),
+                      onViewChanged: (ViewChangedDetails details) {
+                        final visibleDates = details.visibleDates;
+                        if (visibleDates.isNotEmpty &&
+                            (focusedDay.year != visibleDates.first.year ||
+                                focusedDay.month != visibleDates.first.month)) {
+                          setState(() {
+                            focusedDay = visibleDates.first;
+                          });
+                          _loadCalendarData();
+                        }
+                      },
+                      monthViewSettings: MonthViewSettings(
+                        appointmentDisplayMode:
+                            MonthAppointmentDisplayMode.appointment,
+                        showAgenda: false,
+                        monthCellStyle: MonthCellStyle(
+                          textStyle: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 14,
+                            color: themeProvider.isDarkMode
+                                ? Colors.grey.shade300
+                                : Colors.grey.shade700,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const Center(
-                    child: Text('Calendar functionality coming soon'),
-                  ),
-                ],
-              ),
             ),
           ),
         ],
@@ -2428,7 +2571,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               crossAxisCount: 4,
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
-              childAspectRatio: 3.0, // Increased from 2.8 to give more height
+              childAspectRatio:
+                  1.9, // Taller cells so candidate card content fits (avoids 120px overflow)
             ),
             itemCount: candidates.take(8).length, // Show first 8 candidates
             itemBuilder: (context, index) {
@@ -2486,154 +2630,168 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         break;
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        color:
-            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(8), // Reduced from 12
-        child: Row(
-          children: [
-            // Profile Picture
-            CircleAvatar(
-              radius: 16, // Reduced from 20
-              backgroundColor: Colors.grey.shade200,
-              backgroundImage: profilePicture?.isNotEmpty == true
-                  ? NetworkImage(profilePicture!)
-                  : null,
-              child: profilePicture?.isEmpty != false
-                  ? Text(
-                      fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: (themeProvider.isDarkMode
+                  ? const Color(0xFF14131E)
+                  : Colors.white)
+              .withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              // Profile Picture
+              CircleAvatar(
+                radius: 16, // Reduced from 20
+                backgroundColor: Colors.grey.shade200,
+                backgroundImage: profilePicture?.isNotEmpty == true
+                    ? NetworkImage(profilePicture!)
+                    : null,
+                child: profilePicture?.isEmpty != false
+                    ? Text(
+                        fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
+                        style: TextStyle(
+                          fontSize: 12, // Reduced from 14
+                          fontWeight: FontWeight.bold,
+                          color: themeProvider.isDarkMode
+                              ? Colors.white
+                              : Colors.grey.shade700,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 8), // Reduced from 12
+
+              // Candidate Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min, // Added to prevent overflow
+                  children: [
+                    Text(
+                      fullName,
                       style: TextStyle(
-                        fontSize: 12, // Reduced from 14
+                        fontFamily: 'Poppins',
+                        fontSize: 11, // Reduced from 12
                         fontWeight: FontWeight.bold,
                         color: themeProvider.isDarkMode
                             ? Colors.white
-                            : Colors.grey.shade700,
-                      ),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 8), // Reduced from 12
-
-            // Candidate Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min, // Added to prevent overflow
-                children: [
-                  Text(
-                    fullName,
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 11, // Reduced from 12
-                      fontWeight: FontWeight.bold,
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.black87,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1, // Added to prevent overflow
-                  ),
-                  if (title.isNotEmpty) ...[
-                    const SizedBox(height: 1), // Reduced from 2
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 9, // Reduced from 10
-                        color: themeProvider.isDarkMode
-                            ? Colors.grey.shade400
-                            : Colors.grey.shade600,
+                            : Colors.black87,
                       ),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1, // Added to prevent overflow
                     ),
-                  ],
-                  if (location.isNotEmpty) ...[
-                    const SizedBox(height: 1), // Reduced from 2
-                    Text(
-                      location,
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontSize: 9, // Reduced from 10
-                        color: themeProvider.isDarkMode
-                            ? Colors.grey.shade400
-                            : Colors.grey.shade600,
+                    if (title.isNotEmpty) ...[
+                      const SizedBox(height: 1), // Reduced from 2
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 9, // Reduced from 10
+                          color: themeProvider.isDarkMode
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1, // Added to prevent overflow
                       ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1, // Added to prevent overflow
-                    ),
+                    ],
+                    if (location.isNotEmpty) ...[
+                      const SizedBox(height: 1), // Reduced from 2
+                      Text(
+                        location,
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 9, // Reduced from 10
+                          color: themeProvider.isDarkMode
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1, // Added to prevent overflow
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
 
-            // Status and Score
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min, // Added to prevent overflow
-              children: [
-                if (latestStatus != null)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 4, vertical: 1), // Reduced padding
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8), // Reduced from 10
-                    ),
-                    child: Text(
-                      latestStatus.length > 8
-                          ? '${latestStatus.substring(0, 8)}.'
-                          : latestStatus[0].toUpperCase() +
-                              latestStatus.substring(1),
-                      style: TextStyle(
-                        fontSize: 8, // Reduced from 9
-                        fontWeight: FontWeight.w600,
-                        color: statusColor,
+              // Status and Score (Flexible to avoid overflow in narrow grid cells)
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (latestStatus != null)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: statusColor.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          latestStatus.length > 6
+                              ? '${latestStatus.substring(0, 6)}.'
+                              : latestStatus.isNotEmpty
+                                  ? latestStatus[0].toUpperCase() +
+                                      latestStatus.substring(1)
+                                  : '',
+                          style: TextStyle(
+                            fontSize: 8,
+                            fontWeight: FontWeight.w600,
+                            color: statusColor,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
                       ),
-                    ),
-                  ),
-                if (avgScore > 0) ...[
-                  const SizedBox(height: 2), // Reduced from 4
-                  Text(
-                    "${avgScore.toStringAsFixed(0)}", // Removed decimal for space
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 9, // Reduced from 10
-                      color: themeProvider.isDarkMode
-                          ? Colors.grey.shade400
-                          : Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-                if (totalApplications > 0)
-                  Text(
-                    "$totalApplications", // Shortened text
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 8, // Reduced from 9
-                      color: themeProvider.isDarkMode
-                          ? Colors.grey.shade500
-                          : Colors.grey.shade500,
-                    ),
-                  ),
-              ],
-            ),
-          ],
+                    if (avgScore > 0) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        "${avgScore.toStringAsFixed(0)}",
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 9,
+                          color: themeProvider.isDarkMode
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ],
+                    if (totalApplications > 0)
+                      Text(
+                        "$totalApplications",
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 8,
+                          color: themeProvider.isDarkMode
+                              ? Colors.grey.shade500
+                              : Colors.grey.shade500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2788,134 +2946,134 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final total =
         sortedEntries.fold<int>(0, (sum, entry) => sum + (entry.value as int));
 
-    return Container(
-      decoration: BoxDecoration(
-        color:
-            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12), // Reduced from 16
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(icon,
-                    size: 16,
-                    color: const Color.fromARGB(
-                        255, 193, 13, 0)), // Reduced from 18
-                const SizedBox(width: 6), // Reduced from 8
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 12, // Reduced from 14
-                      fontWeight: FontWeight.bold,
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.black87,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8), // Reduced from 12
-
-            // Display top items
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min, // Added to prevent overflow
-                children:
-                    sortedEntries.take(4).toList().asMap().entries.map((entry) {
-                  // Reduced from 5 to 4 items
-                  final index = entry.key;
-                  final item = entry.value;
-                  final label = item.key.toString();
-                  final value = item.value as int;
-                  final percentage = total > 0 ? (value / total * 100) : 0.0;
-
-                  return Padding(
-                    padding: EdgeInsets.only(
-                        bottom: index < 3 ? 6 : 0), // Reduced spacing
-                    child: Row(
-                      children: [
-                        // Colored indicator
-                        Container(
-                          width: 6, // Reduced from 8
-                          height: 6, // Reduced from 8
-                          decoration: BoxDecoration(
-                            color: _getChartColor(index),
-                            borderRadius:
-                                BorderRadius.circular(3), // Reduced from 4
-                          ),
-                        ),
-                        const SizedBox(width: 6), // Reduced from 8
-
-                        // Label
-                        Expanded(
-                          child: Text(
-                            label.length > 12 // Reduced from 15
-                                ? '${label.substring(0, 12)}...'
-                                : label,
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 10, // Reduced from 11
-                              color: themeProvider.isDarkMode
-                                  ? Colors.grey.shade300
-                                  : Colors.grey.shade700,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-
-                        // Value and percentage
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisSize:
-                              MainAxisSize.min, // Added to prevent overflow
-                          children: [
-                            Text(
-                              value.toString(),
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 10, // Reduced from 11
-                                fontWeight: FontWeight.w600,
-                                color: themeProvider.isDarkMode
-                                    ? Colors.white
-                                    : Colors.black87,
-                              ),
-                            ),
-                            Text(
-                              "${percentage.toStringAsFixed(0)}%", // Removed decimal
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 8, // Reduced from 9
-                                color: themeProvider.isDarkMode
-                                    ? Colors.grey.shade500
-                                    : Colors.grey.shade500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-              ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: (themeProvider.isDarkMode
+                  ? const Color(0xFF14131E)
+                  : Colors.white)
+              .withValues(alpha: 0.9),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Icon(icon,
+                      size: 16, color: const Color.fromARGB(255, 193, 13, 0)),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: themeProvider.isDarkMode
+                            ? Colors.white
+                            : Colors.black87,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // Display top items - scrollable if needed, fixed height to avoid overflow
+              SizedBox(
+                height: 100,
+                child: ListView(
+                  shrinkWrap: true,
+                  physics: const ClampingScrollPhysics(),
+                  children: sortedEntries
+                      .take(4)
+                      .toList()
+                      .asMap()
+                      .entries
+                      .map((entry) {
+                    final index = entry.key;
+                    final item = entry.value;
+                    final label = item.key.toString();
+                    final value = item.value as int;
+                    final percentage = total > 0 ? (value / total * 100) : 0.0;
+
+                    return Padding(
+                      padding: EdgeInsets.only(bottom: index < 3 ? 6 : 0),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: _getChartColor(index),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              label.length > 12
+                                  ? '${label.substring(0, 12)}...'
+                                  : label,
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 10,
+                                color: themeProvider.isDarkMode
+                                    ? Colors.grey.shade300
+                                    : Colors.grey.shade700,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                value.toString(),
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: themeProvider.isDarkMode
+                                      ? Colors.white
+                                      : Colors.black87,
+                                ),
+                              ),
+                              Text(
+                                "${percentage.toStringAsFixed(0)}%",
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 8,
+                                  color: themeProvider.isDarkMode
+                                      ? Colors.grey.shade500
+                                      : Colors.grey.shade500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

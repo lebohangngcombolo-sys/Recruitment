@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -312,15 +312,23 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
     return violation?.toString() ?? '';
   }
 
-  Widget applicationCard(dynamic app) {
+  Widget applicationCard(BuildContext context, dynamic app) {
     final assessmentScore = (app['assessment_score'] ?? 0).toDouble();
     final status = app['status'] ?? "Applied";
+    final scoreReady = app['score_ready'] == true;
+    final cvAnalysisStatus = (app['cv_analysis_status'] ?? '').toString();
     final passFail = assessmentScore >= 60 ? "Pass" : "Fail";
     final missingSkills =
         List<String>.from(app['cv_parser_result']?['missing_skills'] ?? []);
     final suggestions =
         List<String>.from(app['cv_parser_result']?['suggestions'] ?? []);
     final breakdown = app['scoring_breakdown'] ?? {};
+    final cvFromApp = (app['cv_score'] ?? 0).toDouble();
+    final cvFromBreakdown = (breakdown['cv'] ?? cvFromApp).toDouble();
+    final cvDisplay =
+        cvFromBreakdown == 0 && cvFromApp > 0 ? cvFromApp : cvFromBreakdown;
+    final cvDisplayText =
+        cvDisplay % 1 == 0 ? cvDisplay.toInt().toString() : cvDisplay.toString();
     final violations =
         List<dynamic>.from(app['knockout_rule_violations'] ?? []);
 
@@ -460,6 +468,71 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
 
             const SizedBox(height: 24),
 
+            if (!scoreReady) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: _accentRed.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _accentRed.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.hourglass_top, color: _accentRed, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        cvAnalysisStatus == 'not_started'
+                            ? "Final score will appear after you upload your CV and analysis completes."
+                            : "Final weighted score will appear once CV analysis completes.",
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: _textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+            if (scoreReady) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: _accentGreen.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _accentGreen.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: _accentGreen, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "CV scoring is complete—visit your CV results page to review the analysis.",
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: _textPrimary,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        final safeToken = Uri.encodeComponent(token);
+                        context.go('/jobs-applied?token=$safeToken');
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: _accentGreen,
+                      ),
+                      child: const Text("View CV Results"),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
             if (breakdown.isNotEmpty) ...[
               Container(
                 padding: const EdgeInsets.all(20),
@@ -488,7 +561,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      "CV: ${breakdown['cv'] ?? 0} | "
+                      "CV: $cvDisplayText | "
                       "Assessment: ${breakdown['assessment'] ?? 0} | "
                       "Interview: ${breakdown['interview'] ?? 0} | "
                       "References: ${breakdown['references'] ?? 0}",
@@ -825,7 +898,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
 
                               // Applications List
                               ...applications
-                                  .map((app) => applicationCard(app))
+                                  .map((app) => applicationCard(context, app))
                                   .toList(),
                             ],
                           ),
