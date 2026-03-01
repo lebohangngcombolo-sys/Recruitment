@@ -21,13 +21,16 @@ def _send_via_sendgrid_api(app, subject, recipients, html_body, text_body, sende
         parts = sender.strip().rsplit(" <", 1)
         from_name = (parts[0] or "").strip() or None
         from_email = (parts[1] or "").rstrip(">").strip()
+    # SendGrid requires: text/plain first, then text/html (see https://docs.sendgrid.com/api-reference/mail-send/mail-send)
+    content = []
+    if text_body and (text_body or "").strip():
+        content.append({"type": "text/plain", "value": (text_body or "").strip()})
+    content.append({"type": "text/html", "value": html_body or ""})
     payload = {
         "personalizations": [{"to": [{"email": r} for r in recipients], "subject": subject}],
         "from": {"email": from_email, "name": from_name} if from_name else {"email": from_email},
-        "content": [{"type": "text/html", "value": html_body or ""}],
+        "content": content,
     }
-    if text_body and (text_body or "").strip():
-        payload["content"].append({"type": "text/plain", "value": (text_body or "").strip()})
     try:
         import requests
         r = requests.post(
