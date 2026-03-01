@@ -151,6 +151,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                                     ? Colors.white
                                     : const Color(0xFF14131E),
                                 letterSpacing: -0.8,
+                                fontFamily: 'Poppins',
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -162,6 +163,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                                     : Colors.grey.shade600,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w400,
+                                fontFamily: 'Poppins',
                               ),
                             ),
                           ],
@@ -208,6 +210,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                                       : const Color(0xFF14131E),
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
+                                  fontFamily: 'Poppins',
                                 ),
                                 items: const [
                                   DropdownMenuItem(
@@ -313,6 +316,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
               color: themeProvider.isDarkMode
                   ? Colors.white70
                   : Colors.grey.shade800,
+              fontFamily: 'Poppins',
             ),
           ),
           const SizedBox(height: 14),
@@ -323,6 +327,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                   ? Colors.white54
                   : Colors.grey.shade500,
               fontSize: 14,
+              fontFamily: 'Poppins',
             ),
           ),
         ],
@@ -362,6 +367,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
                 color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                fontFamily: 'Poppins',
               ),
             ),
             const SizedBox(height: 18),
@@ -370,6 +376,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
               style: TextStyle(
                 color: Colors.grey.shade600,
                 fontSize: 14,
+                fontFamily: 'Poppins',
               ),
               textAlign: TextAlign.center,
             ),
@@ -393,6 +400,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 15,
+                  fontFamily: 'Poppins',
                 ),
               ),
             ),
@@ -618,6 +626,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+              fontFamily: 'Poppins',
             ),
           ),
           const SizedBox(height: 20),
@@ -685,6 +694,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                         color: themeProvider.isDarkMode
                             ? Colors.white
                             : Colors.black87,
+                        fontFamily: 'Poppins',
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -734,6 +744,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                         color: themeProvider.isDarkMode
                             ? Colors.white
                             : Colors.black87,
+                        fontFamily: 'Poppins',
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -820,6 +831,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                         color: themeProvider.isDarkMode
                             ? Colors.white
                             : Colors.black87,
+                        fontFamily: 'Poppins',
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -858,6 +870,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                         color: themeProvider.isDarkMode
                             ? Colors.white
                             : Colors.black87,
+                        fontFamily: 'Poppins',
                       ),
                     ),
                     const SizedBox(height: 16),

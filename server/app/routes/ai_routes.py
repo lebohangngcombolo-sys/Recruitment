@@ -2,11 +2,8 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import get_jwt_identity
 from app.utils.decorators import role_required
-from app.services.ai_parser_service import analyse_resume_gemini
-from app.extensions import db, cloudinary_client
-from app.models import CVAnalysis, Conversation, Candidate, User
-import cloudinary.uploader
-import datetime
+from app.services.ai_service import AIService
+import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -55,6 +52,38 @@ def chat():
             "error": "AI chat failed",
             "details": str(e)
         }), 502  # use 502 Bad Gateway for upstream AI errors
+
+
+@ai_bp.route("/generate_job_details", methods=["POST"])
+@role_required(["admin", "hiring_manager"])
+def generate_job_details():
+    """
+    Generate comprehensive job details using AI
+    body: {"job_title": "Software Engineer"}
+    """
+    data = request.get_json(silent=True) or {}
+    job_title = (data.get("job_title") or "").strip()
+    
+    if not job_title:
+        return jsonify({"error": "job_title is required"}), 400
+
+    try:
+        ai = AIService()
+        
+        # Generate job details using AI hierarchy
+        result = ai.generate_job_details(job_title)
+        
+        return jsonify({
+            "message": "Job details generated successfully",
+            "job_details": result
+        }), 200
+        
+    except Exception as e:
+        logger.exception("Job details generation error")
+        return jsonify({
+            "error": "AI job generation failed",
+            "details": str(e)
+        }), 502
 
 
 @ai_bp.route("/parse_cv", methods=["POST"])

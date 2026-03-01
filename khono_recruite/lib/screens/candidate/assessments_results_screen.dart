@@ -1,10 +1,10 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
-import '../../utils/api_endpoints.dart';
+
 class AssessmentResultsPage extends StatefulWidget {
   final int? applicationId;
   final String token;
@@ -42,7 +42,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
     setState(() => loading = true);
     try {
       final res = await http.get(
-        Uri.parse(ApiEndpoints.getApplications),
+        Uri.parse('http://127.0.0.1:5000/api/candidate/applications'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token'
@@ -66,25 +66,6 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
     } finally {
       setState(() => loading = false);
     }
-  }
-
-  Widget _buildBackground(Widget child) {
-    return Stack(
-      children: [
-        Container(
-          decoration: const BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage("assets/images/dark.png"),
-              fit: BoxFit.cover,
-            ),
-          ),
-        ),
-        Container(
-          color: Colors.black.withOpacity(0.4),
-        ),
-        child,
-      ],
-    );
   }
 
   Widget scoreDonutChart(double score, Color color, String title) {
@@ -620,6 +601,12 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildBackground(Widget child) {
+    return Container(
+      child: child,
     );
   }
 

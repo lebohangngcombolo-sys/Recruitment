@@ -8,6 +8,7 @@ import 'dart:ui';
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Import your existing services
@@ -18,7 +19,6 @@ import 'assessments_results_screen.dart';
 import '../../screens/candidate/user_profile_page.dart';
 import 'saved_application_screen.dart';
 import '../../services/auth_service.dart';
-import '../../utils/api_endpoints.dart';
 import 'offers_screen.dart';
 
 class CandidateDashboard extends StatefulWidget {
@@ -46,7 +46,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   final Color primaryColor = Color(0xFF991A1A);
   final Color strokeColor = Color(0xFFC10D00);
   final Color fillColor = Color(0xFFf2f2f2).withValues(alpha: 0.2);
-  String get apiBase => ApiEndpoints.candidateBase;
+  final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
   List<Map<String, dynamic>> notifications = [];
   Timer? _notificationTimer;
@@ -57,6 +57,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   int? _applicationsCount;
   int? _savedCount; // saved drafts count
   Map<String, dynamic>? _pendingApplyJob;
+
+  // Profile image state
+  XFile? _profileImage;
+  Uint8List? _profileImageBytes;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -247,7 +252,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           _inProgressApplications = inProgressMaps;
           _completedApplications = completedMaps;
           _appliedOnlyApplications = appliedOnlyMaps;
-          _interviewsScheduledCount = 0;
+          _interviewsScheduledCount =
+              0; // TODO: fetch from candidate interviews API
           _dashboardCountsLoaded = true;
         });
         _saveCachedInProgressApplications(inProgressMaps);
@@ -468,27 +474,22 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   ImageProvider _getProfileImageProvider() {
-    if (kIsWeb) {
-      return const AssetImage('assets/images/profile_placeholder.png');
-    } else {
-      try {
-        final file = File('assets/images/profile.png');
-        if (file.existsSync()) {
-          return FileImage(file);
-        }
-      } catch (e) {
-        print('Error loading profile image: $e');
-      }
-      return const AssetImage('assets/images/profile_placeholder.png');
+    if (_profileImage != null) {
+      if (kIsWeb) return MemoryImage(_profileImageBytes!);
+      return FileImage(File(_profileImage!.path));
     }
+    return const AssetImage('assets/images/profile_placeholder.png');
   }
 
   Future<void> analyzeCV() async {
     try {
-      final picker = ImagePicker();
-      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
 
       if (image != null) {
+        if (kIsWeb) {
+          _profileImageBytes = await image.readAsBytes();
+        }
+        setState(() => _profileImage = image);
         final bytes = await image.readAsBytes();
         final base64Image = base64Encode(bytes);
 
@@ -1283,7 +1284,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       );
       return;
     }
-    _safeSetState(() {});
     try {
       final res = await http.post(
         Uri.parse('$apiBase/apply/$jobId'),
@@ -1352,9 +1352,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
-    } finally {
-      if (mounted) _safeSetState(() {});
-    }
+    } finally {}
   }
 
   static String _timeAgo(String? isoDate) {

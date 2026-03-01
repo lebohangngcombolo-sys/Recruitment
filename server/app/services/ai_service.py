@@ -15,48 +15,113 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Gemini AI (Google Generative AI)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+
+# OpenRouter
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_URL = os.environ.get(
     "OPENROUTER_URL", "https://openrouter.ai/api/v1/chat/completions"
 )
 DEFAULT_MODEL = os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+
+# DeepSeek
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
+DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 
 
 class AIService:
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: Optional[str] = None,
         timeout: int = 60,
         retries: int = 3,
         backoff: int = 5,
     ):
-        self.api_key = api_key or OPENROUTER_API_KEY
-        self.model = model or DEFAULT_MODEL
         self.timeout = timeout
         self.retries = retries
         self.backoff = backoff
 
-        if not self.api_key:
+        # Check API keys
+        self.gemini_available = bool(GEMINI_API_KEY)
+        self.openrouter_available = bool(OPENROUTER_API_KEY)
+        self.deepseek_available = bool(DEEPSEEK_API_KEY)
+
+        if not any([self.gemini_available, self.openrouter_available, self.deepseek_available]):
             logger.warning(
-                "No OPENROUTER_API_KEY found in environment. AI calls will fail without a key."
+                "No AI API keys found in environment. AI calls will fail without keys."
             )
 
-    def _call_generation(
+    def _call_gemini(
         self, prompt: str, temperature: float = 0.7, max_output_tokens: int = 512
     ) -> str:
-        if not self.api_key:
+        """Call Gemini AI API"""
+        if not self.gemini_available:
+            raise RuntimeError("GEMINI_API_KEY not set")
+
+        headers = {
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "contents": [{
+                "parts": [{"text": prompt}]
+            }],
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_output_tokens,
+            }
+        }
+
+        for attempt in range(1, self.retries + 1):
+            try:
+                url = f"{GEMINI_URL}?key={GEMINI_API_KEY}"
+                resp = requests.post(url, headers=headers, json=payload, timeout=self.timeout)
+                
+                if resp.status_code != 200:
+                    logger.error(
+                        "Gemini API error [%s]: %s", resp.status_code, resp.text
+                    )
+                    raise RuntimeError(
+                        f"Gemini API error: {resp.status_code} {resp.text}"
+                    )
+                
+                data = resp.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+                
+            except requests.exceptions.Timeout:
+                logger.warning(
+                    "Gemini timeout on attempt %d/%d, retrying in %d seconds...",
+                    attempt, self.retries, self.backoff,
+                )
+                time.sleep(self.backoff)
+            except requests.exceptions.RequestException as e:
+                logger.error(
+                    "Gemini RequestException on attempt %d/%d: %s", attempt, self.retries, e
+                )
+                time.sleep(self.backoff)
+            except Exception as e:
+                logger.exception(
+                    "Gemini unexpected error on attempt %d/%d: %s", attempt, self.retries, e
+                )
+                time.sleep(self.backoff)
+
+        raise RuntimeError("Failed to call Gemini API after multiple retries")
+
+    def _call_openrouter(
+        self, prompt: str, temperature: float = 0.7, max_output_tokens: int = 512
+    ) -> str:
+        """Call OpenRouter API"""
+        if not self.openrouter_available:
             raise RuntimeError("OPENROUTER_API_KEY not set")
 
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         }
 
         payload = {
-            "model": self.model,
+            "model": DEFAULT_MODEL,
             "messages": [
                 {"role": "system", "content": "You are an expert recruitment assistant."},
                 {"role": "user", "content": prompt},
@@ -81,116 +146,259 @@ class AIService:
                 return data["choices"][0]["message"]["content"]
             except requests.exceptions.Timeout:
                 logger.warning(
-                    "Timeout on attempt %d/%d, retrying in %d seconds...",
-                    attempt,
-                    self.retries,
-                    self.backoff,
+                    "OpenRouter timeout on attempt %d/%d, retrying in %d seconds...",
+                    attempt, self.retries, self.backoff,
                 )
                 time.sleep(self.backoff)
             except requests.exceptions.RequestException as e:
                 logger.error(
-                    "RequestException on attempt %d/%d: %s", attempt, self.retries, e
+                    "OpenRouter RequestException on attempt %d/%d: %s", attempt, self.retries, e
                 )
                 time.sleep(self.backoff)
             except Exception as e:
                 logger.exception(
-                    "Unexpected error on attempt %d/%d: %s", attempt, self.retries, e
+                    "OpenRouter unexpected error on attempt %d/%d: %s", attempt, self.retries, e
                 )
                 time.sleep(self.backoff)
 
         raise RuntimeError("Failed to call OpenRouter API after multiple retries")
 
-    def _call_gemini(
-        self, prompt: str, temperature: float = 0.7, max_output_tokens: int = 1024
-    ) -> str:
-        """Call Google Gemini API (Firebase/Google AI). Retries on 429 quota errors."""
-        if not GEMINI_API_KEY or not GEMINI_API_KEY.strip():
-            raise RuntimeError("GEMINI_API_KEY not set (cannot use Gemini fallback)")
-        import google.generativeai as genai
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel(GEMINI_MODEL)
-        try:
-            config = genai.GenerationConfig(
-                temperature=temperature,
-                max_output_tokens=max_output_tokens,
-            )
-        except (AttributeError, TypeError):
-            config = None
-
-        last_error = None
-        for attempt in range(1, self.retries + 1):
-            try:
-                if config is not None:
-                    response = model.generate_content(prompt, generation_config=config)
-                else:
-                    response = model.generate_content(prompt)
-                if not response or not response.text:
-                    raise RuntimeError("Empty response from Gemini")
-                return response.text.strip()
-            except Exception as e:
-                last_error = e
-                err_str = str(e)
-                # 429 quota exceeded: wait and retry
-                if "429" in err_str or "quota" in err_str.lower() or "retry" in err_str.lower():
-                    delay = self.backoff + (attempt * 10)
-                    if "retry in" in err_str.lower():
-                        import re as _re
-                        match = _re.search(r"retry in (\d+)\.?\d*s", err_str, _re.I)
-                        if match:
-                            delay = int(float(match.group(1))) + 5
-                    logger.warning(
-                        "Gemini quota/429 (attempt %d/%d), retrying in %ds...",
-                        attempt, self.retries, delay,
-                    )
-                    time.sleep(min(delay, 60))
-                else:
-                    logger.warning("Gemini failed: %s", e)
-                    raise RuntimeError(f"Gemini fallback failed: {e}") from e
-        raise RuntimeError(f"Gemini fallback failed after retries: {last_error}") from last_error
-
-    def _call_ai(
+    def _call_deepseek(
         self, prompt: str, temperature: float = 0.7, max_output_tokens: int = 512
     ) -> str:
-        """Use Firebase/Gemini first when GEMINI_API_KEY is set; fall back to OpenRouter otherwise."""
-        # Prefer Gemini (Firebase AI / Google AI) when configured
-        if GEMINI_API_KEY and GEMINI_API_KEY.strip():
-            try:
-                return self._call_gemini(
-                    prompt, temperature=temperature, max_output_tokens=max_output_tokens
-                )
-            except RuntimeError as e:
-                logger.warning("Gemini (Firebase) failed (%s), trying OpenRouter", e)
-                # Fall through to OpenRouter
-        # Use OpenRouter when no Gemini or Gemini failed
-        try:
-            if self.api_key:
-                return self._call_generation(
-                    prompt, temperature=temperature, max_output_tokens=max_output_tokens
-                )
-        except RuntimeError as e:
-            err_str = str(e).lower()
-            if (
-                "401" in err_str or "403" in err_str or "503" in err_str
-                or "openrouter api error" in err_str
-                or "not set" in err_str
-                or "user not found" in err_str
-                or "failed to call openrouter" in err_str
-            ) and GEMINI_API_KEY and GEMINI_API_KEY.strip():
-                logger.info("OpenRouter failed (%s), retrying Gemini fallback", e)
-                return self._call_gemini(
-                    prompt, temperature=temperature, max_output_tokens=max_output_tokens
-                )
-            raise
-        if GEMINI_API_KEY and GEMINI_API_KEY.strip():
-            logger.info("No OpenRouter key; using Gemini")
-            return self._call_gemini(
-                prompt, temperature=temperature, max_output_tokens=max_output_tokens
-            )
-        raise RuntimeError("No AI provider configured (set GEMINI_API_KEY or OPENROUTER_API_KEY)")
+        """Call DeepSeek API"""
+        if not self.deepseek_available:
+            raise RuntimeError("DEEPSEEK_API_KEY not set")
 
-    def chat(self, message: str, temperature: float = 0.2) -> str:
-        prompt = f"User:\n{message}\n\nAssistant:"
-        return self._call_generation(prompt, temperature=temperature, max_output_tokens=400)
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        }
+
+        payload = {
+            "model": "deepseek-chat",
+            "messages": [
+                {"role": "system", "content": "You are an expert recruitment assistant."},
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": temperature,
+            "max_tokens": max_output_tokens,
+        }
+
+        for attempt in range(1, self.retries + 1):
+            try:
+                resp = requests.post(
+                    DEEPSEEK_URL, headers=headers, json=payload, timeout=self.timeout
+                )
+                if resp.status_code != 200:
+                    logger.error(
+                        "DeepSeek API error [%s]: %s", resp.status_code, resp.text
+                    )
+                    raise RuntimeError(
+                        f"DeepSeek API error: {resp.status_code} {resp.text}"
+                    )
+                data = resp.json()
+                return data["choices"][0]["message"]["content"]
+            except requests.exceptions.Timeout:
+                logger.warning(
+                    "DeepSeek timeout on attempt %d/%d, retrying in %d seconds...",
+                    attempt, self.retries, self.backoff,
+                )
+                time.sleep(self.backoff)
+            except requests.exceptions.RequestException as e:
+                logger.error(
+                    "DeepSeek RequestException on attempt %d/%d: %s", attempt, self.retries, e
+                )
+                time.sleep(self.backoff)
+            except Exception as e:
+                logger.exception(
+                    "DeepSeek unexpected error on attempt %d/%d: %s", attempt, self.retries, e
+                )
+                time.sleep(self.backoff)
+
+        raise RuntimeError("Failed to call DeepSeek API after multiple retries")
+
+    def _call_generation(
+        self, prompt: str, temperature: float = 0.7, max_output_tokens: int = 512
+    ) -> str:
+        """Try AI services in priority order: Gemini -> OpenRouter -> DeepSeek"""
+        
+        # Try Gemini first
+        if self.gemini_available:
+            try:
+                logger.info("Attempting to use Gemini AI")
+                return self._call_gemini(prompt, temperature, max_output_tokens)
+            except Exception as e:
+                logger.warning(f"Gemini AI failed: {e}")
+        
+        # Fallback to OpenRouter
+        if self.openrouter_available:
+            try:
+                logger.info("Falling back to OpenRouter")
+                return self._call_openrouter(prompt, temperature, max_output_tokens)
+            except Exception as e:
+                logger.warning(f"OpenRouter failed: {e}")
+        
+        # Fallback to DeepSeek
+        if self.deepseek_available:
+            try:
+                logger.info("Falling back to DeepSeek")
+                return self._call_deepseek(prompt, temperature, max_output_tokens)
+            except Exception as e:
+                logger.warning(f"DeepSeek failed: {e}")
+        
+        raise RuntimeError("All AI services failed")
+
+    def generate_job_details(self, job_title: str) -> Dict[str, Any]:
+        """Generate comprehensive job details using AI hierarchy: Gemini -> OpenRouter -> DeepSeek"""
+        prompt = f'''
+        First, determine the most appropriate category for the job titled "$job_title" from the following options: Engineering, Marketing, Sales, HR, Finance, Operations, Customer Service, Product, Design, Data Science. Base this on the job title and typical responsibilities.
+
+        Then, generate comprehensive job details in JSON format with the following structure:
+        {{
+          "description": "Detailed job description (2-3 paragraphs) that clearly explains the role, its purpose, and what the candidate will be doing day-to-day",
+          "responsibilities": ["List of 5-7 specific, actionable key responsibilities as separate string items in the array"],
+          "qualifications": ["List of 5-7 required qualifications including education, experience, and specific skills"],
+          "company": "Khonology",
+          "company_details": "Khonology is a South African digital services company founded in 2013, specializing in digital enablement, data solutions, and cloud services with B-BBEE Level 2 status. The company focuses on empowering African businesses through custom software, data analytics, and cloud migration, while also addressing the digital skills gap via the Khonology Academy.",
+          "category": "Choose the most appropriate category from: Engineering, Marketing, Sales, HR, Finance, Operations, Customer Service, Product, Design, Data Science, based on the job title, description, and responsibilities.",
+          "required_skills": ["List of 7 technical/professional skills that are essential for this role"],
+          "min_experience": "Minimum years of experience as a number (0-15+)",
+          "salary_min": "Minimum monthly salary in ZAR (e.g., 25000)",
+          "salary_max": "Maximum monthly salary in ZAR (e.g., 45000)",
+          "salary_currency": "ZAR",
+          "salary_period": "monthly",
+          "evaluation_weightings": {{
+            "cv": 60,
+            "assessment": 30,
+            "interview": 10,
+            "references": 0
+          }}
+        }}
+        
+        IMPORTANT FORMATTING INSTRUCTIONS:
+        - Responsibilities MUST be an array of separate strings, each representing one bullet point
+        - Do NOT combine responsibilities into a single paragraph
+        - Each responsibility should be a complete, actionable statement starting with a verb
+        - Example format: ["Lead development projects", "Design scalable solutions", "Mentor junior developers"]
+        - Qualifications MUST be an array of separate strings, each representing one bullet point
+        - Do NOT combine qualifications into a single paragraph or comma-separated string
+        - Each qualification should be a complete statement (e.g., "Bachelor's degree in Computer Science", "3+ years of experience in software development")
+        - Required skills MUST be an array of separate strings, each representing one bullet point
+        - Do NOT combine skills into a single paragraph
+        - Example format: ["JavaScript", "React", "Node.js"]
+        - Salary should be realistic for South African market (ZAR currency)
+        - Evaluation weightings MUST total exactly 100% (cv + assessment + interview + references = 100)
+        - Do not generate weightings that don't sum to 100%
+        
+        Guidelines:
+        - Make the description compelling and detailed
+        - Responsibilities should be specific, measurable, and formatted as separate bullet points
+        - Qualifications should be realistic but selective
+        - Company details should be professional and appealing
+        - Choose the most appropriate category
+        - Include the determined category in the 'category' field of the JSON
+        - Skills should be current and relevant
+        - Experience should match the seniority level of the role
+        - Salary range should be appropriate for the role and experience level
+        - Evaluation weightings should reflect the importance of each assessment component AND MUST SUM TO EXACTLY 100%
+        
+        CRITICAL: Double-check that cv + assessment + interview + references = 100 before returning the response.
+        Make sure the response is valid JSON and all fields are filled appropriately for the job title.
+        '''
+        
+        try:
+            response = self._call_generation(prompt, temperature=0.7, max_output_tokens=2000)
+            
+            # Try to parse JSON response
+            import re
+            match = re.search(r"(\{.*\})", response, flags=re.DOTALL)
+            json_text = match.group(1) if match else response
+            parsed = json.loads(json_text)
+            
+            # Ensure all fields are present and validated
+            return self._ensure_job_details_complete(parsed, job_title)
+            
+        except Exception as e:
+            logger.exception(f"Failed to generate job details for {job_title}")
+            return self._get_fallback_job_details(job_title)
+
+    def _ensure_job_details_complete(self, job_details: Dict[str, Any], job_title: str) -> Dict[str, Any]:
+        """Ensure all required fields are present and valid"""
+        # Default structure
+        defaults = {
+            "description": f"We are seeking a talented {job_title} to join our dynamic team.",
+            "responsibilities": [f"Perform core responsibilities related to {job_title}"],
+            "qualifications": [f"Relevant experience in {job_title} or similar roles"],
+            "company_details": "We are a forward-thinking organization committed to innovation and excellence.",
+            "category": "Engineering",
+            "required_skills": ["Communication", "Teamwork", "Problem Solving"],
+            "min_experience": "2",
+            "salary_min": "25000",
+            "salary_max": "40000",
+            "salary_currency": "ZAR",
+            "salary_period": "monthly",
+            "evaluation_weightings": {
+                "cv": 60,
+                "assessment": 30,
+                "interview": 10,
+                "references": 0
+            }
+        }
+        
+        # Merge with provided data
+        for key, value in defaults.items():
+            if key not in job_details or job_details[key] is None:
+                job_details[key] = value
+        
+        # Validate weightings sum to 100
+        if "evaluation_weightings" in job_details:
+            weightings = job_details["evaluation_weightings"]
+            if isinstance(weightings, dict):
+                total = sum(weightings.values())
+                if total != 100:
+                    # Normalize to 100
+                    factor = 100.0 / total
+                    for k in weightings:
+                        weightings[k] = round(weightings[k] * factor)
+                    
+                    # Adjust rounding errors
+                    total = sum(weightings.values())
+                    if total != 100:
+                        diff = 100 - total
+                        weightings["cv"] = weightings.get("cv", 0) + diff
+        
+        return job_details
+
+    def _get_fallback_job_details(self, job_title: str) -> Dict[str, Any]:
+        """Fallback job details when AI fails"""
+        return {
+            "description": f"We are seeking a talented {job_title} to join our dynamic team. This role offers an exciting opportunity to contribute to innovative projects and grow professionally in a collaborative environment.",
+            "responsibilities": [
+                f"Perform core responsibilities related to {job_title}",
+                "Collaborate with cross-functional teams to achieve project goals",
+                "Contribute to planning and execution of key initiatives"
+            ],
+            "qualifications": [
+                f"Relevant experience in {job_title} or similar roles",
+                "Strong problem-solving and analytical skills",
+                "Excellent communication and teamwork abilities"
+            ],
+            "company_details": "We are a forward-thinking organization committed to innovation and excellence. Our team thrives on collaboration and continuous growth.",
+            "category": "Engineering",
+            "required_skills": ["Communication", "Teamwork", "Problem Solving", "Time Management"],
+            "min_experience": "2",
+            "salary_min": "25000",
+            "salary_max": "40000",
+            "salary_currency": "ZAR",
+            "salary_period": "monthly",
+            "evaluation_weightings": {
+                "cv": 60,
+                "assessment": 30,
+                "interview": 10,
+                "references": 0
+            }
+        }
 
     def analyze_cv_vs_job(
         self, cv_text: str, job_description: str, want_json: bool = True
@@ -261,7 +469,8 @@ Based on the job title "{job_title}", generate comprehensive job details in JSON
 
 IMPORTANT: Return only valid JSON. Responsibilities and qualifications must be arrays of strings. category must be one of the listed values. min_experience must be a number.
 '''
-        out = self._call_ai(prompt, temperature=0.7, max_output_tokens=1024)
+        out = self._call_generation(prompt, temperature=0.7, max_output_tokens=1024)
+        import re
         try:
             match = re.search(r"(\{.*\})", out, flags=re.DOTALL)
             json_text = match.group(1) if match else out
@@ -306,7 +515,8 @@ Requirements:
 
 Return only valid JSON.
 '''
-        out = self._call_ai(prompt, temperature=0.7, max_output_tokens=1024)
+        out = self._call_generation(prompt, temperature=0.7, max_output_tokens=1024)
+        import re
         try:
             match = re.search(r"(\{.*\})", out, flags=re.DOTALL)
             json_text = match.group(1) if match else out

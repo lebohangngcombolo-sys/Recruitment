@@ -17,8 +17,9 @@ class ApiEndpoints {
   static String get offerBase => "${AppConfig.apiBase}/api/offer";
 
   // WebSocket URL (ws for local, wss for production)
-  static String get webSocketUrl =>
-      AppConfig.apiBase.replaceFirst('http://', 'ws://').replaceFirst('https://', 'wss://');
+  static String get webSocketUrl => AppConfig.apiBase
+      .replaceFirst('http://', 'ws://')
+      .replaceFirst('https://', 'wss://');
 
   // ------------------- Auth -------------------
   static String get register => "$authBase/register";
@@ -37,19 +38,25 @@ class ApiEndpoints {
   // ------------------- OAuth (UPDATED FOR SUPABASE) -------------------
   static String get googleOAuth => "$authBase/google";
   static String get githubOAuth => "$authBase/github";
-  static String get supabaseCallback => "$authBase/callback"; // New unified callback
+  static String get supabaseCallback =>
+      "$authBase/callback"; // New unified callback
 
   // ------------------- SSO -------------------
   static String get ssoLogout => "$authBase/sso/logout"; // <-- ADDED
 
   // ------------------- MFA (UPDATED TO MATCH BACKEND) -------------------
-  static String get enableMfa => "$authBase/mfa/enable"; // POST - Initiate MFA setup
-  static String get verifyMfaSetup => "$authBase/mfa/verify"; // POST - Verify MFA setup
-  static String get mfaLogin => "$authBase/mfa/login"; // POST - Verify MFA during login
+  static String get enableMfa =>
+      "$authBase/mfa/enable"; // POST - Initiate MFA setup
+  static String get verifyMfaSetup =>
+      "$authBase/mfa/verify"; // POST - Verify MFA setup
+  static String get mfaLogin =>
+      "$authBase/mfa/login"; // POST - Verify MFA during login
   static String get disableMfa => "$authBase/mfa/disable"; // POST - Disable MFA
   static String get mfaStatus => "$authBase/mfa/status"; // GET - Get MFA status
-  static String get backupCodes => "$authBase/mfa/backup-codes"; // GET - Get backup codes
-  static String get regenerateBackupCodes => "$authBase/mfa/regenerate-backup-codes"; // POST - Regenerate backup codes
+  static String get backupCodes =>
+      "$authBase/mfa/backup-codes"; // GET - Get backup codes
+  static String get regenerateBackupCodes =>
+      "$authBase/mfa/regenerate-backup-codes"; // POST - Regenerate backup codes
   static String get parserCV => "$authBase/cv/parse"; // POST Multipart
 
   // ------------------- Public (no auth) -------------------
@@ -72,10 +79,12 @@ class ApiEndpoints {
   // ------------------- Pipeline Statistics -------------------
   static String get getPipelineStats => "$adminBase/pipeline/stats";
   static String get getPipelineQuickStats => "$adminBase/pipeline/quick-stats";
-  static String get getPipelineStagesCount => "$adminBase/pipeline/stages/count";
+  static String get getPipelineStagesCount =>
+      "$adminBase/pipeline/stages/count";
 
   // ------------------- Applications with Filters -------------------
-  static String get getFilteredApplications => "$adminBase/applications/filtered";
+  static String get getFilteredApplications =>
+      "$adminBase/applications/filtered";
 
   // Enhanced existing endpoints with query params
   static String getApplicationsByStatus(String status) =>
@@ -95,8 +104,10 @@ class ApiEndpoints {
       "$adminBase/interviews/dashboard/$timeframe"; // today, upcoming, past, week, month
 
   // Alias for compatibility
-  static String get getTodaysInterviews => "$adminBase/interviews/dashboard/today";
-  static String get getUpcomingInterviews => "$adminBase/interviews/dashboard/upcoming";
+  static String get getTodaysInterviews =>
+      "$adminBase/interviews/dashboard/today";
+  static String get getUpcomingInterviews =>
+      "$adminBase/interviews/dashboard/upcoming";
   static String get getPastInterviews => "$adminBase/interviews/dashboard/past";
 
   // ------------------- Update Application Status -------------------
@@ -149,34 +160,42 @@ class ApiEndpoints {
 
   // ------------------- Interview Status Updates -------------------
   /// PATCH ΓÇô Update interview status (completed, no_show, cancelled_by_candidate, etc.)
+  /// PATCH ΓÇô Update interview status (completed, no_show, cancelled_by_candidate, etc.)
   static String updateInterviewStatus(int interviewId) =>
       "$adminBase/interviews/$interviewId/status";
 
+  /// GET ΓÇô Get all interviews for a candidate (existing)
   /// GET ΓÇô Get all interviews for a candidate (existing)
   static String getCandidateInterviews(int candidateId) =>
       "$adminBase/interviews?candidate_id=$candidateId";
 
   /// PUT/PATCH ΓÇô Reschedule an interview
+  /// PUT/PATCH ΓÇô Reschedule an interview
   static String rescheduleInterview(int interviewId) =>
       "$adminBase/interviews/reschedule/$interviewId";
 
+  /// DELETE ΓÇô Cancel an interview
   /// DELETE ΓÇô Cancel an interview
   static String cancelSingleInterview(int interviewId) =>
       "$adminBase/interviews/cancel/$interviewId";
 
   // ------------------- Interview Feedback -------------------
   /// POST ΓÇô Submit interview feedback
+  /// POST ΓÇô Submit interview feedback
   static String submitInterviewFeedback(int interviewId) =>
       "$adminBase/interviews/$interviewId/feedback";
 
+  /// GET ΓÇô Get all feedback for an interview
   /// GET ΓÇô Get all feedback for an interview
   static String getInterviewFeedback(int interviewId) =>
       "$adminBase/interviews/$interviewId/feedback";
 
   /// POST ΓÇô Request feedback from interviewer (email trigger)
+  /// POST ΓÇô Request feedback from interviewer (email trigger)
   static String requestFeedback(int interviewId) =>
       "$adminBase/interviews/$interviewId/feedback/request";
 
+  /// GET ΓÇô Get feedback summary for an interview
   /// GET ΓÇô Get feedback summary for an interview
   static String getFeedbackSummary(int interviewId) =>
       "$adminBase/interviews/$interviewId/feedback/summary";
@@ -187,13 +206,16 @@ class ApiEndpoints {
       "$adminBase/interviews/reminders/schedule";
 
   /// GET ΓÇô Get all reminders for an interview
+  /// GET ΓÇô Get all reminders for an interview
   static String getInterviewReminders(int interviewId) =>
       "$adminBase/interviews/$interviewId/reminders";
 
   /// POST ΓÇô Send immediate reminder (ad-hoc)
+  /// POST ΓÇô Send immediate reminder (ad-hoc)
   static String sendImmediateReminder(int interviewId) =>
       "$adminBase/interviews/$interviewId/reminders/send";
 
+  /// DELETE ΓÇô Cancel a scheduled reminder
   /// DELETE ΓÇô Cancel a scheduled reminder
   static String cancelInterviewReminder(int reminderId) =>
       "$adminBase/interviews/reminders/$reminderId";
@@ -203,7 +225,8 @@ class ApiEndpoints {
   static String get getInterviewAnalytics => "$adminBase/interviews/analytics";
 
   /// GET ΓÇô Get no-show statistics
-  static String get getNoShowAnalytics => "$adminBase/interviews/analytics/no-shows";
+  static String get getNoShowAnalytics =>
+      "$adminBase/interviews/analytics/no-shows";
 
   /// GET ΓÇô Get feedback completion rates
   static String get getFeedbackAnalytics =>
@@ -215,26 +238,32 @@ class ApiEndpoints {
 
   // ------------------- Interview Notes -------------------
   /// POST ΓÇô Add notes to an interview
+  /// POST ΓÇô Add notes to an interview
   static String addInterviewNotes(int interviewId) =>
       "$adminBase/interviews/$interviewId/notes";
 
+  /// GET ΓÇô Get all notes for an interview
   /// GET ΓÇô Get all notes for an interview
   static String getInterviewNotes(int interviewId) =>
       "$adminBase/interviews/$interviewId/notes";
 
   /// PUT ΓÇô Update interview notes
+  /// PUT ΓÇô Update interview notes
   static String updateInterviewNotes(int noteId) =>
       "$adminBase/interviews/notes/$noteId";
 
+  /// DELETE ΓÇô Delete interview notes
   /// DELETE ΓÇô Delete interview notes
   static String deleteInterviewNotes(int noteId) =>
       "$adminBase/interviews/notes/$noteId";
 
   // ------------------- Interview Workflow -------------------
   /// POST ΓÇô Move interview to next stage
+  /// POST ΓÇô Move interview to next stage
   static String moveInterviewToNextStage(int interviewId) =>
       "$adminBase/interviews/$interviewId/workflow/next";
 
+  /// POST ΓÇô Move interview to previous stage
   /// POST ΓÇô Move interview to previous stage
   static String moveInterviewToPreviousStage(int interviewId) =>
       "$adminBase/interviews/$interviewId/workflow/previous";
@@ -245,10 +274,12 @@ class ApiEndpoints {
 
   // ------------------- Bulk Interview Operations -------------------
   /// POST ΓÇô Bulk update interview statuses
-  static String get bulkUpdateInterviewStatus => "$adminBase/interviews/bulk/status";
+  static String get bulkUpdateInterviewStatus =>
+      "$adminBase/interviews/bulk/status";
 
   /// POST ΓÇô Bulk schedule reminders
-  static String get bulkScheduleReminders => "$adminBase/interviews/bulk/reminders";
+  static String get bulkScheduleReminders =>
+      "$adminBase/interviews/bulk/reminders";
 
   /// POST ΓÇô Bulk request feedback
   static String get bulkRequestFeedback =>
@@ -259,25 +290,31 @@ class ApiEndpoints {
   static String get getInterviewTemplates => "$adminBase/interviews/templates";
 
   /// GET ΓÇô Get specific interview template
+  /// GET ΓÇô Get specific interview template
   static String getInterviewTemplate(int templateId) =>
       "$adminBase/interviews/templates/$templateId";
 
   /// POST ΓÇô Create new interview template
-  static String get createInterviewTemplate => "$adminBase/interviews/templates";
+  static String get createInterviewTemplate =>
+      "$adminBase/interviews/templates";
 
+  /// PUT ΓÇô Update interview template
   /// PUT ΓÇô Update interview template
   static String updateInterviewTemplate(int templateId) =>
       "$adminBase/interviews/templates/$templateId";
 
+  /// DELETE ΓÇô Delete interview template
   /// DELETE ΓÇô Delete interview template
   static String deleteInterviewTemplate(int templateId) =>
       "$adminBase/interviews/templates/$templateId";
 
   // ------------------- Candidate Availability -------------------
   /// GET ΓÇô Get candidate availability
+  /// GET ΓÇô Get candidate availability
   static String getCandidateAvailability(int candidateId) =>
       "$adminBase/candidates/$candidateId/availability";
 
+  /// POST ΓÇô Set candidate availability
   /// POST ΓÇô Set candidate availability
   static String setCandidateAvailability(int candidateId) =>
       "$adminBase/candidates/$candidateId/availability";
@@ -308,8 +345,10 @@ class ApiEndpoints {
 
   // ------------------- Interview Calendar (Google Calendar) -------------------
   /// GET ΓÇô Sync & compare upcoming interviews with Google Calendar
-  static String get syncInterviewCalendar => "$adminBase/interviews/calendar/sync";
+  static String get syncInterviewCalendar =>
+      "$adminBase/interviews/calendar/sync";
 
+  /// POST ΓÇô Sync a single interview to Google Calendar
   /// POST ΓÇô Sync a single interview to Google Calendar
   static String syncSingleInterviewCalendar(int interviewId) =>
       "$adminBase/interviews/$interviewId/calendar/sync";
@@ -318,6 +357,7 @@ class ApiEndpoints {
   static String get bulkSyncInterviewCalendar =>
       "$adminBase/interviews/calendar/bulk-sync";
 
+  /// GET ΓÇô Get calendar status for a specific interview
   /// GET ΓÇô Get calendar status for a specific interview
   static String getInterviewCalendarStatus(int interviewId) =>
       "$adminBase/interviews/$interviewId/calendar/status";
@@ -407,7 +447,8 @@ class ApiEndpoints {
 
   // ==================== ANALYTICS ENDPOINTS ====================
   static String get getDashboardAnalytics => "$adminBase/analytics/dashboard";
-  static String get getUsersGrowthAnalytics => "$adminBase/analytics/users-growth";
+  static String get getUsersGrowthAnalytics =>
+      "$adminBase/analytics/users-growth";
   static String get getApplicationsAnalysis =>
       "$adminBase/analytics/applications-analysis";
   static String get getInterviewsAnalysis =>
@@ -427,7 +468,8 @@ class ApiEndpoints {
   static String get getInterviewToOfferConversion =>
       "$analyticsBase/analytics/conversion/interview-to-offer";
   static String get getStageDropoff => "$analyticsBase/analytics/dropoff";
-  static String get getTimePerStage => "$analyticsBase/analytics/time-per-stage";
+  static String get getTimePerStage =>
+      "$analyticsBase/analytics/time-per-stage";
   static String get getMonthlyApplications =>
       "$analyticsBase/analytics/applications/monthly";
   static String get getCVScreeningDrop =>
@@ -451,7 +493,8 @@ class ApiEndpoints {
   static String get getCandidateProfile => "$candidateBase/profile";
   static String get updateCandidateProfile => "$candidateBase/profile";
   static String get uploadCandidateDocument => "$candidateBase/upload_document";
-  static String get uploadProfilePicture => "$candidateBase/upload_profile_picture";
+  static String get uploadProfilePicture =>
+      "$candidateBase/upload_profile_picture";
   static String get getCandidateSettings => "$candidateBase/settings";
   static String get updateCandidateSettings => "$candidateBase/settings";
   static String get changeCandidatePassword =>

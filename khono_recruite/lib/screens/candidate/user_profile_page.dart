@@ -14,7 +14,8 @@ import '../../services/auth_service.dart';
 import '../../providers/theme_provider.dart';
 import '../../utils/api_endpoints.dart';
 
-String get candidateBase => ApiEndpoints.candidateBase;
+// ------------------- API Base URL -------------------
+const String candidateBase = "http://127.0.0.1:5000/api/candidate";
 
 class ProfilePage extends StatefulWidget {
   final String token;
@@ -88,7 +89,7 @@ class _ProfilePageState extends State<ProfilePage>
   List<dynamic> documents = [];
   List<String> _certifications = [];
   List<String> _languages = [];
-  String get apiBase => ApiEndpoints.candidateBase;
+  final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
   // Add these helper methods in the _ProfilePageState class (around line 150, after the state variables):
 
@@ -157,6 +158,126 @@ class _ProfilePageState extends State<ProfilePage>
     final option = options.firstWhere((opt) => opt['value'] == value,
         orElse: () => {'label': '', 'value': ''});
     return option['label'] ?? '';
+  }
+
+  // ignore: unused_element
+  Widget _buildProfileHeader() {
+    return Column(
+      children: [
+        Stack(
+          children: [
+            Container(
+              width: 140,
+              height: 140,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.redAccent.withOpacity(0.7),
+                  width: 4,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(70),
+                child: Image(
+                  image: _getProfileImageProvider(),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.person,
+                      color: Colors.grey.shade400,
+                      size: 70,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.redAccent,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.redAccent.withOpacity(0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: Colors.white,
+                    width: 3,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.camera_alt_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        Text(
+          fullNameController.text.isNotEmpty
+              ? fullNameController.text
+              : "Your Name",
+          style: GoogleFonts.poppins(
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          titleController.text.isNotEmpty ? titleController.text : "Your Title",
+          style: GoogleFonts.inter(
+            fontSize: 18,
+            color: Colors.white70,
+          ),
+        ),
+        const SizedBox(height: 15),
+        if (_mfaEnabled)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.verified_user, color: Colors.greenAccent, size: 18),
+                const SizedBox(width: 8),
+                Text(
+                  "2FA Enabled",
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: Colors.greenAccent,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 30),
+      ],
+    );
   }
 
   @override
@@ -658,7 +779,8 @@ class _ProfilePageState extends State<ProfilePage>
         idNumberController.text = candidate['id_number'] ?? "";
         bioController.text = candidate['bio'] ?? "";
         // Prefer address (from enrollment) then location
-        locationController.text = (candidate['address'] ?? candidate['location'] ?? "").toString();
+        locationController.text =
+            (candidate['address'] ?? candidate['location'] ?? "").toString();
 
         // Initialize education from enrollment format: education list [{level, institution, graduation_year}]
         String degree = candidate['degree'] ?? "";
@@ -670,10 +792,13 @@ class _ProfilePageState extends State<ProfilePage>
           if (first is Map) {
             degree = (first['level'] ?? first['degree'] ?? degree).toString();
             institution = (first['institution'] ?? institution).toString();
-            graduationYear = (first['graduation_year'] ?? graduationYear).toString();
+            graduationYear =
+                (first['graduation_year'] ?? graduationYear).toString();
           }
         }
-        if (degree.isNotEmpty || institution.isNotEmpty || graduationYear.isNotEmpty) {
+        if (degree.isNotEmpty ||
+            institution.isNotEmpty ||
+            graduationYear.isNotEmpty) {
           degreeController.text = degree;
           institutionController.text = institution;
           graduationYearController.text = graduationYear;
@@ -695,7 +820,11 @@ class _ProfilePageState extends State<ProfilePage>
               final pos = exp['position'] ?? exp['title'] ?? '';
               final co = exp['company'] ?? '';
               final desc = exp['description'] ?? '';
-              text = [if (pos.isNotEmpty) pos, if (co.isNotEmpty) 'at $co', if (desc.isNotEmpty) desc].join(' ΓÇó ');
+              text = [
+                if (pos.isNotEmpty) pos,
+                if (co.isNotEmpty) 'at $co',
+                if (desc.isNotEmpty) desc
+              ].join(' ΓÇó ');
             }
             _workExpControllers.add(TextEditingController(text: text));
           }
