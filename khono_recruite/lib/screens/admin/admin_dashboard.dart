@@ -288,7 +288,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       };
       final uri = Uri.parse("${ApiEndpoints.adminBase}/audits")
           .replace(queryParameters: queryParams);
-      final res = await http.get(uri, headers: {"Authorization": "Bearer $token"});
+      final res =
+          await http.get(uri, headers: {"Authorization": "Bearer $token"});
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
@@ -441,11 +442,17 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                             padding: EdgeInsets.zero,
                             children: [
                               _sidebarEntry(
-                                  Icons.home_outlined, 'Home', 'dashboard'),
-                              _sidebarEntry(Icons.work_outline, 'Jobs', 'jobs'),
-                              _sidebarEntry(Icons.quiz_outlined, 'Test Packs', 'test_packs'),
-                              _sidebarEntry(Icons.people_alt_outlined,
-                                  'Shortlisted', 'candidates'),
+                                  'assets/images/Home_Remote_Work_Red_Badge_White.png',
+                                  'Home',
+                                  'dashboard'),
+                              _sidebarEntry(
+                                  'assets/images/Approval_Red_Badge_White.png',
+                                  'Jobs',
+                                  'jobs'),
+                              _sidebarEntry(
+                                  'assets/images/Meeting_Red_Badge_White.png',
+                                  'Shortlisted',
+                                  'candidates'),
                               _sidebarEntry(
                                   'assets/images/red_Management_Red_Badge_White.png',
                                   'Interviews',
@@ -829,16 +836,14 @@ class _AdminDAshboardState extends State<AdminDAshboard>
     return InkWell(
       onTap: () => setState(() => currentScreen = screenKey),
       child: Container(
-        color: selected
-            ? const Color.fromRGBO(151, 18, 8, 1).withValues(alpha: 0.06)
-            : Colors.transparent,
+        color: selected ? const Color(0xFFC10D00) : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
           children: [
             icon is IconData
                 ? Icon(icon,
                     color: selected
-                        ? const Color.fromRGBO(151, 18, 8, 1)
+                        ? const Color(0xFFC10D00)
                         : themeProvider.isDarkMode
                             ? Colors.grey.shade400
                             : Colors.grey.shade800)
@@ -846,7 +851,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                     errorBuilder: (context, error, stackTrace) {
                     return Icon(Icons.error,
                         color: selected
-                            ? const Color.fromRGBO(151, 18, 8, 1)
+                            ? const Color(0xFFC10D00)
                             : themeProvider.isDarkMode
                                 ? Colors.grey.shade400
                                 : Colors.grey.shade800,
@@ -860,7 +865,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     color: selected
-                        ? Colors.redAccent
+                        ? Colors.white
                         : themeProvider.isDarkMode
                             ? Colors.white
                             : Colors.grey.shade800,

@@ -5,17 +5,18 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
+// ignore: unnecessary_import
+import 'dart:ui';
 import 'dart:async';
 import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart'
     show File;
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 // Import your existing services
 import '../../services/candidate_service.dart';
 import '../../services/auth_service.dart';
-import '../../utils/api_endpoints.dart';
 
 /// New landing screen: hero, explore by category, job cards. Optional [token] for logged-in state.
 /// Teammate will refine the real "candidate dashboard" (applications, profile, etc.) in candidate_dashboard.dart.
@@ -89,9 +90,11 @@ class _LandingPageState extends State<LandingPage>
   bool _isDisposed = false;
   final PageController _pageController = PageController();
 
+  // Profile image state
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
-  String get apiBase => ApiEndpoints.candidateBase;
+
+  final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
   @override
   void initState() {
@@ -99,7 +102,6 @@ class _LandingPageState extends State<LandingPage>
     _isDisposed = false;
     WidgetsBinding.instance.addObserver(this);
     _initializeData();
-    if (_hasToken) fetchProfileImage();
   }
 
   @override
@@ -210,8 +212,12 @@ class _LandingPageState extends State<LandingPage>
       );
 
       if (profileRes.statusCode == 200) {
-        json.decode(profileRes.body);
-        setState(() {});
+        final data = json.decode(profileRes.body)['data'];
+        // ignore: unused_local_variable
+        final candidate = data['candidate'] ?? {};
+        setState(() {
+          // Profile image URL fetched but not used
+        });
       }
     } catch (e) {
       debugPrint("Error fetching profile image: $e");
@@ -246,6 +252,7 @@ class _LandingPageState extends State<LandingPage>
 
       if (response.statusCode == 200 && respJson['success'] == true) {
         setState(() {
+          // Profile image uploaded successfully
           _profileImage = null;
           _profileImageBytes = null;
         });
@@ -515,7 +522,7 @@ class _LandingPageState extends State<LandingPage>
 
     try {
       final response = await http.post(
-        Uri.parse("${ApiEndpoints.aiBase}/chat"),
+        Uri.parse("http://127.0.0.1:5000/api/ai/chat"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer ${_effectiveToken ?? ''}",
@@ -566,7 +573,7 @@ class _LandingPageState extends State<LandingPage>
     _safeSetState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse("${ApiEndpoints.aiBase}/parse_cv"),
+        Uri.parse("http://127.0.0.1:5000/api/ai/parse_cv"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer ${_effectiveToken ?? ''}",
@@ -610,38 +617,6 @@ class _LandingPageState extends State<LandingPage>
         ),
       ),
     );
-  }
-
-  String _jobLocation(Map<String, dynamic> job) {
-    final loc = job['location']?.toString().trim() ?? '';
-    if (loc.isNotEmpty) return loc;
-    return job['company']?.toString().trim().isNotEmpty == true
-        ? job['company'].toString().trim()
-        : 'Remote';
-  }
-
-  String _jobType(Map<String, dynamic> job) {
-    final t = job['type']?.toString().trim() ??
-        job['employment_type']?.toString().trim() ??
-        '';
-    if (t.isEmpty) return 'Full Time';
-    return t.replaceAll('_', ' ');
-  }
-
-  String _jobSalary(Map<String, dynamic> job) {
-    final range = job['salary_range']?.toString().trim() ??
-        job['salary']?.toString().trim() ??
-        '';
-    if (range.isNotEmpty) return range;
-    final min = job['salary_min'];
-    final max = job['salary_max'];
-    final currency = job['salary_currency']?.toString().trim() ?? 'ZAR';
-    if (min != null && max != null && (min is num) && (max is num)) {
-      return '$currency ${min.toStringAsFixed(0)} - ${max.toStringAsFixed(0)}';
-    }
-    if (min != null && min is num) return '$currency ${min.toStringAsFixed(0)}+';
-    if (max != null && max is num) return 'Up to $currency ${max.toStringAsFixed(0)}';
-    return 'Not specified';
   }
 
   // Updated to handle real job data ΓÇö dark theme to match the app
@@ -712,18 +687,17 @@ class _LandingPageState extends State<LandingPage>
                                   color: Colors.white70, fontSize: 14)),
                         ],
                       ),
-                      if (salary.isNotEmpty && salary != 'Not specified')
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.attach_money,
-                                size: 16, color: strokeColor),
-                            SizedBox(width: 4),
-                            Text(salary,
-                                style: GoogleFonts.poppins(
-                                    color: Colors.white70, fontSize: 14)),
-                          ],
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.attach_money,
+                              size: 16, color: strokeColor),
+                          SizedBox(width: 4),
+                          Text(salary,
+                              style: GoogleFonts.poppins(
+                                  color: Colors.white70, fontSize: 14)),
+                        ],
+                      ),
                     ],
                   ),
                 ],
@@ -1806,9 +1780,9 @@ class _LandingPageState extends State<LandingPage>
                                                   EdgeInsets.only(bottom: 12),
                                               child: _buildJobItem(
                                                 job['title'] ?? 'Position',
-                                                _jobLocation(job),
-                                                _jobType(job),
-                                                _jobSalary(job),
+                                                job['location'] ?? 'Location',
+                                                job['type'] ?? 'Type',
+                                                job['salary'] ?? 'Salary',
                                                 job,
                                               ),
                                             )),
@@ -1901,15 +1875,15 @@ class _LandingPageState extends State<LandingPage>
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                _socialIcon('assets/icons/Instagram.png',
+                                _socialIcon('assets/icons/Instagram1.png',
                                     'https://www.instagram.com/yourprofile'),
                                 _socialIcon('assets/icons/x1.png',
                                     'https://x.com/yourprofile'),
                                 _socialIcon('assets/icons/LinkedIn1.png',
                                     'https://www.linkedin.com/in/yourprofile'),
-                                _socialIcon('assets/icons/facebook.png',
+                                _socialIcon('assets/icons/facebook1.png',
                                     'https://www.facebook.com/yourprofile'),
-                                _socialIcon('assets/icons/YouTube.png',
+                                _socialIcon('assets/icons/YouTube1.png',
                                     'https://www.youtube.com/yourchannel'),
                               ],
                             ),

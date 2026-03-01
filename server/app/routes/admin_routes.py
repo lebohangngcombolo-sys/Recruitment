@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, current_app
+﻿from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.extensions import db
 from app.models import User, Requisition, Candidate, Application, AssessmentResult, Interview, Notification, AuditLog, Conversation, SharedNote, Meeting, CVAnalysis, InterviewFeedback, Offer, OfferStatus
@@ -676,8 +676,130 @@ def get_job_statistics():
 @admin_bp.route("/candidates", methods=["GET"])
 @role_required(["admin", "hiring_manager", "hr"])
 def list_candidates():
-    candidates = Candidate.query.all()
-    return jsonify([c.to_dict() for c in candidates])
+    """Get all candidates with comprehensive data including applications and assessments"""
+    try:
+        # Get query parameters for filtering and pagination
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        search = request.args.get('search', type=str)
+        status_filter = request.args.get('status', type=str)
+        
+        # Build query
+        query = Candidate.query
+        
+        # Apply search filter
+        if search:
+            search_term = f"%{search}%"
+            query = query.filter(
+                db.or_(
+                    Candidate.full_name.ilike(search_term),
+                    Candidate.phone.ilike(search_term),
+                    Candidate.location.ilike(search_term),
+                    Candidate.title.ilike(search_term)
+                )
+            )
+        
+        # Apply status filter (based on applications)
+        if status_filter:
+            query = query.join(Application).filter(Application.status == status_filter)
+        
+        # Paginate
+        candidates = query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+        
+        # Enrich candidate data with applications and assessments
+        enriched_candidates = []
+        for candidate in candidates.items:
+            # Get user information
+            user = User.query.get(candidate.user_id) if candidate.user_id else None
+            
+            # Get applications for this candidate
+            applications = Application.query.filter_by(candidate_id=candidate.id).all()
+            
+            # Get assessments for this candidate
+            assessments = AssessmentResult.query.filter_by(candidate_id=candidate.id).all()
+            
+            # Get interviews for this candidate
+            interviews = Interview.query.filter_by(candidate_id=candidate.id).all()
+            
+            # Calculate statistics
+            total_applications = len(applications)
+            completed_assessments = len([a for a in assessments if a.percentage_score is not None])
+            scheduled_interviews = len([i for i in interviews if i.status in ['scheduled', 'confirmed']])
+            completed_interviews = len([i for i in interviews if i.status == 'completed'])
+            
+            # Get latest application status
+            latest_application = max(applications, key=lambda x: x.created_at) if applications else None
+            latest_status = latest_application.status if latest_application else None
+            
+            # Calculate average scores
+            avg_cv_score = sum([app.cv_score or 0 for app in applications]) / len(applications) if applications else 0
+            avg_assessment_score = sum([ass.percentage_score or 0 for ass in assessments]) / len(assessments) if assessments else 0
+            
+            enriched_candidates.append({
+                **candidate.to_dict(),
+                'user_email': user.email if user else None,
+                'user_role': user.role if user else None,
+                'user_created_at': user.created_at.isoformat() if user and user.created_at else None,
+                'statistics': {
+                    'total_applications': total_applications,
+                    'completed_assessments': completed_assessments,
+                    'scheduled_interviews': scheduled_interviews,
+                    'completed_interviews': completed_interviews,
+                    'latest_application_status': latest_status,
+                    'average_cv_score': round(avg_cv_score, 2),
+                    'average_assessment_score': round(avg_assessment_score, 2)
+                },
+                'applications': [
+                    {
+                        'id': app.id,
+                        'job_id': app.requisition_id,
+                        'job_title': app.requisition.title if app.requisition else None,
+                        'status': app.status,
+                        'cv_score': app.cv_score,
+                        'assessment_score': app.assessment_score,
+                        'overall_score': app.overall_score,
+                        'created_at': app.created_at.isoformat() if app.created_at else None,
+                        'resume_url': app.resume_url
+                    } for app in applications
+                ],
+                'assessments': [
+                    {
+                        'id': ass.id,
+                        'application_id': ass.application_id,
+                        'percentage_score': ass.percentage_score,
+                        'created_at': ass.created_at.isoformat() if ass.created_at else None
+                    } for ass in assessments
+                ],
+                'interviews': [
+                    {
+                        'id': interview.id,
+                        'application_id': interview.application_id,
+                        'status': interview.status,
+                        'scheduled_time': interview.scheduled_time.isoformat() if interview.scheduled_time else None,
+                        'interview_type': interview.interview_type
+                    } for interview in interviews
+                ]
+            })
+        
+        return jsonify({
+            'candidates': enriched_candidates,
+            'pagination': {
+                'page': candidates.page,
+                'per_page': candidates.per_page,
+                'total_pages': candidates.pages,
+                'total_items': candidates.total,
+                'has_next': candidates.has_next,
+                'has_prev': candidates.has_prev
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching candidates: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
 
 @admin_bp.route("/applications/<int:application_id>", methods=["GET"])
 @role_required(["admin", "hiring_manager", "hr"])
@@ -964,12 +1086,142 @@ def list_audits():
 @role_required(["admin", "hiring_manager"])
 def dashboard_counts():
     try:
+        # Basic counts
+        total_jobs = Requisition.query.count()
+        total_candidates = Candidate.query.count()
+        total_applications = Application.query.count()
+        total_interviews = Interview.query.count()
+        total_audits = AuditLog.query.count()
+        
+        # Enhanced candidate statistics
+        active_jobs = Requisition.query.filter_by(is_active=True).count()
+        candidates_with_cv = Candidate.query.filter(Candidate.cv_url.isnot(None)).count()
+        candidates_with_assessments = db.session.query(AssessmentResult.candidate_id).distinct().count()
+        
+        # Application status breakdown
+        application_statuses = db.session.query(
+            Application.status,
+            func.count(Application.id)
+        ).group_by(Application.status).all()
+        
+        status_breakdown = {status: count for status, count in application_statuses}
+        
+        # Interview statistics
+        completed_interviews = Interview.query.filter_by(status='completed').count()
+        scheduled_interviews = Interview.query.filter_by(status='scheduled').count()
+        upcoming_interviews = Interview.query.filter(
+            Interview.scheduled_time > datetime.utcnow(),
+            Interview.status.in_(['scheduled', 'confirmed'])
+        ).count()
+        
+        # Recent activity (last 7 days)
+        week_ago = datetime.utcnow() - timedelta(days=7)
+        new_applications_week = Application.query.filter(Application.created_at >= week_ago).count()
+        new_interviews_week = Interview.query.filter(Interview.created_at >= week_ago).count()
+        
+        # Offer statistics
+        offered_applications = Application.query.filter_by(status='recommended').count()
+        accepted_offers = Application.query.filter_by(status='offered_accepted').count()
+        
+        # Enhanced candidate demographics and skills analysis
+        candidate_demographics = {}
+        
+        # Gender distribution
+        gender_dist = db.session.query(
+            Candidate.gender,
+            func.count(Candidate.id)
+        ).filter(Candidate.gender.isnot(None)).group_by(Candidate.gender).all()
+        candidate_demographics['gender_distribution'] = {g: count for g, count in gender_dist}
+        
+        # Location distribution
+        location_dist = db.session.query(
+            Candidate.location,
+            func.count(Candidate.id)
+        ).filter(Candidate.location.isnot(None)).group_by(Candidate.location).limit(10).all()
+        candidate_demographics['location_distribution'] = {loc: count for loc, count in location_dist}
+        
+        # Title/Role distribution
+        title_dist = db.session.query(
+            Candidate.title,
+            func.count(Candidate.id)
+        ).filter(Candidate.title.isnot(None)).group_by(Candidate.title).limit(10).all()
+        candidate_demographics['title_distribution'] = {title: count for title, count in title_dist}
+        
+        # Nationality distribution
+        nationality_dist = db.session.query(
+            Candidate.nationality,
+            func.count(Candidate.id)
+        ).filter(Candidate.nationality.isnot(None)).group_by(Candidate.nationality).all()
+        candidate_demographics['nationality_distribution'] = {nat: count for nat, count in nationality_dist}
+        
+        # Skills frequency analysis
+        all_skills = []
+        candidates_with_skills = Candidate.query.filter(Candidate.skills.isnot(None)).all()
+        for candidate in candidates_with_skills:
+            if candidate.skills:
+                all_skills.extend(candidate.skills)
+        
+        from collections import Counter
+        skills_counter = Counter(all_skills)
+        candidate_demographics['top_skills'] = dict(skills_counter.most_common(20))
+        
+        # Education level analysis
+        education_levels = {}
+        for candidate in candidates_with_skills:
+            if candidate.education:
+                for edu in candidate.education:
+                    level = edu.get('level', 'Unknown')
+                    education_levels[level] = education_levels.get(level, 0) + 1
+        candidate_demographics['education_distribution'] = education_levels
+        
+        # Recent candidates with full details
+        recent_candidates = Candidate.query.order_by(Candidate.id.desc()).limit(10).all()
+        recent_candidates_data = []
+        
+        for candidate in recent_candidates:
+            user = User.query.get(candidate.user_id) if candidate.user_id else None
+            applications = Application.query.filter_by(candidate_id=candidate.id).all()
+            latest_application = max(applications, key=lambda x: x.created_at) if applications else None
+            
+            recent_candidates_data.append({
+                'id': candidate.id,
+                'full_name': candidate.full_name,
+                'phone': candidate.phone,
+                'email': user.email if user else None,
+                'location': candidate.location,
+                'title': candidate.title,
+                'nationality': candidate.nationality,
+                'gender': candidate.gender,
+                'profile_picture': candidate.profile_picture,
+                'latest_application_status': latest_application.status if latest_application else None,
+                'total_applications': len(applications),
+                'created_at': user.created_at.isoformat() if user and user.created_at else None
+            })
+        
         counts = {
-            "jobs": Requisition.query.count(),
-            "candidates": Candidate.query.count(),
-            "cv_reviews": Application.query.count(),
-            "audits": AuditLog.query.count(),
-            "interviews": Interview.query.count()
+            "jobs": total_jobs,
+            "candidates": total_candidates,
+            "cv_reviews": total_applications,
+            "audits": total_audits,
+            "interviews": total_interviews,
+            # Enhanced metrics
+            "active_jobs": active_jobs,
+            "candidates_with_cv": candidates_with_cv,
+            "candidates_with_assessments": candidates_with_assessments,
+            "completed_interviews": completed_interviews,
+            "scheduled_interviews": scheduled_interviews,
+            "upcoming_interviews": upcoming_interviews,
+            "offered_applications": offered_applications,
+            "accepted_offers": accepted_offers,
+            # Breakdowns
+            "application_status_breakdown": status_breakdown,
+            "recent_activity": {
+                "new_applications": new_applications_week,
+                "new_interviews": new_interviews_week,
+            },
+            # Enhanced candidate analytics
+            "candidate_demographics": candidate_demographics,
+            "recent_candidates": recent_candidates_data
         }
         return jsonify(counts), 200
     except Exception as e:

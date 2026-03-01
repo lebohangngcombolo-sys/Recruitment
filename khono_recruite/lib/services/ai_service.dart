@@ -433,6 +433,7 @@ class AIService {
         "weight": 1
       },
     ];
+    ];
 
     return baseQuestions.take(questionCount).toList();
   }
@@ -579,49 +580,5 @@ class AIService {
       'required_skills': skills,
       'min_experience': minExp.toString(),
     };
-  }
-
-  static Future<Map<String, dynamic>> _parseJson(String jsonStr) async {
-    return jsonDecode(jsonStr);
-  }
-
-  static Map<String, dynamic> _parseManually(String response) {
-    // Fallback parsing method - extract information manually
-    final lines = response.split('\n');
-    final result = <String, dynamic>{};
-
-    // Default values
-    result['description'] =
-        'Job description will be generated based on the title.';
-    result['responsibilities'] = [
-      'Responsibility 1',
-      'Responsibility 2',
-      'Responsibility 3'
-    ];
-    result['qualifications'] = [
-      'Qualification 1',
-      'Qualification 2',
-      'Qualification 3'
-    ];
-    result['company_details'] =
-        'We are a dynamic company committed to innovation and excellence. Our team thrives on collaboration and continuous growth.';
-    result['category'] = 'Engineering';
-    result['required_skills'] = ['Skill 1', 'Skill 2', 'Skill 3'];
-    result['min_experience'] = '2';
-
-    // Try to extract some information from the response
-    for (final line in lines) {
-      if (line.toLowerCase().contains('description')) {
-        result['description'] = line.trim();
-      } else if (line.toLowerCase().contains('responsibilit')) {
-        result['responsibilities'] = [line.trim()];
-      } else if (line.toLowerCase().contains('qualification')) {
-        result['qualifications'] = [line.trim()];
-      } else if (line.toLowerCase().contains('company')) {
-        result['company_details'] = line.trim();
-      }
-    }
-
-    return result;
   }
 }

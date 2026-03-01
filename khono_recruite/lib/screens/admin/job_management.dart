@@ -505,6 +505,7 @@ class _JobManagementState extends State<JobManagement> {
               .map((item) => Padding(
                     padding: const EdgeInsets.only(left: 8, bottom: 2),
                     child: Text("ΓÇó $item"),
+                    child: Text("ΓÇó $item"),
                   ))
               .toList(),
         ],
@@ -515,7 +516,8 @@ class _JobManagementState extends State<JobManagement> {
   Widget _buildStatChip(String label, String value, {Color? color}) {
     return Chip(
       label: Text("$label: $value"),
-      backgroundColor: color?.withOpacity(0.1) ?? Colors.blue.withOpacity(0.1),
+      backgroundColor:
+          color?.withValues(alpha: 0.1) ?? Colors.blue.withValues(alpha: 0.1),
       side: BorderSide(color: color ?? Colors.blue),
     );
   }
@@ -544,7 +546,7 @@ class _JobManagementState extends State<JobManagement> {
             return Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.1),
+                color: Colors.grey.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.grey.shade300),
               ),
@@ -655,7 +657,7 @@ class _JobManagementState extends State<JobManagement> {
             return Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: colors[index % colors.length].withOpacity(0.1),
+                color: colors[index % colors.length].withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: colors[index % colors.length]),
               ),
@@ -717,7 +719,7 @@ class _JobManagementState extends State<JobManagement> {
 
     return Card(
       color: (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-          .withOpacity(0.9),
+          .withValues(alpha: 0.9),
       elevation: 3,
       margin: const EdgeInsets.symmetric(vertical: 8),
       shape: RoundedRectangleBorder(
@@ -779,8 +781,8 @@ class _JobManagementState extends State<JobManagement> {
                         const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     decoration: BoxDecoration(
                       color: isActive
-                          ? Colors.green.withOpacity(0.1)
-                          : Colors.red.withOpacity(0.1),
+                          ? Colors.green.withValues(alpha: 0.1)
+                          : Colors.red.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: isActive ? Colors.green : Colors.red,
@@ -833,26 +835,26 @@ class _JobManagementState extends State<JobManagement> {
                   if (job['category'] != null && job['category'].isNotEmpty)
                     Chip(
                       label: Text(job['category']),
-                      backgroundColor: Colors.blue.withOpacity(0.1),
+                      backgroundColor: Colors.blue.withValues(alpha: 0.1),
                       side: BorderSide(color: Colors.blue, width: 0.5),
                     ),
                   if (job['min_experience'] != null)
                     Chip(
                       label: Text("${job['min_experience']} yrs exp"),
-                      backgroundColor: Colors.orange.withOpacity(0.1),
+                      backgroundColor: Colors.orange.withValues(alpha: 0.1),
                       side: BorderSide(color: Colors.orange, width: 0.5),
                     ),
                   if (job['vacancy'] != null && job['vacancy'] > 1)
                     Chip(
                       label: Text("${job['vacancy']} vacancies"),
-                      backgroundColor: Colors.purple.withOpacity(0.1),
+                      backgroundColor: Colors.purple.withValues(alpha: 0.1),
                       side: BorderSide(color: Colors.purple, width: 0.5),
                     ),
                   if (job['application_count'] != null &&
                       job['application_count'] > 0)
                     Chip(
                       label: Text("${job['application_count']} applications"),
-                      backgroundColor: Colors.teal.withOpacity(0.1),
+                      backgroundColor: Colors.teal.withValues(alpha: 0.1),
                       side: BorderSide(color: Colors.teal, width: 0.5),
                     ),
                 ],
@@ -979,7 +981,7 @@ class _JobManagementState extends State<JobManagement> {
 
     return Container(
       padding: const EdgeInsets.all(16),
-      color: Colors.black.withOpacity(0.05),
+      color: Colors.black.withValues(alpha: 0.05),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -1086,8 +1088,8 @@ class _JobManagementState extends State<JobManagement> {
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: themeProvider.isDarkMode
-                                  ? Colors.black.withOpacity(0.6)
-                                  : Colors.white.withOpacity(0.7),
+                                  ? Colors.black.withValues(alpha: 0.6)
+                                  : Colors.white.withValues(alpha: 0.7),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Column(
@@ -1378,9 +1380,14 @@ class _JobFormDialogState extends State<JobFormDialog>
   final _formKey = GlobalKey<FormState>();
   late String title;
   late String description;
+  late String company;
+  late String location;
+  late String deadlineStr;
   String jobSummary = "";
   TextEditingController responsibilitiesController = TextEditingController();
   TextEditingController qualificationsController = TextEditingController();
+  TextEditingController companyController = TextEditingController();
+  TextEditingController locationController = TextEditingController();
   String companyName = "";
   String jobLocation = "";
   String companyDetails = "";
@@ -1422,6 +1429,8 @@ class _JobFormDialogState extends State<JobFormDialog>
         (widget.job?['responsibilities'] ?? []).join(", ");
     qualificationsController.text =
         (widget.job?['qualifications'] ?? []).join(", ");
+    companyController.text = widget.job?['company'] ?? '';
+    locationController.text = widget.job?['location'] ?? '';
     companyName = widget.job?['company'] ?? '';
     jobLocation = widget.job?['location'] ?? '';
     companyDetails = widget.job?['company_details'] ?? '';
@@ -1603,6 +1612,8 @@ class _JobFormDialogState extends State<JobFormDialog>
   void dispose() {
     responsibilitiesController.dispose();
     qualificationsController.dispose();
+    companyController.dispose();
+    locationController.dispose();
     skillsController.dispose();
     minExpController.dispose();
     salaryMinController.dispose();
@@ -1771,8 +1782,8 @@ class _JobFormDialogState extends State<JobFormDialog>
     final jobData = {
       'title': title,
       'description': description,
-      'company': companyName,
-      'location': jobLocation,
+      'company': companyController.text,
+      'location': locationController.text,
       'job_summary': jobSummary,
       'employment_type': employmentType,
       'responsibilities': responsibilities,
@@ -1820,6 +1831,8 @@ class _JobFormDialogState extends State<JobFormDialog>
     } catch (e) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error saving job: $e")));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Error saving job: $e")));
     }
   }
 
@@ -1836,7 +1849,7 @@ class _JobFormDialogState extends State<JobFormDialog>
           color: (themeProvider.isDarkMode
                   ? const Color(0xFF14131E)
                   : Colors.white)
-              .withOpacity(0.95),
+              .withValues(alpha: 0.95),
           borderRadius: BorderRadius.circular(24),
         ),
         child: Column(
@@ -1873,6 +1886,13 @@ class _JobFormDialogState extends State<JobFormDialog>
                               onChanged: (v) => title = v,
                               validator: (v) =>
                                   v == null || v.isEmpty ? "Enter title" : null,
+                            CustomTextField(
+                              label: "Title",
+                              initialValue: title,
+                              hintText: "Enter job title",
+                              onChanged: (v) => title = v,
+                              validator: (v) =>
+                                  v == null || v.isEmpty ? "Enter title" : null,
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
@@ -1884,6 +1904,14 @@ class _JobFormDialogState extends State<JobFormDialog>
                               validator: (v) => v == null || v.isEmpty
                                   ? "Enter description"
                                   : null,
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Job Summary",
+                              initialValue: jobSummary,
+                              hintText: "Brief job summary",
+                              maxLines: 3,
+                              onChanged: (v) => jobSummary = v,
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
@@ -1908,16 +1936,14 @@ class _JobFormDialogState extends State<JobFormDialog>
                             const SizedBox(height: 16),
                             CustomTextField(
                               label: "Company",
-                              initialValue: companyName,
+                              controller: companyController,
                               hintText: "Company name",
-                              onChanged: (v) => companyName = v,
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
                               label: "Location",
-                              initialValue: jobLocation,
+                              controller: locationController,
                               hintText: "City, Country or Remote",
-                              onChanged: (v) => jobLocation = v,
                             ),
                             const SizedBox(height: 16),
                             Row(

@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -272,8 +272,7 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
 
     try {
       final res = await http.post(
-        Uri.parse(
-            "${ApiEndpoints.candidateBase}/apply/${widget.job["id"]}"),
+        Uri.parse("${ApiEndpoints.candidateBase}/apply/${widget.job["id"]}"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",

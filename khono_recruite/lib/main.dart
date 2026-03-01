@@ -1,7 +1,8 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+﻿import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_web_plugins/flutter_web_plugins.dart'; // ΓÜí Web URL strategy
 import 'package:flutter_web_plugins/flutter_web_plugins.dart'; // ΓÜí Web URL strategy
 import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
 import 'package:webview_flutter_web/webview_flutter_web.dart';
@@ -75,6 +76,7 @@ void main() async {
 }
 
 // Γ£à Persistent router
+// Γ£à Persistent router
 final GoRouter _router = GoRouter(
   initialLocation: '/',
   routes: [
@@ -103,7 +105,8 @@ final GoRouter _router = GoRouter(
       builder: (context, state) {
         final email = state.uri.queryParameters['email'] ?? '';
         final code = state.uri.queryParameters['code'] ?? '';
-        return VerificationScreen(email: email, initialCode: code.isNotEmpty ? code : null);
+        return VerificationScreen(
+            email: email, initialCode: code.isNotEmpty ? code : null);
       },
     ),
     GoRoute(
@@ -203,6 +206,7 @@ final GoRouter _router = GoRouter(
       builder: (context, state) => const AdminOfferListScreen(),
     ),
     // Γ£à Add this new route
+    // Γ£à Add this new route
     GoRoute(
       path: '/hr-dashboard',
       builder: (context, state) {
@@ -217,6 +221,7 @@ final GoRouter _router = GoRouter(
         return ProfilePage(token: token);
       },
     ),
+    // ΓÜí OAuth callback screen reads tokens directly from URL
     // ΓÜí OAuth callback screen reads tokens directly from URL
     GoRoute(
       path: '/oauth-callback',
