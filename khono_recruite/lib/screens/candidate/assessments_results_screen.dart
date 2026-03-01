@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
+import '../../utils/api_endpoints.dart';
 
 class AssessmentResultsPage extends StatefulWidget {
   final int? applicationId;
@@ -42,7 +43,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
     setState(() => loading = true);
     try {
       final res = await http.get(
-        Uri.parse('http://127.0.0.1:5000/api/candidate/applications'),
+        Uri.parse(ApiEndpoints.getApplications),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token'

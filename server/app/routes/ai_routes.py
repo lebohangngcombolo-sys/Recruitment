@@ -76,9 +76,14 @@ def generate_job_details():
             "job_details": result
         }), 200
     except RuntimeError as e:
-        if "OPENROUTER_API_KEY" in str(e) or "not set" in str(e).lower():
+        err_msg = str(e)
+        if "All AI services failed" in err_msg:
+            return jsonify({
+                "error": "AI service temporarily unavailable. Check API keys and quotas (Gemini, OpenRouter, DeepSeek). Try again later.",
+            }), 503
+        if "OPENROUTER_API_KEY" in err_msg or "not set" in err_msg.lower():
             return jsonify({"error": "AI not configured (OPENROUTER_API_KEY not set)"}), 503
-        return jsonify({"error": str(e)}), 502
+        return jsonify({"error": err_msg}), 502
     except Exception as e:
         logger.exception("Job details generation error")
         return jsonify({"error": "AI job generation failed", "details": str(e)}), 502
@@ -208,7 +213,7 @@ def generate_questions():
     except RuntimeError as e:
         logger.warning("generate_questions AI failed: %s", e)
         return jsonify({
-            "error": "AI service temporarily unavailable. Try again later or check API configuration.",
+            "error": "AI service temporarily unavailable. Check API keys and quotas (Gemini, OpenRouter, DeepSeek). Try again later.",
         }), 503
     except Exception as e:
         logger.exception("generate_questions failed")
