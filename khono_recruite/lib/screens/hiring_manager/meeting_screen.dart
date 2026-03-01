@@ -76,6 +76,7 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
       });
       if (kDebugMode) debugPrint("Displayed meetings count: ${_meetings.length}");
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
@@ -84,6 +85,7 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
         ),
       );
     } finally {
+      if (!mounted) return;
       setState(() => _isLoading = false);
     }
   }
@@ -241,17 +243,24 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
     final isPast = meeting.endTime.isBefore(DateTime.now());
     final isCancelled = meeting.cancelled;
 
+    final dateText =
+        DateFormat('MMM dd, yyyy – hh:mm a').format(meeting.startTime);
+    final organizerLabel = meeting.organizerName.isNotEmpty
+        ? ' • Organizer: ${meeting.organizerName}'
+        : '';
+
     return Card(
       color: themeProvider.isDarkMode ? const Color(0xFF1E1E2C) : Colors.white,
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: ListTile(
-        title: Text(meeting.title,
-            style: GoogleFonts.inter(
-              fontWeight: FontWeight.bold,
-              decoration: isCancelled ? TextDecoration.lineThrough : null,
-            )),
-        subtitle: Text(
-            '${DateFormat('MMM dd, yyyy – hh:mm a').format(meeting.startTime)}'),
+        title: Text(
+          meeting.title,
+          style: GoogleFonts.inter(
+            fontWeight: FontWeight.bold,
+            decoration: isCancelled ? TextDecoration.lineThrough : null,
+          ),
+        ),
+        subtitle: Text('$dateText$organizerLabel'),
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -475,11 +484,13 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                   }
                   Navigator.pop(context);
                   await _loadMeetings();
+                  if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text(meeting == null
                           ? 'Meeting created successfully'
                           : 'Meeting updated successfully')));
                 } catch (e) {
+                  if (!mounted) return;
                   String errorMessage = 'Failed to create meeting';
                   // Extract error message from exception
                   final errorStr = e.toString();
@@ -509,9 +520,11 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
     try {
       await _apiService.cancelMeeting(meeting.id);
       await _loadMeetings();
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Meeting cancelled')));
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Error: $e')));
     }
@@ -521,9 +534,11 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
     try {
       await _apiService.deleteMeeting(meeting.id);
       await _loadMeetings();
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Meeting deleted')));
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text('Error: $e')));
     }
@@ -538,6 +553,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (meeting.organizerName.isNotEmpty)
+                    Text('Organizer: ${meeting.organizerName}'),
                   Text('Description: ${meeting.description}'),
                   Text('Location: ${meeting.location}'),
                   Text('Start: ${meeting.startTime}'),
@@ -565,6 +582,7 @@ class Meeting {
   final String meetingLink;
   final String location;
   final bool cancelled;
+  final String organizerName;
 
   Meeting({
     required this.id,
@@ -576,10 +594,25 @@ class Meeting {
     required this.meetingLink,
     required this.location,
     required this.cancelled,
+    required this.organizerName,
   });
 
   factory Meeting.fromJson(Map<String, dynamic> json) {
     try {
+      String organizerName = '';
+      final organizer = json['organizer'];
+      if (organizer is Map<String, dynamic>) {
+        final profile = organizer['profile'] as Map<String, dynamic>? ?? {};
+        final fullName =
+            (profile['full_name'] ?? profile['name'])?.toString().trim();
+        final email = (organizer['email'] ?? '').toString().trim();
+        if (fullName != null && fullName.isNotEmpty) {
+          organizerName = fullName;
+        } else if (email.isNotEmpty) {
+          organizerName = email;
+        }
+      }
+
       return Meeting(
         id: json['id'] ?? 0,
         title: json['title'] ?? 'Untitled',
@@ -593,6 +626,7 @@ class Meeting {
         meetingLink: json['meeting_link']?.toString() ?? '',
         location: json['location']?.toString() ?? '',
         cancelled: json['cancelled'] ?? false,
+        organizerName: organizerName,
       );
     } catch (e) {
       if (kDebugMode) {

@@ -9,8 +9,9 @@ import '../hiring_manager/draft_offer_screen.dart';
 
 class AdminOfferListScreen extends StatefulWidget {
   final String? initialStatus;
+  final String? token;
 
-  const AdminOfferListScreen({super.key, this.initialStatus});
+  const AdminOfferListScreen({super.key, this.initialStatus, this.token});
 
   @override
   _AdminOfferListScreenState createState() => _AdminOfferListScreenState();

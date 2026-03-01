@@ -7,6 +7,8 @@ import time
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 
+from app.services.cv_analysis_utils import truncate_for_cv_prompt
+
 
 # ----------------------------
 # Environment & Logging Setup
@@ -15,9 +17,10 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Gemini AI (Google Generative AI)
+# Gemini AI (Google Generative AI). Use GEMINI_MODEL for model id (e.g. gemini-2.0-flash, gemini-1.5-flash).
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
 # OpenRouter
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
@@ -29,6 +32,19 @@ DEFAULT_MODEL = os.environ.get("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 # DeepSeek
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
+
+# Cap max_tokens for providers with tight credit limits (e.g. OpenRouter free tier)
+AI_MAX_OUTPUT_TOKENS = int(os.environ.get("AI_MAX_OUTPUT_TOKENS", "800"))
+# Safe fallback limit to avoid hitting free-tier caps
+AI_SAFE_OUTPUT_TOKENS = int(os.environ.get("AI_SAFE_OUTPUT_TOKENS", "600"))
+
+# Provider-specific overrides (fall back to safe limit if unset)
+OPENROUTER_MAX_OUTPUT_TOKENS = int(
+    os.environ.get("OPENROUTER_MAX_OUTPUT_TOKENS", str(AI_SAFE_OUTPUT_TOKENS))
+)
+DEEPSEEK_MAX_OUTPUT_TOKENS = int(
+    os.environ.get("DEEPSEEK_MAX_OUTPUT_TOKENS", str(AI_SAFE_OUTPUT_TOKENS))
+)
 
 
 class AIService:
@@ -120,6 +136,7 @@ class AIService:
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         }
 
+        capped_tokens = min(max_output_tokens, OPENROUTER_MAX_OUTPUT_TOKENS, AI_MAX_OUTPUT_TOKENS)
         payload = {
             "model": DEFAULT_MODEL,
             "messages": [
@@ -127,7 +144,7 @@ class AIService:
                 {"role": "user", "content": prompt},
             ],
             "temperature": temperature,
-            "max_tokens": max_output_tokens,
+            "max_tokens": capped_tokens,
         }
 
         for attempt in range(1, self.retries + 1):
@@ -175,6 +192,7 @@ class AIService:
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
         }
 
+        capped_tokens = min(max_output_tokens, DEEPSEEK_MAX_OUTPUT_TOKENS, AI_MAX_OUTPUT_TOKENS)
         payload = {
             "model": "deepseek-chat",
             "messages": [
@@ -182,7 +200,7 @@ class AIService:
                 {"role": "user", "content": prompt},
             ],
             "temperature": temperature,
-            "max_tokens": max_output_tokens,
+            "max_tokens": capped_tokens,
         }
 
         for attempt in range(1, self.retries + 1):
@@ -248,6 +266,10 @@ class AIService:
                 logger.warning(f"DeepSeek failed: {e}")
         
         raise RuntimeError("All AI services failed")
+
+    def _call_ai(self, prompt: str, temperature: float = 0.7, max_output_tokens: int = 512) -> str:
+        """Alias for _call_generation for backward compatibility (e.g. Celery worker cache)."""
+        return self._call_generation(prompt, temperature, max_output_tokens)
 
     def generate_job_details(self, job_title: str) -> Dict[str, Any]:
         """Generate comprehensive job details using AI hierarchy: Gemini -> OpenRouter -> DeepSeek"""
@@ -403,26 +425,28 @@ class AIService:
     def analyze_cv_vs_job(
         self, cv_text: str, job_description: str, want_json: bool = True
     ) -> Dict[str, Any]:
+        cv_text, job_description = truncate_for_cv_prompt(cv_text or "", job_description or "")
         prompt = f"""
-You are a hiring assistant specializing in parsing resumes and comparing them to job descriptions.
-Please analyze the candidate CV below and the job description below.
+You are a hiring assistant specializing in parsing resumes and comparing them to job requirements.
+Analyze the candidate CV against the full JOB SPEC below. The job spec may include: Role, Description, Responsibilities, Qualifications, Required skills, Minimum experience, and Category. Consider all sections when scoring.
 
-JOB DESCRIPTION:
+JOB SPEC (description, responsibilities, qualifications, required skills, minimum experience):
 \"\"\"{job_description}\"\"\"
 
 CANDIDATE CV:
 \"\"\"{cv_text}\"\"\"
 
 Task:
-1) Compare candidate qualifications with the job description. Produce:
- - a numeric match_score (0-100).
- - a list "missing_skills".
- - a list "suggestions".
- - a list "interview_questions".
+1) Compare the candidate against the job spec. Consider skills match, qualifications, experience level, and relevance of responsibilities.
+2) Produce:
+   - a numeric match_score (0-100).
+   - a list "missing_skills" (skills/qualifications from the job spec that are not clearly present in the CV).
+   - a list "suggestions" (concrete improvements for the candidate).
+   - a list "interview_questions" (2-4 questions to explore fit).
 
 Return the response strictly as JSON.
 """
-        out = self._call_ai(prompt, temperature=0.0, max_output_tokens=700)
+        out = self._call_generation(prompt, temperature=0.0, max_output_tokens=700)
 
         # Try to parse JSON safely
 
@@ -528,3 +552,40 @@ Return only valid JSON.
         if not isinstance(questions, list):
             questions = []
         return questions
+
+    def structure_cv_experience(
+        self, raw_experience_text: str, position_hint: str = "", companies_hint: Optional[list] = None
+    ) -> list:
+        """
+        Use AI to turn raw CV experience text into a structured list of work_experience entries
+        so they can be stored correctly in Candidate.work_experience.
+        Returns list of dicts with keys: title, company, duration, description.
+        """
+        raw = (raw_experience_text or "").strip()
+        if not raw and not position_hint:
+            return []
+        companies = companies_hint or []
+        prompt = f"""Convert the following CV experience information into a structured JSON list.
+Raw experience text:
+\"\"\"{raw[:3000]}\"\"\"
+Current job title (if known): {position_hint or "unknown"}
+Companies mentioned: {companies[:10] if companies else "none"}
+
+Return a JSON object with a single key "work_experience" whose value is an array of job entries.
+Each entry must have: "title" (job title), "company" (employer name), "duration" (e.g. "2020 - Present" or "2 years"), "description" (optional, brief summary).
+Extract each distinct role into its own object. If only one block of text is given, produce one or more entries from it.
+Return only valid JSON, no markdown.
+Example: {{ "work_experience": [ {{ "title": "Software Engineer", "company": "Acme Inc", "duration": "2021-Present", "description": "..." }} ] }}
+"""
+        try:
+            out = self._call_generation(prompt, temperature=0.2, max_output_tokens=min(1024, AI_MAX_OUTPUT_TOKENS))
+            match = re.search(r"(\{.*\})", out, flags=re.DOTALL)
+            json_text = match.group(1) if match else out
+            parsed = json.loads(json_text)
+            work = parsed.get("work_experience")
+            if isinstance(work, list):
+                return work[:30]
+            return []
+        except Exception as e:
+            logger.warning("AI structure_cv_experience failed: %s", e)
+            return []

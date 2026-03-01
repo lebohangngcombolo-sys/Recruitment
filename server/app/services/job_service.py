@@ -1,4 +1,4 @@
-﻿"""
+"""
 Job Service Layer for business logic
 """
 from datetime import datetime
@@ -516,6 +516,48 @@ class JobService:
             # Note: We don't commit here - it will be committed with the main transaction
         except Exception as e:
             current_app.logger.error(f"Failed to log activity: {e}")
+
+    @staticmethod
+    def build_job_spec_for_cv(requisition: Requisition) -> str:
+        """
+        Build a single job spec string from all relevant job fields for CV comparison.
+        Used by CV analyser so manual and AI-generated job details are assessed consistently.
+        """
+        if not requisition:
+            return ""
+        parts = []
+        if requisition.title:
+            parts.append(f"Role: {requisition.title}")
+        if requisition.description:
+            parts.append(f"Description: {requisition.description}")
+        if requisition.responsibilities:
+            r = requisition.responsibilities
+            items = r if isinstance(r, list) else []
+            if items:
+                parts.append("Responsibilities: " + " | ".join(str(x) for x in items))
+        if requisition.qualifications:
+            q = requisition.qualifications
+            items = q if isinstance(q, list) else []
+            if items:
+                parts.append("Qualifications: " + " | ".join(str(x) for x in items))
+        if requisition.required_skills:
+            s = requisition.required_skills
+            items = s if isinstance(s, list) else []
+            if items:
+                parts.append("Required skills: " + ", ".join(str(x) for x in items))
+        min_exp = requisition.min_experience
+        if min_exp is not None and (isinstance(min_exp, (int, float)) and float(min_exp) > 0):
+            parts.append(f"Minimum experience: {float(min_exp)} years")
+        if requisition.category:
+            parts.append(f"Category: {requisition.category}")
+        if requisition.job_summary:
+            parts.append(f"Summary: {requisition.job_summary}")
+        if requisition.company_details:
+            parts.append(f"Company: {requisition.company_details}")
+        if parts:
+            return "\n\n".join(parts)
+        # Ensure non-empty so offline CV analyser has text to match
+        return requisition.description or (requisition.title or "Job application")
 
     @staticmethod
     def evaluate_knockout_rules(job: Requisition, candidate: Candidate) -> List[Dict]:

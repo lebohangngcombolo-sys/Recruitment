@@ -19,7 +19,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
   final AdminService admin = AdminService();
   List<Map<String, dynamic>> candidates = [];
   bool loading = true;
-  String? errorMessage;
+  String? statusMessage;
 
   @override
   void initState() {
@@ -30,44 +30,71 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
   Future<void> fetchShortlist() async {
     setState(() {
       loading = true;
-      errorMessage = null;
+      statusMessage = null;
     });
 
-    try {
-      final List<Map<String, dynamic>> fetched;
+    if (widget.jobId <= 0) {
+      final message = "Select a job to view its applicants.";
+      if (!mounted) return;
+      setState(() {
+        candidates = [];
+        statusMessage = message;
+        loading = false;
+      });
+      return;
+    }
 
-      // Always fetch all candidates instead of shortlisted ones to avoid API error
-      final data = await admin.getCandidatesWithDetails(
+    try {
+      final rawApplications = await admin.getJobApplications(
+        widget.jobId,
         page: 1,
         perPage: 100,
-        search: null,
-        status: null,
       );
-
-      // Extract candidates from response with better error handling
-      if (data['candidates'] != null && data['candidates'] is List) {
-        fetched = (data['candidates'] as List).cast<Map<String, dynamic>>();
-      } else if (data is List) {
-        // Handle case where API returns just a list
-        fetched = (data as List).cast<Map<String, dynamic>>();
-      } else {
-        // Handle empty or malformed response
-        fetched = [];
-        debugPrint("Unexpected candidate data format: ${data.runtimeType}");
-      }
+      final fetched = (rawApplications).map<Map<String, dynamic>>((dynamic app) {
+        final map = Map<String, dynamic>.from(app as Map);
+        final candidateData = (map['candidate'] is Map)
+            ? Map<String, dynamic>.from(map['candidate'] as Map)
+            : {};
+        return {
+          'application_id': map['application_id'] ?? map['id'],
+          'candidate_id': candidateData['id'] ?? map['candidate_id'],
+          'full_name': candidateData['full_name'] ??
+              candidateData['name'] ??
+              map['full_name'],
+          'email': candidateData['email'],
+          'phone': candidateData['phone'],
+          'status': map['status'],
+          'cv_score': map['cv_score'] ?? map['overall_score'] ?? 0,
+          'assessment_score': map['assessment_score'] ?? 0,
+          'overall_score': map['overall_score'] ??
+              (map['scoring_breakdown']?['overall'] ?? 0),
+          'job_title': map['job_title'],
+          'cv_parser_result': map['cv_parser_result'] ?? {},
+          'candidate': candidateData,
+        };
+      }).toList();
 
       fetched.sort((a, b) {
-        final aScore = a['overall_score'] ?? 0;
-        final bScore = b['overall_score'] ?? 0;
+        final aScore = (a['overall_score'] ?? 0).toDouble();
+        final bScore = (b['overall_score'] ?? 0).toDouble();
         return bScore.compareTo(aScore);
       });
 
-      setState(() => candidates = fetched);
+      if (!mounted) return;
+      setState(() {
+        candidates = fetched;
+        statusMessage =
+            fetched.isEmpty ? "No candidates have applied to this job yet." : null;
+      });
     } catch (e) {
       debugPrint("Error fetching candidates: $e");
-      setState(() => errorMessage = "Failed to load candidates: $e");
-      // Don't show a snackbar here to avoid multiple error messages
+      if (!mounted) return;
+      setState(() {
+        candidates = [];
+        statusMessage = "Failed to load candidates: $e";
+      });
     } finally {
+      if (!mounted) return;
       setState(() => loading = false);
     }
   }
@@ -164,19 +191,23 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                         ? Colors.grey.shade800
                         : Colors.grey),
 
-                // Loading / Error / Candidate List
+                // Loading / Status / Candidate List
                 Expanded(
                   child: loading
                       ? const Center(
                           child: CircularProgressIndicator(
                               color: Colors.redAccent),
                         )
-                      : errorMessage != null
+                      : statusMessage != null
                           ? Center(
                               child: Text(
-                                errorMessage!,
+                                statusMessage!,
+                                textAlign: TextAlign.center,
                                 style: TextStyle(
-                                    color: Colors.redAccent, fontSize: 16),
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade300
+                                        : Colors.black54,
+                                    fontSize: 16),
                               ),
                             )
                           : candidates.isEmpty
@@ -199,7 +230,11 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                     itemBuilder: (_, index) {
                                       final c = candidates[index];
                                       final overallScore =
-                                          c['overall_score']?.toDouble() ?? 0.0;
+                                          (c['overall_score']?.toDouble() ?? 0.0);
+                                      final cvScore =
+                                          (c['cv_score'] ?? 0).toDouble();
+                                      final assessmentScore =
+                                          (c['assessment_score'] ?? 0).toDouble();
 
                                       return GestureDetector(
                                         onTap: () => openCandidateDetails(c),
@@ -251,7 +286,6 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                                   children: [
                                                     Text(
                                                       c['full_name'] ??
-                                                          c['name'] ??
                                                           'Unnamed Candidate',
                                                       style: TextStyle(
                                                           fontWeight:
@@ -264,8 +298,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                                     ),
                                                     const SizedBox(height: 4),
                                                     Text(
-                                                      "CV: ${c['cv_score'] ?? 'N/A'} | "
-                                                      "Assessment: ${c['assessment_score'] ?? 'N/A'} | "
+                                                      "CV: ${cvScore.toStringAsFixed(0)} | "
+                                                      "Assessment: ${assessmentScore.toStringAsFixed(0)} | "
                                                       "Overall: ${overallScore.toStringAsFixed(1)}",
                                                       style: TextStyle(
                                                           fontSize: 14,
@@ -307,7 +341,9 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                                       BorderRadius.circular(20),
                                                 ),
                                                 child: Text(
-                                                  c['status'] ?? "Pending",
+                                                  (c['status'] ?? "Pending")
+                                                      .toString()
+                                                      .toUpperCase(),
                                                   style: TextStyle(
                                                     color:
                                                         c['status'] == "hired"

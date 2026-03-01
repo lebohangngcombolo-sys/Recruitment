@@ -505,7 +505,6 @@ class _JobManagementState extends State<JobManagement> {
               .map((item) => Padding(
                     padding: const EdgeInsets.only(left: 8, bottom: 2),
                     child: Text("ΓÇó $item"),
-                    child: Text("ΓÇó $item"),
                   ))
               .toList(),
         ],
@@ -1382,7 +1381,7 @@ class _JobFormDialogState extends State<JobFormDialog>
   late String description;
   late String company;
   late String location;
-  late String deadlineStr;
+  final applicationDeadlineController = TextEditingController();
   String jobSummary = "";
   TextEditingController responsibilitiesController = TextEditingController();
   TextEditingController qualificationsController = TextEditingController();
@@ -1396,6 +1395,7 @@ class _JobFormDialogState extends State<JobFormDialog>
   final minExpController = TextEditingController();
   final salaryMinController = TextEditingController();
   final salaryMaxController = TextEditingController();
+  final vacancyController = TextEditingController();
   String salaryCurrency = "ZAR";
   String salaryPeriod = "monthly";
   List<Map<String, dynamic>> questions = [];
@@ -1440,6 +1440,13 @@ class _JobFormDialogState extends State<JobFormDialog>
     salaryPeriod = widget.job?['salary_period'] ?? 'monthly';
     category = widget.job?['category'] ?? '';
     employmentType = widget.job?['employment_type'] ?? 'full_time';
+    vacancyController.text = (widget.job?['vacancy'] ?? 1).toString();
+    final rawDeadline = widget.job?['application_deadline'];
+    if (rawDeadline != null && rawDeadline.toString().trim().isNotEmpty) {
+      final s = rawDeadline.toString();
+      applicationDeadlineController.text =
+          s.length >= 10 ? s.substring(0, 10) : s;
+    }
 
     final jobWeightings = widget.job?['weightings'];
     if (jobWeightings is Map) {
@@ -1618,6 +1625,8 @@ class _JobFormDialogState extends State<JobFormDialog>
     minExpController.dispose();
     salaryMinController.dispose();
     salaryMaxController.dispose();
+    vacancyController.dispose();
+    applicationDeadlineController.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -1648,6 +1657,84 @@ class _JobFormDialogState extends State<JobFormDialog>
         );
       },
     );
+  }
+
+  Future<void> _generateJobDetailsWithAI() async {
+    final jobTitle = title.trim();
+    if (jobTitle.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Enter a job title first, then tap Generate.')),
+      );
+      return;
+    }
+    try {
+      final result = await AIService.generateJobDetails(jobTitle);
+      if (!mounted) return;
+      final details = result['job_details'] ?? result;
+      if (details is! Map<String, dynamic>) return;
+      setState(() {
+        description = details['description']?.toString() ?? description;
+        final resp = details['responsibilities'];
+        if (resp is List) {
+          responsibilitiesController.text =
+              resp.map((e) => e?.toString() ?? '').join(', ');
+        }
+        final qual = details['qualifications'];
+        if (qual is List) {
+          qualificationsController.text =
+              qual.map((e) => e?.toString() ?? '').join(', ');
+        }
+        companyDetails =
+            details['company_details']?.toString() ?? companyDetails;
+        category = details['category']?.toString() ?? category;
+        final skills = details['required_skills'];
+        if (skills is List) {
+          skillsController.text =
+              skills.map((e) => e?.toString() ?? '').join(', ');
+        }
+        final minExp = details['min_experience'];
+        if (minExp != null) {
+          minExpController.text =
+              minExp is num ? minExp.toString() : minExp.toString();
+        }
+        final smin = details['salary_min'];
+        if (smin != null) {
+          salaryMinController.text =
+              smin is num ? smin.toString() : smin.toString();
+        }
+        final smax = details['salary_max'];
+        if (smax != null) {
+          salaryMaxController.text =
+              smax is num ? smax.toString() : smax.toString();
+        }
+        final ew = details['evaluation_weightings'] ?? details['weightings'];
+        if (ew is Map) {
+          weightings = {
+            'cv': (ew['cv'] is num) ? (ew['cv'] as num).toInt() : 60,
+            'assessment': (ew['assessment'] is num)
+                ? (ew['assessment'] as num).toInt()
+                : 40,
+            'interview':
+                (ew['interview'] is num) ? (ew['interview'] as num).toInt() : 0,
+            'references': (ew['references'] is num)
+                ? (ew['references'] as num).toInt()
+                : 0,
+          };
+        }
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content:
+                Text('Job details filled from AI. Review and edit as needed.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Generate failed: $e')),
+      );
+    }
   }
 
   Future<void> _saveAsTestPack() async {
@@ -1796,18 +1883,24 @@ class _JobFormDialogState extends State<JobFormDialog>
       'category': category,
       'required_skills': skills,
       'min_experience': double.tryParse(minExpController.text) ?? 0,
+      'vacancy': (int.tryParse(vacancyController.text) ?? 1).clamp(1, 999),
+      if (applicationDeadlineController.text.trim().isNotEmpty)
+        'application_deadline': applicationDeadlineController.text.trim(),
       'weightings': weightings,
       'knockout_rules': knockoutRules,
-      'assessment_pack': {
-        'questions': normalizedQuestions.map((q) {
-          return {
-            "question": q["question"],
-            "options": q["options"],
-            "correct_answer": q["answer"],
-            "weight": q["weight"] ?? 1
-          };
-        }).toList()
-      },
+      if (_useTestPack && _testPackId != null) 'test_pack_id': _testPackId,
+      'assessment_pack': _useTestPack && _testPackId != null
+          ? {'questions': <Map<String, dynamic>>[]}
+          : {
+              'questions': normalizedQuestions.map((q) {
+                return {
+                  "question": q["question"],
+                  "options": q["options"],
+                  "correct_answer": q["answer"],
+                  "weight": q["weight"] ?? 1
+                };
+              }).toList()
+            },
     };
 
     try {
@@ -1829,8 +1922,6 @@ class _JobFormDialogState extends State<JobFormDialog>
       widget.onSaved();
       Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error saving job: $e")));
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error saving job: $e")));
     }
@@ -1879,20 +1970,28 @@ class _JobFormDialogState extends State<JobFormDialog>
                       child: SingleChildScrollView(
                         child: Column(
                           children: [
-                            CustomTextField(
-                              label: "Title",
-                              initialValue: title,
-                              hintText: "Enter job title",
-                              onChanged: (v) => title = v,
-                              validator: (v) =>
-                                  v == null || v.isEmpty ? "Enter title" : null,
-                            CustomTextField(
-                              label: "Title",
-                              initialValue: title,
-                              hintText: "Enter job title",
-                              onChanged: (v) => title = v,
-                              validator: (v) =>
-                                  v == null || v.isEmpty ? "Enter title" : null,
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: CustomTextField(
+                                    label: "Title",
+                                    initialValue: title,
+                                    hintText: "Enter job title",
+                                    onChanged: (v) => title = v,
+                                    validator: (v) => v == null || v.isEmpty
+                                        ? "Enter title"
+                                        : null,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton.filled(
+                                  onPressed: _generateJobDetailsWithAI,
+                                  icon: const Icon(Icons.auto_awesome),
+                                  tooltip:
+                                      "Generate job details from title (AI)",
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
@@ -1916,14 +2015,6 @@ class _JobFormDialogState extends State<JobFormDialog>
                             const SizedBox(height: 16),
                             CustomTextField(
                               label: "Job Summary",
-                              initialValue: jobSummary,
-                              hintText: "Brief job summary",
-                              maxLines: 3,
-                              onChanged: (v) => jobSummary = v,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Responsibilities",
                               controller: responsibilitiesController,
                               hintText: "Comma separated list",
                             ),
@@ -2010,6 +2101,19 @@ class _JobFormDialogState extends State<JobFormDialog>
                               initialValue: category,
                               hintText: "Engineering, Marketing...",
                               onChanged: (v) => category = v,
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Vacancy (number of positions)",
+                              controller: vacancyController,
+                              inputType: TextInputType.number,
+                              hintText: "e.g. 1",
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Application deadline (YYYY-MM-DD)",
+                              controller: applicationDeadlineController,
+                              hintText: "e.g. 2025-12-31",
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(

@@ -669,7 +669,13 @@ class AdminService {
       body: json.encode(data),
     );
     if (res.statusCode == 201) return json.decode(res.body);
-    throw Exception('Failed to create note: ${res.body}');
+
+    Map<String, dynamic> body = {};
+    try {
+      if (res.body.isNotEmpty) body = json.decode(res.body);
+    } catch (_) {}
+    final error = body['error'] ?? 'Failed to create note';
+    throw Exception('$error (status ${res.statusCode})');
   }
 
   Future<Map<String, dynamic>> getNotes({
@@ -695,7 +701,13 @@ class AdminService {
       headers: {...headers, 'Authorization': 'Bearer $token'},
     );
     if (res.statusCode == 200) return json.decode(res.body);
-    throw Exception('Failed to fetch notes: ${res.body}');
+
+    Map<String, dynamic> body = {};
+    try {
+      if (res.body.isNotEmpty) body = json.decode(res.body);
+    } catch (_) {}
+    final error = body['error'] ?? 'Failed to fetch notes';
+    throw Exception('$error (status ${res.statusCode})');
   }
 
   Future<Map<String, dynamic>> getNoteById(int noteId) async {
@@ -705,7 +717,13 @@ class AdminService {
       headers: {...headers, 'Authorization': 'Bearer $token'},
     );
     if (res.statusCode == 200) return json.decode(res.body);
-    throw Exception('Failed to fetch note: ${res.body}');
+
+    Map<String, dynamic> body = {};
+    try {
+      if (res.body.isNotEmpty) body = json.decode(res.body);
+    } catch (_) {}
+    final error = body['error'] ?? 'Failed to fetch note';
+    throw Exception('$error (status ${res.statusCode})');
   }
 
   Future<Map<String, dynamic>> updateNote(
@@ -717,7 +735,13 @@ class AdminService {
       body: json.encode(data),
     );
     if (res.statusCode == 200) return json.decode(res.body);
-    throw Exception('Failed to update note: ${res.body}');
+
+    Map<String, dynamic> body = {};
+    try {
+      if (res.body.isNotEmpty) body = json.decode(res.body);
+    } catch (_) {}
+    final error = body['error'] ?? 'Failed to update note';
+    throw Exception('$error (status ${res.statusCode})');
   }
 
   Future<void> deleteNote(int noteId) async {
@@ -727,7 +751,12 @@ class AdminService {
       headers: {...headers, 'Authorization': 'Bearer $token'},
     );
     if (res.statusCode != 200) {
-      throw Exception('Failed to delete note: ${res.body}');
+      Map<String, dynamic> body = {};
+      try {
+        if (res.body.isNotEmpty) body = json.decode(res.body);
+      } catch (_) {}
+      final error = body['error'] ?? 'Failed to delete note';
+      throw Exception('$error (status ${res.statusCode})');
     }
   }
 
@@ -835,17 +864,24 @@ class AdminService {
     }
   }
 
-  Future<Map<String, dynamic>> getUpcomingMeetings({int limit = 5}) async {
+  Future<Map<String, dynamic>> getUpcomingMeetings({
+    int limit = 50,
+    String? startDate,
+    String? endDate,
+  }) async {
     final token = await AuthService.getAccessToken();
+    final params = <String, String>{'limit': limit.toString()};
+    if (startDate != null) params['start_date'] = startDate;
+    if (endDate != null) params['end_date'] = endDate;
     final uri = Uri.parse(ApiEndpoints.getUpcomingMeetings).replace(
-      queryParameters: {'limit': limit.toString()},
+      queryParameters: params,
     );
     final res = await http.get(
       uri,
       headers: {...headers, 'Authorization': 'Bearer $token'},
     );
     final body = _handleResponse(res);
-    return {"meetings": body["data"] ?? []};
+    return {"meetings": body["meetings"] ?? body["data"] ?? []};
   }
 
 // ---------- PRIVATE HELPER ----------
@@ -1814,7 +1850,7 @@ class AdminService {
     throw Exception('Failed to fetch today\'s interviews: ${res.body}');
   }
 
-  /// Get upcoming interviews
+  /// Get upcoming interviews (from dashboard timeframe endpoint)
   Future<List<Map<String, dynamic>>> getUpcomingInterviews() async {
     final token = await AuthService.getAccessToken();
     final res = await http.get(
@@ -1823,10 +1859,38 @@ class AdminService {
     );
 
     if (res.statusCode == 200) {
-      return List<Map<String, dynamic>>.from(json.decode(res.body));
+      final decoded = json.decode(res.body);
+      if (decoded is Map && decoded['interviews'] != null) {
+        return List<Map<String, dynamic>>.from(decoded['interviews']);
+      }
+      if (decoded is List) {
+        return List<Map<String, dynamic>>.from(decoded);
+      }
+      return [];
     }
 
     throw Exception('Failed to fetch upcoming interviews: ${res.body}');
+  }
+
+  /// Get interviews in date range for calendar (start/end as YYYY-MM-DD)
+  Future<List<Map<String, dynamic>>> getInterviewsForCalendar({
+    required String startDate,
+    required String endDate,
+  }) async {
+    final token = await AuthService.getAccessToken();
+    final uri = Uri.parse(ApiEndpoints.getInterviewsForCalendar).replace(
+      queryParameters: {'start_date': startDate, 'end_date': endDate},
+    );
+    final res = await http.get(
+      uri,
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+    if (res.statusCode != 200) {
+      throw Exception('Failed to fetch calendar interviews: ${res.body}');
+    }
+    final decoded = json.decode(res.body);
+    final list = decoded is Map ? decoded['interviews'] : decoded;
+    return list != null ? List<Map<String, dynamic>>.from(list) : [];
   }
 
   /// Get past interviews

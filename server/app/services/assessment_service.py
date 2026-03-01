@@ -19,6 +19,39 @@ def get_questions_for_requisition(requisition):
 class AssessmentService:
 
     @staticmethod
+    def recompute_application_scores(application):
+        """
+        Recompute and assign overall_score + scoring_breakdown from current application fields.
+        This is used when cv_score/assessment_score/interview_score change asynchronously.
+        """
+        weightings = (application.requisition.weightings if application.requisition else None) or {
+            "cv": 60,
+            "assessment": 40,
+            "interview": 0,
+            "references": 0
+        }
+        cv_score = application.cv_score or 0
+        assessment_score = application.assessment_score or 0
+        interview_score = application.interview_feedback_score or 0
+        references_score = 0
+        overall_score = (
+            (cv_score * weightings.get("cv", 0) / 100) +
+            (assessment_score * weightings.get("assessment", 0) / 100) +
+            (interview_score * weightings.get("interview", 0) / 100) +
+            (references_score * weightings.get("references", 0) / 100)
+        )
+        application.overall_score = overall_score
+        application.scoring_breakdown = {
+            "cv": cv_score,
+            "assessment": assessment_score,
+            "interview": interview_score,
+            "references": references_score,
+            "weightings": weightings,
+            "overall": overall_score
+        }
+        return overall_score, application.scoring_breakdown
+
+    @staticmethod
     def create_assessment(requisition_id, questions):
         """
         Add or update MCQ assessment for a requisition/job (inline questions only).
@@ -100,30 +133,7 @@ class AssessmentService:
         # also update the application for shortlisting
         application.assessment_score = percentage_score
 
-        weightings = (application.requisition.weightings if application.requisition else None) or {
-            "cv": 60,
-            "assessment": 40,
-            "interview": 0,
-            "references": 0
-        }
-        cv_score = application.cv_score or 0
-        interview_score = application.interview_feedback_score or 0
-        references_score = 0
-        overall_score = (
-            (cv_score * weightings.get("cv", 0) / 100) +
-            (percentage_score * weightings.get("assessment", 0) / 100) +
-            (interview_score * weightings.get("interview", 0) / 100) +
-            (references_score * weightings.get("references", 0) / 100)
-        )
-        application.overall_score = overall_score
-        application.scoring_breakdown = {
-            "cv": cv_score,
-            "assessment": percentage_score,
-            "interview": interview_score,
-            "references": references_score,
-            "weightings": weightings,
-            "overall": overall_score
-        }
+        AssessmentService.recompute_application_scores(application)
         db.session.commit()
 
         # return clean dict instead of ORM object
@@ -153,8 +163,9 @@ class AssessmentService:
                 "interview": 0,
                 "references": 0
             }
+            cv_score = app.cv_score if app.cv_score is not None else (app.candidate.cv_score or 0)
             overall = (
-                (app.candidate.cv_score * weightings.get("cv", 0) / 100) +
+                (cv_score * weightings.get("cv", 0) / 100) +
                 (app.assessment_score * weightings.get("assessment", 0) / 100) +
                 (app.interview_feedback_score * weightings.get("interview", 0) / 100)
             )

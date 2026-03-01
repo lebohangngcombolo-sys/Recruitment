@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -117,32 +116,10 @@ class _RegisterScreenState extends State<RegisterScreen>
     setState(() => loading = false);
 
     final status = result['status'] as int? ?? 0;
-    final body = result['body'] is Map<String, dynamic> ? result['body'] as Map<String, dynamic> : <String, dynamic>{};
-    final status = result['status'] as int? ?? 0;
-    final body = result['body'] is Map<String, dynamic> ? result['body'] as Map<String, dynamic> : <String, dynamic>{};
+    final body = result['body'] is Map<String, dynamic>
+        ? result['body'] as Map<String, dynamic>
+        : <String, dynamic>{};
 
-    if (status != 201 && status != 200) {
-      final errors = body['errors'];
-      final errorMsg = body['error'];
-      String errorMessage;
-      if (status == 409) {
-        errorMessage = 'An account with this email already exists. Please log in or use a different email.';
-      } else {
-        errorMessage = errors is List
-            ? (errors.isNotEmpty ? errors.join('\n') : (errorMsg is String ? errorMsg : 'Registration failed.'))
-            : (errorMsg is String ? errorMsg : 'Registration failed.');
-      }
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              errorMessage,
-              style: GoogleFonts.poppins(),
-            ),
-          ),
-        );
-      }
     if (status != 201 && status != 200) {
       final errors = body['errors'];
       final errorMsg = body['error'];

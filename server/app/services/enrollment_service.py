@@ -7,6 +7,7 @@ from app.extensions import db
 from app.models import Candidate, User
 from app.services.audit2 import AuditService
 from app.services.ai_cv_parser import AIParser
+from app.services.cv_to_candidate_mapper import map_extraction_to_candidate
 
 
 class EnrollmentService:
@@ -133,7 +134,7 @@ class EnrollmentService:
             candidate = EnrollmentService._get_or_create_candidate(user.id)
 
             # ------------------------------------
-            # AI CV parsing (optional, safe)
+            # AI CV parsing (optional, safe): map to Candidate schema so data is stored in right places
             # ------------------------------------
             if cv_file:
                 try:
@@ -141,13 +142,10 @@ class EnrollmentService:
                 except Exception:
                     ai_data = {}
 
-                ai_data = {
-                    k: v for k, v in ai_data.items()
-                    if k in EnrollmentService.AI_ALLOWED_FIELDS
-                }
-
-                # Manual input takes precedence
-                payload = {**ai_data, **payload}
+                # Map extraction keys to Candidate fields (position->title, experience->work_experience, etc.)
+                candidate_mapped = map_extraction_to_candidate(ai_data, work_experience_structured=None)
+                # Manual input takes precedence over AI
+                payload = {**candidate_mapped, **payload}
 
             saved_fields = set()
 

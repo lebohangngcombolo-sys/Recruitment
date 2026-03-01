@@ -84,6 +84,7 @@ class _ProfilePageState extends State<ProfilePage>
   List<dynamic> documents = [];
 
   final String apiBase = ApiEndpoints.candidateBase;
+  bool _isCandidateUser = false;
 
   @override
   void initState() {
@@ -440,66 +441,82 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  // EXISTING PROFILE METHODS
+  // EXISTING PROFILE METHODS: use /api/auth/me first; candidate uses candidate profile/settings, admin/HM use user.profile
   Future<void> fetchProfileAndSettings() async {
     try {
-      final profileRes = await http.get(
-        Uri.parse("$apiBase/profile"),
+      final meRes = await http.get(
+        Uri.parse(ApiEndpoints.currentUser),
         headers: {
           'Authorization': 'Bearer ${widget.token}',
           'Content-Type': 'application/json'
         },
       );
 
-      if (profileRes.statusCode == 200) {
-        final data = json.decode(profileRes.body)['data'];
-        final user = data['user'] ?? {};
-        final candidate = data['candidate'] ?? {};
+      if (meRes.statusCode == 200) {
+        final body = json.decode(meRes.body) as Map<String, dynamic>;
+        final user = body['user'] as Map<String, dynamic>? ?? {};
+        final profile = user['profile'] as Map<String, dynamic>? ?? {};
+        final candidateProfile = body['candidate_profile'] as Map<String, dynamic>?;
 
-        fullNameController.text = candidate['full_name'] ?? "";
-        emailController.text = user['profile']['email'] ?? "";
-        phoneController.text = candidate['phone'] ?? "";
-        genderController.text = candidate['gender'] ?? "";
-        dobController.text = candidate['dob'] ?? "";
-        nationalityController.text = candidate['nationality'] ?? "";
-        idNumberController.text = candidate['id_number'] ?? "";
-        bioController.text = candidate['bio'] ?? "";
-        locationController.text = candidate['location'] ?? "";
-        titleController.text = candidate['title'] ?? "";
+        _isCandidateUser = candidateProfile != null;
 
-        degreeController.text = candidate['degree'] ?? "";
-        institutionController.text = candidate['institution'] ?? "";
-        graduationYearController.text = candidate['graduation_year'] ?? "";
-        skillsController.text = (candidate['skills'] ?? []).join(", ");
-        workExpController.text =
-            (candidate['work_experience'] ?? []).join("\n");
-        jobTitleController.text = candidate['job_title'] ?? "";
-        companyController.text = candidate['company'] ?? "";
-        yearsOfExpController.text = candidate['years_of_experience'] ?? "";
-        linkedinController.text = candidate['linkedin'] ?? "";
-        githubController.text = candidate['github'] ?? "";
-        portfolioController.text = candidate['portfolio'] ?? "";
-        cvTextController.text = candidate['cv_text'] ?? "";
-        cvUrlController.text = candidate['cv_url'] ?? "";
-        documents = candidate['documents'] ?? [];
-        _profileImageUrl = candidate['profile_picture'] ?? "";
-      }
+        if (candidateProfile != null) {
+          fullNameController.text = candidateProfile['full_name']?.toString() ?? "";
+          emailController.text = user['email']?.toString() ?? "";
+          phoneController.text = candidateProfile['phone']?.toString() ?? "";
+          genderController.text = candidateProfile['gender']?.toString() ?? "";
+          dobController.text = candidateProfile['dob']?.toString() ?? "";
+          nationalityController.text = candidateProfile['nationality']?.toString() ?? "";
+          idNumberController.text = candidateProfile['id_number']?.toString() ?? "";
+          bioController.text = candidateProfile['bio']?.toString() ?? "";
+          locationController.text = candidateProfile['location']?.toString() ?? "";
+          titleController.text = candidateProfile['title']?.toString() ?? "";
+          degreeController.text = candidateProfile['degree']?.toString() ?? "";
+          institutionController.text = candidateProfile['institution']?.toString() ?? "";
+          graduationYearController.text = candidateProfile['graduation_year']?.toString() ?? "";
+          skillsController.text = (candidateProfile['skills'] is List) ? (candidateProfile['skills'] as List).join(", ") : "";
+          workExpController.text = (candidateProfile['work_experience'] is List) ? (candidateProfile['work_experience'] as List).join("\n") : (candidateProfile['work_experience']?.toString() ?? "");
+          jobTitleController.text = candidateProfile['job_title']?.toString() ?? "";
+          companyController.text = candidateProfile['company']?.toString() ?? "";
+          yearsOfExpController.text = candidateProfile['years_of_experience']?.toString() ?? "";
+          linkedinController.text = candidateProfile['linkedin']?.toString() ?? "";
+          githubController.text = candidateProfile['github']?.toString() ?? "";
+          portfolioController.text = candidateProfile['portfolio']?.toString() ?? "";
+          cvTextController.text = candidateProfile['cv_text']?.toString() ?? "";
+          cvUrlController.text = candidateProfile['cv_url']?.toString() ?? "";
+          documents = candidateProfile['documents'] is List ? candidateProfile['documents'] as List : [];
+          _profileImageUrl = candidateProfile['profile_picture']?.toString() ?? "";
+        } else {
+          fullNameController.text = profile['full_name']?.toString() ?? "";
+          emailController.text = user['email']?.toString() ?? "";
+          phoneController.text = profile['phone']?.toString() ?? "";
+          _profileImageUrl = profile['profile_picture']?.toString() ?? "";
+        }
 
-      final settingsRes = await http.get(
-        Uri.parse("$apiBase/settings"),
-        headers: {
-          'Authorization': 'Bearer ${widget.token}',
-          'Content-Type': 'application/json'
-        },
-      );
+        final settings = user['settings'] as Map<String, dynamic>? ?? {};
+        darkMode = settings['dark_mode'] == true;
+        notificationsEnabled = settings['notifications_enabled'] != false;
+        enrollmentCompleted = user['enrollment_completed'] == true;
+        jobAlertsEnabled = settings['job_alerts_enabled'] != false;
+        profileVisible = settings['profile_visible'] != false;
 
-      if (settingsRes.statusCode == 200) {
-        final data = json.decode(settingsRes.body);
-        darkMode = data['dark_mode'] ?? false;
-        notificationsEnabled = data['notifications_enabled'] ?? true;
-        enrollmentCompleted = data['enrollment_completed'] ?? false;
-        jobAlertsEnabled = data['job_alerts_enabled'] ?? true;
-        profileVisible = data['profile_visible'] ?? true;
+        if (_isCandidateUser) {
+          final settingsRes = await http.get(
+            Uri.parse("$apiBase/settings"),
+            headers: {
+              'Authorization': 'Bearer ${widget.token}',
+              'Content-Type': 'application/json'
+            },
+          );
+          if (settingsRes.statusCode == 200) {
+            final data = json.decode(settingsRes.body) as Map<String, dynamic>;
+            darkMode = data['dark_mode'] == true;
+            notificationsEnabled = data['notifications_enabled'] != false;
+            enrollmentCompleted = data['enrollment_completed'] == true;
+            jobAlertsEnabled = data['job_alerts_enabled'] != false;
+            profileVisible = data['profile_visible'] != false;
+          }
+        }
       }
     } catch (e) {
       debugPrint("Error fetching profile/settings: $e");
@@ -589,19 +606,41 @@ class _ProfilePageState extends State<ProfilePage>
         "user_profile": {"email": emailController.text},
       };
 
-      final res = await http.put(
-        Uri.parse("$apiBase/profile"),
-        headers: {
-          'Authorization': 'Bearer ${widget.token}',
-          'Content-Type': 'application/json'
-        },
-        body: json.encode(payload),
-      );
-
-      if (res.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Profile updated successfully")));
-        setState(() => showProfileSummary = true);
+      if (_isCandidateUser) {
+        final res = await http.put(
+          Uri.parse("$apiBase/profile"),
+          headers: {
+            'Authorization': 'Bearer ${widget.token}',
+            'Content-Type': 'application/json'
+          },
+          body: json.encode(payload),
+        );
+        if (res.statusCode == 200) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Profile updated successfully")));
+          setState(() => showProfileSummary = true);
+        }
+      } else {
+        final res = await http.put(
+          Uri.parse(ApiEndpoints.updateAuthProfile),
+          headers: {
+            'Authorization': 'Bearer ${widget.token}',
+            'Content-Type': 'application/json'
+          },
+          body: json.encode({
+            "profile": {
+              "full_name": fullNameController.text,
+              "phone": phoneController.text,
+            }
+          }),
+        );
+        if (res.statusCode == 200) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Profile updated successfully")));
+          setState(() => showProfileSummary = true);
+        }
       }
     } catch (e) {
       debugPrint("Error updating profile: $e");

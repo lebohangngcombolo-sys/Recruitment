@@ -1087,6 +1087,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             ),
           ),
         );
+      } else if (res.statusCode == 403) {
+        final msg = data is Map
+            ? (data['error']?.toString() ?? 'Complete your enrollment before applying to jobs')
+            : 'Complete your enrollment before applying to jobs';
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        context.go('/enrollment');
       } else if (res.statusCode == 400 && data is Map) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1315,6 +1322,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             ),
           ),
         );
+      } else if (res.statusCode == 403) {
+        final msg = data is Map
+            ? (data['error']?.toString() ?? 'Complete your enrollment before applying to jobs')
+            : 'Complete your enrollment before applying to jobs';
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        context.go('/enrollment');
       } else if (res.statusCode == 400 && data is Map) {
         final err = data['error']?.toString() ?? '';
         if (!mounted) return;

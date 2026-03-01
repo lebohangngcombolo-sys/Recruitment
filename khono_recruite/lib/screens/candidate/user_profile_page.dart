@@ -14,9 +14,6 @@ import '../../services/auth_service.dart';
 import '../../providers/theme_provider.dart';
 import '../../utils/api_endpoints.dart';
 
-// ------------------- API Base URL -------------------
-const String candidateBase = "http://127.0.0.1:5000/api/candidate";
-
 class ProfilePage extends StatefulWidget {
   final String token;
   const ProfilePage({super.key, required this.token});
@@ -89,7 +86,7 @@ class _ProfilePageState extends State<ProfilePage>
   List<dynamic> documents = [];
   List<String> _certifications = [];
   List<String> _languages = [];
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  final String apiBase = ApiEndpoints.candidateBase;
 
   // Add these helper methods in the _ProfilePageState class (around line 150, after the state variables):
 
@@ -3402,7 +3399,7 @@ class _ProfilePageState extends State<ProfilePage>
 
       try {
         final response = await http.post(
-          Uri.parse("$candidateBase/settings/change_password"),
+          Uri.parse(ApiEndpoints.changeCandidatePassword),
           headers: {
             "Authorization": "Bearer ${widget.token}",
             "Content-Type": "application/json",

@@ -1,4 +1,4 @@
-﻿from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.extensions import db
 from app.models import User, Requisition, Candidate, Application, AssessmentResult, Interview, Notification, AuditLog, Conversation, SharedNote, Meeting, CVAnalysis, InterviewFeedback, Offer, OfferStatus
@@ -836,8 +836,9 @@ def shortlist_candidates(job_id):
     shortlisted = []
 
     for app in applications:
-        profile = app.candidate.profile or {}
-        cv_score = profile.get("cv_score", 0)
+        # Use application-level CV score (from upload flow); fallback to candidate profile for legacy/standalone parse_cv
+        cv_score = app.cv_score if app.cv_score is not None else (app.candidate.profile or {}).get("cv_score", 0)
+        cv_score = float(cv_score) if cv_score is not None else 0
         assessment_score = app.assessment_score or 0
 
         try:
@@ -965,7 +966,7 @@ def list_cv_reviews():
 
 # ----------------- USERS MANAGEMENT -----------------
 @admin_bp.route("/users", methods=["GET"])
-@role_required(["admin"])
+@role_required(["admin", "hiring_manager"])
 def list_users():
     users = User.query.all()
     result = []
@@ -1170,7 +1171,12 @@ def dashboard_counts():
         for candidate in candidates_with_skills:
             if candidate.education:
                 for edu in candidate.education:
-                    level = edu.get('level', 'Unknown')
+                    if isinstance(edu, dict):
+                        level = edu.get('level') or edu.get('qualification') or 'Unknown'
+                    elif isinstance(edu, str):
+                        level = edu.strip() or 'Unknown'
+                    else:
+                        level = 'Unknown'
                     education_levels[level] = education_levels.get(level, 0) + 1
         candidate_demographics['education_distribution'] = education_levels
         
@@ -1305,16 +1311,29 @@ def manage_interviews():
             db.session.add(interview)
             db.session.flush()  # Get the interview ID
 
-            # Create in-app notification
-            notif = Notification(
-                user_id=candidate_id,
-                message=f"Your {interview_type} interview has been scheduled for {scheduled_time.strftime('%Y-%m-%d %H:%M:%S')}."
-            )
-            db.session.add(notif)
-
             # Fetch candidate and hiring manager details
             candidate_profile = Candidate.query.get(candidate_id)
+            # Create in-app notification for candidate (user_id must be User.id, not Candidate.id)
+            if candidate_profile and getattr(candidate_profile, 'user_id', None):
+                notif = Notification(
+                    user_id=candidate_profile.user_id,
+                    message=f"Your {interview_type} interview has been scheduled for {scheduled_time.strftime('%Y-%m-%d %H:%M:%S')}."
+                )
+                db.session.add(notif)
             hiring_manager = User.query.get(hiring_manager_id)
+            candidate_name = candidate_profile.full_name if candidate_profile else "Candidate"
+            job_title = None
+            if interview.application and interview.application.requisition:
+                job_title = interview.application.requisition.title
+
+            # Notify hiring manager so it shows in their calendar/notifications
+            notif_hm = Notification(
+                user_id=hiring_manager_id,
+                message=f"Interview scheduled: {candidate_name} for {job_title or 'position'} on {scheduled_time.strftime('%Y-%m-%d at %H:%M')}.",
+                type="interview",
+                interview_id=interview.id
+            )
+            db.session.add(notif_hm)
 
             # Google Calendar Integration
             google_calendar_event = None
@@ -1466,18 +1485,19 @@ def reschedule_interview(interview_id):
 
         db.session.commit()
 
-        # Create candidate notification
-        notif = Notification(
-            user_id=interview.candidate_id,
-            message=f"Your interview has been rescheduled from "
-                    f"{old_time.strftime('%Y-%m-%d %H:%M:%S')} to "
-                    f"{new_time.strftime('%Y-%m-%d %H:%M:%S')}."
-        )
-        db.session.add(notif)
-        db.session.commit()
+        # Create candidate notification (user_id must be User.id, not Candidate.id)
+        candidate_user = interview.candidate.user if interview.candidate else None
+        if candidate_user and getattr(candidate_user, 'id', None):
+            notif = Notification(
+                user_id=candidate_user.id,
+                message=f"Your interview has been rescheduled from "
+                        f"{old_time.strftime('%Y-%m-%d %H:%M:%S')} to "
+                        f"{new_time.strftime('%Y-%m-%d %H:%M:%S')}."
+            )
+            db.session.add(notif)
+            db.session.commit()
 
         # Send reschedule email
-        candidate_user = interview.candidate.user
         if candidate_user and candidate_user.email:
             candidate_name = candidate_user.profile.get("full_name")
             if not candidate_name:
@@ -2334,9 +2354,64 @@ def get_interview_feedback(interview_id):
     except Exception as e:
         current_app.logger.error(f"Get feedback error: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
-    
+
+
+@admin_bp.route("/interviews/<int:interview_id>/feedback/summary", methods=["GET"])
+@role_required(["admin", "hiring_manager", "hr"])
+def get_interview_feedback_summary(interview_id):
+    """
+    Get aggregated feedback summary for an interview (count, average rating, recommendations).
+    """
+    try:
+        interview = Interview.query.get_or_404(interview_id)
+        feedback_list = InterviewFeedback.query.filter_by(
+            interview_id=interview_id,
+            is_submitted=True
+        ).all()
+        feedback_count = len(feedback_list)
+        if feedback_count == 0:
+            return jsonify({
+                "interview_id": interview_id,
+                "feedback_count": 0,
+                "overall_average_rating": None,
+                "recommendations": [],
+                "summary": "No feedback submitted yet."
+            }), 200
+        overall_avg = sum(fb.overall_rating for fb in feedback_list if fb.overall_rating is not None) / max(1, sum(1 for fb in feedback_list if fb.overall_rating is not None))
+        recommendations = [fb.recommendation for fb in feedback_list if fb.recommendation]
+        return jsonify({
+            "interview_id": interview_id,
+            "feedback_count": feedback_count,
+            "overall_average_rating": round(overall_avg, 2),
+            "recommendations": recommendations,
+            "summary": f"{feedback_count} feedback(s), average rating {overall_avg:.2f}."
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Feedback summary error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@admin_bp.route("/interviews/templates", methods=["GET"])
+@role_required(["admin", "hiring_manager", "hr"])
+def get_interview_templates():
+    """
+    Get list of interview templates (e.g. technical, behavioural). Returns default templates when no DB table exists.
+    """
+    try:
+        templates = [
+            {"id": "technical", "name": "Technical", "description": "Technical skills assessment", "duration_minutes": 60},
+            {"id": "behavioural", "name": "Behavioural", "description": "Behavioural and culture fit", "duration_minutes": 45},
+            {"id": "panel", "name": "Panel", "description": "Panel interview", "duration_minutes": 60},
+            {"id": "phone", "name": "Phone Screen", "description": "Initial phone screening", "duration_minutes": 30},
+        ]
+        return jsonify({"templates": templates}), 200
+    except Exception as e:
+        current_app.logger.error(f"Interview templates error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
 # =====================================================
-# ≡ƒöö INTERVIEW REMINDERS SYSTEM
+# INTERVIEW REMINDERS SYSTEM
 # =====================================================
 @admin_bp.route("/interviews/reminders/schedule", methods=["POST"])
 @role_required(["admin", "hiring_manager", "hr"])
@@ -2506,18 +2581,18 @@ def send_24_hour_reminder(interview):
             timezone="UTC"
         )
     
-    # Send in-app notification
-    notif_candidate = Notification(
-        user_id=interview.candidate_id,
-        message=f"Reminder: Your interview is tomorrow at {interview.scheduled_time.strftime('%H:%M')}. Please be prepared.",
-        type="reminder",
-        interview_id=interview.id
-    )
-    db.session.add(notif_candidate)
-    
+    # Send in-app notification (candidate: use User.id not Candidate.id)
+    if interview.candidate and getattr(interview.candidate, 'user_id', None):
+        notif_candidate = Notification(
+            user_id=interview.candidate.user_id,
+            message=f"Reminder: Your interview is tomorrow at {interview.scheduled_time.strftime('%H:%M')}. Please be prepared.",
+            type="reminder",
+            interview_id=interview.id
+        )
+        db.session.add(notif_candidate)
     notif_interviewer = Notification(
         user_id=interview.hiring_manager_id,
-        message=f"Reminder: Interview with {interview.candidate.full_name} tomorrow at {interview.scheduled_time.strftime('%H:%M')}",
+        message=f"Reminder: Interview with {interview.candidate.full_name if interview.candidate else 'Candidate'} tomorrow at {interview.scheduled_time.strftime('%H:%M')}",
         type="reminder",
         interview_id=interview.id
     )
@@ -2552,18 +2627,18 @@ def send_1_hour_reminder(interview):
             timezone="UTC"
         )
     
-    # Send in-app notification
-    notif_candidate = Notification(
-        user_id=interview.candidate_id,
-        message=f"Your interview starts in 1 hour: {interview.scheduled_time.strftime('%H:%M')}. Join: {interview.meeting_link}",
-        type="reminder_urgent",
-        interview_id=interview.id
-    )
-    db.session.add(notif_candidate)
-    
+    # Send in-app notification (candidate: use User.id not Candidate.id)
+    if interview.candidate and getattr(interview.candidate, 'user_id', None):
+        notif_candidate = Notification(
+            user_id=interview.candidate.user_id,
+            message=f"Your interview starts in 1 hour: {interview.scheduled_time.strftime('%H:%M')}. Join: {interview.meeting_link}",
+            type="reminder_urgent",
+            interview_id=interview.id
+        )
+        db.session.add(notif_candidate)
     notif_interviewer = Notification(
         user_id=interview.hiring_manager_id,
-        message=f"Interview with {interview.candidate.full_name} in 1 hour. Join: {interview.meeting_link}",
+        message=f"Interview with {interview.candidate.full_name if interview.candidate else 'Candidate'} in 1 hour. Join: {interview.meeting_link}",
         type="reminder_urgent",
         interview_id=interview.id
     )
@@ -3158,6 +3233,19 @@ def create_shared_note():
         )
         
         db.session.add(note)
+        db.session.flush()
+        author = User.query.get(user_id)
+        author_name = author.full_name if author else "A team member"
+        recipients = User.query.filter(
+            User.role.in_(["admin", "hiring_manager"]),
+            User.id != user_id
+        ).all()
+        for u in recipients:
+            db.session.add(Notification(
+                user_id=u.id,
+                message=f"{author_name} shared a note: {title}",
+                type="shared_note"
+            ))
         db.session.commit()
 
         AuditService.record_action(admin_id=user_id, action="create_shared_note", details=f"Created note '{title}'")
@@ -3213,6 +3301,17 @@ def update_shared_note(note_id):
             note.is_pinned = data.get("is_pinned", False)
 
         note.updated_at = datetime.utcnow()
+        author_name = note.author.full_name if note.author else "A team member"
+        recipients = User.query.filter(
+            User.role.in_(["admin", "hiring_manager"]),
+            User.id != note.author_id
+        ).all()
+        for u in recipients:
+            db.session.add(Notification(
+                user_id=u.id,
+                message=f"{author_name} updated note: {note.title}",
+                type="shared_note"
+            ))
         db.session.commit()
 
         AuditService.record_action(admin_id=user_id, action="update_shared_note", details=f"Updated note '{note.title}'")
@@ -3437,6 +3536,27 @@ def create_meeting():
         )
 
         db.session.add(meeting)
+        db.session.flush()
+
+        # In-app notification for organizer
+        notif_organizer = Notification(
+            user_id=user_id,
+            message=f"Meeting '{title}' scheduled for {start_time.strftime('%Y-%m-%d at %H:%M')}.",
+            type="meeting"
+        )
+        db.session.add(notif_organizer)
+
+        # In-app notifications for participants (if they are users in the system)
+        for participant_email in (participants or []):
+            participant_user = User.query.filter_by(email=participant_email).first()
+            if participant_user and participant_user.id != user_id:
+                notif_participant = Notification(
+                    user_id=participant_user.id,
+                    message=f"You're invited to meeting '{title}' on {start_time.strftime('%Y-%m-%d at %H:%M')}.",
+                    type="meeting"
+                )
+                db.session.add(notif_participant)
+
         db.session.commit()
 
         # Send email notifications (if enabled)
@@ -3539,6 +3659,24 @@ def update_meeting(meeting_id):
 
             meeting.start_time = new_start_time
             meeting.end_time = new_end_time
+
+            # Notify organizer and participants about the time change
+            notif_organizer = Notification(
+                user_id=meeting.organizer_id,
+                message=f"Meeting '{meeting.title}' rescheduled to {new_start_time.strftime('%Y-%m-%d at %H:%M')}.",
+                type="meeting"
+            )
+            db.session.add(notif_organizer)
+            participants_list = meeting.participants if isinstance(meeting.participants, list) else []
+            for participant_email in participants_list:
+                participant_user = User.query.filter_by(email=participant_email).first()
+                if participant_user and participant_user.id != meeting.organizer_id:
+                    notif_p = Notification(
+                        user_id=participant_user.id,
+                        message=f"Meeting '{meeting.title}' rescheduled to {new_start_time.strftime('%Y-%m-%d at %H:%M')}.",
+                        type="meeting"
+                    )
+                    db.session.add(notif_p)
 
         meeting.updated_at = datetime.utcnow()
         db.session.commit()
@@ -4144,9 +4282,16 @@ def get_interviews_by_timeframe(timeframe):
         elif timeframe == "month":
             start_date = now - timedelta(days=30)
             query_filter = Interview.scheduled_time >= start_date
+        elif timeframe == "action-required":
+            # Interviews that need action: completed but no feedback submitted yet
+            has_feedback = db.session.query(InterviewFeedback.id).filter(
+                InterviewFeedback.interview_id == Interview.id,
+                InterviewFeedback.is_submitted == True
+            ).exists()
+            query_filter = db.and_(Interview.status == "completed", ~has_feedback)
         else:
             return jsonify({"error": "Invalid timeframe"}), 400
-        
+
         # Query interviews
         interviews = Interview.query.filter(query_filter).order_by(
             Interview.scheduled_time
@@ -4207,7 +4352,62 @@ def get_interviews_by_timeframe(timeframe):
     except Exception as e:
         current_app.logger.error(f"Interviews by timeframe error: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
-    
+
+
+@admin_bp.route("/interviews/calendar", methods=["GET"])
+@role_required(["admin", "hiring_manager", "hr"])
+def get_interviews_for_calendar():
+    """
+    Get interviews in a date range for calendar display.
+    Query params: start_date (YYYY-MM-DD), end_date (YYYY-MM-DD). Defaults to current month.
+    """
+    try:
+        start_date_str = request.args.get("start_date")
+        end_date_str = request.args.get("end_date")
+        now = datetime.utcnow()
+        if start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+            except ValueError:
+                return jsonify({"error": "Invalid start_date, use YYYY-MM-DD"}), 400
+        else:
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        if end_date_str:
+            try:
+                end_date = datetime.strptime(end_date_str, "%Y-%m-%d") + timedelta(days=1)
+            except ValueError:
+                return jsonify({"error": "Invalid end_date, use YYYY-MM-DD"}), 400
+        else:
+            next_month = start_date.replace(day=28) + timedelta(days=4)
+            end_date = next_month.replace(day=1)
+
+        interviews = Interview.query.filter(
+            db.and_(
+                Interview.scheduled_time >= start_date,
+                Interview.scheduled_time < end_date
+            )
+        ).order_by(Interview.scheduled_time).all()
+
+        result = []
+        for i in interviews:
+            candidate = i.candidate
+            application = i.application
+            job = application.requisition if application else None
+            hiring_manager = i.hiring_manager
+            result.append({
+                "id": i.id,
+                "candidate_name": candidate.full_name if candidate else "Unknown",
+                "job_title": job.title if job else "Unknown",
+                "interview_type": i.interview_type,
+                "scheduled_time": i.scheduled_time.isoformat() if i.scheduled_time else None,
+                "status": i.status,
+            })
+        return jsonify({"interviews": result}), 200
+    except Exception as e:
+        current_app.logger.error(f"Interviews calendar error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
 from sqlalchemy import func
 
 @admin_bp.route("/pipeline/stages/count", methods=["GET"])
@@ -4424,13 +4624,17 @@ def update_application_status(application_id):
             ).first()
             
             if not existing_interview:
-                # Create a placeholder interview or notification
-                notification = Notification(
-                    user_id=application.candidate.user_id if application.candidate and application.candidate.user_id else None,
-                    message=f"Your application for {application.requisition.title if application.requisition else 'the position'} has moved to interview stage.",
-                    type="status_update"
-                )
-                db.session.add(notification)
+                # Create notification only when we have a valid User.id (not Candidate.id)
+                candidate_user_id = None
+                if application.candidate and getattr(application.candidate, 'user_id', None):
+                    candidate_user_id = application.candidate.user_id
+                if candidate_user_id is not None:
+                    notification = Notification(
+                        user_id=candidate_user_id,
+                        message=f"Your application for {application.requisition.title if application.requisition else 'the position'} has moved to interview stage.",
+                        type="status_update"
+                    )
+                    db.session.add(notification)
         
         # If moving to hired stage, update vacancy count
         if new_status == 'hired' and old_status != 'hired':

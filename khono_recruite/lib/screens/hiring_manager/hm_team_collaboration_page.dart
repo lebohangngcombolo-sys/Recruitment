@@ -26,6 +26,8 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
   String _selectedEntity = 'general';
   String _currentUser = 'Hiring Manager';
 
+  int? _currentThreadId;
+
   final AdminService _apiService = AdminService(); // ADD API SERVICE
   bool _isLoading = true;
 
@@ -40,6 +42,169 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
     _isConnected = false; // Disabled temporarily
   }
 
+  String _extractAuthorName(Map<String, dynamic> note) {
+    final dynamic author = note['author'];
+    if (author is Map<String, dynamic>) {
+      final dynamic profile = author['profile'];
+      if (profile is Map<String, dynamic>) {
+        final dynamic fullName = profile['full_name'] ?? profile['name'];
+        if (fullName is String && fullName.trim().isNotEmpty) {
+          return fullName.trim();
+        }
+      }
+      final dynamic email = author['email'];
+      if (email is String && email.trim().isNotEmpty) {
+        return email.trim();
+      }
+    }
+    return 'Unknown';
+  }
+
+  DateTime _parseNoteTimestamp(Map<String, dynamic> note) {
+    final updatedRaw = note['updated_at']?.toString();
+    final createdRaw = note['created_at']?.toString();
+    final candidate = updatedRaw?.isNotEmpty == true ? updatedRaw : createdRaw;
+    if (candidate != null && candidate.isNotEmpty) {
+      final parsed = DateTime.tryParse(candidate);
+      if (parsed != null) return parsed;
+    }
+    return DateTime.now();
+  }
+
+  Map<String, String?> _mapSelectedEntity() {
+    if (_selectedEntity == 'general') {
+      return {'entityType': 'general', 'entityId': null};
+    }
+    if (_selectedEntity.startsWith('candidate:')) {
+      return {
+        'entityType': 'candidate',
+        'entityId': _selectedEntity.split(':').last,
+      };
+    }
+    if (_selectedEntity.startsWith('requisition:')) {
+      return {
+        'entityType': 'requisition',
+        'entityId': _selectedEntity.split(':').last,
+      };
+    }
+    return {'entityType': 'general', 'entityId': null};
+  }
+
+  Future<void> _loadTeamMembers() async {
+    try {
+      final users = await _apiService.getUsers();
+      final members = <TeamMember>[];
+      for (final u in users.whereType<Map<String, dynamic>>()) {
+        final profile = u['profile'] as Map<String, dynamic>? ?? {};
+        final fullName =
+            (profile['full_name'] ?? profile['name'])?.toString().trim();
+        final email = (u['email'] ?? '').toString().trim();
+        final role = (u['role'] ?? '').toString().trim();
+        final displayName =
+            (fullName != null && fullName.isNotEmpty) ? fullName : email;
+        if (displayName.isEmpty) continue;
+        members.add(TeamMember(
+          name: displayName,
+          role: role.isEmpty ? 'Team member' : role,
+          isOnline: false, // presence will update this later
+        ));
+      }
+      setState(() {
+        _teamMembers
+          ..clear()
+          ..addAll(members);
+      });
+    } catch (e) {
+      debugPrint('Failed to load team members: $e');
+    }
+  }
+
+  Future<void> _ensureThreadForSelectedEntity() async {
+    final mapping = _mapSelectedEntity();
+    final entityType = mapping['entityType'];
+    final entityId = mapping['entityId'];
+
+    try {
+      final threads = await _apiService.getChatThreads(
+        entityType: entityType == 'general' ? null : entityType,
+        entityId: entityId,
+      );
+
+      if (threads.isNotEmpty) {
+        final first = threads.first;
+        final id = first['id'];
+        if (id is int) {
+          _currentThreadId = id;
+          return;
+        }
+      }
+
+      // No existing thread found, create one (participants handled server-side)
+      final created = await _apiService.createChatThread(
+        title: entityType == 'general'
+            ? 'Team Collaboration'
+            : '$entityType:$entityId',
+        participantIds: const [],
+        entityType: entityType ?? 'general',
+        entityId: entityId,
+      );
+      final newId = created['id'] ?? created['thread']?['id'];
+      if (newId is int) {
+        _currentThreadId = newId;
+      }
+    } catch (e) {
+      // If chat thread setup fails, keep the UI usable but local-only
+      debugPrint('Failed to ensure chat thread: $e');
+    }
+  }
+
+  Future<void> _loadMessages() async {
+    if (_currentThreadId == null) return;
+    try {
+      final rawMessages =
+          await _apiService.getChatMessages(threadId: _currentThreadId!);
+      final loaded = rawMessages.whereType<Map<String, dynamic>>().map((m) {
+        final authorInfo = m['sender'] ?? m['author'];
+        String authorName = 'User';
+        if (authorInfo is Map<String, dynamic>) {
+          final profile = authorInfo['profile'];
+          if (profile is Map<String, dynamic>) {
+            final fullName =
+                (profile['full_name'] ?? profile['name'])?.toString();
+            if (fullName != null && fullName.trim().isNotEmpty) {
+              authorName = fullName.trim();
+            } else {
+              authorName = (authorInfo['email'] ?? 'User').toString();
+            }
+          } else {
+            authorName = (authorInfo['email'] ?? 'User').toString();
+          }
+        } else if (m['sender_name'] is String) {
+          authorName = (m['sender_name'] as String).trim();
+        }
+
+        final createdAtRaw = m['created_at']?.toString();
+        final createdAt =
+            createdAtRaw != null ? DateTime.tryParse(createdAtRaw) : null;
+
+        return CollaborationMessage(
+          author: authorName,
+          content: (m['content'] ?? '').toString(),
+          timestamp: createdAt ?? DateTime.now(),
+          entity: _selectedEntity,
+        );
+      }).toList();
+
+      setState(() {
+        _messages
+          ..clear()
+          ..addAll(loaded.reversed);
+      });
+    } catch (e) {
+      debugPrint('Failed to load chat messages: $e');
+    }
+  }
+
   Future<void> _loadTeamData() async {
     setState(() {
       _isLoading = true;
@@ -48,32 +213,31 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
     try {
       // Load shared notes from API
       final notesResponse = await _apiService.getNotes(page: 1, perPage: 10);
-      final notesData = notesResponse['notes'] as List<dynamic>;
+      final notesData = (notesResponse['notes'] as List<dynamic>? ?? []);
 
+      if (!mounted) return;
       setState(() {
         _sharedNotes.clear();
         _sharedNotes.addAll(notesData
+            .whereType<Map<String, dynamic>>()
             .map((note) => SharedNote(
-                  id: note['id'] ?? 0,
-                  title: note['title'] ?? 'Untitled',
-                  content: note['content'] ?? '',
-                  author: note['author_name'] ?? 'Unknown',
-                  lastModified:
-                      DateTime.parse(note['updated_at'] ?? note['created_at']),
+                  id: note['id'] is int ? note['id'] as int : 0,
+                  title: (note['title'] ?? 'Untitled').toString(),
+                  content: (note['content'] ?? '').toString(),
+                  author: _extractAuthorName(note),
+                  lastModified: _parseNoteTimestamp(note),
                 ))
             .toList());
       });
 
-      // Load team members (you might need to create a separate API for this)
-      // For now, keeping the mock data but you can replace with API call
-      _teamMembers.addAll([
-        TeamMember(
-            name: 'John Smith', role: 'Senior Recruiter', isOnline: true),
-        TeamMember(name: 'Sarah Johnson', role: 'HR Manager', isOnline: true),
-        TeamMember(name: 'Mike Davis', role: 'Technical Lead', isOnline: false),
-        TeamMember(name: 'Lisa Chen', role: 'Recruiter', isOnline: true),
-      ]);
+      // Load team members from API
+      await _loadTeamMembers();
+
+      // Ensure there is a chat thread for the selected entity and load messages
+      await _ensureThreadForSelectedEntity();
+      await _loadMessages();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to load data: $e', style: GoogleFonts.inter()),
@@ -83,6 +247,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         ),
       );
     } finally {
+      if (!mounted) return;
       setState(() {
         _isLoading = false;
       });
@@ -755,8 +920,14 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                         value: 'requisition:456',
                         child: Text('Job Requisition')),
                   ],
-                  onChanged: (value) =>
-                      setState(() => _selectedEntity = value!),
+                  onChanged: (value) async {
+                    if (value == null) return;
+                    setState(() {
+                      _selectedEntity = value;
+                    });
+                    await _ensureThreadForSelectedEntity();
+                    await _loadMessages();
+                  },
                   underline: const SizedBox(),
                   icon: const Icon(Icons.arrow_drop_down, size: 16),
                   style: GoogleFonts.inter(
@@ -859,20 +1030,19 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
-                if (!isCurrentUser)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      message.author,
-                      style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w600,
-                        color: themeProvider.isDarkMode
-                            ? Colors.white
-                            : AppColors.textDark,
-                        fontSize: 12,
-                      ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    message.author,
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      color: themeProvider.isDarkMode
+                          ? Colors.white
+                          : AppColors.textDark,
+                      fontSize: 12,
                     ),
                   ),
+                ),
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -1012,15 +1182,38 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
       entity: _selectedEntity,
     );
 
-    if (_channel != null && _isConnected) {
-      _channel!.sink.add(message.toJson());
-    }
+    Future<void>.microtask(() async {
+      // Optimistic update
+      setState(() {
+        _messages.insert(0, message);
+      });
+      _messageController.clear();
 
-    setState(() {
-      _messages.insert(0, message);
+      try {
+        if (_currentThreadId == null) {
+          await _ensureThreadForSelectedEntity();
+        }
+        if (_currentThreadId != null) {
+          await _apiService.sendMessage(
+            threadId: _currentThreadId!,
+            content: message.content,
+          );
+          await _loadMessages();
+        }
+      } catch (e) {
+        debugPrint('Failed to send chat message: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Failed to send message', style: GoogleFonts.inter()),
+            backgroundColor: AppColors.primaryRed,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
     });
-
-    _messageController.clear();
   }
 
   void _createSharedNote() {
@@ -1123,6 +1316,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   Navigator.pop(context);
                   await _loadTeamData(); // Refresh the notes list
 
+                  if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Shared note created successfully',
@@ -1134,6 +1328,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     ),
                   );
                 } catch (e) {
+                  if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('Failed to create note: $e',

@@ -25,15 +25,15 @@ import '../../providers/theme_provider.dart';
 import 'analytics_dashboard.dart';
 import 'offer_list_screen.dart';
 
-class AdminDAshboard extends StatefulWidget {
+class AdminDashboard extends StatefulWidget {
   final String token;
-  const AdminDAshboard({super.key, required this.token});
+  const AdminDashboard({super.key, required this.token});
 
   @override
-  _AdminDAshboardState createState() => _AdminDAshboardState();
+  _AdminDashboardState createState() => _AdminDashboardState();
 }
 
-class _AdminDAshboardState extends State<AdminDAshboard>
+class _AdminDashboardState extends State<AdminDashboard>
     with SingleTickerProviderStateMixin {
   String currentScreen = "dashboard";
   bool loadingStats = true;
@@ -347,10 +347,10 @@ class _AdminDAshboardState extends State<AdminDAshboard>
   }
 
   void _performLogout(BuildContext context) async {
-    Navigator.of(context).pop();
+    // Do not pop: confirmation dialog already closed by onPressed. Popping again would remove the last route.
     await AuthService.logout();
     if (!mounted) return;
-    context.go('/');
+    context.go('/login');
   }
 
   // ---------- UI Build ----------
@@ -449,6 +449,10 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                                   'assets/images/Approval_Red_Badge_White.png',
                                   'Jobs',
                                   'jobs'),
+                              _sidebarEntry(
+                                  'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
+                                  'Test Packs',
+                                  'test_packs'),
                               _sidebarEntry(
                                   'assets/images/Meeting_Red_Badge_White.png',
                                   'Shortlisted',
