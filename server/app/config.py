@@ -1,4 +1,4 @@
-﻿import os
+import os
 from datetime import timedelta
 from pathlib import Path
 
@@ -64,13 +64,17 @@ class Config:
     JWT_TOKEN_LOCATION = ["headers", "query_string"]  # Allow token in headers or query string
     JWT_QUERY_STRING_NAME = "access_token"            # Query param name
     
-    # Email
+    # Email (SMTP and/or SendGrid HTTP API; Render typically uses SENDGRID_API_KEY)
     MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
     MAIL_PORT = int(os.getenv('MAIL_PORT', 587))
     MAIL_USE_TLS = os.getenv('MAIL_USE_TLS', 'True').lower() == 'true'
     MAIL_USERNAME = os.getenv('MAIL_USERNAME')
     MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
     MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER')
+    _mt = (os.getenv('MAIL_TIMEOUT') or '60').strip()
+    MAIL_TIMEOUT = int(_mt) if _mt else 60
+    SENDGRID_API_KEY = (os.getenv('SENDGRID_API_KEY') or '').strip() or None
+    SENDGRID_API_URL = (os.getenv('SENDGRID_API_URL') or 'https://api.sendgrid.com/v3/mail/send').strip()
     
     # OAuth Configuration
     GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')

@@ -1,9 +1,11 @@
 import logging
+import sys
 from logging.config import fileConfig
 
 from flask import current_app
 
 from alembic import context
+from sqlalchemy.exc import OperationalError
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -96,7 +98,22 @@ def run_migrations_online():
 
     connectable = get_engine()
 
-    with connectable.connect() as connection:
+    try:
+        connection = connectable.connect()
+    except OperationalError as e:
+        err_text = str(e.orig) if getattr(e, "orig", None) else str(e)
+        if "name resolution" in err_text.lower() or "could not translate host name" in err_text.lower():
+            print(
+                "\n*** Database connection failed (DNS / network) ***\n"
+                "The database host could not be resolved from this machine (e.g. WSL).\n"
+                "  - From WSL: fix DNS (e.g. sudo bash -c 'echo \"nameserver 8.8.8.8\" > /etc/resolv.conf')\n"
+                "  - Or use a local PostgreSQL and set DATABASE_URL to it for local migration checks.\n"
+                "  - On Render, migrations run automatically during deploy (render_start.sh).\n",
+                file=sys.stderr,
+            )
+        raise
+
+    with connection:
         context.configure(
             connection=connection,
             target_metadata=get_metadata(),
