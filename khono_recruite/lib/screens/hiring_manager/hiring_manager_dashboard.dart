@@ -102,6 +102,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   // Display name for the logged-in user (shared with Team Collaboration semantics)
   String userName = "Hiring Manager";
 
+  /// Use role-based name when stored name is null, empty, or a placeholder (e.g. "Deployed Hiring Manager").
+  String _effectiveWelcomeName(String? name) {
+    if (name == null || name.trim().isEmpty) return 'Hiring Manager';
+    if (name.toLowerCase().contains('deployed')) return 'Hiring Manager';
+    return name.trim();
+  }
+
   bool sidebarCollapsed = false;
   late final AnimationController _sidebarAnimController;
   late final Animation<double> _sidebarWidthAnimation;
@@ -1481,7 +1488,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 8),
-            Text("Welcome Back, $userName",
+            Text("Welcome Back, ${_effectiveWelcomeName(userName)}!",
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 28,
