@@ -91,9 +91,11 @@ class Config:
     CV_UPLOAD_FOLDER = os.getenv('CV_UPLOAD_FOLDER', 'uploads/cvs')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
     
-    # Frontend URL
+    # Frontend URL (for CORS and email links). Set on Render to e.g. https://recruitment-web-59qy.onrender.com
     FRONTEND_URL = os.getenv('FRONTEND_URL')
-    
+    # So CORS production logic in create_app() runs; Render sets FLASK_ENV=production
+    FLASK_ENV = os.getenv('FLASK_ENV', 'development')
+
     # SSO Configuration for Company Hub Integration
     SSO_JWT_SECRET = os.getenv('SSO_JWT_SECRET', 'our-super-secret-code-123')  # Same as hub!
     PORTAL_HUB_URL = os.getenv('PORTAL_HUB_URL', 'http://localhost:5001')  # Hub address

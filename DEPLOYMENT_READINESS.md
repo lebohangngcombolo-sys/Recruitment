@@ -91,3 +91,13 @@ After changing **BACKEND_URL**, **redeploy recruitment-web** so the next build u
 5. After deploy: hit `/api/public/healthz`, then test login and one API call from the web app; optionally test registration and verification email.
 
 For detailed troubleshooting (e.g. verification email, 409, CORS), see **RENDER_FEEDBACK.md** and **DEPLOYMENT.md**.
+
+---
+
+## 7. CORS and Render free-tier cold start
+
+**CORS:** The API sends `Access-Control-Allow-Origin` on every response (including errors). In production, set **FRONTEND_URL** on **recruitment-api** to your web app URL exactly, e.g. `https://recruitment-web-59qy.onrender.com` (no trailing slash). If unset, all origins are allowed.
+
+**“No 'Access-Control-Allow-Origin' header” / “Failed to fetch”:** On the free tier, the API **spins down after ~15 min of no traffic**. The first request after that can take 30–60s to wake the service. Render’s proxy may return **502/503** before the app is up; those responses do not include CORS headers, so the browser reports a CORS error. **Fix options:** (1) Open `https://<recruitment-api-url>/api/public/healthz` in a tab, wait until it returns `{"status":"ok"}`, then use the app; (2) Use a cron (e.g. cron-job.org) to GET the healthz URL every 10–14 minutes to keep the service awake; (3) Upgrade to a paid plan so the service does not spin down.
+
+**401 “Missing or invalid JWT”:** Expected when the user is not logged in or the token expired. The frontend should redirect to login and store/refresh the token after successful auth.
