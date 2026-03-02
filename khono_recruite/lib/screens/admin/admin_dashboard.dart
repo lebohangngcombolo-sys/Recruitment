@@ -95,6 +95,13 @@ class _AdminDashboardState extends State<AdminDashboard>
 
   String? _userName;
 
+  /// Use role-based name when stored name is null, empty, or a placeholder (e.g. "Deployed Admin").
+  String _effectiveWelcomeName(String? name) {
+    if (name == null || name.trim().isEmpty) return 'Admin';
+    if (name.toLowerCase().contains('deployed')) return 'Admin';
+    return name.trim();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1330,7 +1337,7 @@ class _AdminDashboardState extends State<AdminDashboard>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 8),
-            Text("Welcome Back, ${_userName ?? 'Admin'}!",
+            Text("Welcome Back, ${_effectiveWelcomeName(_userName)}!",
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 28,
