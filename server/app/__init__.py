@@ -68,6 +68,27 @@ def create_app():
         supports_credentials=False,  # Required when using origins="*"; auth uses header not cookies
     )
 
+    # Ensure CORS headers on every response (including 4xx/5xx and errors). When Render free tier
+    # wakes from sleep, gateway timeouts may not reach the app; when the app does respond, CORS must be present.
+    @app.after_request
+    def _add_cors_headers(response):
+        from flask import request
+        if "Access-Control-Allow-Origin" not in response.headers:
+            origin = request.environ.get("HTTP_ORIGIN")
+            if _cors_origins and "*" in _cors_origins:
+                response.headers["Access-Control-Allow-Origin"] = "*"
+            elif origin and _cors_origins and origin in _cors_origins:
+                response.headers["Access-Control-Allow-Origin"] = origin
+            elif _cors_origins:
+                response.headers["Access-Control-Allow-Origin"] = _cors_origins[0]
+            else:
+                response.headers["Access-Control-Allow-Origin"] = "*"
+        if "Access-Control-Allow-Methods" not in response.headers:
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        if "Access-Control-Allow-Headers" not in response.headers:
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Accept"
+        return response
+
     # ---------------- Register Blueprints ----------------
     auth.init_auth_routes(app)  # existing auth routes
     app.register_blueprint(admin_routes.admin_bp, url_prefix="/api/admin")

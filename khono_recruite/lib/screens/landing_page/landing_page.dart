@@ -272,16 +272,26 @@ class _LandingPageState extends State<LandingPage>
     }
   }
 
-  // Fetch jobs for explore category: public API when not logged in, candidate API when logged in
+  // Fetch jobs for explore category: public API when not logged in, candidate API when logged in.
+  // When API was sleeping (Render free tier), first request may fail; retry once after delay.
   Future<void> fetchAvailableJobs() async {
     if (!mounted) return;
 
     _safeSetState(() => loadingJobs = true);
     try {
-      final List<Map<String, dynamic>> jobs =
-          _hasToken && _effectiveToken != null
-              ? await CandidateService.getAvailableJobs(_effectiveToken!)
-              : await CandidateService.getPublicJobs();
+      List<Map<String, dynamic>> jobs;
+      if (_hasToken && _effectiveToken != null) {
+        jobs = await CandidateService.getAvailableJobs(_effectiveToken!);
+      } else {
+        try {
+          jobs = await CandidateService.getPublicJobs();
+        } catch (e) {
+          debugPrint("Public jobs first attempt failed (cold start?): $e");
+          await Future<void>.delayed(const Duration(seconds: 3));
+          if (!mounted) return;
+          jobs = await CandidateService.getPublicJobs();
+        }
+      }
       if (!mounted) return;
 
       _safeSetState(() {
