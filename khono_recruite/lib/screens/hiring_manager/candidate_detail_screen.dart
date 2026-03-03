@@ -486,7 +486,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
   Widget buildSidebar(ThemeProvider themeProvider) {
     return Drawer(
       backgroundColor:
-          (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
+          (themeProvider.isDarkMode ? const Color(0xFF1F2840) : Colors.white)
               .withValues(alpha: 0.9),
       child: SafeArea(
         child: ListView(
