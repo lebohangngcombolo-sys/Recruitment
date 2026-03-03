@@ -155,7 +155,8 @@ class AuthService {
         'dashboard': data['dashboard'],
       };
     } else {
-      return {'success': false, 'message': data['error'] ?? 'Login failed'};
+      final msg = data['error'] ?? data['message'] ?? 'Login failed';
+      return {'success': false, 'message': msg, 'error': msg};
     }
   }
 

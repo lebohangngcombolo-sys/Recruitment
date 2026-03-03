@@ -498,15 +498,23 @@ def init_auth_routes(app):
 
             # ---- Invalid credentials ----
             if not user:
+                if current_app.config.get('DEBUG'):
+                    current_app.logger.info('Login 401: no user for email (lowered)=%s', email)
                 return jsonify({'error': 'Invalid credentials'}), 401
             if not user.password:
                 return jsonify({'error': 'Account has no password set (e.g. SSO-only). Use the correct sign-in method.'}), 401
             try:
                 if not AuthService.verify_password(password, user.password):
+                    if current_app.config.get('DEBUG'):
+                        current_app.logger.info('Login 401: password mismatch for user id=%s email=%s', user.id, user.email)
                     return jsonify({'error': 'Invalid credentials'}), 401
             except Exception as pw_err:
                 current_app.logger.warning(f'Password verification failed: {pw_err}')
                 return jsonify({'error': 'Invalid credentials'}), 401
+
+            # ---- Handle inactive account ----
+            if not getattr(user, 'is_active', True):
+                return jsonify({'error': 'Account is deactivated. Contact support.'}), 403
 
             # ---- Handle unverified user ----
             if not user.is_verified:

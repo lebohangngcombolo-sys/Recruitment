@@ -1,5 +1,14 @@
-﻿import os
+import os
 import ssl
+from pathlib import Path
+
+# Load .env when app package is imported (e.g. flask db upgrade) so MONGO_URI/REDIS_URL are set
+_server_dir = Path(__file__).resolve().parent.parent
+_env_path = _server_dir / ".env"
+if _env_path.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_env_path)
+
 import cloudinary
 import cloudinary.uploader
 from flask_sqlalchemy import SQLAlchemy
@@ -62,8 +71,11 @@ cloudinary_client = CloudinaryClient()
 
 limiter = Limiter(key_func=get_remote_address)
 # ------------------- MongoDB Client -------------------
-mongo_client = MongoClient('mongodb://localhost:27017/')
-mongo_db = mongo_client['recruitment_cv']
+# Use MONGO_URI from env (e.g. .env) so local run can use cloud MongoDB; default localhost for minimal setup.
+_mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/recruitment_cv").strip()
+_mongo_db_name = _mongo_uri.rstrip("/").split("/")[-1].split("?")[0] or "recruitment_cv"
+mongo_client = MongoClient(_mongo_uri)
+mongo_db = mongo_client[_mongo_db_name]
 
 
 # ------------------- Redis Client -------------------
