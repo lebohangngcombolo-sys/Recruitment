@@ -12,6 +12,8 @@ import '../admin/interviews_list_screen.dart';
 import 'offer_list_screen.dart';
 import 'hm_analytics_page.dart';
 import 'hm_team_collaboration_page.dart';
+import 'hiring_manager_profile_screen.dart';
+import 'hiring_manager_settings_screen.dart';
 import 'pipeline_page.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
@@ -882,7 +884,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     height: double.infinity,
                     decoration: BoxDecoration(
                       color: themeProvider.isDarkMode
-                          ? const Color.fromARGB(171, 20, 19, 30)
+                          ? const Color(0xFF1F2840)
                           : const Color.fromARGB(156, 255, 255, 255),
                       border: Border(
                         right:
@@ -939,86 +941,48 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                             ),
                           ),
                         ),
-                        const Divider(height: 1, color: Colors.grey),
                         Expanded(
                           child: ListView(
                             padding: EdgeInsets.zero,
                             children: [
                               _sidebarEntry(
-                                  Icons.home_outlined, 'Home', 'dashboard'),
-                              _sidebarEntry(Icons.work_outline, 'Jobs', 'jobs'),
-                              _sidebarEntry(Icons.people_alt_outlined,
+                                  'assets/images/Home_Remote_Work_Red_Badge_White.png',
+                                  'Home', 'dashboard'),
+                              _sidebarEntry(
+                                  Icons.person_outline,
+                                  'Profile', 'profile'),
+                              _sidebarEntry(
+                                  'assets/images/Approval_Red_Badge_White.png',
+                                  'Jobs', 'jobs'),
+                              _sidebarEntry(
+                                  'assets/images/candidates.png',
                                   'Candidates', 'candidates'),
                               _sidebarEntry(
-                                  Icons.event_note, 'Interviews', 'interviews'),
-                              _sidebarEntry(Icons.assignment_outlined,
+                                  'assets/images/red_Management_Red_Badge_White.png',
+                                  'Interviews', 'interviews'),
+                              _sidebarEntry(
+                                  'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
                                   'CV Reviews', 'cv_reviews'),
-                              _sidebarEntry(Icons.analytics_outlined,
+                              _sidebarEntry(
+                                  'assets/icons/data-analytics.png',
                                   'Analytics', 'analytics'),
-                              _sidebarEntry(Icons.group_outlined,
+                              _sidebarEntry(
+                                  'assets/icons/teamC.png',
                                   'Team Collaboration', 'team_collaboration'),
-                              _sidebarEntry(Icons.notifications_active_outlined,
+                              _sidebarEntry(
+                                  'assets/images/Notification_Red_White.png',
                                   'Notifications', 'notifications'),
+                              _sidebarEntry(
+                                  'assets/images/innovation_brainstorm_red_badge_white.png',
+                                  'Settings', 'settings'),
                             ],
                           ),
                         ),
-                        const Divider(height: 1, color: Colors.grey),
                         Padding(
                           padding: const EdgeInsets.symmetric(
                               vertical: 12.0, horizontal: 8),
                           child: Column(
                             children: [
-                              if (!sidebarCollapsed)
-                                Row(
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () {
-                                        context.push(
-                                            '/profile?token=${widget.token}');
-                                      },
-                                      onLongPress: _pickProfileImage,
-                                      child: CircleAvatar(
-                                        radius: 18,
-                                        backgroundColor: Colors.grey.shade200,
-                                        backgroundImage:
-                                            _getProfileImageProvider(),
-                                        child: null,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        userName,
-                                        style: TextStyle(
-                                          fontFamily: 'Poppins',
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.grey.shade800,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              else
-                                Center(
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      context.push(
-                                          '/profile?token=${widget.token}');
-                                    },
-                                    onLongPress: _pickProfileImage,
-                                    child: CircleAvatar(
-                                      radius: 18,
-                                      backgroundColor: Colors.grey.shade200,
-                                      backgroundImage:
-                                          _getProfileImageProvider(),
-                                      child: null,
-                                    ),
-                                  ),
-                                ),
-                              const SizedBox(height: 12),
                               if (!sidebarCollapsed)
                                 ElevatedButton.icon(
                                   onPressed: () =>
@@ -1319,24 +1283,40 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     });
   }
 
-  Widget _sidebarEntry(IconData icon, String label, String screenKey) {
+  Widget _sidebarEntry(dynamic icon, String label, String screenKey,
+      {VoidCallback? onTapOverride}) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final selected = currentScreen == screenKey;
+    final iconColor = selected
+        ? const Color.fromRGBO(151, 18, 8, 1)
+        : themeProvider.isDarkMode
+            ? Colors.grey.shade400
+            : Colors.grey.shade800;
     return InkWell(
-      onTap: () => setState(() => currentScreen = screenKey),
+      onTap: onTapOverride ?? () => setState(() => currentScreen = screenKey),
       child: Container(
-        color: selected
-            ? const Color.fromRGBO(151, 18, 8, 1).withValues(alpha: 0.06)
-            : Colors.transparent,
+        color: selected ? const Color(0xFFC10D00) : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
           children: [
-            Icon(icon,
-                color: selected
-                    ? const Color.fromRGBO(151, 18, 8, 1)
-                    : themeProvider.isDarkMode
-                        ? Colors.grey.shade400
-                        : Colors.grey.shade800),
+            icon is IconData
+                ? Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: selected
+                          ? Colors.white
+                          : themeProvider.isDarkMode
+                              ? Colors.grey.shade700
+                              : Colors.grey.shade600,
+                    ),
+                    child: Icon(icon, size: 20, color: selected ? const Color(0xFFC10D00) : Colors.white),
+                  )
+                : Image.asset(icon as String, width: 32, height: 32,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Icon(Icons.error, color: iconColor, size: 32);
+                    }),
             const SizedBox(width: 12),
             if (!sidebarCollapsed)
               Expanded(
@@ -1345,7 +1325,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     color: selected
-                        ? Colors.redAccent
+                        ? Colors.white
                         : themeProvider.isDarkMode
                             ? Colors.grey.shade400
                             : Colors.grey.shade800,
@@ -1382,6 +1362,16 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         return HMTeamCollaborationPage();
       case "notifications":
         return NotificationsScreen();
+      case "settings":
+        return HiringManagerSettingsScreen(
+          token: widget.token,
+          onBack: () => setState(() => currentScreen = 'dashboard'),
+        );
+      case "profile":
+        return HiringManagerProfileScreen(
+          token: widget.token,
+          onBack: () => setState(() => currentScreen = 'dashboard'),
+        );
       default:
         return dashboardOverview();
     }

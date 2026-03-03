@@ -30,6 +30,7 @@ import 'screens/auth/sso_enterprise_screen.dart';
 import 'screens/hr/hr_dashboard.dart';
 import 'screens/hiring_manager/pipeline_page.dart';
 import 'screens/hiring_manager/offer_list_screen.dart';
+import 'screens/hiring_manager/hiring_manager_profile_screen.dart';
 
 import 'providers/theme_provider.dart';
 import 'utils/theme_utils.dart';
@@ -221,6 +222,13 @@ final GoRouter _router = GoRouter(
       builder: (context, state) {
         final token = state.uri.queryParameters['token'] ?? '';
         return ProfilePage(token: token);
+      },
+    ),
+    GoRoute(
+      path: '/hiring-manager-profile',
+      builder: (context, state) {
+        final token = state.uri.queryParameters['token'] ?? '';
+        return HiringManagerProfileScreen(token: token);
       },
     ),
     // ΓÜí OAuth callback screen reads tokens directly from URL

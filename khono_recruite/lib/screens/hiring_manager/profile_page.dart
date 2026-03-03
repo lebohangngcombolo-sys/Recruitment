@@ -740,7 +740,7 @@ class _ProfilePageState extends State<ProfilePage>
               width: 280,
               decoration: BoxDecoration(
                 color: themeProvider.isDarkMode
-                    ? const Color(0xFF14131E)
+                    ? const Color(0xFF1F2840)
                     : Colors.white,
                 boxShadow: [
                   BoxShadow(

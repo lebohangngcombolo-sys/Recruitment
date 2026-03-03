@@ -24,6 +24,7 @@ from app.services.ai_cv_parser import AIParser
 from marshmallow import ValidationError
 from werkzeug.utils import secure_filename
 import os
+import cloudinary.uploader
 
 
 
@@ -743,7 +744,10 @@ def init_auth_routes(app):
                 return jsonify({"error": "Body must include 'profile' object"}), 400
             new_profile = data["profile"]
             existing = dict(user.profile or {})
-            allowed = {"full_name", "first_name", "last_name", "phone", "profile_picture"}
+            allowed = {
+                "full_name", "first_name", "last_name", "phone", "profile_picture",
+                "department", "designation", "preferred_name", "managed_by", "preferences"
+            }
             for key in allowed:
                 if key in new_profile:
                     existing[key] = new_profile[key]
@@ -753,6 +757,57 @@ def init_auth_routes(app):
         except Exception as e:
             current_app.logger.error(f"Update profile error: {str(e)}", exc_info=True)
             return jsonify({"error": "Internal server error"}), 500
+
+    @app.route("/api/auth/upload_profile_picture", methods=["OPTIONS"])
+    def upload_profile_picture_options():
+        """CORS preflight for profile picture upload."""
+        return "", 204
+
+    @app.route("/api/auth/upload_profile_picture", methods=["POST"])
+    @jwt_required()
+    def upload_auth_profile_picture():
+        """Upload profile picture to Cloudinary and save URL to User.profile (for admin/HM)."""
+        try:
+            user_id = int(get_jwt_identity())
+            user = User.query.get(user_id)
+            if not user:
+                return jsonify({"success": False, "message": "User not found"}), 404
+            if "image" not in request.files:
+                return jsonify({"success": False, "message": "No image uploaded"}), 400
+            file = request.files["image"]
+            filename = secure_filename(file.filename or "")
+            if not filename:
+                return jsonify({"success": False, "message": "Invalid filename"}), 400
+            allowed = {"png", "jpg", "jpeg", "webp"}
+            ext = filename.rsplit(".", 1)[-1].lower()
+            if ext not in allowed:
+                return jsonify({"success": False, "message": "Invalid image type"}), 400
+
+            result = cloudinary.uploader.upload(
+                file,
+                folder="profile_pics/",
+                format="jpg",
+                resource_type="image",
+                public_id=f"user_{user_id}",
+            )
+            url = result.get("secure_url")
+            if not url:
+                return jsonify({"success": False, "message": "Cloudinary upload failed"}), 500
+
+            existing = dict(user.profile or {})
+            existing["profile_picture"] = url
+            user.profile = existing
+            db.session.commit()
+
+            return jsonify({
+                "success": True,
+                "message": "Profile picture updated",
+                "data": {"profile_picture": url},
+            }), 200
+        except Exception as e:
+            current_app.logger.error(f"Upload profile picture error: {str(e)}", exc_info=True)
+            db.session.rollback()
+            return jsonify({"success": False, "message": "Internal server error"}), 500
 
     # ------------------- DASHBOARDS -------------------
     @app.route("/api/dashboard/admin", methods=["GET"])

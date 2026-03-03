@@ -32,6 +32,7 @@ class ApiEndpoints {
   static String get changePassword => "$authBase/change-password";
   static String get currentUser => "$authBase/me";
   static String get updateAuthProfile => "$authBase/profile";
+  static String get uploadAuthProfilePicture => "$authBase/upload_profile_picture";
   static String get refresh => "$authBase/refresh";
   static String get adminEnroll => "$authBase/admin-enroll";
   static String get firebaseLogin => "$authBase/firebase-login";
