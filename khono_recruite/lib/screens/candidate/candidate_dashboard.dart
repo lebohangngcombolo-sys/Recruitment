@@ -223,9 +223,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       final results = await Future.wait([
         CandidateService.getApplications(widget.token),
         CandidateService.getDrafts(widget.token),
+        CandidateService.getInterviews(widget.token),
       ]);
       if (mounted) {
-        final apps = List<dynamic>.from(results[0]);
+        final apps = List<dynamic>.from(results[0] as List);
         final submittedOrCompletedList =
             apps.where(_isSubmittedOrCompletedApplication).toList();
         final submittedOrCompletedMaps = submittedOrCompletedList
@@ -247,14 +248,17 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             .whereType<Map>()
             .map((e) => Map<String, dynamic>.from(e))
             .toList();
+        final interviewsData = results[2] is Map<String, dynamic> ? results[2] as Map<String, dynamic> : <String, dynamic>{};
+        final scheduledCount = interviewsData['scheduled_count'] is int
+            ? interviewsData['scheduled_count'] as int
+            : (interviewsData['interviews'] is List ? (interviewsData['interviews'] as List).length : 0);
         _safeSetState(() {
           _applicationsCount = submittedOrCompletedMaps.length;
-          _savedCount = results[1].length;
+          _savedCount = (results[1] as List).length;
           _inProgressApplications = inProgressMaps;
           _completedApplications = completedMaps;
           _appliedOnlyApplications = appliedOnlyMaps;
-          _interviewsScheduledCount =
-              0; // TODO: fetch from candidate interviews API
+          _interviewsScheduledCount = scheduledCount;
           _dashboardCountsLoaded = true;
         });
         _saveCachedInProgressApplications(inProgressMaps);

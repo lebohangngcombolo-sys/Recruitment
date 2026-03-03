@@ -7,7 +7,7 @@ from app.extensions import bcrypt
 import cloudinary.uploader
 import cloudinary.utils
 from app.models import (
-    User, Candidate, Requisition, Application, AssessmentResult, Notification, AuditLog, CVAnalysis
+    User, Candidate, Requisition, Application, AssessmentResult, Notification, AuditLog, CVAnalysis, Interview
 )
 from datetime import datetime
 from werkzeug.utils import secure_filename
@@ -678,6 +678,40 @@ def get_profile():
     except Exception as e:
         current_app.logger.error(f"Get profile error: {e}", exc_info=True)
         return jsonify({"success": False, "message": "Internal server error"}), 500
+
+
+# ----------------- GET MY INTERVIEWS (for candidate dashboard) -----------------
+@candidate_bp.route("/interviews", methods=["GET"])
+@role_required(["candidate"])
+def get_my_interviews():
+    """Return the current candidate's interviews for dashboard count and listing."""
+    try:
+        candidate = get_current_candidate(auto_create=False)
+        if not candidate:
+            return jsonify({"interviews": [], "scheduled_count": 0}), 200
+
+        interviews = Interview.query.filter_by(candidate_id=candidate.id).order_by(Interview.scheduled_time.desc()).all()
+        now = datetime.utcnow()
+        scheduled_count = sum(
+            1 for i in interviews
+            if i.scheduled_time >= now and (i.status or "scheduled") in ("scheduled", "confirmed")
+        )
+        out = []
+        for i in interviews:
+            out.append({
+                "id": i.id,
+                "application_id": i.application_id,
+                "scheduled_time": i.scheduled_time.isoformat() if i.scheduled_time else None,
+                "interview_type": i.interview_type,
+                "meeting_link": i.meeting_link,
+                "status": i.status or "scheduled",
+                "job_title": i.application.requisition.title if i.application and i.application.requisition else None,
+            })
+        return jsonify({"interviews": out, "scheduled_count": scheduled_count}), 200
+    except Exception as e:
+        current_app.logger.error(f"Get my interviews error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
 
 # ----------------- UPDATE PROFILE -----------------
 

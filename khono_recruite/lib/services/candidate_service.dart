@@ -262,4 +262,23 @@ class CandidateService {
       throw Exception('Failed to submit draft: ${response.body}');
     }
   }
+
+  // ---------- GET MY INTERVIEWS (for dashboard scheduled count) ----------
+  static Future<Map<String, dynamic>> getInterviews(String token) async {
+    final response = await http.get(
+      Uri.parse('${ApiEndpoints.candidateBase}/interviews'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    if (response.statusCode == 200) {
+      final data = _safeJsonDecode(response.body);
+      if (data is Map<String, dynamic>) {
+        return data;
+      }
+      return {'interviews': [], 'scheduled_count': 0};
+    }
+    return {'interviews': [], 'scheduled_count': 0};
+  }
 }
