@@ -1,0 +1,2 @@
+# Ensure requirements.txt is always UTF-8 and LF (avoids Render build failures from UTF-16)
+server/requirements.txt text eol=lf encoding=utf-8
