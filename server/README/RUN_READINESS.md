@@ -30,7 +30,7 @@ flutter run
   - `YYYY` = 4-digit year, `MM` = 2-digit month.
   - `X` = week-of-month letter `A–F`.
   - `Y` = day-of-week letter `A–G` (Mon–Sun).
-  - `Z` = commit count (usually from `origin/dev_main`).
+  - `Z` = **number of commits on `dev_main` for the current calendar day** (fallback: commits on the current HEAD for today, then `0` if none).
   - `ENV` = environment suffix (e.g. `DEV`, `STAGE`, `PROD`), taken from `APP_ENV`.
 - **Render (production) builds:**
   - `render.yaml` runs `khono_recruite/render_build.sh`, which:

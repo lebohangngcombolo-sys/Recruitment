@@ -10,12 +10,15 @@ if [ -n "${REPO_ROOT:-}" ]; then
   cd "$REPO_ROOT"
 fi
 
-# Year and month
+# Year, month, and day (for both letters and per-day commit counting)
 YEAR="$(date +%Y)"
 MONTH="$(date +%m)"
+DAY_OF_MONTH="$(date +%d)"
+
+# Today string for git date filters (YYYY-MM-DD)
+TODAY="${YEAR}-${MONTH}-${DAY_OF_MONTH}"
 
 # Week of month: 1→A, 2→B, … 6→F
-DAY_OF_MONTH="$(date +%d)"
 WEEK_NUM=$(( (10#$DAY_OF_MONTH - 1) / 7 + 1 ))
 # Cap at 6 for letter F
 if [ "$WEEK_NUM" -gt 6 ]; then
@@ -27,10 +30,13 @@ WEEK_LETTER="$(printf '%c' $((64 + WEEK_NUM)))"
 DOW_NUM="$(date +%u)"
 DAY_LETTER="$(printf '%c' $((64 + DOW_NUM)))"
 
-# Commit count: prefer origin/dev_main, else HEAD, else 0
-COMMIT_COUNT="$(git rev-list --count origin/dev_main 2>/dev/null)" || true
+# Commit count for *today*:
+# - Prefer commits on origin/dev_main for the current calendar day.
+# - Fall back to commits on HEAD for today.
+# - Finally fall back to 0 if git history is unavailable.
+COMMIT_COUNT="$(git rev-list --count origin/dev_main --since=\"${TODAY}\" 2>/dev/null)" || true
 if [ -z "${COMMIT_COUNT:-}" ]; then
-  COMMIT_COUNT="$(git rev-list --count HEAD 2>/dev/null)" || true
+  COMMIT_COUNT="$(git rev-list --count HEAD --since=\"${TODAY}\" 2>/dev/null)" || true
 fi
 COMMIT_COUNT="${COMMIT_COUNT:-0}"
 
