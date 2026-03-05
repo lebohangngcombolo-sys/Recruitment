@@ -123,6 +123,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
     return 'Needs Review';
   }
 
+  static const double _kTranslucentOpacity = 0.65;
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -212,7 +214,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                   color: (themeProvider.isDarkMode
                                           ? const Color(0xFF14131E)
                                           : Colors.white)
-                                      .withValues(alpha: 0.9),
+                                      .withValues(alpha: _kTranslucentOpacity),
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
@@ -231,7 +233,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                           padding: const EdgeInsets.all(12),
                                           decoration: BoxDecoration(
                                             color: Colors.redAccent
-                                                .withValues(alpha: 0.1),
+                                                .withValues(alpha: _kTranslucentOpacity),
                                             borderRadius:
                                                 BorderRadius.circular(12),
                                           ),
@@ -279,7 +281,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                             color: (showAllCVs
                                                     ? Colors.blue
                                                     : Colors.redAccent)
-                                                .withValues(alpha: 0.1),
+                                                .withValues(alpha: _kTranslucentOpacity),
                                             borderRadius:
                                                 BorderRadius.circular(12),
                                           ),
@@ -311,7 +313,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                   horizontal: 16, vertical: 12),
                                               decoration: BoxDecoration(
                                                 color: !showAllCVs
-                                                    ? const Color(0xFFC10D00)
+                                                    ? const Color(0xFFC10D00).withValues(alpha: _kTranslucentOpacity)
                                                     : Colors.transparent,
                                                 borderRadius:
                                                     BorderRadius.circular(8),
@@ -344,7 +346,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                   horizontal: 16, vertical: 12),
                                               decoration: BoxDecoration(
                                                 color: showAllCVs
-                                                    ? const Color(0xFFC10D00)
+                                                    ? const Color(0xFFC10D00).withValues(alpha: _kTranslucentOpacity)
                                                     : Colors.transparent,
                                                 borderRadius:
                                                     BorderRadius.circular(8),
@@ -394,9 +396,9 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                     BorderRadius.circular(8),
                                               ),
                                               filled: true,
-                                              fillColor: themeProvider.isDarkMode
+                                              fillColor: (themeProvider.isDarkMode
                                                   ? Colors.grey[800]
-                                                  : Colors.grey[100],
+                                                  : Colors.grey[100])!.withValues(alpha: _kTranslucentOpacity),
                                             ),
                                             style: TextStyle(
                                                 color: themeProvider.isDarkMode
@@ -433,14 +435,14 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                   borderRadius:
                                                       BorderRadius.circular(8)),
                                               filled: true,
-                                              fillColor: themeProvider.isDarkMode
+                                              fillColor: (themeProvider.isDarkMode
                                                   ? Colors.grey[800]
-                                                  : Colors.grey[100],
+                                                  : Colors.grey[100])!.withValues(alpha: _kTranslucentOpacity),
                                             ),
                                             dropdownColor:
-                                                themeProvider.isDarkMode
+                                                (themeProvider.isDarkMode
                                                     ? Colors.grey[800]
-                                                    : Colors.white,
+                                                    : Colors.white)!.withValues(alpha: _kTranslucentOpacity),
                                             style: TextStyle(
                                                 color: themeProvider.isDarkMode
                                                     ? Colors.white
@@ -481,14 +483,14 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                   borderRadius:
                                                       BorderRadius.circular(8)),
                                               filled: true,
-                                              fillColor: themeProvider.isDarkMode
+                                              fillColor: (themeProvider.isDarkMode
                                                   ? Colors.grey[800]
-                                                  : Colors.grey[100],
+                                                  : Colors.grey[100])!.withValues(alpha: _kTranslucentOpacity),
                                             ),
                                             dropdownColor:
-                                                themeProvider.isDarkMode
+                                                (themeProvider.isDarkMode
                                                     ? Colors.grey[800]
-                                                    : Colors.white,
+                                                    : Colors.white)!.withValues(alpha: _kTranslucentOpacity),
                                             style: TextStyle(
                                                 color: themeProvider.isDarkMode
                                                     ? Colors.white
@@ -530,15 +532,15 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                           colors: themeProvider.isDarkMode
                                               ? [
                                                   const Color(0xFF1E1E2E)
-                                                      .withValues(alpha: 0.9),
+                                                      .withValues(alpha: _kTranslucentOpacity),
                                                   const Color(0xFF2A2A3E)
-                                                      .withValues(alpha: 0.9),
+                                                      .withValues(alpha: _kTranslucentOpacity),
                                                 ]
                                               : [
                                                   Colors.white
-                                                      .withValues(alpha: 0.95),
+                                                      .withValues(alpha: _kTranslucentOpacity),
                                                   Colors.grey.shade50
-                                                      .withValues(alpha: 0.95),
+                                                      .withValues(alpha: _kTranslucentOpacity),
                                                 ],
                                           begin: Alignment.topLeft,
                                           end: Alignment.bottomRight,
@@ -568,8 +570,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                     shape: BoxShape.circle,
                                                     gradient: LinearGradient(
                                                       colors: [
-                                                        const Color(0xFFC10D00),
-                                                        Colors.red.shade700,
+                                                        const Color(0xFFC10D00).withValues(alpha: _kTranslucentOpacity),
+                                                        Colors.red.shade700.withValues(alpha: _kTranslucentOpacity),
                                                       ],
                                                     ),
                                                   ),
@@ -622,7 +624,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                                       : Colors
                                                                           .grey)
                                                               .withValues(
-                                                                  alpha: 0.1),
+                                                                  alpha: _kTranslucentOpacity),
                                                           borderRadius:
                                                               BorderRadius
                                                                   .circular(12),
@@ -677,9 +679,9 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                               decoration: BoxDecoration(
                                                 color: hasScore
                                                     ? Colors.amber
-                                                        .withValues(alpha: 0.1)
+                                                        .withValues(alpha: _kTranslucentOpacity)
                                                     : Colors.grey
-                                                        .withValues(alpha: 0.1),
+                                                        .withValues(alpha: _kTranslucentOpacity),
                                                 borderRadius:
                                                     BorderRadius.circular(12),
                                                 border: Border.all(
@@ -733,11 +735,12 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                     Icons.remove_red_eye),
                                                 label: const Text('Preview CV'),
                                                 style: ElevatedButton.styleFrom(
-                                                  backgroundColor: cvUrl !=
+                                                  backgroundColor: (cvUrl !=
                                                               null &&
                                                           cvUrl.isNotEmpty
                                                       ? const Color(0xFFC10D00)
-                                                      : Colors.grey.shade400,
+                                                      : Colors.grey.shade400)
+                                                          .withValues(alpha: _kTranslucentOpacity),
                                                   foregroundColor: Colors.white,
                                                   padding: const EdgeInsets
                                                       .symmetric(vertical: 14),
