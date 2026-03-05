@@ -124,7 +124,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   }
 
   static const double _kTranslucentOpacity = 0.9;
-  static const double _kCardAndHeaderOpacity = 0.7;
+  static const double _kCardAndHeaderOpacity = 0.7; // dark mode
+  static const double _kCardOpacityLight = 0.98; // light mode: thick, minimal see-through (match analytics)
 
   // Design system
   static const Color _kPrimary = Color(0xFFC10D00);
@@ -502,7 +503,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                   decoration: BoxDecoration(
                                     color: themeProvider.isDarkMode
                                         ? _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity)
-                                        : Colors.white.withValues(alpha: _kCardAndHeaderOpacity),
+                                        : Colors.white.withValues(alpha: _kCardOpacityLight),
                                     borderRadius: BorderRadius.circular(_kCardRadius),
                                     boxShadow: [
                                       BoxShadow(
@@ -522,7 +523,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                         decoration: BoxDecoration(
                                           color: themeProvider.isDarkMode
                                               ? _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity)
-                                              : Colors.white.withValues(alpha: _kCardAndHeaderOpacity),
+                                              : Colors.white.withValues(alpha: _kCardOpacityLight),
                                           borderRadius: const BorderRadius.vertical(
                                               top: Radius.circular(_kCardRadius)),
                                         ),
@@ -587,7 +588,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                               decoration: BoxDecoration(
                                                 color: themeProvider.isDarkMode
                                                     ? _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity)
-                                                    : Colors.white.withValues(alpha: _kCardAndHeaderOpacity),
+                                                    : Colors.white.withValues(alpha: _kCardOpacityLight),
                                                 borderRadius: isLast
                                                     ? const BorderRadius.vertical(
                                                         bottom: Radius.circular(_kCardRadius))
@@ -714,7 +715,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                                 ? _kDarkSurface
                                                                     .withValues(alpha: _kCardAndHeaderOpacity)
                                                                 : Colors.grey.shade300
-                                                                    .withValues(alpha: _kCardAndHeaderOpacity)),
+                                                                    .withValues(alpha: _kCardOpacityLight)),
                                                         foregroundColor: Colors.white,
                                                         padding: const EdgeInsets.symmetric(
                                                             horizontal: 8, vertical: 8),
