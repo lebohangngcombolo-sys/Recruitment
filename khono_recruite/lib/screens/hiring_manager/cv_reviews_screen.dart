@@ -114,7 +114,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   Color getScoreColor(double score) {
     if (score >= 70) return Colors.green;
     if (score >= 50) return Colors.orange;
-    return Colors.redAccent;
+    return _kPrimary;
   }
 
   String getScoreLabel(double score) {
@@ -123,7 +123,18 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
     return 'Needs Review';
   }
 
-  static const double _kTranslucentOpacity = 0.65;
+  static const double _kTranslucentOpacity = 0.9;
+  static const double _kCardAndHeaderOpacity = 0.4;
+
+  // Design system
+  static const Color _kPrimary = Color(0xFFC10D00);
+  static const Color _kDarkSurface = Color(0xFF2C3E50);
+  static const double _kCardRadius = 16;
+  static const double _kBadgeRadius = 20;
+  static const double _kSearchRadius = 25;
+  static const double _kInputRadius = 4;
+  static const double _kMainPadding = 16;
+  static const double _kSmallGap = 8;
 
   @override
   Widget build(BuildContext context) {
@@ -147,12 +158,12 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                     children: [
                       const CircularProgressIndicator(
                         valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.redAccent),
+                            AlwaysStoppedAnimation<Color>(_kPrimary),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: _kMainPadding),
                       Text(
                         "Loading CV Reviews...",
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.poppins(
                           color: themeProvider.isDarkMode
                               ? Colors.grey.shade400
                               : Colors.grey.shade600,
@@ -163,7 +174,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                   ),
                 )
                       : Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(_kMainPadding),
                   child: displayedCVs.isEmpty
                       ? Center(
                           child: Column(
@@ -176,12 +187,12 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                     ? Colors.grey.shade600
                                     : Colors.grey.shade300,
                               ),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: _kMainPadding),
                               Text(
                                 showAllCVs
                                     ? "No CVs Found"
                                     : "No CV Reviews Found",
-                                style: GoogleFonts.inter(
+                                style: GoogleFonts.poppins(
                                   color: themeProvider.isDarkMode
                                       ? Colors.grey.shade400
                                       : Colors.grey.shade600,
@@ -189,12 +200,12 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: _kSmallGap),
                               Text(
                                 showAllCVs
                                     ? "CVs will appear here once candidates upload them"
                                     : "CV reviews will appear here once available",
-                                style: GoogleFonts.inter(
+                                style: GoogleFonts.poppins(
                                   color: themeProvider.isDarkMode
                                       ? Colors.grey.shade500
                                       : Colors.grey.shade500,
@@ -209,13 +220,10 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                             // Header with stats and filter toggle (scrolls with content)
                             SliverToBoxAdapter(
                               child: Container(
-                                padding: const EdgeInsets.all(20),
+                                padding: const EdgeInsets.all(_kMainPadding),
                                 decoration: BoxDecoration(
-                                  color: (themeProvider.isDarkMode
-                                          ? const Color(0xFF14131E)
-                                          : Colors.white)
-                                      .withValues(alpha: _kTranslucentOpacity),
-                                  borderRadius: BorderRadius.circular(16),
+                                  color: _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity),
+                                  borderRadius: BorderRadius.circular(_kCardRadius),
                                   boxShadow: [
                                     BoxShadow(
                                       color: Colors.black.withValues(alpha: 0.1),
@@ -232,18 +240,18 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                         Container(
                                           padding: const EdgeInsets.all(12),
                                           decoration: BoxDecoration(
-                                            color: Colors.redAccent
+                                            color: _kPrimary
                                                 .withValues(alpha: _kTranslucentOpacity),
                                             borderRadius:
-                                                BorderRadius.circular(12),
+                                                BorderRadius.circular(_kBadgeRadius),
                                           ),
                                           child: Icon(
                                             Icons.assignment_outlined,
-                                            color: Colors.redAccent,
+                                            color: _kPrimary,
                                             size: 28,
                                           ),
                                         ),
-                                        const SizedBox(width: 16),
+                                        const SizedBox(width: _kMainPadding),
                                         Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
@@ -264,7 +272,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                               showAllCVs
                                                   ? "${allCVs.length} total CVs uploaded"
                                                   : "${cvReviews.length} candidates reviewed",
-                                              style: GoogleFonts.inter(
+                                              style: GoogleFonts.poppins(
                                                 color: themeProvider.isDarkMode
                                                     ? Colors.grey.shade400
                                                     : Colors.grey.shade600,
@@ -276,23 +284,19 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                         const Spacer(),
                                         Container(
                                           padding: const EdgeInsets.symmetric(
-                                              horizontal: 16, vertical: 8),
+                                              horizontal: _kMainPadding, vertical: _kSmallGap),
                                           decoration: BoxDecoration(
-                                            color: (showAllCVs
-                                                    ? Colors.blue
-                                                    : Colors.redAccent)
+                                            color: _kPrimary
                                                 .withValues(alpha: _kTranslucentOpacity),
                                             borderRadius:
-                                                BorderRadius.circular(12),
+                                                BorderRadius.circular(_kBadgeRadius),
                                           ),
                                           child: Text(
                                             showAllCVs
                                                 ? "All CVs"
                                                 : "Reviewed CVs",
-                                            style: GoogleFonts.inter(
-                                              color: showAllCVs
-                                                  ? Colors.blue
-                                                  : Colors.redAccent,
+                                            style: GoogleFonts.poppins(
+                                              color: Colors.white,
                                               fontWeight: FontWeight.w600,
                                               fontSize: 12,
                                             ),
@@ -300,7 +304,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 16),
+                                    const SizedBox(height: _kMainPadding),
                                     // Filter toggle buttons
                                     Row(
                                       children: [
@@ -310,25 +314,25 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                 () => showAllCVs = false),
                                             child: Container(
                                               padding: const EdgeInsets.symmetric(
-                                                  horizontal: 16, vertical: 12),
+                                                  horizontal: _kMainPadding, vertical: 12),
                                               decoration: BoxDecoration(
                                                 color: !showAllCVs
-                                                    ? const Color(0xFFC10D00).withValues(alpha: _kTranslucentOpacity)
+                                                    ? _kPrimary.withValues(alpha: _kTranslucentOpacity)
                                                     : Colors.transparent,
                                                 borderRadius:
-                                                    BorderRadius.circular(8),
+                                                    BorderRadius.circular(_kCardRadius),
                                                 border: Border.all(
-                                                  color: const Color(0xFFC10D00)
+                                                  color: _kPrimary
                                                       .withValues(alpha: 0.3),
                                                 ),
                                               ),
                                               child: Text(
                                                 "Reviewed CVs",
                                                 textAlign: TextAlign.center,
-                                                style: GoogleFonts.inter(
+                                                style: GoogleFonts.poppins(
                                                   color: !showAllCVs
                                                       ? Colors.white
-                                                      : const Color(0xFFC10D00),
+                                                      : _kPrimary,
                                                   fontWeight: FontWeight.w600,
                                                   fontSize: 14,
                                                 ),
@@ -336,32 +340,32 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                             ),
                                           ),
                                         ),
-                                        const SizedBox(width: 12),
+                                        const SizedBox(width: _kSmallGap),
                                         Expanded(
                                           child: GestureDetector(
                                             onTap: () =>
                                                 setState(() => showAllCVs = true),
                                             child: Container(
                                               padding: const EdgeInsets.symmetric(
-                                                  horizontal: 16, vertical: 12),
+                                                  horizontal: _kMainPadding, vertical: 12),
                                               decoration: BoxDecoration(
                                                 color: showAllCVs
-                                                    ? const Color(0xFFC10D00).withValues(alpha: _kTranslucentOpacity)
+                                                    ? _kPrimary.withValues(alpha: _kTranslucentOpacity)
                                                     : Colors.transparent,
                                                 borderRadius:
-                                                    BorderRadius.circular(8),
+                                                    BorderRadius.circular(_kCardRadius),
                                                 border: Border.all(
-                                                  color: const Color(0xFFC10D00)
+                                                  color: _kPrimary
                                                       .withValues(alpha: 0.3),
                                                 ),
                                               ),
                                               child: Text(
                                                 "All CVs",
                                                 textAlign: TextAlign.center,
-                                                style: GoogleFonts.inter(
+                                                style: GoogleFonts.poppins(
                                                   color: showAllCVs
                                                       ? Colors.white
-                                                      : const Color(0xFFC10D00),
+                                                      : _kPrimary,
                                                   fontWeight: FontWeight.w600,
                                                   fontSize: 14,
                                                 ),
@@ -371,7 +375,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                         ),
                                       ],
                                     ),
-                                    const SizedBox(height: 16),
+                                    const SizedBox(height: _kMainPadding),
                                     // Search and filters row
                                     Row(
                                       children: [
@@ -383,7 +387,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                 () => searchQuery = value),
                                             decoration: InputDecoration(
                                               hintText: 'Search by name...',
-                                              hintStyle: TextStyle(
+                                              hintStyle: GoogleFonts.poppins(
                                                   color: themeProvider.isDarkMode
                                                       ? Colors.white54
                                                       : Colors.black54),
@@ -393,20 +397,18 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                       : Colors.black54),
                                               border: OutlineInputBorder(
                                                 borderRadius:
-                                                    BorderRadius.circular(8),
+                                                    BorderRadius.circular(_kSearchRadius),
                                               ),
                                               filled: true,
-                                              fillColor: (themeProvider.isDarkMode
-                                                  ? Colors.grey[800]
-                                                  : Colors.grey[100])!.withValues(alpha: _kTranslucentOpacity),
+                                              fillColor: _kDarkSurface.withValues(alpha: _kTranslucentOpacity),
                                             ),
-                                            style: TextStyle(
+                                            style: GoogleFonts.poppins(
                                                 color: themeProvider.isDarkMode
                                                     ? Colors.white
                                                     : Colors.black),
                                           ),
                                         ),
-                                        const SizedBox(width: 16),
+                                        const SizedBox(width: _kMainPadding),
                                         // Gender filter
                                         Expanded(
                                           child: DropdownButtonFormField<String>(
@@ -417,7 +419,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                 .map((gender) => DropdownMenuItem(
                                                       value: gender,
                                                       child: Text(gender,
-                                                          style: TextStyle(
+                                                          style: GoogleFonts.poppins(
                                                               color: themeProvider
                                                                       .isDarkMode
                                                                   ? Colors.white
@@ -427,29 +429,24 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                 .toList(),
                                             decoration: InputDecoration(
                                               labelText: 'Gender',
-                                              labelStyle: TextStyle(
+                                              labelStyle: GoogleFonts.poppins(
                                                   color: themeProvider.isDarkMode
                                                       ? Colors.white70
                                                       : Colors.black54),
                                               border: OutlineInputBorder(
                                                   borderRadius:
-                                                      BorderRadius.circular(8)),
+                                                      BorderRadius.circular(_kInputRadius)),
                                               filled: true,
-                                              fillColor: (themeProvider.isDarkMode
-                                                  ? Colors.grey[800]
-                                                  : Colors.grey[100])!.withValues(alpha: _kTranslucentOpacity),
+                                              fillColor: _kDarkSurface.withValues(alpha: _kTranslucentOpacity),
                                             ),
-                                            dropdownColor:
-                                                (themeProvider.isDarkMode
-                                                    ? Colors.grey[800]
-                                                    : Colors.white)!.withValues(alpha: _kTranslucentOpacity),
-                                            style: TextStyle(
+                                            dropdownColor: _kDarkSurface.withValues(alpha: _kTranslucentOpacity),
+                                            style: GoogleFonts.poppins(
                                                 color: themeProvider.isDarkMode
                                                     ? Colors.white
                                                     : Colors.black),
                                           ),
                                         ),
-                                        const SizedBox(width: 16),
+                                        const SizedBox(width: _kMainPadding),
                                         // Score filter
                                         Expanded(
                                           child: DropdownButtonFormField<String>(
@@ -465,7 +462,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                 .map((filter) => DropdownMenuItem(
                                                       value: filter,
                                                       child: Text(filter,
-                                                          style: TextStyle(
+                                                          style: GoogleFonts.poppins(
                                                               color: themeProvider
                                                                       .isDarkMode
                                                                   ? Colors.white
@@ -475,23 +472,18 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                 .toList(),
                                             decoration: InputDecoration(
                                               labelText: 'Score',
-                                              labelStyle: TextStyle(
+                                              labelStyle: GoogleFonts.poppins(
                                                   color: themeProvider.isDarkMode
                                                       ? Colors.white70
                                                       : Colors.black54),
                                               border: OutlineInputBorder(
                                                   borderRadius:
-                                                      BorderRadius.circular(8)),
+                                                      BorderRadius.circular(_kInputRadius)),
                                               filled: true,
-                                              fillColor: (themeProvider.isDarkMode
-                                                  ? Colors.grey[800]
-                                                  : Colors.grey[100])!.withValues(alpha: _kTranslucentOpacity),
+                                              fillColor: _kDarkSurface.withValues(alpha: _kTranslucentOpacity),
                                             ),
-                                            dropdownColor:
-                                                (themeProvider.isDarkMode
-                                                    ? Colors.grey[800]
-                                                    : Colors.white)!.withValues(alpha: _kTranslucentOpacity),
-                                            style: TextStyle(
+                                            dropdownColor: _kDarkSurface.withValues(alpha: _kTranslucentOpacity),
+                                            style: GoogleFonts.poppins(
                                                 color: themeProvider.isDarkMode
                                                     ? Colors.white
                                                     : Colors.black),
@@ -503,7 +495,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                 ),
                               ),
                             ),
-                            const SliverToBoxAdapter(child: SizedBox(height: 20)),
+                            const SliverToBoxAdapter(child: SizedBox(height: _kMainPadding)),
 
                             // Candidate CV Cards (scrolls with header)
                             SliverList(
@@ -518,49 +510,27 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                       : 0.0;
                                   final cvUrl = review['cv_url'] as String?;
 
-                                  return Card(
-                                    margin: const EdgeInsets.symmetric(
-                                        vertical: 8, horizontal: 16),
-                                    elevation: 8,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(16),
-                                    ),
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: _kSmallGap, horizontal: _kMainPadding),
                                     child: Container(
+                                      padding: const EdgeInsets.all(_kMainPadding),
                                       decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(16),
-                                        gradient: LinearGradient(
-                                          colors: themeProvider.isDarkMode
-                                              ? [
-                                                  const Color(0xFF1E1E2E)
-                                                      .withValues(alpha: _kTranslucentOpacity),
-                                                  const Color(0xFF2A2A3E)
-                                                      .withValues(alpha: _kTranslucentOpacity),
-                                                ]
-                                              : [
-                                                  Colors.white
-                                                      .withValues(alpha: _kTranslucentOpacity),
-                                                  Colors.grey.shade50
-                                                      .withValues(alpha: _kTranslucentOpacity),
-                                                ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
+                                        color: _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity),
+                                        borderRadius: BorderRadius.circular(_kCardRadius),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.black
-                                                .withValues(alpha: 0.1),
-                                            blurRadius: 12,
+                                            color: Colors.black.withValues(alpha: 0.1),
+                                            blurRadius: 15,
                                             offset: const Offset(0, 6),
                                           ),
                                         ],
                                       ),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(20),
-                                        child: Column(
+                                      child: Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
                                           children: [
-                                            // Header with Name and Gender
+                                            // Header with Name and Gender (same design as top widget)
                                             Row(
                                               children: [
                                                 Container(
@@ -568,12 +538,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                   height: 48,
                                                   decoration: BoxDecoration(
                                                     shape: BoxShape.circle,
-                                                    gradient: LinearGradient(
-                                                      colors: [
-                                                        const Color(0xFFC10D00).withValues(alpha: _kTranslucentOpacity),
-                                                        Colors.red.shade700.withValues(alpha: _kTranslucentOpacity),
-                                                      ],
-                                                    ),
+                                                    color: _kPrimary,
                                                   ),
                                                   child: const Icon(
                                                     Icons.person,
@@ -581,7 +546,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                     size: 24,
                                                   ),
                                                 ),
-                                                const SizedBox(width: 16),
+                                                const SizedBox(width: _kMainPadding),
                                                 Expanded(
                                                   child: Column(
                                                     crossAxisAlignment:
@@ -592,7 +557,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                         review['full_name'] ??
                                                             'Unknown Candidate',
                                                         style:
-                                                            GoogleFonts.inter(
+                                                            GoogleFonts.poppins(
                                                           fontSize: 18,
                                                           fontWeight:
                                                               FontWeight.w700,
@@ -605,13 +570,13 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                         overflow: TextOverflow
                                                             .ellipsis,
                                                       ),
-                                                      const SizedBox(height: 4),
+                                                      const SizedBox(height: _kSmallGap),
                                                       Container(
                                                         padding:
                                                             const EdgeInsets
                                                                 .symmetric(
                                                                 horizontal: 10,
-                                                                vertical: 4),
+                                                                vertical: _kSmallGap),
                                                         decoration:
                                                             BoxDecoration(
                                                           color: (review['gender'] ==
@@ -622,12 +587,12 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                                       ? Colors
                                                                           .pink
                                                                       : Colors
-                                                                          .grey)
+                                                                          .black)
                                                               .withValues(
-                                                                  alpha: _kTranslucentOpacity),
+                                                                  alpha: (review['gender'] == null || review['gender'] == '' || review['gender'] == 'N/A') ? _kCardAndHeaderOpacity : _kTranslucentOpacity),
                                                           borderRadius:
                                                               BorderRadius
-                                                                  .circular(12),
+                                                                  .circular(_kBadgeRadius),
                                                           border: Border.all(
                                                             color: (review['gender'] ==
                                                                         'Male'
@@ -638,7 +603,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                                         ? Colors
                                                                             .pink
                                                                         : Colors
-                                                                            .grey)
+                                                                            .black)
                                                                 .withValues(
                                                                     alpha: 0.3),
                                                           ),
@@ -647,14 +612,14 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                           review['gender'] ??
                                                               'N/A',
                                                           style:
-                                                              GoogleFonts.inter(
+                                                              GoogleFonts.poppins(
                                                             fontSize: 12,
                                                             fontWeight:
                                                                 FontWeight.w600,
                                                             color: review[
                                                                         'gender'] ==
                                                                     'Male'
-                                                                ? Colors.blue
+                                                                    ? Colors.blue
                                                                     .shade700
                                                                 : review['gender'] ==
                                                                         'Female'
@@ -662,8 +627,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                                         .pink
                                                                         .shade700
                                                                     : Colors
-                                                                        .grey
-                                                                        .shade700,
+                                                                        .black87,
                                                           ),
                                                         ),
                                                       ),
@@ -672,24 +636,20 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                 ),
                                               ],
                                             ),
-                                            const SizedBox(height: 16),
-                                            // Score Section
+                                            const SizedBox(height: _kMainPadding),
+                                            // Score Section: red = solid (no opacity), dark = 40% like card
                                             Container(
                                               padding: const EdgeInsets.all(12),
                                               decoration: BoxDecoration(
                                                 color: hasScore
-                                                    ? Colors.amber
-                                                        .withValues(alpha: _kTranslucentOpacity)
-                                                    : Colors.grey
-                                                        .withValues(alpha: _kTranslucentOpacity),
+                                                    ? _kPrimary
+                                                    : _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity),
                                                 borderRadius:
-                                                    BorderRadius.circular(12),
+                                                    BorderRadius.circular(_kCardRadius),
                                                 border: Border.all(
                                                   color: hasScore
-                                                      ? Colors.amber.withValues(
-                                                          alpha: 0.3)
-                                                      : Colors.grey.withValues(
-                                                          alpha: 0.3),
+                                                      ? _kPrimary.withValues(alpha: 0.3)
+                                                      : _kDarkSurface.withValues(alpha: 0.3),
                                                 ),
                                               ),
                                               child: Row(
@@ -699,31 +659,29 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                         ? Icons.star
                                                         : Icons.star_border,
                                                     color: hasScore
-                                                        ? Colors.amber.shade600
-                                                        : Colors.grey,
+                                                        ? Colors.white
+                                                        : Colors.black54,
                                                     size: 24,
                                                   ),
-                                                  const SizedBox(width: 8),
+                                                  const SizedBox(width: _kSmallGap),
                                                   Text(
                                                     hasScore
                                                         ? 'CV Score: ${score.toStringAsFixed(1)}%'
                                                         : 'CV Score: Not Available',
-                                                    style: GoogleFonts.inter(
+                                                    style: GoogleFonts.poppins(
                                                       fontSize: 16,
                                                       fontWeight:
                                                           FontWeight.w600,
                                                       color: hasScore
-                                                          ? Colors
-                                                              .amber.shade800
-                                                          : Colors
-                                                              .grey.shade600,
+                                                          ? Colors.white
+                                                          : Colors.black87,
                                                     ),
                                                   ),
                                                 ],
                                               ),
                                             ),
-                                            const SizedBox(height: 20),
-                                            // Preview Button
+                                            const SizedBox(height: _kMainPadding),
+                                            // Preview Button (red action #C10D00)
                                             SizedBox(
                                               width: double.infinity,
                                               child: ElevatedButton.icon(
@@ -733,28 +691,32 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                     : null,
                                                 icon: const Icon(
                                                     Icons.remove_red_eye),
-                                                label: const Text('Preview CV'),
+                                                label: Text(
+                                                  'Preview CV',
+                                                  style: GoogleFonts.poppins(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
                                                 style: ElevatedButton.styleFrom(
-                                                  backgroundColor: (cvUrl !=
-                                                              null &&
+                                                  backgroundColor: cvUrl != null &&
                                                           cvUrl.isNotEmpty
-                                                      ? const Color(0xFFC10D00)
-                                                      : Colors.grey.shade400)
-                                                          .withValues(alpha: _kTranslucentOpacity),
+                                                      ? _kPrimary
+                                                      : _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity),
                                                   foregroundColor: Colors.white,
                                                   padding: const EdgeInsets
                                                       .symmetric(vertical: 14),
                                                   shape: RoundedRectangleBorder(
                                                     borderRadius:
                                                         BorderRadius.circular(
-                                                            12),
+                                                            _kCardRadius),
                                                   ),
                                                   elevation: cvUrl != null &&
                                                           cvUrl.isNotEmpty
                                                       ? 4
                                                       : 0,
                                                   shadowColor:
-                                                      const Color(0xFFC10D00)
+                                                      _kPrimary
                                                           .withValues(
                                                               alpha: 0.3),
                                                 ),
@@ -762,7 +724,6 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                             ),
                                           ],
                                         ),
-                                      ),
                                     ),
                                   );
                                 },
