@@ -7,20 +7,17 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:ui';
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
-import 'dart:io';
-import 'dart:typed_data';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // Import your existing services
 import 'job_details_page.dart';
 import 'assessment_page.dart';
+import 'redirect_to_assessment_page.dart';
 import '../../services/candidate_service.dart';
 import 'assessments_results_screen.dart';
 import '../../screens/candidate/user_profile_page.dart';
 import 'saved_application_screen.dart';
 import '../../services/auth_service.dart';
-import 'offers_screen.dart';
-import '../../utils/api_endpoints.dart';
 
 class CandidateDashboard extends StatefulWidget {
   final String token;
@@ -35,19 +32,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   @override
   bool get wantKeepAlive => true;
 
+  // ignore: unused_field
   int _currentTab = 0;
-  final List<String> _jobTypes = [
-    'Featured',
-    'Full Time',
-    'Part Time',
-    'Remote'
-  ];
-  static const int _jobListPageSize = 4;
+  final List<String> _jobTypes = ['Featured', 'Full Time', 'Part Time', 'Remote'];
+  static const int _jobListPageSize = 8;
   int _jobListCurrentPage = 0;
   final Color primaryColor = Color(0xFF991A1A);
   final Color strokeColor = Color(0xFFC10D00);
   final Color fillColor = Color(0xFFf2f2f2).withValues(alpha: 0.2);
-  String get apiBase => ApiEndpoints.candidateBase;
+  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  final GlobalKey _jobsSectionKey = GlobalKey();
 
   List<Map<String, dynamic>> notifications = [];
   Timer? _notificationTimer;
@@ -58,11 +52,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   int? _applicationsCount;
   int? _savedCount; // saved drafts count
   Map<String, dynamic>? _pendingApplyJob;
-
-  // Profile image state
-  XFile? _profileImage;
-  Uint8List? _profileImageBytes;
-  final ImagePicker _picker = ImagePicker();
+  // ignore: unused_field
+  bool _continuingApplication = false;
 
   @override
   void initState() {
@@ -75,7 +66,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     // Use cached name so greeting shows correct name from first paint (set by login/MFA before navigate)
     _userName = AuthService.getCachedDisplayName();
     _loadPersistedNameIfNeeded();
-    // Don't restore from cache on init ΓÇö show Continue section only after API returns, so no stale "Not started" cards appear
+    // Don't restore from cache on init — show Continue section only after API returns, so no stale "Not started" cards appear
     _fetchDashboardCounts();
     _fetchUserProfile();
     _fetchNotifications();
@@ -104,12 +95,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       if (response['unauthorized'] == true && mounted) {
         // Token expired and refresh failed; keep showing persisted name if any, and prompt re-login
         final persisted = await AuthService.getPersistedDisplayName();
-        _safeSetState(() => _userName =
-            (persisted != null && persisted.isNotEmpty) ? persisted : null);
+        _safeSetState(() => _userName = (persisted != null && persisted.isNotEmpty) ? persisted : null);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(response['error']?.toString() ??
-                'Session expired. Please log in again.'),
+            content: Text(response['error']?.toString() ?? 'Session expired. Please log in again.'),
             backgroundColor: Colors.red.shade700,
             action: SnackBarAction(
               label: 'Log in',
@@ -126,8 +115,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       final profile = user['profile'] is Map ? user['profile'] as Map : null;
 
       String? displayName;
-      if (candidateProfile != null &&
-          candidateProfile['full_name']?.toString().trim().isNotEmpty == true) {
+      if (candidateProfile != null && candidateProfile['full_name']?.toString().trim().isNotEmpty == true) {
         displayName = candidateProfile['full_name'].toString().trim();
       }
       if (displayName == null || displayName.isEmpty) {
@@ -143,35 +131,31 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         if (combined.isNotEmpty) displayName = combined;
       }
 
-      if (mounted)
-        _safeSetState(() => _userName =
-            (displayName != null && displayName.isNotEmpty)
-                ? displayName
-                : null);
+      if (mounted) _safeSetState(() => _userName = (displayName != null && displayName.isNotEmpty) ? displayName : null);
     } catch (_) {
       if (mounted) {
         final persisted = await AuthService.getPersistedDisplayName();
-        _safeSetState(() => _userName =
-            (persisted != null && persisted.isNotEmpty) ? persisted : null);
+        _safeSetState(() => _userName = (persisted != null && persisted.isNotEmpty) ? persisted : null);
       }
     }
   }
 
+  static const _jobsFetchTimeout = Duration(seconds: 8);
+
   Future<void> _fetchJobs() async {
     _safeSetState(() => _loadingJobs = true);
     try {
-      final list = await CandidateService.getAvailableJobs(widget.token);
-      if (mounted)
-        _safeSetState(() {
-          _jobs = list;
-          _loadingJobs = false;
-        });
+      final list = await CandidateService.getAvailableJobs(widget.token)
+          .timeout(_jobsFetchTimeout, onTimeout: () => <Map<String, dynamic>>[]);
+      if (mounted) _safeSetState(() {
+        _jobs = list;
+        _loadingJobs = false;
+      });
     } catch (_) {
-      if (mounted)
-        _safeSetState(() {
-          _jobs = [];
-          _loadingJobs = false;
-        });
+      if (mounted) _safeSetState(() {
+        _jobs = [];
+        _loadingJobs = false;
+      });
     }
   }
 
@@ -200,18 +184,39 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return status == 'applied';
   }
 
+  // ignore: unused_field
+  Map<String, dynamic>? _inProgressApplication;
   List<Map<String, dynamic>> _inProgressApplications = [];
   List<Map<String, dynamic>> _completedApplications = [];
-
-  /// Form submitted but assessment not done (status 'applied') ΓÇö show "Applied" on job cards, not in Continue section.
+  /// Form submitted but assessment not done (status 'applied') — show "Applied" on job cards, not in Continue section.
   List<Map<String, dynamic>> _appliedOnlyApplications = [];
   int _interviewsScheduledCount = 0;
   bool _dashboardCountsLoaded = false;
-  static const String _kCachedInProgressApps =
-      'candidate_in_progress_applications';
+  static const String _kCachedInProgressApps = 'candidate_in_progress_applications';
+  /// In-memory cache so "Continue Your Application" shows on first paint after login (same session).
+  // ignore: unused_field
+  static List<Map<String, dynamic>>? _cachedInProgressApps;
 
-  Future<void> _saveCachedInProgressApplications(
-      List<Map<String, dynamic>> list) async {
+  // ignore: unused_element
+  Future<void> _loadCachedInProgressApplications() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final json = prefs.getString(_kCachedInProgressApps);
+      if (mounted && json != null && json.isNotEmpty) {
+        final list = jsonDecode(json) as List<dynamic>?;
+        if (list != null && list.isNotEmpty) {
+          final maps = list
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          if (maps.isNotEmpty) _safeSetState(() => _inProgressApplications = maps);
+        }
+      }
+    } catch (_) {}
+    // Do NOT set _dashboardCountsLoaded here — only _fetchDashboardCounts does, so Continue section stays empty until API returns
+  }
+
+  Future<void> _saveCachedInProgressApplications(List<Map<String, dynamic>> list) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kCachedInProgressApps, jsonEncode(list));
@@ -223,12 +228,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       final results = await Future.wait([
         CandidateService.getApplications(widget.token),
         CandidateService.getDrafts(widget.token),
-        CandidateService.getInterviews(widget.token),
       ]);
       if (mounted) {
-        final apps = List<dynamic>.from(results[0] as List);
-        final submittedOrCompletedList =
-            apps.where(_isSubmittedOrCompletedApplication).toList();
+        final apps = List<dynamic>.from(results[0]);
+        final submittedOrCompletedList = apps.where(_isSubmittedOrCompletedApplication).toList();
         final submittedOrCompletedMaps = submittedOrCompletedList
             .whereType<Map>()
             .map((e) => Map<String, dynamic>.from(e))
@@ -248,26 +251,23 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             .whereType<Map>()
             .map((e) => Map<String, dynamic>.from(e))
             .toList();
-        final interviewsData = results[2] is Map<String, dynamic> ? results[2] as Map<String, dynamic> : <String, dynamic>{};
-        final scheduledCount = interviewsData['scheduled_count'] is int
-            ? interviewsData['scheduled_count'] as int
-            : (interviewsData['interviews'] is List ? (interviewsData['interviews'] as List).length : 0);
+        final firstInProgress = inProgressMaps.isNotEmpty ? inProgressMaps.first : null;
+        _CandidateDashboardState._cachedInProgressApps = inProgressMaps;
         _safeSetState(() {
           _applicationsCount = submittedOrCompletedMaps.length;
-          _savedCount = (results[1] as List).length;
+          _savedCount = results[1].length;
+          _inProgressApplication = firstInProgress;
           _inProgressApplications = inProgressMaps;
           _completedApplications = completedMaps;
           _appliedOnlyApplications = appliedOnlyMaps;
-          _interviewsScheduledCount = scheduledCount;
+          _interviewsScheduledCount = 0; // TODO: fetch from candidate interviews API
           _dashboardCountsLoaded = true;
         });
         _saveCachedInProgressApplications(inProgressMaps);
         // If pending apply job is for a job we've already applied/completed, clear it so it doesn't show in Continue.
         final pending = await AuthService.getPendingApplyJob();
         if (pending != null && pending['id'] != null) {
-          final pid = pending['id'] is int
-              ? pending['id'] as int
-              : int.tryParse(pending['id'].toString());
+          final pid = pending['id'] is int ? pending['id'] as int : int.tryParse(pending['id'].toString());
           if (pid != null) {
             final alreadyHas = submittedOrCompletedMaps.any((a) {
               final jid = a['job_id'];
@@ -282,16 +282,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         }
       }
     } catch (_) {
-      if (mounted)
-        _safeSetState(() {
-          _applicationsCount = 0;
-          _savedCount = 0;
-          _inProgressApplications = [];
-          _completedApplications = [];
-          _appliedOnlyApplications = [];
-          _interviewsScheduledCount = 0;
-          _dashboardCountsLoaded = true;
-        });
+      if (mounted) _safeSetState(() {
+        _applicationsCount = 0;
+        _savedCount = 0;
+        _inProgressApplication = null;
+        _inProgressApplications = [];
+        _completedApplications = [];
+        _appliedOnlyApplications = [];
+        _interviewsScheduledCount = 0;
+        _dashboardCountsLoaded = true;
+      });
     }
   }
 
@@ -305,7 +305,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return null;
   }
 
-  /// Form submitted (status applied) for this job ΓÇö show "Applied" on job card, not Continue.
+  /// Form submitted (status applied) for this job — show "Applied" on job card, not Continue.
   Map<String, dynamic>? _appliedOnlyForJob(Map<String, dynamic> job) {
     final jobId = job['id'];
     if (jobId == null) return null;
@@ -349,7 +349,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     if (widget.token.isEmpty) return;
     try {
       final response = await http.get(
-        Uri.parse(ApiEndpoints.getCandidateNotifications),
+        Uri.parse('$apiBase/notifications'),
         headers: {'Authorization': 'Bearer ${widget.token}'},
       );
 
@@ -387,66 +387,114 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   void _showNotificationsDialog() {
+    const double panelWidth = 360;
+    const double maxPanelHeight = 420;
     showDialog(
       context: context,
+      barrierColor: Colors.black26,
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+        alignment: Alignment.topRight,
+        insetPadding: EdgeInsets.only(top: 72, right: 12, left: 24, bottom: 24),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: panelWidth, maxHeight: maxPanelHeight),
           child: Container(
-            padding: EdgeInsets.all(20),
+            padding: EdgeInsets.zero,
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 20,
+                  offset: Offset(0, 8),
+                ),
+              ],
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Notifications',
-                      style: GoogleFonts.poppins(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
+                Padding(
+                  padding: EdgeInsets.fromLTRB(8, 10, 4, 10),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: Icon(Icons.arrow_back, size: 22, color: Colors.black87),
+                        padding: EdgeInsets.zero,
+                        constraints: BoxConstraints(minWidth: 40, minHeight: 40),
                       ),
-                    ),
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: Icon(Icons.close),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 20),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: notifications.length,
-                    itemBuilder: (context, index) {
-                      final notification = notifications[index];
-                      return ListTile(
-                        leading: Icon(
-                          Icons.notifications,
-                          color: primaryColor,
+                      SizedBox(width: 4),
+                      Text(
+                        'Notifications',
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
                         ),
-                        title: Text(
-                          notification['message'] ?? 'New notification',
-                          style: GoogleFonts.poppins(),
-                        ),
-                        subtitle: Text(
-                          _formatDate(notification['created_at']),
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      );
-                    },
+                      ),
+                      Spacer(),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: Icon(Icons.close, size: 22, color: Colors.black87),
+                        padding: EdgeInsets.zero,
+                        constraints: BoxConstraints(minWidth: 40, minHeight: 40),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+                  Divider(height: 1),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: maxPanelHeight - 80),
+                      child: notifications.isEmpty
+                          ? Padding(
+                              padding: EdgeInsets.symmetric(vertical: 32, horizontal: 20),
+                              child: Text(
+                                'No notifications yet. Updates from hiring managers will appear here.',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              padding: EdgeInsets.symmetric(vertical: 4),
+                              itemCount: notifications.length,
+                              itemBuilder: (context, index) {
+                                final notification = notifications[index];
+                                return ListTile(
+                                  dense: true,
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                  leading: Icon(
+                                    Icons.notifications_outlined,
+                                    color: primaryColor,
+                                    size: 22,
+                                  ),
+                                  title: Text(
+                                    notification['message'] ?? 'New notification',
+                                    style: GoogleFonts.poppins(fontSize: 14),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  subtitle: Padding(
+                                    padding: EdgeInsets.only(top: 2),
+                                    child: Text(
+                                      _formatDate(notification['created_at']),
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 11,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                  ),
+                ],
+              ),
             ),
-          ),
         ),
       ),
     );
@@ -478,23 +526,18 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     }
   }
 
+  // ignore: unused_element
   ImageProvider _getProfileImageProvider() {
-    if (_profileImage != null) {
-      if (kIsWeb) return MemoryImage(_profileImageBytes!);
-      return FileImage(File(_profileImage!.path));
-    }
-    return const AssetImage('assets/images/profile_placeholder.png');
+    // Use the same default profile icon on all platforms (assets/icons/profile.png).
+    return const AssetImage('assets/icons/profile.png');
   }
 
   Future<void> analyzeCV() async {
     try {
-      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+      final picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
 
       if (image != null) {
-        if (kIsWeb) {
-          _profileImageBytes = await image.readAsBytes();
-        }
-        setState(() => _profileImage = image);
         final bytes = await image.readAsBytes();
         final base64Image = base64Encode(bytes);
 
@@ -623,11 +666,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   void _showLogoutConfirmation(BuildContext context) {
-    final navigatorContext = context;
     showDialog(
       context: context,
       barrierColor: Colors.black54,
-      builder: (dialogContext) => Dialog(
+      builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
         insetPadding: EdgeInsets.symmetric(horizontal: 24),
         child: BackdropFilter(
@@ -660,7 +702,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
                     OutlinedButton(
-                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      onPressed: () => Navigator.of(context).pop(),
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(color: Colors.grey),
                         shape: RoundedRectangleBorder(
@@ -674,10 +716,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                     ),
                     ElevatedButton(
                       onPressed: () async {
-                        Navigator.of(dialogContext).pop();
+                        Navigator.of(context).pop();
                         await AuthService.logout();
-                        if (!navigatorContext.mounted) return;
-                        navigatorContext.go('/login');
+                        if (!context.mounted) return;
+                        context.go('/login');
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
@@ -700,6 +742,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     );
   }
 
+  // ignore: unused_element
   Widget _buildNavItem(String text, {bool isActive = false, Color? color}) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 16),
@@ -713,105 +756,147 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     );
   }
 
-  Widget _buildJobCard(Map<String, dynamic> job) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: fillColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: strokeColor, width: 1),
-      ),
+  /// Primary nav link with optional tap and subtle active state (dashboard theme).
+  Widget _buildNavLink(String label, {bool isActive = false, VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
       child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    job['title'] ?? 'Job Title',
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: strokeColor,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    _formatJobType(
-                        job['type'] ?? job['employment_type'] ?? 'Full Time'),
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 8),
-            Text(
-              (job['company']?.toString().trim().isNotEmpty == true)
-                  ? (job['company'] ?? '')
-                  : 'ΓÇö',
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: Colors.white70,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              (job['location']?.toString().trim().isNotEmpty == true)
-                  ? (job['location'] ?? '')
-                  : 'ΓÇö',
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: Colors.white70,
-              ),
-            ),
-            SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => JobDetailsPage(
-                            job: job,
-                          ),
-                        ),
-                      );
-                    },
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: Colors.white),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: Text(
-                      'View Details',
-                      style: GoogleFonts.poppins(color: Colors.white),
-                    ),
-                  ),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: _buildApplyOrContinueButton(job),
-                ),
-              ],
-            ),
-          ],
+        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        child: Text(
+          label,
+          style: GoogleFonts.poppins(
+            fontSize: 15,
+            color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.85),
+            fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+          ),
         ),
+      ),
+    );
+  }
+
+  void _scrollToJobsSection() {
+    final ctx = _jobsSectionKey.currentContext;
+    if (ctx != null) {
+      Scrollable.ensureVisible(ctx, duration: Duration(milliseconds: 400), alignment: 0.1);
+    }
+  }
+
+  // ignore: unused_element
+  Widget _buildJobCard(Map<String, dynamic> job) {
+    return _buildJobTableRow(job);
+  }
+
+  Widget _buildJobTableHeader() {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.white12, width: 1)),
+      ),
+      child: Row(
+        children: [
+          Expanded(flex: 2, child: _tableHeaderCell('Job Position')),
+          Expanded(flex: 2, child: _tableHeaderCell('Company')),
+          Expanded(flex: 1, child: _tableHeaderCell('Location')),
+          SizedBox(width: 160),
+        ],
+      ),
+    );
+  }
+
+  Widget _tableHeaderCell(String label) {
+    return Text(
+      label,
+      style: GoogleFonts.poppins(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: Colors.white70,
+      ),
+    );
+  }
+
+  Widget _buildJobTableRow(Map<String, dynamic> job) {
+    final company = (job['company']?.toString().trim().isNotEmpty == true) ? (job['company'] ?? '') : '—';
+    final location = (job['location']?.toString().trim().isNotEmpty == true) ? (job['location'] ?? '') : '—';
+    final jobType = _formatJobType(job['type'] ?? job['employment_type'] ?? 'Full Time');
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08), width: 1)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              job['title'] ?? 'Job Title',
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  company,
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  jobType,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    color: Colors.white60,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            flex: 1,
+            child: Text(
+              location,
+              style: GoogleFonts.poppins(fontSize: 14, color: Colors.white70),
+            ),
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              OutlinedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => JobDetailsPage(job: job),
+                    ),
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: Color(0xFF3A3A3A),
+                  side: BorderSide(color: Colors.white38),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                ),
+                child: Text(
+                  'View Details',
+                  style: GoogleFonts.poppins(fontSize: 13, color: Colors.white),
+                ),
+              ),
+              SizedBox(width: 10),
+              _buildApplyOrContinueButton(job),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -922,21 +1007,26 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return value.toString();
   }
 
+  /// True if the candidate has any application for this job (in progress, completed, or applied); such jobs are hidden from Recommended Jobs.
+  bool _hasAnyApplicationForJob(Map<String, dynamic> job) {
+    return _inProgressForJob(job) != null ||
+        _completedApplicationForJob(job) != null ||
+        _appliedOnlyForJob(job) != null;
+  }
+
   List<Map<String, dynamic>> _getFilteredJobs(int typeIndex) {
     final typeFilter = _jobTypes[typeIndex];
-    if (typeFilter == 'Featured') return _jobs;
-    return _jobs.where((j) {
-      final t =
-          (j['type'] ?? j['employment_type'] ?? '').toString().toLowerCase();
-      final loc = (j['location'] ?? '').toString().toLowerCase();
-      if (typeFilter == 'Full Time')
-        return t.contains('full') || t == 'full_time';
-      if (typeFilter == 'Part Time')
-        return t.contains('part') || t == 'part_time';
-      if (typeFilter == 'Remote')
-        return loc.contains('remote') || t.contains('remote');
-      return true;
-    }).toList();
+    final byType = typeFilter == 'Featured'
+        ? _jobs
+        : _jobs.where((j) {
+            final t = (j['type'] ?? j['employment_type'] ?? '').toString().toLowerCase();
+            final loc = (j['location'] ?? '').toString().toLowerCase();
+            if (typeFilter == 'Full Time') return t.contains('full') || t == 'full_time';
+            if (typeFilter == 'Part Time') return t.contains('part') || t == 'part_time';
+            if (typeFilter == 'Remote') return loc.contains('remote') || t.contains('remote');
+            return true;
+          }).toList();
+    return byType.where((j) => !_hasAnyApplicationForJob(j)).toList();
   }
 
   List<Map<String, dynamic>> _getPaginatedJobs(int typeIndex) {
@@ -947,8 +1037,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return list.sublist(start, end);
   }
 
-  int _getFilteredJobsTotalCount(int typeIndex) =>
-      _getFilteredJobs(typeIndex).length;
+  // ignore: unused_element
+  int _getFilteredJobsTotalCount(int typeIndex) => _getFilteredJobs(typeIndex).length;
 
   Widget _buildJobList(int typeIndex) {
     final jobs = _getFilteredJobs(typeIndex);
@@ -971,78 +1061,59 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         ),
       );
     }
-    final totalCount = _getFilteredJobsTotalCount(typeIndex);
     final paginatedJobs = _getPaginatedJobs(typeIndex);
-    final startOneBased =
-        totalCount == 0 ? 0 : (_jobListCurrentPage * _jobListPageSize) + 1;
-    final endInclusive =
-        (_jobListCurrentPage * _jobListPageSize + paginatedJobs.length)
-            .clamp(0, totalCount);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        ...paginatedJobs.map((job) {
-          final j = Map<String, dynamic>.from(job);
-          if (!j.containsKey('type') && j.containsKey('employment_type')) {
-            j['type'] = j['employment_type'];
-          }
-          return Padding(
-            padding: EdgeInsets.only(bottom: 12),
-            child: _buildJobCard(j),
-          );
-        }),
-        SizedBox(height: 16),
         Container(
-          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           decoration: BoxDecoration(
-            color: Color(0xFF252525),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white10),
+            color: Color(0xFF2A2A2A),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white12),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Showing $startOneBased to $endInclusive of $totalCount entries',
-                style: GoogleFonts.poppins(color: Colors.white70, fontSize: 13),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildJobTableHeader(),
+                ...paginatedJobs.map((job) {
+                  final j = Map<String, dynamic>.from(job);
+                  if (!j.containsKey('type') && j.containsKey('employment_type')) {
+                    j['type'] = j['employment_type'];
+                  }
+                  return _buildJobTableRow(j);
+                }),
+              ],
+            ),
+          ),
+        ),
+        SizedBox(height: 28),
+        Center(
+          child: TextButton.icon(
+            onPressed: () {
+              _safeSetState(() => _jobListCurrentPage = 0);
+              _fetchJobs();
+              _fetchDashboardCounts();
+            },
+            icon: Icon(Icons.refresh, size: 18, color: Colors.white70),
+            label: Text(
+              'Browse All Jobs',
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: Colors.white70,
               ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextButton(
-                    onPressed: _jobListCurrentPage > 0
-                        ? () => _safeSetState(() => _jobListCurrentPage--)
-                        : null,
-                    child: Text(
-                      'Previous',
-                      style: GoogleFonts.poppins(
-                        color: _jobListCurrentPage > 0
-                            ? strokeColor
-                            : Colors.white38,
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 8),
-                  TextButton(
-                    onPressed: (_jobListCurrentPage + 1) * _jobListPageSize <
-                            totalCount
-                        ? () => _safeSetState(() => _jobListCurrentPage++)
-                        : null,
-                    child: Text(
-                      'Next',
-                      style: GoogleFonts.poppins(
-                        color: (_jobListCurrentPage + 1) * _jobListPageSize <
-                                totalCount
-                            ? strokeColor
-                            : Colors.white38,
-                      ),
-                    ),
-                  ),
-                ],
+            ),
+            style: TextButton.styleFrom(
+              backgroundColor: Color(0xFF3A3A3A),
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
-            ],
+            ),
           ),
         ),
       ],
@@ -1050,76 +1121,28 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   Future<void> _handleApplyNow(Map<String, dynamic> job) async {
-    final token = widget.token.isNotEmpty
-        ? widget.token
-        : await AuthService.getAccessToken();
+    final token = widget.token.isNotEmpty ? widget.token : await AuthService.getAccessToken();
     if (token == null || token.isEmpty) {
       _showSignInToApplyDialog(job);
       return;
     }
-    final jobId = job['id'];
-    if (jobId == null) {
+    if (job['id'] == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Invalid job.')),
       );
       return;
     }
-    try {
-      final res = await http.post(
-        Uri.parse('$apiBase/apply/$jobId'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'full_name': '',
-          'phone': '',
-          'portfolio': '',
-          'cover_letter': '',
-        }),
-      );
-      final data = jsonDecode(res.body);
-      if (res.statusCode == 201 &&
-          data is Map &&
-          data['application_id'] != null) {
-        if (!mounted) return;
-        await AuthService.clearPendingApplyJob();
-        if (!mounted) return;
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => AssessmentPage(
-              applicationId: data['application_id'] as int,
-            ),
-          ),
-        );
-      } else if (res.statusCode == 403) {
-        final msg = data is Map
-            ? (data['error']?.toString() ?? 'Complete your enrollment before applying to jobs')
-            : 'Complete your enrollment before applying to jobs';
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-        context.go('/enrollment');
-      } else if (res.statusCode == 400 && data is Map) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error']?.toString() ?? 'Apply failed')),
-        );
-      } else {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(data is Map
-                  ? (data['error']?.toString() ?? 'Apply failed')
-                  : 'Apply failed')),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
-    }
+    // Navigate to redirect page immediately; it will call apply API then show countdown.
+    if (!mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RedirectToAssessmentPage(
+          job: job,
+          jobTitle: job['title']?.toString(),
+        ),
+      ),
+    );
   }
 
   void _showSignInToApplyDialog(Map<String, dynamic> job) {
@@ -1154,8 +1177,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             },
             child: Text(
               'Create account',
-              style: GoogleFonts.poppins(
-                  color: strokeColor, fontWeight: FontWeight.w600),
+              style: GoogleFonts.poppins(color: strokeColor, fontWeight: FontWeight.w600),
             ),
           ),
           ElevatedButton(
@@ -1168,13 +1190,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             style: ElevatedButton.styleFrom(
               backgroundColor: strokeColor,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             child: Text(
               'Log in',
-              style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w600, fontSize: 14),
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14),
             ),
           ),
         ],
@@ -1234,8 +1254,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 end: Alignment.bottomRight,
               ),
               onTap: () {
-                context.push(
-                    '/jobs-applied?token=${Uri.encodeComponent(widget.token)}');
+                context.push('/jobs-applied?token=${Uri.encodeComponent(widget.token)}');
               },
             ),
           ),
@@ -1253,8 +1272,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 end: Alignment.bottomRight,
               ),
               onTap: () {
-                context.push(
-                    '/jobs-applied?token=${Uri.encodeComponent(widget.token)}');
+                context.push('/jobs-applied?token=${Uri.encodeComponent(widget.token)}');
               },
             ),
           ),
@@ -1297,6 +1315,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       );
       return;
     }
+    _safeSetState(() => _continuingApplication = true);
     try {
       final res = await http.post(
         Uri.parse('$apiBase/apply/$jobId'),
@@ -1312,9 +1331,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         }),
       );
       final data = jsonDecode(res.body);
-      if (res.statusCode == 201 &&
-          data is Map &&
-          data['application_id'] != null) {
+      if (res.statusCode == 201 && data is Map && data['application_id'] != null) {
         if (!mounted) return;
         await AuthService.clearPendingApplyJob();
         if (!mounted) return;
@@ -1328,13 +1345,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             ),
           ),
         );
-      } else if (res.statusCode == 403) {
-        final msg = data is Map
-            ? (data['error']?.toString() ?? 'Complete your enrollment before applying to jobs')
-            : 'Complete your enrollment before applying to jobs';
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-        context.go('/enrollment');
       } else if (res.statusCode == 400 && data is Map) {
         final err = data['error']?.toString() ?? '';
         if (!mounted) return;
@@ -1344,15 +1354,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           _fetchDashboardCounts();
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text(
-                    'This application is already in your list. Refreshing.')),
+            const SnackBar(content: Text('This application is already in your list. Refreshing.')),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content:
-                    Text(err.isNotEmpty ? err : 'Could not start application')),
+            SnackBar(content: Text(err.isNotEmpty ? err : 'Could not start application')),
           );
         }
       } else {
@@ -1360,9 +1366,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              data is Map
-                  ? (data['error']?.toString() ?? 'Could not start application')
-                  : 'Could not start application',
+              data is Map ? (data['error']?.toString() ?? 'Could not start application') : 'Could not start application',
             ),
           ),
         );
@@ -1372,7 +1376,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
-    } finally {}
+    } finally {
+      if (mounted) _safeSetState(() => _continuingApplication = false);
+    }
   }
 
   static String _timeAgo(String? isoDate) {
@@ -1381,12 +1387,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     if (d == null) return '';
     final now = DateTime.now();
     final diff = now.difference(d);
-    if (diff.inDays > 0)
-      return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
-    if (diff.inHours > 0)
-      return '${diff.inHours} hour${diff.inHours == 1 ? '' : 's'} ago';
-    if (diff.inMinutes > 0)
-      return '${diff.inMinutes} minute${diff.inMinutes == 1 ? '' : 's'} ago';
+    if (diff.inDays > 0) return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
+    if (diff.inHours > 0) return '${diff.inHours} hour${diff.inHours == 1 ? '' : 's'} ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes} minute${diff.inMinutes == 1 ? '' : 's'} ago';
     return 'Just now';
   }
 
@@ -1403,7 +1406,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       final id = jobId is int ? jobId : int.tryParse(jobId.toString());
       if (id != null) seenJobIds.add(id);
     }
-
     for (final app in _completedApplications) {
       addJobId(app['job_id']);
     }
@@ -1434,8 +1436,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     if (_pendingApplyJob != null) {
       final pendingId = _pendingApplyJob!['id'];
       if (pendingId != null) {
-        final id =
-            pendingId is int ? pendingId : int.tryParse(pendingId.toString());
+        final id = pendingId is int ? pendingId : int.tryParse(pendingId.toString());
         if (id != null && !seenJobIds.contains(id)) {
           seenJobIds.add(id);
           items.add({
@@ -1499,34 +1500,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Continue Your Application',
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              GestureDetector(
-                onTap: () {
-                  // Navigate to notifications or alerts
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Manage alerts')),
-                  );
-                },
-                child: Text(
-                  'Manage Alerts >',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: Colors.white70,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
+          Text(
+            'Continue Your Application',
+            style: GoogleFonts.poppins(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
           SizedBox(height: 16),
           SizedBox(
@@ -1539,8 +1519,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               itemBuilder: (context, index) {
                 return SizedBox(
                   width: 380,
-                  child: _buildIncompleteApplicationCard(items[index],
-                      compact: true),
+                  child: _buildIncompleteApplicationCard(items[index], compact: true),
                 );
               },
             ),
@@ -1550,15 +1529,12 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     );
   }
 
-  /// Estimate progress 0ΓÇô100 from draft_data / last_saved_screen.
-  int _progressPercent(
-      Map<String, dynamic>? draftData, String? lastSavedScreen) {
-    if (draftData == null || draftData.isEmpty)
-      return lastSavedScreen != null ? 25 : 0;
+  /// Estimate progress 0–100 from draft_data / last_saved_screen.
+  int _progressPercent(Map<String, dynamic>? draftData, String? lastSavedScreen) {
+    if (draftData == null || draftData.isEmpty) return lastSavedScreen != null ? 25 : 0;
     final screen = (lastSavedScreen ?? '').toString().toLowerCase();
     if (screen.contains('assessment')) {
-      final assessment =
-          draftData['assessment'] ?? draftData['assessment.assessment'];
+      final assessment = draftData['assessment'] ?? draftData['assessment.assessment'];
       if (assessment is Map && assessment.isNotEmpty) return 75;
       return 50;
     }
@@ -1566,8 +1542,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return 25;
   }
 
-  Widget _buildIncompleteApplicationCard(Map<String, dynamic> item,
-      {bool compact = false}) {
+  Widget _buildIncompleteApplicationCard(Map<String, dynamic> item, {bool compact = false}) {
     final type = item['type'] as String?;
     String title;
     String? company;
@@ -1598,8 +1573,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       progressPercent = _progressPercent(draftData, lastSaved);
       if (progressPercent == 0) progressPercent = 25;
       showProgressBar = true;
-      final timeAgo =
-          savedAt != null && savedAt.isNotEmpty ? _timeAgo(savedAt) : null;
+      final timeAgo = savedAt != null && savedAt.isNotEmpty ? _timeAgo(savedAt) : null;
       if (timeAgo != null && timeAgo.isNotEmpty) {
         statusLine = '$progressPercent% complete - last updated $timeAgo';
       } else {
@@ -1621,8 +1595,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                     ),
                   ),
                 ).then((_) {
-                  if (mounted)
-                    _safeSetState(() => _navigatingToAssessment = false);
+                  if (mounted) _safeSetState(() => _navigatingToAssessment = false);
                   _fetchDashboardCounts();
                 });
               });
@@ -1677,8 +1650,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               SizedBox(height: 6),
               Row(
                 children: [
-                  Icon(Icons.location_on_outlined,
-                      size: 14, color: Colors.white54),
+                  Icon(Icons.location_on_outlined, size: 14, color: Colors.white54),
                   SizedBox(width: 4),
                   Expanded(
                     child: Text(
@@ -1716,8 +1688,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 if (showProgressBar && progressPercent >= 25)
                   Padding(
                     padding: EdgeInsets.only(right: 6),
-                    child: Icon(Icons.check_circle,
-                        size: 14, color: Colors.green.shade400),
+                    child: Icon(Icons.check_circle, size: 14, color: Colors.green.shade400),
                   ),
                 Expanded(
                   child: Text(
@@ -1759,8 +1730,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       ),
                     ),
                     SizedBox(width: 4),
-                    Icon(Icons.arrow_forward_rounded,
-                        size: 18, color: Colors.white),
+                    Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.white),
                   ],
                 ),
               ),
@@ -1896,153 +1866,107 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             Positioned.fill(
               child: CustomScrollView(
                 slivers: [
-                  // App Bar - Updated with real data
+                  // App Bar - logo (title), nav tabs + utility (actions)
                   SliverAppBar(
                     backgroundColor: Colors.transparent,
-                    elevation: 2,
+                    elevation: 0,
                     title: Image.asset(
                       'assets/icons/khono.png',
                       height: 40,
                       fit: BoxFit.contain,
                     ),
+                    titleSpacing: 24,
                     actions: [
-                      _buildNavItem('Home', isActive: _currentTab == 0),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) =>
-                                    AssessmentResultsPage(token: widget.token)),
-                          );
-                        },
-                        child: _buildNavItem(
-                          'Assessments Results',
-                          color: Colors.white,
-                        ),
-                      ),
-                      PopupMenuButton<String>(
-                        itemBuilder: (context) => [
-                          PopupMenuItem(
-                            child: Text(
-                              'Saved Applications',
-                              style: GoogleFonts.poppins(color: Colors.black),
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => SavedApplicationsScreen(
-                                      token: widget.token),
-                                ),
-                              );
-                            },
+                      _buildNavLink('Dashboard', isActive: true),
+                      SizedBox(width: 28),
+                      _buildNavLink('Browse Jobs', onTap: _scrollToJobsSection),
+                      SizedBox(width: 28),
+                      _buildNavLink('Applications', onTap: () {
+                        context.push('/jobs-applied?token=${Uri.encodeComponent(widget.token)}');
+                      }),
+                      SizedBox(width: 28),
+                      _buildNavLink('Assessments', onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                AssessmentResultsPage(token: widget.token),
                           ),
-                          PopupMenuItem(
-                            child: Text(
-                              'Applied jobs',
-                              style: GoogleFonts.poppins(color: Colors.black),
-                            ),
-                            onTap: () {
-                              context.push(
-                                  '/jobs-applied?token=${Uri.encodeComponent(widget.token)}');
-                            },
-                          ),
-                          PopupMenuItem(
-                            child: Text(
-                              'Offers',
-                              style: GoogleFonts.poppins(color: Colors.black),
-                            ),
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CandidateOffersScreen(),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
-                          child: Row(
-                            children: [
-                              Text(
-                                'Application',
-                                style: GoogleFonts.poppins(color: Colors.white),
-                              ),
-                              Icon(
-                                Icons.arrow_drop_down,
-                                color: Colors.white,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => _showLogoutConfirmation(context),
-                        icon: const Icon(
-                          Icons.logout,
-                          color: Colors.white,
-                        ),
-                        label: Text('Log Out',
-                            style: GoogleFonts.poppins(color: Colors.white)),
-                      ),
-                      // Notifications Bell Icon
+                        );
+                      }),
+                      SizedBox(width: 40),
                       Stack(
+                        clipBehavior: Clip.none,
                         children: [
                           IconButton(
-                            icon: Icon(
-                              Icons.notifications,
-                              color: Colors.white,
-                            ),
-                            onPressed: () {
-                              if (notifications.isNotEmpty) {
-                                _showNotificationsDialog();
-                              }
-                            },
+                            icon: Icon(Icons.notifications_outlined, color: Colors.white, size: 24),
+                            onPressed: () => _showNotificationsDialog(),
                           ),
                           if (notifications.isNotEmpty)
                             Positioned(
-                              right: 8,
-                              top: 8,
-                              child: Material(
-                                color: Colors.red,
-                                shape: CircleBorder(),
-                                child: SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: Center(
-                                    child: Text(
-                                      notifications.length.toString(),
-                                      style: GoogleFonts.poppins(
-                                          color: Colors.white, fontSize: 10),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
+                              right: 6,
+                              top: 6,
+                              child: Container(
+                                padding: EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: strokeColor,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  notifications.length > 99 ? '99+' : notifications.length.toString(),
+                                  style: GoogleFonts.poppins(color: Colors.white, fontSize: 10),
                                 ),
                               ),
                             ),
                         ],
                       ),
                       SizedBox(width: 8),
-                      // Profile Placeholder Icon
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) =>
-                                    ProfilePage(token: widget.token)),
-                          );
+                      PopupMenuButton<String>(
+                        offset: Offset(0, 48),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        color: Color(0xFF2C2C2C),
+                        onSelected: (value) {
+                          if (value == 'profile') {
+                            Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => ProfilePage(token: widget.token),
+                            ));
+                          } else if (value == 'logout') {
+                            _showLogoutConfirmation(context);
+                          }
                         },
-                        child: CircleAvatar(
-                          radius: 20,
-                          backgroundColor: Colors.grey.shade200,
-                          backgroundImage: _getProfileImageProvider(),
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: 'profile',
+                            child: Row(
+                              children: [
+                                Icon(Icons.person_outline, color: Colors.white70, size: 20),
+                                SizedBox(width: 12),
+                                Text('My Profile', style: GoogleFonts.poppins(color: Colors.white)),
+                              ],
+                            ),
+                          ),
+                          PopupMenuDivider(color: Colors.white24),
+                          PopupMenuItem(
+                            value: 'logout',
+                            child: Row(
+                              children: [
+                                Icon(Icons.logout, color: Colors.white70, size: 20),
+                                SizedBox(width: 12),
+                                Text('Log Out', style: GoogleFonts.poppins(color: Colors.white)),
+                              ],
+                            ),
+                          ),
+                        ],
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          child: CircleAvatar(
+                            radius: 18,
+                            backgroundColor: primaryColor,
+                            child: Icon(Icons.person, color: Colors.white, size: 22),
+                          ),
                         ),
                       ),
-                      SizedBox(width: 16),
+                      SizedBox(width: 24),
                     ],
                   ),
 
@@ -2059,37 +1983,46 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                     child: _buildContinueYourApplicationSection(),
                   ),
 
-                  // Jobs Section - KEPT AS IS
+                  // Jobs Section (scroll target for "Browse Jobs")
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: EdgeInsets.all(32),
                       child: Column(
+                        key: _jobsSectionKey,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Job Listing',
+                            'Recommended Jobs',
                             style: GoogleFonts.poppins(
-                                fontSize: 32,
+                                fontSize: 28,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.white),
                           ),
-                          SizedBox(height: 32),
+                          SizedBox(height: 24),
                           DefaultTabController(
                             length: _jobTypes.length,
                             child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 TabBar(
+                                  isScrollable: true,
+                                  tabAlignment: TabAlignment.start,
                                   labelStyle: GoogleFonts.poppins(
                                       color: Colors.white,
-                                      fontWeight: FontWeight.bold),
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 15),
                                   unselectedLabelStyle:
-                                      GoogleFonts.poppins(color: Colors.white),
+                                      GoogleFonts.poppins(
+                                          color: Colors.white70,
+                                          fontSize: 15),
                                   labelColor: Colors.white,
-                                  unselectedLabelColor: Colors.white,
+                                  unselectedLabelColor: Colors.white70,
                                   indicatorColor: primaryColor,
+                                  indicatorWeight: 3,
                                   onTap: (index) => _safeSetState(() {
-                                    _currentTab = index;
-                                    _jobListCurrentPage = 0;
-                                  }),
+                                        _currentTab = index;
+                                        _jobListCurrentPage = 0;
+                                      }),
                                   tabs: _jobTypes
                                       .map((type) => Tab(
                                           child: Text(type,
@@ -2097,7 +2030,12 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                                                   color: Colors.white))))
                                       .toList(),
                                 ),
-                                SizedBox(height: 32),
+                                Container(
+                                  height: 1,
+                                  margin: EdgeInsets.only(top: 0),
+                                  color: Colors.white24,
+                                ),
+                                SizedBox(height: 24),
                                 SizedBox(
                                   height: 860,
                                   child: TabBarView(

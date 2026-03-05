@@ -243,7 +243,7 @@ def get_available_jobs():
 
 # ----------------- UPLOAD RESUME -----------------
 # ----------------- UPLOAD RESUME -----------------
-@candidate_bp.route("/upload_resume/<int:application_id>", methods=["POST"])
+@candidate_bp.route("/upload_resume/<int:application_id>", methods=["POST", "OPTIONS"])
 @role_required(["candidate"])
 def upload_resume(application_id):
     try:
@@ -356,6 +356,59 @@ def upload_resume(application_id):
 
     except Exception as e:
         current_app.logger.error(f"Upload resume error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+# ----------------- UPLOAD APPLICATION DOCUMENT (ID / QUALIFICATION) -----------------
+@candidate_bp.route("/applications/<int:application_id>/document", methods=["POST", "OPTIONS"])
+@role_required(["candidate"])
+def upload_application_document(application_id):
+    """Upload an ID or qualification document for an application. Stores in candidate.documents."""
+    try:
+        application = Application.query.get_or_404(application_id)
+        candidate = get_current_candidate()
+        if not candidate or application.candidate_id != candidate.id:
+            return jsonify({"error": "Unauthorized"}), 403
+
+        doc_type = (request.form.get("type") or "").strip().lower()
+        if doc_type not in ("id", "qualification"):
+            return jsonify({"error": "type must be 'id' or 'qualification'"}), 400
+
+        file = request.files.get("document") or request.files.get("file")
+        if not file or not file.filename:
+            return jsonify({"error": "No file uploaded"}), 400
+
+        filename = secure_filename(file.filename)
+        _, ext = (filename.rsplit(".", 1) + [""])[:2]
+        ext = ext.lower()
+        allowed = {"pdf", "doc", "docx", "png", "jpg", "jpeg"}
+        if ext not in allowed:
+            return jsonify({"error": f"Unsupported file type. Allowed: {', '.join(sorted(allowed))}"}), 400
+
+        url = HybridResumeAnalyzer.upload_cv(file, filename=filename)
+        if not url:
+            return jsonify({"error": "Failed to upload document"}), 500
+
+        doc_list = list(candidate.documents or [])
+        doc_list.append({
+            "type": doc_type,
+            "url": url,
+            "application_id": application_id,
+            "filename": filename,
+        })
+        candidate.documents = doc_list
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Document uploaded",
+            "url": url,
+            "type": doc_type,
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Upload application document error: {e}", exc_info=True)
+        db.session.rollback()
         return jsonify({"error": "Internal server error"}), 500
 
 
