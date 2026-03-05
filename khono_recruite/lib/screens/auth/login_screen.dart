@@ -404,20 +404,17 @@ class _LoginScreenState extends State<LoginScreen>
                                 ),
                               ),
                               const SizedBox(height: 16),
-                              // 🆕 Enterprise SSO Button - White with C10D00 text and icon
+                              // Enterprise SSO Button
                               SizedBox(
-                                width: 200, // Same medium width as login button
-                                height:
-                                    44, // Same medium height as login button
+                                width: 200,
+                                height: 44,
                                 child: ElevatedButton(
                                   onPressed: loading
                                       ? null
                                       : () => context.push('/sso-enterprise'),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor:
-                                        Colors.white, // White background
-                                    foregroundColor:
-                                        const Color(0xFFC10D00), // C10D00 text
+                                    backgroundColor: Colors.white,
+                                    foregroundColor: const Color(0xFFC10D00),
                                     shape: RoundedRectangleBorder(
                                         borderRadius:
                                             BorderRadius.circular(20)),
@@ -429,8 +426,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       Icon(
                                         Icons.business,
                                         size: 18,
-                                        color: const Color(
-                                            0xFFC10D00), // C10D00 icon
+                                        color: const Color(0xFFC10D00),
                                       ),
                                       const SizedBox(width: 8),
                                       Text(

@@ -21,10 +21,11 @@ import '../../utils/api_endpoints.dart';
 import '../../utils/app_config.dart';
 
 /// New landing screen: hero, explore by category, job cards. Optional [token] for logged-in state.
-/// Teammate will refine the real "candidate dashboard" (applications, profile, etc.) in candidate_dashboard.dart.
+/// [ssoTokenFromUrl] when the app is opened with ?token=... (e.g. from hub); we validate and redirect to dashboard.
 class LandingPage extends StatefulWidget {
   final String? token;
-  const LandingPage({super.key, this.token});
+  final String? ssoTokenFromUrl;
+  const LandingPage({super.key, this.token, this.ssoTokenFromUrl});
 
   @override
   _LandingPageState createState() => _LandingPageState();
@@ -78,6 +79,10 @@ class _LandingPageState extends State<LandingPage>
   static const int _entriesPerPage = 4;
   int _categoryPageSize = _entriesPerPage;
   int _categoryCurrentPage = 0;
+  // SSO token from URL: when hub redirects to /?token=xxx we validate and go to dashboard
+  bool _ssoTokenHandled = false;
+  bool _ssoTokenLoading = false;
+
   // Your existing chatbot state
   bool chatbotOpen = false;
   bool cvParserMode = false;
@@ -104,6 +109,47 @@ class _LandingPageState extends State<LandingPage>
     _isDisposed = false;
     WidgetsBinding.instance.addObserver(this);
     _initializeData();
+    _checkSsoTokenFromUrl();
+  }
+
+  /// If the app was opened with ?token=... (e.g. from hub), validate with backend and redirect to dashboard.
+  void _checkSsoTokenFromUrl() {
+    final ssoToken = widget.ssoTokenFromUrl?.trim();
+    if (ssoToken == null || ssoToken.isEmpty || _ssoTokenHandled) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _isDisposed) return;
+      _safeSetState(() {
+        _ssoTokenHandled = true;
+        _ssoTokenLoading = true;
+      });
+      try {
+        final result = await AuthService.loginWithSsoToken(ssoToken);
+        if (!mounted) return;
+        if (result['success'] == true) {
+          final dashboard = result['dashboard']?.toString() ?? '/candidate-dashboard';
+          final accessToken = result['access_token']?.toString();
+          if (accessToken != null && dashboard.isNotEmpty) {
+            final path = dashboard.contains('?')
+                ? dashboard
+                : '$dashboard?token=${Uri.encodeComponent(accessToken)}';
+            GoRouter.of(context).go(path);
+            return;
+          }
+        }
+        _safeSetState(() => _ssoTokenLoading = false);
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text(result['error']?.toString() ?? 'Invalid or expired SSO token')),
+        );
+        GoRouter.of(context).go('/');
+      } catch (e) {
+        if (!mounted) return;
+        _safeSetState(() => _ssoTokenLoading = false);
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text('SSO sign-in failed: $e')),
+        );
+        GoRouter.of(context).go('/');
+      }
+    });
   }
 
   @override
@@ -1516,6 +1562,33 @@ class _LandingPageState extends State<LandingPage>
                 fit: BoxFit.cover,
               ),
             ),
+
+            // SSO token from URL: show loading while validating and redirecting
+            if (_ssoTokenLoading)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black54,
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Signing you in...',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
 
             // Main content with transparent background
             Positioned.fill(

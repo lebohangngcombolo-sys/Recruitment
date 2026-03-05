@@ -277,6 +277,51 @@ class AuthService {
     };
   }
 
+  /// ARW SSO: login with hub token (paste token). POST to sso-login, returns app tokens and dashboard.
+  static Future<Map<String, dynamic>> loginWithSsoToken(String token) async {
+    final trimmed = token.trim();
+    if (trimmed.isEmpty) {
+      return {'success': false, 'error': 'Please paste your SSO token.'};
+    }
+    try {
+      final response = await http.post(
+        Uri.parse(ApiEndpoints.ssoLogin),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'token': trimmed}),
+      );
+      final data = response.statusCode == 200
+          ? jsonDecode(response.body) as Map<String, dynamic>?
+          : null;
+      if (data == null || data['access_token'] == null) {
+        final err = response.statusCode == 200
+            ? (data?['error'] ?? 'Invalid response')
+            : (jsonDecode(response.body) is Map
+                ? (jsonDecode(response.body) as Map)['error']?.toString()
+                : null) ?? 'SSO login failed (${response.statusCode})';
+        return {'success': false, 'error': err};
+      }
+      await clearAuthState();
+      await storeTokens(
+        data['access_token'] as String,
+        data['refresh_token']?.toString(),
+        data['role']?.toString() ?? 'candidate',
+      );
+      final user = data['user'];
+      if (user is Map<String, dynamic>) {
+        await saveUserInfo(user);
+      }
+      return {
+        'success': true,
+        'access_token': data['access_token'],
+        'refresh_token': data['refresh_token'],
+        'role': data['role'] ?? 'candidate',
+        'dashboard': data['dashboard'] ?? '/candidate-dashboard',
+      };
+    } catch (e) {
+      return {'success': false, 'error': 'SSO login error: $e'};
+    }
+  }
+
   // ----------------- FORGOT PASSWORD -----------------
   static Future<Map<String, dynamic>> forgotPassword(String email) async {
     final response = await http.post(

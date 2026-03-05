@@ -96,8 +96,9 @@ class Config:
     # So CORS production logic in create_app() runs; Render sets FLASK_ENV=production
     FLASK_ENV = os.getenv('FLASK_ENV', 'development')
 
-    # SSO Configuration for Company Hub Integration
-    SSO_JWT_SECRET = os.getenv('SSO_JWT_SECRET', 'our-super-secret-code-123')  # Same as hub!
+    # SSO Configuration – use SSO_JWT_SECRET / SSO_DECRYPTION_KEY (must match hub JWT_SECRET_KEY / ENCRYPTION_KEY)
+    SSO_JWT_SECRET = os.getenv('SSO_JWT_SECRET') or os.getenv('HUB_JWT_SECRET') or 'our-super-secret-code-123'
+    SSO_DECRYPTION_KEY = (os.getenv('SSO_DECRYPTION_KEY') or os.getenv('ENCRYPTION_KEY') or '').strip() or None
     PORTAL_HUB_URL = os.getenv('PORTAL_HUB_URL', 'http://localhost:5001')  # Hub address
     
     RATELIMIT_STORAGE_URI = "memory://"

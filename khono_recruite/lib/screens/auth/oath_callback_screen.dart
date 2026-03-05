@@ -25,6 +25,7 @@ class _OAuthCallbackScreenState extends State<OAuthCallbackScreen> {
     final accessToken = uri.queryParameters['access_token'];
     final refreshToken = uri.queryParameters['refresh_token'];
     final role = uri.queryParameters['role'];
+    final dashboard = uri.queryParameters['dashboard'];
 
     if (accessToken != null && role != null) {
       // Store tokens securely (also persists to SharedPreferences)
@@ -43,7 +44,13 @@ class _OAuthCallbackScreenState extends State<OAuthCallbackScreen> {
 
       if (!mounted) return;
 
-      // Navigate based on user role
+      // Prefer explicit dashboard from backend (SSO: admin → admin dashboard, hiring_manager → hiring manager screen)
+      if (dashboard != null && dashboard.isNotEmpty) {
+        context.go('$dashboard?token=$accessToken');
+        return;
+      }
+
+      // Navigate based on user role (e.g. when dashboard param not provided)
       switch (role) {
         case 'admin':
           context.go('/admin-dashboard?token=$accessToken');

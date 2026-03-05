@@ -1,4 +1,4 @@
-﻿import bcrypt
+import bcrypt
 from app.extensions import db
 from app.models import User
 from flask import current_app
@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 import secrets
 import string
 import logging
+from typing import Optional
 
 
 class AuthService:
@@ -36,13 +37,27 @@ class AuthService:
             return False
 
     @staticmethod
-    def create_user(email: str, password: str) -> User:
-        """Create a candidate user using email + password only."""
+    def create_user(
+        email: str,
+        password: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        role: Optional[str] = None,
+    ) -> User:
+        """Create a user. Optional first_name, last_name (stored in profile), role (default candidate)."""
+        profile = {}
+        if first_name is not None or last_name is not None:
+            if first_name:
+                profile["first_name"] = first_name
+            if last_name:
+                profile["last_name"] = last_name
+            if first_name or last_name:
+                profile["full_name"] = f"{first_name or ''} {last_name or ''}".strip()
         user = User(
             email=email.strip().lower(),
             password=AuthService.hash_password(password),
-            role='candidate',
-            profile={}
+            role=(role or "candidate"),
+            profile=profile,
         )
 
         try:
@@ -54,7 +69,7 @@ class AuthService:
             raise ValueError("Email already exists")
         except Exception:
             db.session.rollback()
-            logger.exception("Failed to create user")
+            current_app.logger.exception("Failed to create user")
             raise
 
 

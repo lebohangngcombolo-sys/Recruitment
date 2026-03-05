@@ -1,4 +1,4 @@
-from flask import request, jsonify, current_app, redirect, url_for, make_response
+from flask import request, jsonify, current_app, redirect, url_for, make_response, g
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
@@ -13,7 +13,7 @@ from app.services.auth_service import AuthService
 from app.services.email_service import EmailService
 from app.services.audit2 import AuditService
 from app.services.file_text_extractor import extract_text_from_file
-from app.utils.decorators import role_required
+from app.utils.decorators import role_required, khonobuzz_jwt_required
 from datetime import datetime, timedelta
 import secrets
 import jwt  # ΓåÉ ADD THIS IMPORT
@@ -95,39 +95,39 @@ def init_auth_routes(app):
     # ------------------- SSO LOGIN (ADD THIS NEW ROUTE) -------------------
     # In your auth_routes.py - Update the sso_login function:
 
-    @app.route("/api/auth/sso-login", methods=["GET"])
+    # Hub role prefix: Automated-Recruitment_Workflow -> ARW (e.g. ARW - Admin, ARW - Hiring Manager)
+    def _hub_roles_to_app_role(roles):
+        """Map hub roles (e.g. ['ARW - Admin', 'ARW - Hiring Manager']) to app role: admin, hiring_manager, hr, candidate."""
+        if not roles:
+            return "candidate"
+        roles_lower = [r.lower() if isinstance(r, str) else "" for r in roles]
+        if any("admin" in r for r in roles_lower):
+            return "admin"
+        if any("hr" in r for r in roles_lower):
+            return "hr"
+        if any("manager" in r for r in roles_lower):
+            return "hiring_manager"
+        return "candidate"
+
+    @app.route("/api/auth/sso-login", methods=["GET", "POST"])
     @limiter.limit("10 per minute")
+    @khonobuzz_jwt_required
     def sso_login():
-        """SSO login from company hub"""
+        """SSO login from hub. GET: redirect to frontend with tokens. POST: return JSON. New users created; existing users get role/profile updated."""
         try:
-            # Get token from hub
-            token = request.args.get('token')
-        
-            if not token:
-                return jsonify({"error": "No SSO token provided"}), 401
-        
-            # Verify the token using our secret
-            user_data = jwt.decode(
-                token, 
-                current_app.config['SSO_JWT_SECRET'],  # Make sure this is in your config
-                algorithms=['HS256']
-            )
-        
-            # Get user info from token - FIXED: Use first_name and last_name
-            email = user_data['email']
-            first_name = user_data.get('first_name', '')
-            last_name = user_data.get('last_name', '')
-            role = user_data['role']
-        
-            # Combine first and last name for display
-            full_name = f"{first_name} {last_name}".strip()
+            u = g.khonobuzz_user
+            email = u["email"]
+            full_name = (u.get("full_name") or "").strip()
+            roles = u.get("roles") or []
+            role = _hub_roles_to_app_role(roles)
+            parts = full_name.split(None, 1) if full_name else []
+            first_name = parts[0] if parts else ""
+            last_name = parts[1] if len(parts) > 1 else ""
             if not full_name:
-                full_name = email.split('@')[0]  # Use email username as fallback
-        
-            # Find user in our database
+                full_name = email.split("@")[0]
+
             user = User.query.filter(db.func.lower(User.email) == email.lower()).first()
-        
-            # If user doesn't exist, create them automatically
+
             if not user:
                 random_password = secrets.token_urlsafe(16)
                 user = AuthService.create_user(
@@ -138,46 +138,67 @@ def init_auth_routes(app):
                     role=role
                 )
                 user.is_verified = True
+                try:
+                    user.last_login_at = datetime.utcnow()
+                except Exception:
+                    pass
                 db.session.commit()
                 current_app.logger.info(f"Auto-created user via SSO: {email}")
-        
-            try:
-                user.last_login_at = datetime.utcnow()
-                db.session.commit()
-            except Exception as e:
-                current_app.logger.warning("SSO: failed to set last_login_at: %s", e)
-                db.session.rollback()
+            else:
+                if user.role != role:
+                    user.role = role
+                    current_app.logger.info(f"SSO: updated role for {email} to {role}")
+                existing_profile = dict(user.profile or {})
+                if first_name and existing_profile.get("first_name") != first_name:
+                    existing_profile["first_name"] = first_name
+                if last_name and existing_profile.get("last_name") != last_name:
+                    existing_profile["last_name"] = last_name
+                if full_name and existing_profile.get("full_name") != full_name:
+                    existing_profile["full_name"] = full_name
+                user.profile = existing_profile
+                try:
+                    user.last_login_at = datetime.utcnow()
+                    db.session.commit()
+                except Exception as e:
+                    current_app.logger.warning("SSO: failed to update user: %s", e)
+                    db.session.rollback()
 
-            # Create JWT tokens for our app
             additional_claims = {"role": user.role}
             access_token = create_access_token(identity=str(user.id), additional_claims=additional_claims)
             refresh_token = create_refresh_token(identity=str(user.id), additional_claims=additional_claims)
 
-            # Determine dashboard URL
             dashboard_path = (
                 "/enrollment"
                 if user.role == "candidate" and not getattr(user, "enrollment_completed", False)
                 else ROLE_DASHBOARD_MAP.get(user.role, "/dashboard")
             )
-        
-            # Remove accidental /api/ prefix
             if dashboard_path.startswith("/api/"):
                 dashboard_path = dashboard_path.replace("/api", "", 1)
-        
-            # Redirect to frontend with tokens
+            if dashboard_path == "/dashboard/admin":
+                dashboard_route = "/admin-dashboard"
+            elif dashboard_path == "/dashboard/hiring-manager":
+                dashboard_route = "/hiring-manager-dashboard"
+            elif dashboard_path == "/dashboard/hr":
+                dashboard_route = "/hr-dashboard"
+            else:
+                dashboard_route = "/candidate-dashboard"
+
+            if request.method == "POST":
+                return jsonify({
+                    "access_token": access_token,
+                    "refresh_token": refresh_token,
+                    "role": user.role,
+                    "dashboard": dashboard_route,
+                    "user": user.to_dict(),
+                }), 200
+
             frontend_redirect = (
-                f"{current_app.config['FRONTEND_URL']}/oauth-callback"  # ΓåÉ CHANGED THIS LINE
-                f"?access_token={access_token}&refresh_token={refresh_token}&role={user.role}"
+                f"{current_app.config['FRONTEND_URL']}/oauth-callback"
+                f"?access_token={access_token}&refresh_token={refresh_token}&role={user.role}&dashboard={dashboard_route}"
             )
-        
-            current_app.logger.info(f"SSO Login: {user.email} ({user.role}) ΓåÆ {frontend_redirect}")
+            current_app.logger.info(f"SSO Login: {user.email} ({user.role}) -> {frontend_redirect}")
             return redirect(frontend_redirect)
-        
-        except jwt.ExpiredSignatureError:
-            return jsonify({"error": "SSO token has expired"}), 401
-        except jwt.InvalidTokenError as e:
-            current_app.logger.error(f"Invalid SSO token: {str(e)}")
-            return jsonify({"error": "Invalid SSO token"}), 401
+
         except Exception as e:
             current_app.logger.error(f"SSO login error: {str(e)}", exc_info=True)
             return jsonify({"error": "SSO authentication failed"}), 500

@@ -43,8 +43,9 @@ class ApiEndpoints {
   static String get supabaseCallback =>
       "$authBase/callback"; // New unified callback
 
-  // ------------------- SSO -------------------
-  static String get ssoLogout => "$authBase/sso/logout"; // <-- ADDED
+  // ------------------- SSO (ARW / hub token) -------------------
+  static String get ssoLogin => "$authBase/sso-login";
+  static String get ssoLogout => "$authBase/sso/logout";
 
   // ------------------- MFA (UPDATED TO MATCH BACKEND) -------------------
   static String get enableMfa =>

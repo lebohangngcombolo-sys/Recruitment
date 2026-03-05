@@ -65,6 +65,10 @@ services:
         value: "true"
       - key: CELERY_TASK_EAGER_PROPAGATES
         value: "true"
+      - key: SSO_JWT_SECRET
+        sync: false
+      - key: SSO_DECRYPTION_KEY
+        sync: false
       - key: SSO_CLIENT_ID
         sync: false
       - key: SSO_CLIENT_SECRET

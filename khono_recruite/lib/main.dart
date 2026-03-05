@@ -82,7 +82,9 @@ final GoRouter _router = GoRouter(
   routes: [
     GoRoute(
       path: '/',
-      builder: (context, state) => const LandingPage(),
+      builder: (context, state) => LandingPage(
+        ssoTokenFromUrl: state.uri.queryParameters['token'],
+      ),
     ),
     GoRoute(
       path: '/login',
