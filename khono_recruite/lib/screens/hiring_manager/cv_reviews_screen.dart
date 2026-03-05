@@ -51,6 +51,23 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   List<Map<String, dynamic>> get displayedCVs {
     var base = showAllCVs ? allCVs : cvReviews;
 
+    // Only show users that have a full name
+    base = base
+        .where((cv) {
+          final name = cv['full_name'];
+          return name is String && name.trim().isNotEmpty;
+        })
+        .toList();
+
+    // Only show CVs with a valid uploaded URL (Cloudinary)
+    base = base
+        .where((cv) {
+          final url = cv['cv_url'];
+          if (url == null || url is! String) return false;
+          return url.trim().isNotEmpty && url.contains('cloudinary.com');
+        })
+        .toList();
+
     // Filter by search query
     if (searchQuery.isNotEmpty) {
       base = base
@@ -121,24 +138,6 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
         ),
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          appBar: AppBar(
-            title: Text(
-              "CV Reviews Dashboard",
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            backgroundColor: (themeProvider.isDarkMode
-                    ? const Color(0xFF14131E)
-                    : Colors.white)
-                .withValues(alpha: 0.9),
-            elevation: 0,
-            foregroundColor:
-                themeProvider.isDarkMode ? Colors.white : Colors.black87,
-            iconTheme: IconThemeData(
-                color:
-                    themeProvider.isDarkMode ? Colors.white : Colors.black87),
-          ),
           body: loading
               ? Center(
                   child: Column(
@@ -161,7 +160,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                     ],
                   ),
                 )
-              : Padding(
+                      : Padding(
                   padding: const EdgeInsets.all(20),
                   child: displayedCVs.isEmpty
                       ? Center(
@@ -203,311 +202,311 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                             ],
                           ),
                         )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Header with stats and filter toggle
-                            Container(
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: (themeProvider.isDarkMode
-                                        ? const Color(0xFF14131E)
-                                        : Colors.white)
-                                    .withValues(alpha: 0.9),
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.1),
-                                    blurRadius: 15,
-                                    offset: const Offset(0, 6),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: Colors.redAccent
-                                              .withValues(alpha: 0.1),
-                                          borderRadius:
-                                              BorderRadius.circular(12),
+                      : CustomScrollView(
+                          slivers: [
+                            // Header with stats and filter toggle (scrolls with content)
+                            SliverToBoxAdapter(
+                              child: Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: (themeProvider.isDarkMode
+                                          ? const Color(0xFF14131E)
+                                          : Colors.white)
+                                      .withValues(alpha: 0.9),
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.1),
+                                      blurRadius: 15,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(12),
+                                          decoration: BoxDecoration(
+                                            color: Colors.redAccent
+                                                .withValues(alpha: 0.1),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          child: Icon(
+                                            Icons.assignment_outlined,
+                                            color: Colors.redAccent,
+                                            size: 28,
+                                          ),
                                         ),
-                                        child: Icon(
-                                          Icons.assignment_outlined,
-                                          color: Colors.redAccent,
-                                          size: 28,
+                                        const SizedBox(width: 16),
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              showAllCVs
+                                                  ? "All CVs"
+                                                  : "CV Reviews",
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.w600,
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.white
+                                                    : Colors.black87,
+                                              ),
+                                            ),
+                                            Text(
+                                              showAllCVs
+                                                  ? "${allCVs.length} total CVs uploaded"
+                                                  : "${cvReviews.length} candidates reviewed",
+                                              style: GoogleFonts.inter(
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.grey.shade400
+                                                    : Colors.grey.shade600,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
+                                        const Spacer(),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 16, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: (showAllCVs
+                                                    ? Colors.blue
+                                                    : Colors.redAccent)
+                                                .withValues(alpha: 0.1),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
                                             showAllCVs
                                                 ? "All CVs"
-                                                : "CV Reviews",
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 20,
-                                              fontWeight: FontWeight.w600,
-                                              color: themeProvider.isDarkMode
-                                                  ? Colors.white
-                                                  : Colors.black87,
-                                            ),
-                                          ),
-                                          Text(
-                                            showAllCVs
-                                                ? "${allCVs.length} total CVs uploaded"
-                                                : "${cvReviews.length} candidates reviewed",
+                                                : "Reviewed CVs",
                                             style: GoogleFonts.inter(
-                                              color: themeProvider.isDarkMode
-                                                  ? Colors.grey.shade400
-                                                  : Colors.grey.shade600,
-                                              fontSize: 14,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const Spacer(),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 16, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: (showAllCVs
-                                                  ? Colors.blue
-                                                  : Colors.redAccent)
-                                              .withValues(alpha: 0.1),
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                        ),
-                                        child: Text(
-                                          showAllCVs
-                                              ? "All CVs"
-                                              : "Reviewed CVs",
-                                          style: GoogleFonts.inter(
-                                            color: showAllCVs
-                                                ? Colors.blue
-                                                : Colors.redAccent,
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 12,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 16),
-                                  // Filter toggle buttons
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: GestureDetector(
-                                          onTap: () => setState(
-                                              () => showAllCVs = false),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 16, vertical: 12),
-                                            decoration: BoxDecoration(
-                                              color: !showAllCVs
-                                                  ? const Color(0xFFC10D00)
-                                                  : Colors.transparent,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              border: Border.all(
-                                                color: const Color(0xFFC10D00)
-                                                    .withValues(alpha: 0.3),
-                                              ),
-                                            ),
-                                            child: Text(
-                                              "Reviewed CVs",
-                                              textAlign: TextAlign.center,
-                                              style: GoogleFonts.inter(
-                                                color: !showAllCVs
-                                                    ? Colors.white
-                                                    : const Color(0xFFC10D00),
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: GestureDetector(
-                                          onTap: () =>
-                                              setState(() => showAllCVs = true),
-                                          child: Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 16, vertical: 12),
-                                            decoration: BoxDecoration(
                                               color: showAllCVs
-                                                  ? const Color(0xFFC10D00)
-                                                  : Colors.transparent,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              border: Border.all(
-                                                color: const Color(0xFFC10D00)
-                                                    .withValues(alpha: 0.3),
+                                                  ? Colors.blue
+                                                  : Colors.redAccent,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    // Filter toggle buttons
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: GestureDetector(
+                                            onTap: () => setState(
+                                                () => showAllCVs = false),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 16, vertical: 12),
+                                              decoration: BoxDecoration(
+                                                color: !showAllCVs
+                                                    ? const Color(0xFFC10D00)
+                                                    : Colors.transparent,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: const Color(0xFFC10D00)
+                                                      .withValues(alpha: 0.3),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                "Reviewed CVs",
+                                                textAlign: TextAlign.center,
+                                                style: GoogleFonts.inter(
+                                                  color: !showAllCVs
+                                                      ? Colors.white
+                                                      : const Color(0xFFC10D00),
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 14,
+                                                ),
                                               ),
                                             ),
-                                            child: Text(
-                                              "All CVs",
-                                              textAlign: TextAlign.center,
-                                              style: GoogleFonts.inter(
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: GestureDetector(
+                                            onTap: () =>
+                                                setState(() => showAllCVs = true),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 16, vertical: 12),
+                                              decoration: BoxDecoration(
                                                 color: showAllCVs
-                                                    ? Colors.white
-                                                    : const Color(0xFFC10D00),
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 14,
+                                                    ? const Color(0xFFC10D00)
+                                                    : Colors.transparent,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: const Color(0xFFC10D00)
+                                                      .withValues(alpha: 0.3),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                "All CVs",
+                                                textAlign: TextAlign.center,
+                                                style: GoogleFonts.inter(
+                                                  color: showAllCVs
+                                                      ? Colors.white
+                                                      : const Color(0xFFC10D00),
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 14,
+                                                ),
                                               ),
                                             ),
                                           ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 16),
-                                  // Search and filters row
-                                  Row(
-                                    children: [
-                                      // Search bar
-                                      Expanded(
-                                        flex: 2,
-                                        child: TextField(
-                                          onChanged: (value) => setState(
-                                              () => searchQuery = value),
-                                          decoration: InputDecoration(
-                                            hintText: 'Search by name...',
-                                            hintStyle: TextStyle(
-                                                color: themeProvider.isDarkMode
-                                                    ? Colors.white54
-                                                    : Colors.black54),
-                                            prefixIcon: Icon(Icons.search,
-                                                color: themeProvider.isDarkMode
-                                                    ? Colors.white70
-                                                    : Colors.black54),
-                                            border: OutlineInputBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    // Search and filters row
+                                    Row(
+                                      children: [
+                                        // Search bar
+                                        Expanded(
+                                          flex: 2,
+                                          child: TextField(
+                                            onChanged: (value) => setState(
+                                                () => searchQuery = value),
+                                            decoration: InputDecoration(
+                                              hintText: 'Search by name...',
+                                              hintStyle: TextStyle(
+                                                  color: themeProvider.isDarkMode
+                                                      ? Colors.white54
+                                                      : Colors.black54),
+                                              prefixIcon: Icon(Icons.search,
+                                                  color: themeProvider.isDarkMode
+                                                      ? Colors.white70
+                                                      : Colors.black54),
+                                              border: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              filled: true,
+                                              fillColor: themeProvider.isDarkMode
+                                                  ? Colors.grey[800]
+                                                  : Colors.grey[100],
                                             ),
-                                            filled: true,
-                                            fillColor: themeProvider.isDarkMode
-                                                ? Colors.grey[800]
-                                                : Colors.grey[100],
-                                          ),
-                                          style: TextStyle(
-                                              color: themeProvider.isDarkMode
-                                                  ? Colors.white
-                                                  : Colors.black),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      // Gender filter
-                                      Expanded(
-                                        child: DropdownButtonFormField<String>(
-                                          value: selectedGender,
-                                          onChanged: (value) => setState(
-                                              () => selectedGender = value!),
-                                          items: ['All', 'Male', 'Female']
-                                              .map((gender) => DropdownMenuItem(
-                                                    value: gender,
-                                                    child: Text(gender,
-                                                        style: TextStyle(
-                                                            color: themeProvider
-                                                                    .isDarkMode
-                                                                ? Colors.white
-                                                                : Colors
-                                                                    .black)),
-                                                  ))
-                                              .toList(),
-                                          decoration: InputDecoration(
-                                            labelText: 'Gender',
-                                            labelStyle: TextStyle(
+                                            style: TextStyle(
                                                 color: themeProvider.isDarkMode
-                                                    ? Colors.white70
-                                                    : Colors.black54),
-                                            border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8)),
-                                            filled: true,
-                                            fillColor: themeProvider.isDarkMode
-                                                ? Colors.grey[800]
-                                                : Colors.grey[100],
+                                                    ? Colors.white
+                                                    : Colors.black),
                                           ),
-                                          dropdownColor:
-                                              themeProvider.isDarkMode
-                                                  ? Colors.grey[800]
-                                                  : Colors.white,
-                                          style: TextStyle(
-                                              color: themeProvider.isDarkMode
-                                                  ? Colors.white
-                                                  : Colors.black),
                                         ),
-                                      ),
-                                      const SizedBox(width: 16),
-                                      // Score filter
-                                      Expanded(
-                                        child: DropdownButtonFormField<String>(
-                                          value: selectedScoreFilter,
-                                          onChanged: (value) => setState(() =>
-                                              selectedScoreFilter = value!),
-                                          items: [
-                                            'All',
-                                            'Above 70%',
-                                            'Above 50%',
-                                            'Below 50%'
-                                          ]
-                                              .map((filter) => DropdownMenuItem(
-                                                    value: filter,
-                                                    child: Text(filter,
-                                                        style: TextStyle(
-                                                            color: themeProvider
-                                                                    .isDarkMode
-                                                                ? Colors.white
-                                                                : Colors
-                                                                    .black)),
-                                                  ))
-                                              .toList(),
-                                          decoration: InputDecoration(
-                                            labelText: 'Score',
-                                            labelStyle: TextStyle(
+                                        const SizedBox(width: 16),
+                                        // Gender filter
+                                        Expanded(
+                                          child: DropdownButtonFormField<String>(
+                                            value: selectedGender,
+                                            onChanged: (value) => setState(
+                                                () => selectedGender = value!),
+                                            items: ['All', 'Male', 'Female']
+                                                .map((gender) => DropdownMenuItem(
+                                                      value: gender,
+                                                      child: Text(gender,
+                                                          style: TextStyle(
+                                                              color: themeProvider
+                                                                      .isDarkMode
+                                                                  ? Colors.white
+                                                                  : Colors
+                                                                      .black)),
+                                                    ))
+                                                .toList(),
+                                            decoration: InputDecoration(
+                                              labelText: 'Gender',
+                                              labelStyle: TextStyle(
+                                                  color: themeProvider.isDarkMode
+                                                      ? Colors.white70
+                                                      : Colors.black54),
+                                              border: OutlineInputBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8)),
+                                              filled: true,
+                                              fillColor: themeProvider.isDarkMode
+                                                  ? Colors.grey[800]
+                                                  : Colors.grey[100],
+                                            ),
+                                            dropdownColor:
+                                                themeProvider.isDarkMode
+                                                    ? Colors.grey[800]
+                                                    : Colors.white,
+                                            style: TextStyle(
                                                 color: themeProvider.isDarkMode
-                                                    ? Colors.white70
-                                                    : Colors.black54),
-                                            border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8)),
-                                            filled: true,
-                                            fillColor: themeProvider.isDarkMode
-                                                ? Colors.grey[800]
-                                                : Colors.grey[100],
+                                                    ? Colors.white
+                                                    : Colors.black),
                                           ),
-                                          dropdownColor:
-                                              themeProvider.isDarkMode
-                                                  ? Colors.grey[800]
-                                                  : Colors.white,
-                                          style: TextStyle(
-                                              color: themeProvider.isDarkMode
-                                                  ? Colors.white
-                                                  : Colors.black),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                        const SizedBox(width: 16),
+                                        // Score filter
+                                        Expanded(
+                                          child: DropdownButtonFormField<String>(
+                                            value: selectedScoreFilter,
+                                            onChanged: (value) => setState(() =>
+                                                selectedScoreFilter = value!),
+                                            items: [
+                                              'All',
+                                              'Above 70%',
+                                              'Above 50%',
+                                              'Below 50%'
+                                            ]
+                                                .map((filter) => DropdownMenuItem(
+                                                      value: filter,
+                                                      child: Text(filter,
+                                                          style: TextStyle(
+                                                              color: themeProvider
+                                                                      .isDarkMode
+                                                                  ? Colors.white
+                                                                  : Colors
+                                                                      .black)),
+                                                    ))
+                                                .toList(),
+                                            decoration: InputDecoration(
+                                              labelText: 'Score',
+                                              labelStyle: TextStyle(
+                                                  color: themeProvider.isDarkMode
+                                                      ? Colors.white70
+                                                      : Colors.black54),
+                                              border: OutlineInputBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8)),
+                                              filled: true,
+                                              fillColor: themeProvider.isDarkMode
+                                                  ? Colors.grey[800]
+                                                  : Colors.grey[100],
+                                            ),
+                                            dropdownColor:
+                                                themeProvider.isDarkMode
+                                                    ? Colors.grey[800]
+                                                    : Colors.white,
+                                            style: TextStyle(
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.white
+                                                    : Colors.black),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 20),
+                            const SliverToBoxAdapter(child: SizedBox(height: 20)),
 
-                            // Candidate CV Cards
-                            Expanded(
-                              child: ListView.builder(
-                                itemCount: displayedCVs.length,
-                                itemBuilder: (context, index) {
+                            // Candidate CV Cards (scrolls with header)
+                            SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) {
                                   final review = displayedCVs[index];
                                   final hasScore =
                                       review.containsKey('cv_score') &&
@@ -764,6 +763,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                     ),
                                   );
                                 },
+                                childCount: displayedCVs.length,
                               ),
                             ),
                           ],
