@@ -19,6 +19,7 @@ import '../../services/candidate_service.dart';
 import '../../services/auth_service.dart';
 import '../../utils/api_endpoints.dart';
 import '../../utils/app_config.dart';
+import '../../utils/app_version.dart';
 
 /// New landing screen: hero, explore by category, job cards. Optional [token] for logged-in state.
 /// Teammate will refine the real "candidate dashboard" (applications, profile, etc.) in candidate_dashboard.dart.
@@ -1923,7 +1924,19 @@ class _LandingPageState extends State<LandingPage>
                   ),
                   child: _buildLuxuryChatbotPanel(),
                 ),
+              ), // chatbot
+            // ===== APP VERSION (bottom-left, display only, not clickable) =====
+            Positioned(
+              left: 12,
+              bottom: 12,
+              child: Text(
+                kAppVersion,
+                style: GoogleFonts.poppins(
+                  fontSize: 10,
+                  color: Colors.white54,
+                ),
               ),
+            ),
           ],
         ),
 

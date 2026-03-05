@@ -43,7 +43,12 @@ PUBLIC_BASE="${PUBLIC_API_BASE:-${API_BASE}}"
 if [ -z "${BACKEND_URL:-}" ]; then
   echo "WARNING: BACKEND_URL is not set for recruitment-web. Build will use API_BASE=${API_BASE}. Set BACKEND_URL in Render (Environment) to your API URL (e.g. https://recruitment-api-zovg.onrender.com) and redeploy."
 fi
+# Generate version string (Ver.YYYY.MM.XYZ.ENV) from date, week/day letters, commit count, APP_ENV
+APP_VERSION="$(bash scripts/generate_version.sh 2>/dev/null || echo 'Ver.0.0.0.LOCAL')"
+echo "Building with APP_VERSION=${APP_VERSION}"
+
 echo "Building Flutter web with API_BASE=${API_BASE}"
 flutter build web --release \
   --dart-define=API_BASE="$API_BASE" \
-  --dart-define=PUBLIC_API_BASE="$PUBLIC_BASE"
+  --dart-define=PUBLIC_API_BASE="$PUBLIC_BASE" \
+  --dart-define=APP_VERSION="$APP_VERSION"
