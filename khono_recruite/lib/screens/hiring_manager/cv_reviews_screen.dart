@@ -124,7 +124,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   }
 
   static const double _kTranslucentOpacity = 0.9;
-  static const double _kCardAndHeaderOpacity = 0.4;
+  static const double _kCardAndHeaderOpacity = 0.7;
 
   // Design system
   static const Color _kPrimary = Color(0xFFC10D00);
@@ -222,7 +222,9 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                               child: Container(
                                 padding: const EdgeInsets.all(_kMainPadding),
                                 decoration: BoxDecoration(
-                                  color: _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity),
+                                  color: themeProvider.isDarkMode
+                                      ? _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity)
+                                      : Colors.white.withValues(alpha: _kCardAndHeaderOpacity),
                                   borderRadius: BorderRadius.circular(_kCardRadius),
                                   boxShadow: [
                                     BoxShadow(
@@ -237,21 +239,6 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                   children: [
                                     Row(
                                       children: [
-                                        Container(
-                                          padding: const EdgeInsets.all(12),
-                                          decoration: BoxDecoration(
-                                            color: _kPrimary
-                                                .withValues(alpha: _kTranslucentOpacity),
-                                            borderRadius:
-                                                BorderRadius.circular(_kBadgeRadius),
-                                          ),
-                                          child: Icon(
-                                            Icons.assignment_outlined,
-                                            color: _kPrimary,
-                                            size: 28,
-                                          ),
-                                        ),
-                                        const SizedBox(width: _kMainPadding),
                                         Column(
                                           crossAxisAlignment:
                                               CrossAxisAlignment.start,
@@ -259,13 +246,13 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                             Text(
                                               showAllCVs
                                                   ? "All CVs"
-                                                  : "CV Reviews",
+                                                  : "Candidate Reviews",
                                               style: GoogleFonts.poppins(
                                                 fontSize: 20,
                                                 fontWeight: FontWeight.w600,
                                                 color: themeProvider.isDarkMode
                                                     ? Colors.white
-                                                    : Colors.black87,
+                                                    : Colors.black,
                                               ),
                                             ),
                                             Text(
@@ -275,7 +262,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                               style: GoogleFonts.poppins(
                                                 color: themeProvider.isDarkMode
                                                     ? Colors.grey.shade400
-                                                    : Colors.grey.shade600,
+                                                    : Colors.black87,
                                                 fontSize: 14,
                                               ),
                                             ),
@@ -400,7 +387,9 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                     BorderRadius.circular(_kSearchRadius),
                                               ),
                                               filled: true,
-                                              fillColor: _kDarkSurface.withValues(alpha: _kTranslucentOpacity),
+                                              fillColor: themeProvider.isDarkMode
+                                                  ? _kDarkSurface.withValues(alpha: _kTranslucentOpacity)
+                                                  : Colors.white.withValues(alpha: _kTranslucentOpacity),
                                             ),
                                             style: GoogleFonts.poppins(
                                                 color: themeProvider.isDarkMode
@@ -437,9 +426,13 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                   borderRadius:
                                                       BorderRadius.circular(_kInputRadius)),
                                               filled: true,
-                                              fillColor: _kDarkSurface.withValues(alpha: _kTranslucentOpacity),
+                                              fillColor: themeProvider.isDarkMode
+                                                  ? _kDarkSurface.withValues(alpha: _kTranslucentOpacity)
+                                                  : Colors.white.withValues(alpha: _kTranslucentOpacity),
                                             ),
-                                            dropdownColor: _kDarkSurface.withValues(alpha: _kTranslucentOpacity),
+                                            dropdownColor: themeProvider.isDarkMode
+                                                ? _kDarkSurface.withValues(alpha: _kTranslucentOpacity)
+                                                : Colors.white.withValues(alpha: _kTranslucentOpacity),
                                             style: GoogleFonts.poppins(
                                                 color: themeProvider.isDarkMode
                                                     ? Colors.white
@@ -480,9 +473,13 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                   borderRadius:
                                                       BorderRadius.circular(_kInputRadius)),
                                               filled: true,
-                                              fillColor: _kDarkSurface.withValues(alpha: _kTranslucentOpacity),
+                                              fillColor: themeProvider.isDarkMode
+                                                  ? _kDarkSurface.withValues(alpha: _kTranslucentOpacity)
+                                                  : Colors.white.withValues(alpha: _kTranslucentOpacity),
                                             ),
-                                            dropdownColor: _kDarkSurface.withValues(alpha: _kTranslucentOpacity),
+                                            dropdownColor: themeProvider.isDarkMode
+                                                ? _kDarkSurface.withValues(alpha: _kTranslucentOpacity)
+                                                : Colors.white.withValues(alpha: _kTranslucentOpacity),
                                             style: GoogleFonts.poppins(
                                                 color: themeProvider.isDarkMode
                                                     ? Colors.white
@@ -497,237 +494,256 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                             ),
                             const SliverToBoxAdapter(child: SizedBox(height: _kMainPadding)),
 
-                            // Candidate CV Cards (scrolls with header)
-                            SliverList(
-                              delegate: SliverChildBuilderDelegate(
-                                (context, index) {
-                                  final review = displayedCVs[index];
-                                  final hasScore =
-                                      review.containsKey('cv_score') &&
-                                          review['cv_score'] != null;
-                                  final score = hasScore
-                                      ? (review['cv_score'] ?? 0).toDouble()
-                                      : 0.0;
-                                  final cvUrl = review['cv_url'] as String?;
-
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: _kSmallGap, horizontal: _kMainPadding),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(_kMainPadding),
-                                      decoration: BoxDecoration(
-                                        color: _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity),
-                                        borderRadius: BorderRadius.circular(_kCardRadius),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.black.withValues(alpha: 0.1),
-                                            blurRadius: 15,
-                                            offset: const Offset(0, 6),
-                                          ),
-                                        ],
+                            // Candidates table (same design & opacity, faster browse for 200–1000 rows)
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: _kMainPadding),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: themeProvider.isDarkMode
+                                        ? _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity)
+                                        : Colors.white.withValues(alpha: _kCardAndHeaderOpacity),
+                                    borderRadius: BorderRadius.circular(_kCardRadius),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.1),
+                                        blurRadius: 15,
+                                        offset: const Offset(0, 6),
                                       ),
-                                      child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                                    ],
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      // Table header row
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: _kMainPadding, vertical: 12),
+                                        decoration: BoxDecoration(
+                                          color: themeProvider.isDarkMode
+                                              ? _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity)
+                                              : Colors.white.withValues(alpha: _kCardAndHeaderOpacity),
+                                          borderRadius: const BorderRadius.vertical(
+                                              top: Radius.circular(_kCardRadius)),
+                                        ),
+                                        child: Row(
                                           children: [
-                                            // Header with Name and Gender (same design as top widget)
-                                            Row(
-                                              children: [
-                                                Container(
-                                                  width: 48,
-                                                  height: 48,
-                                                  decoration: BoxDecoration(
-                                                    shape: BoxShape.circle,
-                                                    color: _kPrimary,
-                                                  ),
-                                                  child: const Icon(
-                                                    Icons.person,
-                                                    color: Colors.white,
-                                                    size: 24,
-                                                  ),
-                                                ),
-                                                const SizedBox(width: _kMainPadding),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        review['full_name'] ??
-                                                            'Unknown Candidate',
-                                                        style:
-                                                            GoogleFonts.poppins(
-                                                          fontSize: 18,
-                                                          fontWeight:
-                                                              FontWeight.w700,
-                                                          color: themeProvider
-                                                                  .isDarkMode
-                                                              ? Colors.white
-                                                              : Colors.black87,
-                                                        ),
-                                                        maxLines: 2,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
-                                                      ),
-                                                      const SizedBox(height: _kSmallGap),
-                                                      Container(
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .symmetric(
-                                                                horizontal: 10,
-                                                                vertical: _kSmallGap),
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: (review['gender'] ==
-                                                                      'Male'
-                                                                  ? Colors.blue
-                                                                  : review['gender'] ==
-                                                                          'Female'
-                                                                      ? Colors
-                                                                          .pink
-                                                                      : Colors
-                                                                          .black)
-                                                              .withValues(
-                                                                  alpha: (review['gender'] == null || review['gender'] == '' || review['gender'] == 'N/A') ? _kCardAndHeaderOpacity : _kTranslucentOpacity),
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(_kBadgeRadius),
-                                                          border: Border.all(
-                                                            color: (review['gender'] ==
-                                                                        'Male'
-                                                                    ? Colors
-                                                                        .blue
-                                                                    : review['gender'] ==
-                                                                            'Female'
-                                                                        ? Colors
-                                                                            .pink
-                                                                        : Colors
-                                                                            .black)
-                                                                .withValues(
-                                                                    alpha: 0.3),
-                                                          ),
-                                                        ),
-                                                        child: Text(
-                                                          review['gender'] ??
-                                                              'N/A',
-                                                          style:
-                                                              GoogleFonts.poppins(
-                                                            fontSize: 12,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            color: review[
-                                                                        'gender'] ==
-                                                                    'Male'
-                                                                    ? Colors.blue
-                                                                    .shade700
-                                                                : review['gender'] ==
-                                                                        'Female'
-                                                                    ? Colors
-                                                                        .pink
-                                                                        .shade700
-                                                                    : Colors
-                                                                        .black87,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: _kMainPadding),
-                                            // Score Section: red = solid (no opacity), dark = 40% like card
-                                            Container(
-                                              padding: const EdgeInsets.all(12),
+                                            Expanded(
+                                                flex: 2,
+                                                child: Text('Candidate',
+                                                    style: GoogleFonts.poppins(
+                                                        fontWeight: FontWeight.w600,
+                                                        fontSize: 14,
+                                                        color: themeProvider.isDarkMode
+                                                            ? Colors.white70
+                                                            : Colors.black87))),
+                                            Expanded(
+                                                flex: 1,
+                                                child: Text('Gender',
+                                                    style: GoogleFonts.poppins(
+                                                        fontWeight: FontWeight.w600,
+                                                        fontSize: 14,
+                                                        color: themeProvider.isDarkMode
+                                                            ? Colors.white70
+                                                            : Colors.black87))),
+                                            Expanded(
+                                                flex: 1,
+                                                child: Text('CV Score',
+                                                    style: GoogleFonts.poppins(
+                                                        fontWeight: FontWeight.w600,
+                                                        fontSize: 14,
+                                                        color: themeProvider.isDarkMode
+                                                            ? Colors.white70
+                                                            : Colors.black87))),
+                                            const SizedBox(width: 100),
+                                          ],
+                                        ),
+                                      ),
+                                      Divider(
+                                          height: 1,
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.white.withValues(alpha: 0.1)
+                                              : Colors.black.withValues(alpha: 0.1)),
+                                      SizedBox(
+                                        height: 420,
+                                        child: ListView.builder(
+                                          itemCount: displayedCVs.length,
+                                          itemBuilder: (context, index) {
+                                            final review = displayedCVs[index];
+                                            final hasScore = review.containsKey('cv_score') &&
+                                                review['cv_score'] != null;
+                                            final score = hasScore
+                                                ? (review['cv_score'] ?? 0).toDouble()
+                                                : 0.0;
+                                            final cvUrl = review['cv_url'] as String?;
+                                            final isLast = index == displayedCVs.length - 1;
+                                            return Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: _kMainPadding, vertical: _kSmallGap),
                                               decoration: BoxDecoration(
-                                                color: hasScore
-                                                    ? _kPrimary
-                                                    : _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity),
-                                                borderRadius:
-                                                    BorderRadius.circular(_kCardRadius),
-                                                border: Border.all(
-                                                  color: hasScore
-                                                      ? _kPrimary.withValues(alpha: 0.3)
-                                                      : _kDarkSurface.withValues(alpha: 0.3),
-                                                ),
+                                                color: themeProvider.isDarkMode
+                                                    ? _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity)
+                                                    : Colors.white.withValues(alpha: _kCardAndHeaderOpacity),
+                                                borderRadius: isLast
+                                                    ? const BorderRadius.vertical(
+                                                        bottom: Radius.circular(_kCardRadius))
+                                                    : null,
+                                                border: isLast
+                                                    ? null
+                                                    : Border(
+                                                        bottom: BorderSide(
+                                                          color: themeProvider.isDarkMode
+                                                              ? Colors.white.withValues(alpha: 0.15)
+                                                              : Colors.black.withValues(alpha: 0.12),
+                                                          width: 1,
+                                                        ),
+                                                      ),
                                               ),
                                               child: Row(
                                                 children: [
-                                                  Icon(
-                                                    hasScore
-                                                        ? Icons.star
-                                                        : Icons.star_border,
-                                                    color: hasScore
-                                                        ? Colors.white
-                                                        : Colors.black54,
-                                                    size: 24,
+                                                  Expanded(
+                                                    flex: 2,
+                                                    child: Row(
+                                                      children: [
+                                                        Container(
+                                                          width: 36,
+                                                          height: 36,
+                                                          decoration: const BoxDecoration(
+                                                            shape: BoxShape.circle,
+                                                            color: _kPrimary,
+                                                          ),
+                                                          child: const Icon(
+                                                            Icons.person,
+                                                            color: Colors.white,
+                                                            size: 18,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: _kSmallGap),
+                                                        Expanded(
+                                                          child: Text(
+                                                            review['full_name'] ?? 'Unknown',
+                                                            style: GoogleFonts.poppins(
+                                                              fontSize: 13,
+                                                              fontWeight: FontWeight.w500,
+                                                              color: themeProvider.isDarkMode
+                                                                  ? Colors.white
+                                                                  : Colors.black,
+                                                            ),
+                                                            maxLines: 1,
+                                                            overflow: TextOverflow.ellipsis,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
                                                   ),
-                                                  const SizedBox(width: _kSmallGap),
-                                                  Text(
-                                                    hasScore
-                                                        ? 'CV Score: ${score.toStringAsFixed(1)}%'
-                                                        : 'CV Score: Not Available',
-                                                    style: GoogleFonts.poppins(
-                                                      fontSize: 16,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      color: hasScore
-                                                          ? Colors.white
-                                                          : Colors.black87,
+                                                  Expanded(
+                                                    flex: 1,
+                                                    child: Center(
+                                                      child: Container(
+                                                        padding: const EdgeInsets.symmetric(
+                                                            horizontal: 10, vertical: 6),
+                                                        decoration: BoxDecoration(
+                                                          color: _kPrimary.withValues(
+                                                              alpha: (review['gender'] == null ||
+                                                                      review['gender'] == '' ||
+                                                                      review['gender'] == 'N/A')
+                                                                  ? _kCardAndHeaderOpacity
+                                                                  : _kTranslucentOpacity),
+                                                          borderRadius:
+                                                              BorderRadius.circular(_kCardRadius),
+                                                        ),
+                                                        child: Text(
+                                                          review['gender'] ?? 'N/A',
+                                                          style: GoogleFonts.poppins(
+                                                            fontSize: 10,
+                                                            fontWeight: FontWeight.w600,
+                                                            color: Colors.white,
+                                                          ),
+                                                          textAlign: TextAlign.center,
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  Expanded(
+                                                    flex: 1,
+                                                    child: Row(
+                                                      mainAxisSize: MainAxisSize.min,
+                                                      children: [
+                                                        Icon(
+                                                          hasScore ? Icons.star : Icons.star_border,
+                                                          color: themeProvider.isDarkMode
+                                                              ? (hasScore ? Colors.white : Colors.white70)
+                                                              : Colors.black,
+                                                          size: 16,
+                                                        ),
+                                                        const SizedBox(width: 4),
+                                                        Text(
+                                                          hasScore
+                                                              ? '${score.toStringAsFixed(1)}%'
+                                                              : '—',
+                                                          style: GoogleFonts.poppins(
+                                                            fontSize: 12,
+                                                            fontWeight: FontWeight.w600,
+                                                            color: themeProvider.isDarkMode
+                                                                ? (hasScore ? Colors.white : Colors.white70)
+                                                                : Colors.black,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  SizedBox(
+                                                    width: 100,
+                                                    child: ElevatedButton(
+                                                      onPressed: cvUrl != null && cvUrl.isNotEmpty
+                                                          ? () => launch(cvUrl)
+                                                          : null,
+                                                      style: ElevatedButton.styleFrom(
+                                                        backgroundColor: cvUrl != null &&
+                                                                cvUrl.isNotEmpty
+                                                            ? _kPrimary
+                                                            : (themeProvider.isDarkMode
+                                                                ? _kDarkSurface
+                                                                    .withValues(alpha: _kCardAndHeaderOpacity)
+                                                                : Colors.grey.shade300
+                                                                    .withValues(alpha: _kCardAndHeaderOpacity)),
+                                                        foregroundColor: Colors.white,
+                                                        padding: const EdgeInsets.symmetric(
+                                                            horizontal: 8, vertical: 8),
+                                                        minimumSize: Size.zero,
+                                                        shape: RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius.circular(_kCardRadius),
+                                                        ),
+                                                        elevation: cvUrl != null && cvUrl.isNotEmpty ? 2 : 0,
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Icon(Icons.remove_red_eye, size: 14),
+                                                          const SizedBox(width: 4),
+                                                          Text(
+                                                            'Preview',
+                                                            style: GoogleFonts.poppins(
+                                                              fontWeight: FontWeight.w600,
+                                                              fontSize: 11,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
                                                     ),
                                                   ),
                                                 ],
                                               ),
-                                            ),
-                                            const SizedBox(height: _kMainPadding),
-                                            // Preview Button (red action #C10D00)
-                                            SizedBox(
-                                              width: double.infinity,
-                                              child: ElevatedButton.icon(
-                                                onPressed: cvUrl != null &&
-                                                        cvUrl.isNotEmpty
-                                                    ? () => launch(cvUrl)
-                                                    : null,
-                                                icon: const Icon(
-                                                    Icons.remove_red_eye),
-                                                label: Text(
-                                                  'Preview CV',
-                                                  style: GoogleFonts.poppins(
-                                                    fontWeight: FontWeight.w600,
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: cvUrl != null &&
-                                                          cvUrl.isNotEmpty
-                                                      ? _kPrimary
-                                                      : _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity),
-                                                  foregroundColor: Colors.white,
-                                                  padding: const EdgeInsets
-                                                      .symmetric(vertical: 14),
-                                                  shape: RoundedRectangleBorder(
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            _kCardRadius),
-                                                  ),
-                                                  elevation: cvUrl != null &&
-                                                          cvUrl.isNotEmpty
-                                                      ? 4
-                                                      : 0,
-                                                  shadowColor:
-                                                      _kPrimary
-                                                          .withValues(
-                                                              alpha: 0.3),
-                                                ),
-                                              ),
-                                            ),
-                                          ],
+                                            );
+                                          },
                                         ),
-                                    ),
-                                  );
-                                },
-                                childCount: displayedCVs.length,
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                           ],
