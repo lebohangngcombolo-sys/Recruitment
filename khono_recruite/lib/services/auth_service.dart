@@ -286,9 +286,13 @@ class AuthService {
     }
     debugPrint('[SSO AuthService] POST ${ApiEndpoints.ssoLogin} with token length=${trimmed.length}');
     try {
+      // Send token in both header and body so backend gets it even if a proxy strips the body (405/HTML often means request didn't reach Flask)
       final response = await http.post(
         Uri.parse(ApiEndpoints.ssoLogin),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $trimmed',
+        },
         body: jsonEncode({'token': trimmed}),
       );
       debugPrint('[SSO AuthService] Response status=${response.statusCode}, body length=${response.body.length}');

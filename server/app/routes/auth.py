@@ -109,7 +109,7 @@ def init_auth_routes(app):
             return "hiring_manager"
         return "candidate"
 
-    @app.route("/api/auth/sso-login", methods=["GET", "POST"])
+    @app.route("/api/auth/sso-login", methods=["GET", "POST", "OPTIONS"], strict_slashes=False)
     @limiter.limit("10 per minute")
     @khonobuzz_jwt_required
     def sso_login():
