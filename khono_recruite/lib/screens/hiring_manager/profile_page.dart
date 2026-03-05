@@ -13,6 +13,7 @@ import '../../providers/theme_provider.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
 import '../../utils/api_endpoints.dart';
+import '../../utils/app_version.dart';
 
 // ------------------- API Base URL -------------------
 final String candidateBase = ApiEndpoints.candidateBase;
@@ -1862,7 +1863,7 @@ class _ProfilePageState extends State<ProfilePage>
                 Align(
                   alignment: Alignment.bottomLeft,
                   child: Text(
-                    "Ver. 2026.02.BA1_SIT",
+                    kAppVersion,
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       color: themeProvider.isDarkMode

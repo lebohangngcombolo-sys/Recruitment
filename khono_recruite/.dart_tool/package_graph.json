@@ -5,7 +5,7 @@
   "packages": [
     {
       "name": "khono_recruite",
-      "version": "1.0.0+1",
+      "version": "1.0.1+2",
       "dependencies": [
         "dio",
         "dotted_border",

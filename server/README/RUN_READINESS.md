@@ -25,6 +25,32 @@ flutter run
 - **Override at run time:**  
   `flutter run --dart-define=API_BASE=https://your-api.com`
 
+### Build-time versioning (APP_VERSION)
+- **Format:** Frontend uses a build-stamped version string of the form `Ver.YYYY.MM.XYZ.ENV` where:
+  - `YYYY` = 4-digit year, `MM` = 2-digit month.
+  - `X` = week-of-month letter `A–F`.
+  - `Y` = day-of-week letter `A–G` (Mon–Sun).
+  - `Z` = commit count (usually from `origin/dev_main`).
+  - `ENV` = environment suffix (e.g. `DEV`, `STAGE`, `PROD`), taken from `APP_ENV`.
+- **Render (production) builds:**
+  - `render.yaml` runs `khono_recruite/render_build.sh`, which:
+    - Calls `scripts/generate_version.sh` to compute `APP_VERSION`.
+    - Passes it into Flutter via `--dart-define=APP_VERSION=...`.
+  - The `recruitment-web` service defines `APP_ENV=PROD` so production builds end in `.PROD`.
+- **Local development (simple):**
+  - If you run `flutter run` without `--dart-define=APP_VERSION`, the app uses a synthetic fallback:
+    - `kAppVersion` in `lib/utils/app_version.dart` defaults to `Ver.0.0.0.LOCAL`.
+    - This is intentionally **not** a real date-based build; it just indicates a non-versioned local run.
+- **Local development (realistic build stamp):**
+  - To mirror Render’s build-time stamping locally, use:
+    ```bash
+    bash khono_recruite/scripts/flutter_run_with_version.sh
+    ```
+  - This script:
+    - Runs `scripts/generate_version.sh` to get a `Ver.YYYY.MM.XYZ.ENV` string.
+    - Derives `API_BASE` the same way as `render_build.sh`.
+    - Starts `flutter run -d chrome` with both `API_BASE` and `APP_VERSION` passed via `--dart-define`.
+
 ### Firebase (optional)
 - `lib/firebase_options.dart` has placeholders (empty `apiKey`). The app **runs without Firebase**; AI uses the backend when Firebase is not configured.
 - To enable Firebase (e.g. Gemini client-side): configure a Firebase project and run `flutterfire configure` (or paste values into `firebase_options.dart`).
@@ -72,6 +98,18 @@ python run.py
 - Entry: `server/run.py` (loads `server/.env`, creates app, runs SocketIO on port 5000).
 - Config: `server/app/config.py` (reads from env).
 - Database: `SQLALCHEMY_DATABASE_URI` from `DATABASE_URL`; SSL is added for remote URLs (e.g. Render).
+
+### Backend version and health
+- **Health endpoint:** `GET /api/public/healthz`
+  - Lightweight liveness probe, now also returns version info:
+    - `status`: `"ok"` if the process is up.
+    - `git_sha`: short git revision of the running backend container (from `GIT_SHA`).
+    - `alembic_revision`: current DB migration revision from the `alembic_version` table (if available).
+- **Git SHA injection:**
+  - `server/render_start.sh` computes `GIT_SHA` via `git rev-parse --short HEAD` and exports it before starting Gunicorn.
+  - The `healthz` route reads `GIT_SHA` from app config or environment.
+- **DB migration linkage:**
+  - The same Alembic metadata used for migrations (`flask db upgrade`) is surfaced via `alembic_revision` so you can verify that backend code and DB schema are in sync.
 
 ---
 
