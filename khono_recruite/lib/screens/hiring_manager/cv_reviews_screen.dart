@@ -539,22 +539,26 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                             : Colors.black87))),
                                             Expanded(
                                                 flex: 1,
-                                                child: Text('Gender',
-                                                    style: GoogleFonts.poppins(
-                                                        fontWeight: FontWeight.w600,
-                                                        fontSize: 14,
-                                                        color: themeProvider.isDarkMode
-                                                            ? Colors.white70
-                                                            : Colors.black87))),
+                                                child: Center(
+                                                    child: Text('Gender',
+                                                        style: GoogleFonts.poppins(
+                                                            fontWeight: FontWeight.w600,
+                                                            fontSize: 14,
+                                                            color: themeProvider.isDarkMode
+                                                                ? Colors.white70
+                                                                : Colors.black87))),
+                                            ),
                                             Expanded(
                                                 flex: 1,
-                                                child: Text('CV Score',
-                                                    style: GoogleFonts.poppins(
-                                                        fontWeight: FontWeight.w600,
-                                                        fontSize: 14,
-                                                        color: themeProvider.isDarkMode
-                                                            ? Colors.white70
-                                                            : Colors.black87))),
+                                                child: Center(
+                                                    child: Text('CV Score',
+                                                        style: GoogleFonts.poppins(
+                                                            fontWeight: FontWeight.w600,
+                                                            fontSize: 14,
+                                                            color: themeProvider.isDarkMode
+                                                                ? Colors.white70
+                                                                : Colors.black87))),
+                                            ),
                                             const SizedBox(width: 100),
                                           ],
                                         ),
@@ -668,30 +672,32 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                   ),
                                                   Expanded(
                                                     flex: 1,
-                                                    child: Row(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      children: [
-                                                        Icon(
-                                                          hasScore ? Icons.star : Icons.star_border,
-                                                          color: themeProvider.isDarkMode
-                                                              ? (hasScore ? Colors.white : Colors.white70)
-                                                              : Colors.black,
-                                                          size: 16,
-                                                        ),
-                                                        const SizedBox(width: 4),
-                                                        Text(
-                                                          hasScore
-                                                              ? '${score.toStringAsFixed(1)}%'
-                                                              : '—',
-                                                          style: GoogleFonts.poppins(
-                                                            fontSize: 12,
-                                                            fontWeight: FontWeight.w600,
+                                                    child: Center(
+                                                      child: Row(
+                                                        mainAxisSize: MainAxisSize.min,
+                                                        children: [
+                                                          Icon(
+                                                            hasScore ? Icons.star : Icons.star_border,
                                                             color: themeProvider.isDarkMode
                                                                 ? (hasScore ? Colors.white : Colors.white70)
                                                                 : Colors.black,
+                                                            size: 16,
                                                           ),
-                                                        ),
-                                                      ],
+                                                          const SizedBox(width: 4),
+                                                          Text(
+                                                            hasScore
+                                                                ? '${score.toStringAsFixed(1)}%'
+                                                                : '—',
+                                                            style: GoogleFonts.poppins(
+                                                              fontSize: 12,
+                                                              fontWeight: FontWeight.w600,
+                                                              color: themeProvider.isDarkMode
+                                                                  ? (hasScore ? Colors.white : Colors.white70)
+                                                                  : Colors.black,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
                                                     ),
                                                   ),
                                                   SizedBox(
