@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import '../../../constants/app_colors.dart';
-import '../../widgets/glass_card.dart';
 import '../../services/analytics_service.dart';
 import 'package:intl/intl.dart';
 import '../../utils/app_config.dart';
@@ -28,6 +28,44 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   List<Map<String, dynamic>> _assessmentTrend = [];
 
   String? _error;
+
+  // Same design system as CV review screen (light/dark)
+  static const Color _kPrimary = Color(0xFFC10D00);
+  static const Color _kDarkSurface = Color(0xFF2C3E50);
+  static const double _kCardAndHeaderOpacity = 0.7; // dark mode
+  static const double _kCardOpacityLight = 0.98; // light mode: thick, minimal see-through
+  static const double _kTranslucentOpacity = 0.9;
+  static const double _kCardRadius = 16;
+
+  Widget _buildThemedCard(Widget child) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark
+            ? _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity)
+            : Colors.white.withValues(alpha: _kCardOpacityLight),
+        borderRadius: BorderRadius.circular(_kCardRadius),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 15,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Color _textPrimary(BuildContext c) =>
+      Theme.of(c).brightness == Brightness.dark
+          ? Colors.white
+          : AppColors.textDark;
+
+  Color _textSecondary(BuildContext c) =>
+      Theme.of(c).brightness == Brightness.dark
+          ? Colors.white70
+          : AppColors.textGrey;
 
   @override
   void initState() {
@@ -72,14 +110,16 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildHeader(),
+    return DefaultTextStyle(
+      style: GoogleFonts.poppins(fontSize: 14, color: _textPrimary(context)),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildHeader(),
             const SizedBox(height: 16),
             _buildTimeRangeSelector(),
             const SizedBox(height: 16),
@@ -94,7 +134,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                         child: _buildError(),
                       )
                     : _buildAnalyticsContent(),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -104,19 +145,19 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text('Analytics & Insights',
-            style: TextStyle(
+        Text('Analytics & Insights',
+            style: GoogleFonts.poppins(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: AppColors.textDark)),
+                color: _textPrimary(context))),
         Row(children: [
           ElevatedButton.icon(
             onPressed: () => _exportCsv(),
             icon: const Icon(Icons.download),
-            label: const Text('Export CSV'),
+            label: Text('Export CSV', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: AppColors.primaryWhite,
+                backgroundColor: _kPrimary,
+                foregroundColor: Colors.white,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
           ),
@@ -124,10 +165,10 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
           ElevatedButton.icon(
             onPressed: _loadAllAnalytics,
             icon: const Icon(Icons.refresh),
-            label: const Text('Refresh'),
+            label: Text('Refresh', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryRed,
-                foregroundColor: AppColors.primaryWhite,
+                backgroundColor: _kPrimary,
+                foregroundColor: Colors.white,
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
           ),
@@ -138,16 +179,24 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
 
   Widget _buildTimeRangeSelector() {
     return Row(children: [
-      const Text('Time Range:',
-          style: TextStyle(
+      Text('Time Range:',
+          style: GoogleFonts.poppins(
               fontSize: 16,
               fontWeight: FontWeight.w600,
-              color: AppColors.textDark)),
+              color: _textPrimary(context))),
       const SizedBox(width: 12),
       DropdownButton<String>(
         value: _selectedTimeRange,
+        style: GoogleFonts.poppins(color: _textPrimary(context), fontSize: 14),
+        dropdownColor: Theme.of(context).brightness == Brightness.dark
+            ? _kDarkSurface.withValues(alpha: _kTranslucentOpacity)
+            : Colors.white,
         items: ['Last Month', 'Last 3 Months', 'Last 6 Months', 'Last Year']
-            .map((range) => DropdownMenuItem(value: range, child: Text(range)))
+            .map((range) => DropdownMenuItem(
+                value: range,
+                child: Text(range,
+                    style: GoogleFonts.poppins(
+                        color: _textPrimary(context)))))
             .toList(),
         onChanged: (value) {
           setState(() => _selectedTimeRange = value!);
@@ -161,12 +210,12 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
     return Center(
         child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-          CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryRed)),
-          SizedBox(height: 16),
+            children: [
+          const CircularProgressIndicator(
+              valueColor: const AlwaysStoppedAnimation<Color>(_kPrimary)),
+          const SizedBox(height: 16),
           Text('Loading analytics...',
-              style: TextStyle(color: AppColors.textGrey, fontSize: 16)),
+              style: GoogleFonts.poppins(color: _textSecondary(context), fontSize: 16)),
         ]));
   }
 
@@ -174,9 +223,11 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
     return Center(
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
       Text('Failed to load analytics: $_error',
-          style: const TextStyle(color: Colors.red)),
+          style: GoogleFonts.poppins(color: Colors.red)),
       const SizedBox(height: 12),
-      ElevatedButton(onPressed: _loadAllAnalytics, child: const Text('Retry'))
+      ElevatedButton(
+          onPressed: _loadAllAnalytics,
+          child: Text('Retry', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)))
     ]));
   }
 
@@ -216,18 +267,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   // ---------------- Stylish Charts ----------------
 
   Widget _buildStylishHiringTrendChart() {
-    return GlassCard(
-      blur: 12,
-      opacity: 0.1,
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          AppColors.primaryRed.withValues(alpha: 0.05),
-          Colors.blue.withValues(alpha: 0.05),
-        ],
-      ),
-      child: Padding(
+    return _buildThemedCard(Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -235,23 +275,23 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Applications / Month',
-                    style: TextStyle(
+                Text('Applications / Month',
+                    style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textDark)),
+                        color: _textPrimary(context))),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryRed.withValues(alpha: 0.1),
+                    color: _kPrimary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${_monthlyApps.length} months',
-                      style: const TextStyle(
+                      style: GoogleFonts.poppins(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.primaryRed)),
+                          color: _kPrimary)),
                 ),
               ],
             ),
@@ -264,31 +304,31 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   majorGridLines: const MajorGridLines(width: 0),
                   axisLine: const AxisLine(width: 0),
                   labelStyle:
-                      const TextStyle(color: AppColors.textGrey, fontSize: 10),
+                      GoogleFonts.poppins(color: _textSecondary(context), fontSize: 10),
                 ),
                 primaryYAxis: NumericAxis(
                   majorGridLines: const MajorGridLines(width: 0),
                   axisLine: const AxisLine(width: 0),
                   labelStyle:
-                      const TextStyle(color: AppColors.textGrey, fontSize: 10),
+                      GoogleFonts.poppins(color: _textSecondary(context), fontSize: 10),
                 ),
                 series: <CartesianSeries>[
                   SplineSeries<Map<String, dynamic>, String>(
                     dataSource: _monthlyApps,
                     xValueMapper: (d, _) => d['month'] ?? '',
                     yValueMapper: (d, _) => (d['applications'] ?? 0) as num,
-                    color: AppColors.primaryRed,
+                    color: _kPrimary,
                     width: 3,
                     markerSettings: const MarkerSettings(
                       isVisible: true,
-                      color: AppColors.primaryRed,
+                      color: _kPrimary,
                       borderWidth: 2,
                       borderColor: Colors.white,
                     ),
-                    dataLabelSettings: const DataLabelSettings(
+                    dataLabelSettings: DataLabelSettings(
                       isVisible: true,
                       textStyle:
-                          TextStyle(fontSize: 10, color: AppColors.textDark),
+                          GoogleFonts.poppins(fontSize: 10, color: _textPrimary(context)),
                     ),
                   )
                 ],
@@ -296,24 +336,12 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
             )
           ],
         ),
-      ),
-    );
+      ));
   }
 
   Widget _buildStylishSourcePerformanceChart() {
     final data = _appsPerReq.take(8).toList(); // Limit for better display
-    return GlassCard(
-      blur: 12,
-      opacity: 0.1,
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.green.withValues(alpha: 0.05),
-          Colors.teal.withValues(alpha: 0.05),
-        ],
-      ),
-      child: Padding(
+    return _buildThemedCard(Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -321,11 +349,11 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Top Requisitions',
-                    style: TextStyle(
+                Text('Top Requisitions',
+                    style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textDark)),
+                        color: _textPrimary(context))),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -334,7 +362,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${data.length} roles',
-                      style: const TextStyle(
+                      style: GoogleFonts.poppins(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                           color: Colors.green)),
@@ -351,13 +379,13 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   majorGridLines: const MajorGridLines(width: 0),
                   axisLine: const AxisLine(width: 0),
                   labelStyle:
-                      const TextStyle(color: AppColors.textGrey, fontSize: 9),
+                      GoogleFonts.poppins(color: _textSecondary(context), fontSize: 9),
                 ),
                 primaryYAxis: NumericAxis(
                   majorGridLines: const MajorGridLines(width: 0),
                   axisLine: const AxisLine(width: 0),
                   labelStyle:
-                      const TextStyle(color: AppColors.textGrey, fontSize: 10),
+                      GoogleFonts.poppins(color: _textSecondary(context), fontSize: 10),
                 ),
                 series: <CartesianSeries>[
                   BarSeries<Map<String, dynamic>, String>(
@@ -367,10 +395,10 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                     yValueMapper: (d, _) => (d['applications'] ?? 0) as num,
                     color: Colors.green,
                     borderRadius: BorderRadius.circular(4),
-                    dataLabelSettings: const DataLabelSettings(
+                    dataLabelSettings: DataLabelSettings(
                       isVisible: true,
                       textStyle:
-                          TextStyle(fontSize: 9, color: AppColors.textDark),
+                          GoogleFonts.poppins(fontSize: 9, color: _textPrimary(context)),
                     ),
                   )
                 ],
@@ -378,24 +406,12 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
             )
           ],
         ),
-      ),
-    );
+      ));
   }
 
   Widget _buildStylishAssessmentPassChart() {
     final data = _assessmentTrend;
-    return GlassCard(
-      blur: 12,
-      opacity: 0.1,
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.purple.withValues(alpha: 0.05),
-          Colors.blue.withValues(alpha: 0.05),
-        ],
-      ),
-      child: Padding(
+    return _buildThemedCard(Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -403,11 +419,11 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Assessment Pass Rate',
-                    style: TextStyle(
+                Text('Assessment Pass Rate',
+                    style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textDark)),
+                        color: _textPrimary(context))),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -415,8 +431,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                     color: Colors.purple.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Text('Trend',
-                      style: TextStyle(
+                  child: Text('Trend',
+                      style: GoogleFonts.poppins(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                           color: Colors.purple)),
@@ -432,14 +448,14 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   majorGridLines: const MajorGridLines(width: 0),
                   axisLine: const AxisLine(width: 0),
                   labelStyle:
-                      const TextStyle(color: AppColors.textGrey, fontSize: 10),
+                      GoogleFonts.poppins(color: _textSecondary(context), fontSize: 10),
                 ),
                 primaryYAxis: NumericAxis(
                   numberFormat: NumberFormat.percentPattern(),
                   majorGridLines: const MajorGridLines(width: 0),
                   axisLine: const AxisLine(width: 0),
                   labelStyle:
-                      const TextStyle(color: AppColors.textGrey, fontSize: 10),
+                      GoogleFonts.poppins(color: _textSecondary(context), fontSize: 10),
                 ),
                 series: <CartesianSeries>[
                   LineSeries<Map<String, dynamic>, String>(
@@ -458,8 +474,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                     dataLabelSettings: DataLabelSettings(
                       isVisible: true,
                       labelAlignment: ChartDataLabelAlignment.auto,
-                      textStyle: const TextStyle(
-                          fontSize: 10, color: AppColors.textDark),
+                      textStyle: GoogleFonts.poppins(
+                          fontSize: 10, color: _textPrimary(context)),
                     ),
                   )
                 ],
@@ -467,24 +483,12 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
             )
           ],
         ),
-      ),
-    );
+      ));
   }
 
   Widget _buildStylishOffersByCategoryChart() {
     final data = _offersByCategory;
-    return GlassCard(
-      blur: 12,
-      opacity: 0.1,
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.orange.withValues(alpha: 0.05),
-          Colors.amber.withValues(alpha: 0.05),
-        ],
-      ),
-      child: Padding(
+    return _buildThemedCard(Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -492,11 +496,11 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Offers by Category',
-                    style: TextStyle(
+                Text('Offers by Category',
+                    style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textDark)),
+                        color: _textPrimary(context))),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -505,7 +509,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${data.length} categories',
-                      style: const TextStyle(
+                      style: GoogleFonts.poppins(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                           color: Colors.orange)),
@@ -521,10 +525,10 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                     dataSource: data,
                     xValueMapper: (d, _) => (d['category'] ?? '') as String,
                     yValueMapper: (d, _) => (d['offers'] ?? 0) as num,
-                    dataLabelSettings: const DataLabelSettings(
+                    dataLabelSettings: DataLabelSettings(
                       isVisible: true,
                       textStyle:
-                          TextStyle(fontSize: 10, color: AppColors.textDark),
+                          GoogleFonts.poppins(fontSize: 10, color: _textPrimary(context)),
                     ),
                     innerRadius: '60%',
                     radius: '100%',
@@ -545,18 +549,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
       ..sort((a, b) => (b['count'] as int).compareTo(a['count'] as int));
     final topSkills = items.take(8).toList();
 
-    return GlassCard(
-      blur: 12,
-      opacity: 0.1,
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.blue.withValues(alpha: 0.05),
-          Colors.indigo.withValues(alpha: 0.05),
-        ],
-      ),
-      child: Padding(
+    return _buildThemedCard(Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -564,11 +557,11 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Top Skills',
-                    style: TextStyle(
+                Text('Top Skills',
+                    style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textDark)),
+                        color: _textPrimary(context))),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -577,7 +570,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${topSkills.length} skills',
-                      style: const TextStyle(
+                      style: GoogleFonts.poppins(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                           color: Colors.blue)),
@@ -594,13 +587,13 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   majorGridLines: const MajorGridLines(width: 0),
                   axisLine: const AxisLine(width: 0),
                   labelStyle:
-                      const TextStyle(color: AppColors.textGrey, fontSize: 9),
+                      GoogleFonts.poppins(color: _textSecondary(context), fontSize: 9),
                 ),
                 primaryYAxis: NumericAxis(
                   majorGridLines: const MajorGridLines(width: 0),
                   axisLine: const AxisLine(width: 0),
                   labelStyle:
-                      const TextStyle(color: AppColors.textGrey, fontSize: 10),
+                      GoogleFonts.poppins(color: _textSecondary(context), fontSize: 10),
                 ),
                 series: <CartesianSeries>[
                   ColumnSeries<Map<String, dynamic>, String>(
@@ -609,10 +602,10 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                     yValueMapper: (d, _) => (d['count'] ?? 0) as num,
                     color: Colors.blue,
                     borderRadius: BorderRadius.circular(4),
-                    dataLabelSettings: const DataLabelSettings(
+                    dataLabelSettings: DataLabelSettings(
                       isVisible: true,
                       textStyle:
-                          TextStyle(fontSize: 9, color: AppColors.textDark),
+                          GoogleFonts.poppins(fontSize: 9, color: _textPrimary(context)),
                     ),
                   )
                 ],
@@ -620,8 +613,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
             )
           ],
         ),
-      ),
-    );
+      ));
   }
 
   Widget _buildStylishExperienceDistributionChart() {
@@ -631,18 +623,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
       ..sort((a, b) => int.parse(a['years'].toString())
           .compareTo(int.parse(b['years'].toString())));
 
-    return GlassCard(
-      blur: 12,
-      opacity: 0.1,
-      gradient: LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.teal.withValues(alpha: 0.05),
-          Colors.green.withValues(alpha: 0.05),
-        ],
-      ),
-      child: Padding(
+    return _buildThemedCard(Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -650,11 +631,11 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Experience Distribution',
-                    style: TextStyle(
+                Text('Experience Distribution',
+                    style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.textDark)),
+                        color: _textPrimary(context))),
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -663,7 +644,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text('${items.length} ranges',
-                      style: const TextStyle(
+                      style: GoogleFonts.poppins(
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                           color: Colors.teal)),
@@ -679,13 +660,13 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                   majorGridLines: const MajorGridLines(width: 0),
                   axisLine: const AxisLine(width: 0),
                   labelStyle:
-                      const TextStyle(color: AppColors.textGrey, fontSize: 10),
+                      GoogleFonts.poppins(color: _textSecondary(context), fontSize: 10),
                 ),
                 primaryYAxis: NumericAxis(
                   majorGridLines: const MajorGridLines(width: 0),
                   axisLine: const AxisLine(width: 0),
                   labelStyle:
-                      const TextStyle(color: AppColors.textGrey, fontSize: 10),
+                      GoogleFonts.poppins(color: _textSecondary(context), fontSize: 10),
                 ),
                 series: <CartesianSeries>[
                   BarSeries<Map<String, dynamic>, String>(
@@ -694,10 +675,10 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                     yValueMapper: (d, _) => (d['count'] ?? 0) as num,
                     color: Colors.teal,
                     borderRadius: BorderRadius.circular(4),
-                    dataLabelSettings: const DataLabelSettings(
+                    dataLabelSettings: DataLabelSettings(
                       isVisible: true,
                       textStyle:
-                          TextStyle(fontSize: 10, color: AppColors.textDark),
+                          GoogleFonts.poppins(fontSize: 10, color: _textPrimary(context)),
                     ),
                   )
                 ],
@@ -705,8 +686,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
             )
           ],
         ),
-      ),
-    );
+      ));
   }
 
   String _truncateTitle(String title) {
@@ -725,33 +705,30 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   }
 
   Widget _buildReportCard(String title) {
-    return GlassCard(
-        blur: 8,
-        opacity: 0.08,
-        child: ListTile(
-          title: Text(title, style: const TextStyle(color: AppColors.textDark)),
-          trailing:
-              const Icon(Icons.arrow_forward, color: AppColors.primaryRed),
-          onTap: () => _viewDetailedReport(title),
-        ));
+    return _buildThemedCard(ListTile(
+      title: Text(title, style: GoogleFonts.poppins(color: _textPrimary(context), fontWeight: FontWeight.w600)),
+      trailing: const Icon(Icons.arrow_forward, color: _kPrimary),
+      onTap: () => _viewDetailedReport(title),
+    ));
   }
 
   void _exportCsv() {
     ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Export CSV not implemented.')));
+        SnackBar(content: Text('Export CSV not implemented.', style: GoogleFonts.poppins())));
   }
 
   void _viewDetailedReport(String title) {
     showDialog(
         context: context,
         builder: (context) => AlertDialog(
-              title: Text('$title Report'),
-              content: const Text(
-                  'Detailed report view - implement navigation to full report page.'),
+              title: Text('$title Report', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              content: Text(
+                  'Detailed report view - implement navigation to full report page.',
+                  style: GoogleFonts.poppins()),
               actions: [
                 TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'))
+                    child: Text('Close', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)))
               ],
             ));
   }
