@@ -11,6 +11,7 @@ import 'screens/auth/register_screen.dart';
 import 'screens/candidate/candidate_dashboard.dart';
 import 'screens/candidate/find_talent_page.dart';
 import 'screens/candidate/jobs_applied_page.dart';
+import 'screens/candidate/browse_all_jobs_page.dart';
 import 'screens/candidate/intern_stories_page.dart';
 import 'screens/candidate/job_details_page.dart';
 import 'screens/enrollment/enrollment_screen.dart';
@@ -171,6 +172,13 @@ final GoRouter _router = GoRouter(
       builder: (context, state) {
         final token = state.uri.queryParameters['token'] ?? '';
         return JobsAppliedPage(token: token);
+      },
+    ),
+    GoRoute(
+      path: '/browse-jobs',
+      builder: (context, state) {
+        final token = state.uri.queryParameters['token'] ?? '';
+        return BrowseAllJobsPage(token: token);
       },
     ),
     GoRoute(

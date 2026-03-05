@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import '../../services/auth_service.dart';
 import '../../utils/api_endpoints.dart';
+import 'redirect_to_assessment_page.dart';
 
 class JobDetailsPage extends StatefulWidget {
   final Map<String, dynamic> job;
@@ -268,74 +269,36 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
       return;
     }
     if (!mounted) return;
-    setState(() => submitting = true);
-
-    try {
-      final res = await http.post(
-        Uri.parse("${ApiEndpoints.candidateBase}/apply/${widget.job["id"]}"),
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Bearer $token",
-        },
-        body: json.encode({
-          "full_name": fullNameController.text,
-          "phone": phoneController.text,
-          "portfolio": portfolioController.text,
-          "cover_letter": coverLetterController.text,
-        }),
+    // Navigate to redirect page immediately; it will call apply API and then show countdown.
+    if (applicationId != null && applicationId! > 0) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => RedirectToAssessmentPage(
+            applicationId: applicationId!,
+            draftData: widget.draftData,
+            jobTitle: widget.job['title']?.toString(),
+          ),
+        ),
       );
-
-      if (res.statusCode == 201 || res.statusCode == 200) {
-        final data = _safeJsonDecode(res.body);
-        if (data is! Map) {
-          throw Exception("Invalid apply response");
-        }
-        if (!mounted) return;
-        await AuthService.clearPendingApplyJob();
-        setState(() {
-          applicationId = data["application_id"];
-        });
-        final message = data["message"]?.toString() ?? "Applied successfully!";
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
-        );
-      } else if (res.statusCode == 401) {
-        await AuthService.clearAuthState();
-        if (!mounted) return;
-        setState(() {});
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Session expired. Please sign in to apply.")),
-        );
-      } else if (res.statusCode == 403) {
-        final data = _safeJsonDecode(res.body);
-        final message = data is Map
-            ? (data["error"] ?? "Complete your enrollment before applying to jobs")
-            : "Complete your enrollment before applying to jobs";
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message.toString())),
-        );
-        context.go("/enrollment");
-      } else {
-        final data = _safeJsonDecode(res.body);
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text(data is Map
-                  ? (data["error"] ?? "Apply failed")
-                  : "Apply failed")),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error: $e")));
-    } finally {
-      if (!mounted) return;
-      setState(() => submitting = false);
+      return;
     }
+    // No application yet: show redirect page instantly; it will apply and then redirect to assessment.
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RedirectToAssessmentPage(
+          job: widget.job,
+          jobTitle: widget.job['title']?.toString(),
+          applyPayload: {
+            'full_name': fullNameController.text,
+            'phone': phoneController.text,
+            'portfolio': portfolioController.text,
+            'cover_letter': coverLetterController.text,
+          },
+        ),
+      ),
+    );
   }
 
   void _showSignInToApplyDialog() {
@@ -506,90 +469,86 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
               ),
             ),
           ),
-          Container(
-            color: Colors.black.withOpacity(0.4),
-          ),
-          Positioned.fill(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  const SizedBox(height: 24),
-                  // Banner - UNCHANGED
-                  Stack(
-                    children: [
-                      Image.asset(
-                        widget.job["banner"] ?? "assets/images/team1.jpg",
-                        width: double.infinity,
-                        height: 400,
-                        fit: BoxFit.cover,
-                      ),
-                      Container(
-                        height: 400,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.black.withValues(alpha: 0.6),
-                              Colors.transparent,
-                              Colors.black.withValues(alpha: 0.3),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 40,
-                        left: 16,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(30),
-                            border: Border.all(
-                                color: _accentRed.withOpacity(0.6), width: 1.5),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.2),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: IconButton(
-                            icon: const Icon(Icons.arrow_back,
-                                color: Colors.white),
-                            onPressed: () => Navigator.of(context).pop(),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 40,
-                        left: 24,
-                        right: 24,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.job["title"] ?? "",
-                              style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              "${widget.job["company"] ?? ""} ΓÇó ${widget.job["location"] ?? ""}",
-                              style: GoogleFonts.poppins(
-                                color: Colors.white.withValues(alpha: 0.9),
-                                fontSize: 18,
-                              ),
-                            ),
+          SingleChildScrollView(
+            child: Column(
+              children: [
+                const SizedBox(height: 24),
+                // Banner - UNCHANGED
+                Stack(
+                  children: [
+                    Image.asset(
+                      widget.job["banner"] ?? "assets/images/team1.jpg",
+                      width: double.infinity,
+                      height: 400,
+                      fit: BoxFit.cover,
+                    ),
+                    Container(
+                      height: 400,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.6),
+                            Colors.transparent,
+                            Colors.black.withValues(alpha: 0.3),
                           ],
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
+                    ),
+                    Positioned(
+                      top: 40,
+                      left: 16,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          borderRadius: BorderRadius.circular(30),
+                          border: Border.all(
+                              color: _accentRed.withOpacity(0.6), width: 1.5),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.2),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          icon:
+                              const Icon(Icons.arrow_back, color: Colors.white),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 40,
+                      left: 24,
+                      right: 24,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.job["title"] ?? "",
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            "${widget.job["company"] ?? ""} • ${widget.job["location"] ?? ""}",
+                            style: GoogleFonts.poppins(
+                              color: Colors.white.withValues(alpha: 0.9),
+                              fontSize: 18,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 32),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Column(
@@ -835,7 +794,6 @@ class _JobDetailsPageState extends State<JobDetailsPage> {
                 ],
               ),
             ),
-          ),
         ],
       ),
     );
