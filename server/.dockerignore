@@ -1,0 +1,43 @@
+# Dependencies and env (installed in image or provided at runtime)
+.env
+.env.*
+venv
+.venv
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info
+.eggs
+dist
+build
+
+# Git and IDE
+.git
+.gitignore
+.cursor
+.vscode
+*.swp
+*.swo
+
+# Tests and local dev
+.pytest_cache
+.coverage
+htmlcov
+*.log
+test_*.py
+tests/
+
+# Docs and scripts (not needed in container)
+README
+README.md
+*.md
+scripts/
+
+# Migrations are needed for flask db upgrade; keep them
+# migrations/
+
+# Optional: uncomment to exclude heavy/cache data
+# *.sqlite
+# assessment_library_export.json

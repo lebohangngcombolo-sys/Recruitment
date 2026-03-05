@@ -12,7 +12,7 @@ import 'dart:async';
 import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart'
     show File;
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 
 // Import your existing services
 import '../../services/candidate_service.dart';
@@ -114,8 +114,21 @@ class _LandingPageState extends State<LandingPage>
 
   /// If the app was opened with ?token=... (e.g. from hub), validate with backend and redirect to dashboard.
   void _checkSsoTokenFromUrl() {
-    final ssoToken = widget.ssoTokenFromUrl?.trim();
-    if (ssoToken == null || ssoToken.isEmpty || _ssoTokenHandled) return;
+    // Prefer widget (from router), then on web fallback to current browser URL so we never miss the token
+    String? ssoToken = widget.ssoTokenFromUrl?.trim();
+    if ((ssoToken == null || ssoToken.isEmpty) && kIsWeb) {
+      ssoToken = Uri.base.queryParameters['token']?.trim();
+      if (ssoToken != null && ssoToken.isNotEmpty) {
+        debugPrint('[SSO] Token taken from Uri.base (router did not pass it)');
+      }
+    }
+    if (ssoToken == null || ssoToken.isEmpty || _ssoTokenHandled) {
+      if (kDebugMode && (ssoToken == null || ssoToken.isEmpty)) {
+        debugPrint('[SSO] No token in URL or already handled. widget.ssoTokenFromUrl=${widget.ssoTokenFromUrl != null ? "set" : "null"}, Uri.base.queryParameters[token]=${kIsWeb ? (Uri.base.queryParameters['token'] != null ? "set" : "null") : "n/a"}');
+      }
+      return;
+    }
+    debugPrint('[SSO] Found token in URL (length=${ssoToken.length}), exchanging with backend...');
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || _isDisposed) return;
       _safeSetState(() {
@@ -123,7 +136,8 @@ class _LandingPageState extends State<LandingPage>
         _ssoTokenLoading = true;
       });
       try {
-        final result = await AuthService.loginWithSsoToken(ssoToken);
+        final result = await AuthService.loginWithSsoToken(ssoToken!);
+        debugPrint('[SSO] Backend result: success=${result['success']}, error=${result['error']}, dashboard=${result['dashboard']}');
         if (!mounted) return;
         if (result['success'] == true) {
           final dashboard = result['dashboard']?.toString() ?? '/candidate-dashboard';
@@ -132,6 +146,7 @@ class _LandingPageState extends State<LandingPage>
             final path = dashboard.contains('?')
                 ? dashboard
                 : '$dashboard?token=${Uri.encodeComponent(accessToken)}';
+            debugPrint('[SSO] Redirecting to $path');
             GoRouter.of(context).go(path);
             return;
           }
@@ -141,8 +156,10 @@ class _LandingPageState extends State<LandingPage>
           SnackBar(content: Text(result['error']?.toString() ?? 'Invalid or expired SSO token')),
         );
         GoRouter.of(context).go('/');
-      } catch (e) {
+      } catch (e, st) {
         if (!mounted) return;
+        debugPrint('[SSO] Exception: $e');
+        debugPrint('[SSO] StackTrace: $st');
         _safeSetState(() => _ssoTokenLoading = false);
         ScaffoldMessenger.maybeOf(context)?.showSnackBar(
           SnackBar(content: Text('SSO sign-in failed: $e')),

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart' show File;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -281,14 +281,17 @@ class AuthService {
   static Future<Map<String, dynamic>> loginWithSsoToken(String token) async {
     final trimmed = token.trim();
     if (trimmed.isEmpty) {
+      debugPrint('[SSO AuthService] Token empty');
       return {'success': false, 'error': 'Please paste your SSO token.'};
     }
+    debugPrint('[SSO AuthService] POST ${ApiEndpoints.ssoLogin} with token length=${trimmed.length}');
     try {
       final response = await http.post(
         Uri.parse(ApiEndpoints.ssoLogin),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'token': trimmed}),
       );
+      debugPrint('[SSO AuthService] Response status=${response.statusCode}, body length=${response.body.length}');
       final data = response.statusCode == 200
           ? jsonDecode(response.body) as Map<String, dynamic>?
           : null;
@@ -298,6 +301,7 @@ class AuthService {
             : (jsonDecode(response.body) is Map
                 ? (jsonDecode(response.body) as Map)['error']?.toString()
                 : null) ?? 'SSO login failed (${response.statusCode})';
+        debugPrint('[SSO AuthService] Failed: $err');
         return {'success': false, 'error': err};
       }
       await clearAuthState();
@@ -310,6 +314,7 @@ class AuthService {
       if (user is Map<String, dynamic>) {
         await saveUserInfo(user);
       }
+      debugPrint('[SSO AuthService] Success, dashboard=${data['dashboard'] ?? '/candidate-dashboard'}');
       return {
         'success': true,
         'access_token': data['access_token'],
@@ -317,7 +322,9 @@ class AuthService {
         'role': data['role'] ?? 'candidate',
         'dashboard': data['dashboard'] ?? '/candidate-dashboard',
       };
-    } catch (e) {
+    } catch (e, st) {
+      debugPrint('[SSO AuthService] Exception: $e');
+      debugPrint('[SSO AuthService] StackTrace: $st');
       return {'success': false, 'error': 'SSO login error: $e'};
     }
   }

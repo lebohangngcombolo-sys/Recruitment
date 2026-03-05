@@ -8,11 +8,11 @@ databases:
 services:
   - type: web
     name: recruitment-api
-    runtime: python
+    runtime: docker
     plan: free
     rootDir: server
-    buildCommand: pip install -r requirements.txt
-    startCommand: bash render_start.sh
+    dockerfilePath: Dockerfile
+    dockerContext: .
     healthCheckPath: /api/public/healthz
     envVars:
       - key: FLASK_ENV

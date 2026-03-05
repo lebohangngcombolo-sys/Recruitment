@@ -82,9 +82,16 @@ final GoRouter _router = GoRouter(
   routes: [
     GoRoute(
       path: '/',
-      builder: (context, state) => LandingPage(
-        ssoTokenFromUrl: state.uri.queryParameters['token'],
-      ),
+      builder: (context, state) {
+        // Use browser URL (Uri.base) on web so token is read even when router state misses query params on first load
+        final tokenFromState = state.uri.queryParameters['token'];
+        final tokenFromUrl = kIsWeb ? Uri.base.queryParameters['token'] : null;
+        final ssoToken = tokenFromState ?? tokenFromUrl;
+        if (kIsWeb && (tokenFromState != tokenFromUrl || (ssoToken != null && tokenFromState == null))) {
+          debugPrint('[SSO] Token from router state: ${tokenFromState != null ? "present" : "null"}, from Uri.base: ${tokenFromUrl != null ? "present" : "null"}');
+        }
+        return LandingPage(ssoTokenFromUrl: ssoToken);
+      },
     ),
     GoRoute(
       path: '/login',
