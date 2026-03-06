@@ -1901,8 +1901,7 @@ class _ProfilePageState extends State<ProfilePage>
                 // Version info
                 Align(
                   alignment: Alignment.bottomLeft,
-                  child: Text(
-                    kAppVersion,
+                  child: AppVersionText(
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       color: themeProvider.isDarkMode
