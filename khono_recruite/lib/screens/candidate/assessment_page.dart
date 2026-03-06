@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -25,8 +26,13 @@ class _AssessmentPageState extends State<AssessmentPage>
   String _assessmentTitle = 'Assessment';
   Map<int, String> answers = {}; // index -> selected option
   bool submitting = false;
+  int _currentQuestionIndex = 0; // one question per screen, navigate with Prev/Next
   late AnimationController _redirectPulseController;
   late Animation<double> _redirectPulseAnimation;
+
+  // Countdown timer: duration from intro "About X minutes" (questions.length * 1.5).ceil()
+  int _countdownRemainingSeconds = 0;
+  Timer? _countdownTimer;
 
   String? token;
 
@@ -50,7 +56,7 @@ class _AssessmentPageState extends State<AssessmentPage>
     );
     loadTokenAndFetch();
 
-    // Γ£à Autofill from draft if available (backend may nest as assessment.assessment)
+    // Autofill from draft if available (backend may nest as assessment.assessment)
     if (widget.draftData != null) {
       final assessmentData = widget.draftData!['assessment'];
       final answersMap = assessmentData is Map
@@ -67,8 +73,40 @@ class _AssessmentPageState extends State<AssessmentPage>
 
   @override
   void dispose() {
+    _countdownTimer?.cancel();
     _redirectPulseController.dispose();
     super.dispose();
+  }
+
+  int get _countdownDurationSeconds {
+    final minutes = (questions.length * 1.5).ceil();
+    return (minutes > 0 ? minutes : 1) * 60;
+  }
+
+  void _startCountdown() {
+    _countdownTimer?.cancel();
+    _countdownRemainingSeconds = _countdownDurationSeconds;
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      setState(() {
+        _countdownRemainingSeconds--;
+        if (_countdownRemainingSeconds <= 0) {
+          _countdownRemainingSeconds = 0;
+          t.cancel();
+          _countdownTimer = null;
+        }
+      });
+    });
+  }
+
+  String _formatCountdown(int totalSeconds) {
+    final hours = totalSeconds ~/ 3600;
+    final minutes = (totalSeconds % 3600) ~/ 60;
+    final seconds = totalSeconds % 60;
+    return '${hours.toString().padLeft(2, '0')} : ${minutes.toString().padLeft(2, '0')} : ${seconds.toString().padLeft(2, '0')}';
   }
 
   Future<void> loadTokenAndFetch() async {
@@ -153,15 +191,69 @@ class _AssessmentPageState extends State<AssessmentPage>
           throw Exception("Invalid submission response");
         }
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(
-                "Assessment Submitted! Score: ${data['total_score']}%, Result: ${data['recommendation']}")));
+
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+              title: Center(
+                child: Text(
+                  'Assessment submitted',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black87,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              content: Text(
+                'Your assessment has been submitted successfully.',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: Colors.black87,
+                  height: 1.4,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              actionsAlignment: MainAxisAlignment.center,
+              actions: [
+                ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _accentRed,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    'Continue',
+                    style: GoogleFonts.poppins(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
 
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => CVUploadScreen(applicationId: widget.applicationId),
+            builder: (_) =>
+                CVUploadScreen(applicationId: widget.applicationId),
           ),
         );
       } else {
@@ -177,7 +269,7 @@ class _AssessmentPageState extends State<AssessmentPage>
     }
   }
 
-  // Γ£à NEW: Save draft progress and redirect to dashboard
+  // Save draft progress and redirect to dashboard
   Future<void> saveDraftAndExit() async {
     if (token == null) return;
 
@@ -206,7 +298,7 @@ class _AssessmentPageState extends State<AssessmentPage>
           const SnackBar(content: Text("Progress saved successfully.")),
         );
 
-        // Γ£à Use GoRouter to navigate
+        // Use GoRouter to navigate
         await Future.delayed(const Duration(milliseconds: 700));
         if (context.mounted) {
           GoRouter.of(context).go('/candidate-dashboard');
@@ -361,7 +453,10 @@ class _AssessmentPageState extends State<AssessmentPage>
           const SizedBox(height: 16),
           Center(
             child: ElevatedButton(
-              onPressed: () => setState(() => _showIntro = false),
+              onPressed: () {
+                setState(() => _showIntro = false);
+                _startCountdown();
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: _accentRed,
                 foregroundColor: Colors.white,
@@ -535,7 +630,7 @@ class _AssessmentPageState extends State<AssessmentPage>
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        "Hang tight ΓÇö we're setting everything up.",
+                        "Hang tight — we're setting everything up.",
                         style: GoogleFonts.poppins(
                           fontSize: 16,
                           color: Colors.white.withValues(alpha: 0.85),
@@ -667,154 +762,305 @@ class _AssessmentPageState extends State<AssessmentPage>
       body: _buildBackground(
         context,
         Column(
-            children: [
-              SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight + 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  _assessmentTitle,
-                  style: GoogleFonts.poppins(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
+          children: [
+            SizedBox(height: MediaQuery.of(context).padding.top + kToolbarHeight + 2),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Position: $_assessmentTitle',
+                      style: GoogleFonts.poppins(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                      textAlign: TextAlign.left,
+                    ),
                   ),
-                  textAlign: TextAlign.left,
-                ),
+                  _buildTimerAndProgress(context),
+                ],
               ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: ListView.builder(
-                  itemCount: questions.length + 1,
-                  itemBuilder: (context, index) {
-                    if (index == questions.length) {
-                      // Submit button - same size/style as Start assessment
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        child: Center(
-                          child: ElevatedButton(
-                            onPressed: submitting ? null : submitAssessment,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _accentRed,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 28),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            child: submitting
-                                ? SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : Text(
-                                    "Submit Assessment",
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                      );
-                    }
-
-                    final q = questions[index];
-                    final String questionText =
-                        q['question'] ?? "Question not available";
-                    final List options = q['options'] ?? [];
-
-                    return Container(
-                      margin: const EdgeInsets.symmetric(vertical: 10),
-                      decoration: BoxDecoration(
-                        color: _cardDark,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: _accentRed.withValues(alpha: 0.6),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Question ${index + 1}',
-                              style: GoogleFonts.poppins(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: _textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              questionText,
-                              style: GoogleFonts.poppins(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500,
-                                color: _textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            RadioGroup<String>(
-                              groupValue: answers[index],
-                              onChanged: (value) {
-                                if (value == null) return;
-                                setState(() {
-                                  answers[index] = value;
-                                });
-                              },
-                              child: Column(
-                                children: List.generate(options.length, (i) {
-                                  final optionLabel = ["A", "B", "C", "D"][i];
-                                  final optionText = options[i];
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 8),
-                                    decoration: BoxDecoration(
-                                      color: _boxFillColor,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: _accentRed.withValues(alpha: 0.4),
-                                      ),
-                                    ),
-                                    child: RadioListTile<String>(
-                                      title: Text(
-                                        "$optionLabel. $optionText",
-                                        style: TextStyle(
-                                          color: _textPrimary,
-                                          fontFamily: 'Poppins',
-                                        ),
-                                      ),
-                                      value: optionLabel,
-                                    ),
-                                  );
-                                }),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  children: [
+                    Expanded(child: _buildCurrentQuestionCard()),
+                    const SizedBox(height: 16),
+                    _buildQuestionFooter(context),
+                    const SizedBox(height: 28),
+                  ],
                 ),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildTimerAndProgress(BuildContext context) {
+    final current = _currentQuestionIndex + 1;
+    final total = questions.length;
+    final progress = _countdownDurationSeconds > 0
+        ? 1.0 - (_countdownRemainingSeconds / _countdownDurationSeconds)
+        : 0.0;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.timer_outlined, color: Colors.white.withValues(alpha: 0.9), size: 20),
+            const SizedBox(width: 6),
+            Text(
+              'Question $current of $total',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.95),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: 76,
+          height: 76,
+          child: Stack(
+            alignment: Alignment.center,
+            fit: StackFit.expand,
+            children: [
+              CircularProgressIndicator(
+                value: progress.clamp(0.0, 1.0),
+                backgroundColor: Colors.white.withValues(alpha: 0.2),
+                color: _accentRed,
+                strokeWidth: 4,
+              ),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Text(
+                    _formatCountdown(_countdownRemainingSeconds),
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCurrentQuestionCard() {
+    if (questions.isEmpty || _currentQuestionIndex >= questions.length) {
+      return const SizedBox();
+    }
+    final q = questions[_currentQuestionIndex];
+    final String questionText = q['question'] ?? 'Question not available';
+    final List options = q['options'] ?? [];
+
+    return SingleChildScrollView(
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: _cardDark,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: _accentRed.withValues(alpha: 0.6)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.3),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Question ${_currentQuestionIndex + 1}',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: _textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              questionText,
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: _textPrimary,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ...List.generate(options.length, (i) {
+              final optionLabel = ['A', 'B', 'C', 'D'][i];
+              final optionText = i < options.length ? options[i].toString() : '';
+              final isSelected = answers[_currentQuestionIndex] == optionLabel;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: InkWell(
+                  onTap: () => setState(() => answers[_currentQuestionIndex] = optionLabel),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: _boxFillColor,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isSelected ? _accentRed : _accentRed.withValues(alpha: 0.4),
+                        width: isSelected ? 2 : 1,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                          color: isSelected ? _accentRed : Colors.white54,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            '$optionLabel. $optionText',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: _textPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuestionFooter(BuildContext context) {
+    final total = questions.length;
+    final canPrev = _currentQuestionIndex > 0;
+    final canNext = _currentQuestionIndex < total - 1;
+
+    final centerGroup = Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        OutlinedButton(
+          onPressed: canPrev
+              ? () => setState(() => _currentQuestionIndex = (_currentQuestionIndex - 1).clamp(0, total - 1))
+              : null,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: BorderSide(color: canPrev ? Colors.white54 : Colors.white24),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          ),
+          child: Text('Prev', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+        ),
+        const SizedBox(width: 12),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: List.generate(total, (i) {
+              final isCurrent = i == _currentQuestionIndex;
+              final hasAnswer = answers.containsKey(i);
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: Material(
+                  color: isCurrent ? _accentRed : (hasAnswer ? _accentRed.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.15)),
+                  borderRadius: BorderRadius.circular(8),
+                  child: InkWell(
+                    onTap: () => setState(() => _currentQuestionIndex = i),
+                    borderRadius: BorderRadius.circular(8),
+                    child: SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: Center(
+                        child: Text(
+                          '${i + 1}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+        const SizedBox(width: 12),
+        OutlinedButton(
+          onPressed: canNext
+              ? () => setState(() => _currentQuestionIndex = (_currentQuestionIndex + 1).clamp(0, total - 1))
+              : null,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: BorderSide(color: canNext ? Colors.white54 : Colors.white24),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          ),
+          child: Text('Next', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+        ),
+      ],
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(child: Center(child: centerGroup)),
+        ElevatedButton(
+          onPressed: submitting ? null : submitAssessment,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _accentRed,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          child: submitting
+              ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : Text(
+                  'Submit',
+                  style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+        ),
+      ],
     );
   }
 }

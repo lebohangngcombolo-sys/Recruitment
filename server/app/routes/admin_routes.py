@@ -957,6 +957,7 @@ def list_cv_reviews():
 
             "candidate_id": candidate.id if candidate else None,
             "full_name": candidate.full_name if candidate else None,
+            "gender": candidate.gender if candidate else None,
             "cv_url": cv_url,
         })
 

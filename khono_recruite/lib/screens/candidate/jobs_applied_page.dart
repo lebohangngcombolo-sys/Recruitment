@@ -23,7 +23,7 @@ class JobsAppliedPage extends StatefulWidget {
 class _JobsAppliedPageState extends State<JobsAppliedPage> {
   List<Map<String, dynamic>> applications = [];
   bool loading = true;
-  int _selectedTabIndex = 0; // 0=All, 1=In Progress, 2=Offers, 3=Rejected
+  int _selectedTabIndex = 0; // 0=All, 1=In Progress, 2=Offers, 3=Unsuccessful
   Map<String, dynamic>? _drawerApplication;
   bool _drawerVisible = false;
 
@@ -48,7 +48,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
         status.contains('offer');
   }
 
-  /// Map backend status to display status. If CV or assessment is missing → In progress. Otherwise Applied/Interview/Offer/Rejected.
+  /// Map backend status to display status. If CV or assessment is missing → In progress. Otherwise Applied/Interview/Offer/Unsuccessful.
   static _DisplayStatus _toDisplayStatus(Map<String, dynamic> app) {
     if (!_assessmentCompleted(app) || !_cvUploaded(app)) {
       return _DisplayStatus.inProgress;
@@ -161,7 +161,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
       case 2:
         return 'Offers will appear here when you receive them.';
       case 3:
-        return 'Rejected applications will appear here.';
+        return 'Unsuccessful applications will appear here.';
       default:
         return 'Your applications will appear here.';
     }
@@ -289,7 +289,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
   }
 
   Widget _buildTabs() {
-    final tabLabels = ['All', 'Applied', 'Offers', 'Rejected'];
+    final tabLabels = ['All', 'Applied', 'Offers', 'Unsuccessful'];
     final tabCounts = [
       applications.length,
       _countApplied(),
@@ -520,7 +520,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
         bg = Colors.green.shade700.withValues(alpha: 0.25);
         break;
       case _DisplayStatus.rejected:
-        label = 'Rejected';
+        label = 'Unsuccessful';
         bg = Colors.red.shade700.withValues(alpha: 0.25);
         break;
     }
@@ -595,13 +595,18 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                           _drawerSectionTitle('Application Status'),
                           const SizedBox(height: 8),
                           _buildStatusPill(displayStatus),
-                          const SizedBox(height: 24),
-                          _drawerSectionTitle('Application Requirements'),
-                          const SizedBox(height: 12),
-                          _requirementRow('Assessment', assessmentDone),
-                          const SizedBox(height: 10),
-                          _requirementRow('CV Upload', cvDone),
-                          if (singleAction != null) ...[
+                          if (displayStatus == _DisplayStatus.rejected) ...[
+                            const SizedBox(height: 20),
+                            _buildUnsuccessfulExplanation(app),
+                          ],
+                          if (displayStatus != _DisplayStatus.rejected) ...[
+                            const SizedBox(height: 24),
+                            _drawerSectionTitle('Application Requirements'),
+                            const SizedBox(height: 12),
+                            _requirementRow('Assessment', assessmentDone),
+                            const SizedBox(height: 10),
+                            _requirementRow('CV Upload', cvDone),
+                            if (singleAction != null) ...[
                             const SizedBox(height: 28),
                             SizedBox(
                               width: double.infinity,
@@ -686,6 +691,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                               ],
                             ),
                           ],
+                            ],
                         ],
                       ),
                     ),
@@ -748,6 +754,76 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
     );
   }
 
+  /// Shown in the drawer when application status is Unsuccessful. Explains why in a supportive way.
+  Widget _buildUnsuccessfulExplanation(Map<String, dynamic> app) {
+    final recommendation = app['recommendation']?.toString().trim();
+    final violations = app['knockout_rule_violations'];
+    final hasViolations = violations is List && violations.isNotEmpty;
+    final recLower = recommendation?.toLowerCase() ?? '';
+    final isInternalCode = recLower == 'pass' ||
+        recLower == 'fail' ||
+        recLower == 'moderate' ||
+        recLower == 'strong_hire' ||
+        recLower == 'hire' ||
+        recLower == 'no_hire' ||
+        recLower == 'strong_no_hire' ||
+        recLower == 'not_sure';
+    final hasCandidateFriendlyRecommendation = recommendation != null &&
+        recommendation.isNotEmpty &&
+        recommendation.length > 2 &&
+        recommendation.length < 200 &&
+        !isInternalCode;
+
+    String message;
+    if (hasCandidateFriendlyRecommendation) {
+      message = recommendation;
+    } else if (recLower == 'fail') {
+      message =
+          'After review, this application did not meet the requirements for this role. '
+          'We encourage you to apply for other positions that match your skills and experience.';
+    } else if (hasViolations) {
+      message =
+          'This role had specific requirements that were not met on this occasion. '
+          'We encourage you to apply for other positions that match your skills and experience.';
+    } else {
+      message =
+          'This application was not successful on this occasion. '
+          'We encourage you to apply for other roles that match your experience.';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Why wasn\'t I successful?',
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.white70,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              height: 1.4,
+              color: Colors.white.withValues(alpha: 0.85),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _drawerSectionTitle(String title) {
     return Text(
       title,
@@ -779,7 +855,6 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
     );
   }
 }
-
 /// Full-screen in-app CV preview using backend proxy (avoids Cloudinary 401).
 class _CvPreviewDialog extends StatefulWidget {
   final String url;
@@ -871,3 +946,4 @@ class _CvPreviewDialogState extends State<_CvPreviewDialog> {
     );
   }
 }
+
