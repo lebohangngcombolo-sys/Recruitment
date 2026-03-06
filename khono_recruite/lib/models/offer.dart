@@ -142,7 +142,7 @@ class Offer {
       case 'signed':
         return 'Signed';
       case 'rejected':
-        return 'Rejected';
+        return 'Unsuccessful';
       case 'expired':
         return 'Expired';
       case 'withdrawn':

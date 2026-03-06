@@ -8,9 +8,9 @@ from sqlalchemy import or_, and_, desc, asc
 from sqlalchemy.orm import Query
 
 from app.extensions import db
-from app.models import Requisition, User, Application, JobActivityLog
+from app.models import Requisition, User, Application, JobActivityLog, Candidate
 from app.schemas.job_schemas import (
-    job_create_schema, job_update_schema, job_filter_schema
+    job_create_schema, job_update_schema, job_filter_schema, job_activity_filter_schema
 )
 
 
@@ -51,8 +51,10 @@ class JobService:
             )
             
             db.session.add(job)
+            # Ensure job.id is assigned before logging activity
+            db.session.flush()
             
-            # Log activity
+            # Log activity (job.id is now set)
             JobService._log_activity(
                 action="CREATE",
                 job_id=job.id,
@@ -514,3 +516,139 @@ class JobService:
             # Note: We don't commit here - it will be committed with the main transaction
         except Exception as e:
             current_app.logger.error(f"Failed to log activity: {e}")
+
+    @staticmethod
+    def build_job_spec_for_cv(requisition: Requisition) -> str:
+        """
+        Build a single job spec string from all relevant job fields for CV comparison.
+        Used by CV analyser so manual and AI-generated job details are assessed consistently.
+        """
+        if not requisition:
+            return ""
+        parts = []
+        if requisition.title:
+            parts.append(f"Role: {requisition.title}")
+        if requisition.description:
+            parts.append(f"Description: {requisition.description}")
+        if requisition.responsibilities:
+            r = requisition.responsibilities
+            items = r if isinstance(r, list) else []
+            if items:
+                parts.append("Responsibilities: " + " | ".join(str(x) for x in items))
+        if requisition.qualifications:
+            q = requisition.qualifications
+            items = q if isinstance(q, list) else []
+            if items:
+                parts.append("Qualifications: " + " | ".join(str(x) for x in items))
+        if requisition.required_skills:
+            s = requisition.required_skills
+            items = s if isinstance(s, list) else []
+            if items:
+                parts.append("Required skills: " + ", ".join(str(x) for x in items))
+        min_exp = requisition.min_experience
+        if min_exp is not None and (isinstance(min_exp, (int, float)) and float(min_exp) > 0):
+            parts.append(f"Minimum experience: {float(min_exp)} years")
+        if requisition.category:
+            parts.append(f"Category: {requisition.category}")
+        if requisition.job_summary:
+            parts.append(f"Summary: {requisition.job_summary}")
+        if requisition.company_details:
+            parts.append(f"Company: {requisition.company_details}")
+        if parts:
+            return "\n\n".join(parts)
+        # Ensure non-empty so offline CV analyser has text to match
+        return requisition.description or (requisition.title or "Job application")
+
+    @staticmethod
+    def evaluate_knockout_rules(job: Requisition, candidate: Candidate) -> List[Dict]:
+        """Evaluate knockout rules against candidate data."""
+        violations = []
+        rules = job.knockout_rules or []
+
+        candidate_skills = [str(s).lower() for s in (candidate.skills or [])]
+        candidate_certs = [str(c).lower() for c in (candidate.certifications or [])]
+        candidate_education = [
+            (e.get("degree", "") if isinstance(e, dict) else str(e)).lower()
+            for e in (candidate.education or [])
+        ]
+        candidate_location = (candidate.location or "").lower()
+
+        profile = candidate.profile or {}
+        years_experience = (
+            profile.get("years_experience")
+            or profile.get("experience_years")
+            or profile.get("years_of_experience")
+            or 0
+        )
+        try:
+            years_experience = float(years_experience)
+        except (TypeError, ValueError):
+            years_experience = 0
+
+        expected_salary = profile.get("expected_salary") or profile.get("salary_expectation") or 0
+        try:
+            expected_salary = float(expected_salary)
+        except (TypeError, ValueError):
+            expected_salary = 0
+
+        def _compare(left, operator, right):
+            try:
+                if operator == ">=":
+                    return left >= right
+                if operator == ">":
+                    return left > right
+                if operator == "==":
+                    return left == right
+                if operator == "!=":
+                    return left != right
+                if operator == "<":
+                    return left < right
+                if operator == "<=":
+                    return left <= right
+            except Exception:
+                return False
+            return False
+
+        for rule in rules:
+            rule_type = rule.get("type")
+            operator = rule.get("operator")
+            value = rule.get("value")
+
+            if operator is None:
+                violations.append({**rule, "reason": "Missing operator"})
+                continue
+
+            if rule_type == "certification":
+                target = str(value).lower()
+                has_cert = target in candidate_certs
+                passed = _compare(has_cert, operator, True)
+            elif rule_type == "skills":
+                target = str(value).lower()
+                has_skill = target in candidate_skills
+                passed = _compare(has_skill, operator, True)
+            elif rule_type == "education":
+                target = str(value).lower()
+                has_edu = any(target in item for item in candidate_education)
+                passed = _compare(has_edu, operator, True)
+            elif rule_type == "location":
+                target = str(value).lower()
+                passed = _compare(candidate_location, operator, target)
+            elif rule_type == "salary":
+                try:
+                    target = float(value)
+                except (TypeError, ValueError):
+                    target = 0
+                passed = _compare(expected_salary, operator, target)
+            elif rule_type == "experience":
+                try:
+                    target = float(value)
+                except (TypeError, ValueError):
+                    target = 0
+                passed = _compare(years_experience, operator, target)
+            else:
+                passed = True
+
+            if not passed:
+                violations.append(rule)
+
+        return violations

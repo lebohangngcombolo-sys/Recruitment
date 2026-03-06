@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import '../../../constants/app_colors.dart';
-import '../../widgets/widgets1/glass_card.dart';
+import '../../widgets/glass_card.dart';
 import '../../services/analytics_service.dart';
+import '../../utils/app_config.dart';
 
 class HMAnalyticsPage extends StatefulWidget {
   const HMAnalyticsPage({super.key});
@@ -14,8 +15,7 @@ class HMAnalyticsPage extends StatefulWidget {
 class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   bool _isLoading = true;
   String _selectedTimeRange = 'Last 6 Months';
-  final AnalyticsService _service = AnalyticsService(
-      baseUrl: 'http://127.0.0.1:5000'); // <-- set your base URL
+  final AnalyticsService _service = AnalyticsService(baseUrl: AppConfig.apiBase);
 
   // Data holders
   Map<String, dynamic> _pipeline = {};
@@ -24,12 +24,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   List<Map<String, dynamic>> _offersByCategory = [];
   Map<String, dynamic> _skillsFreq = {};
   Map<String, dynamic> _expDist = {};
-  Map<String, dynamic> _cvScore = {};
-  Map<String, dynamic> _assessmentScore = {};
   List<Map<String, dynamic>> _appsPerReq = [];
   List<Map<String, dynamic>> _assessmentTrend = [];
-  List<Map<String, dynamic>> _interviewScheduled = [];
-  List<Map<String, dynamic>> _cvDrop = [];
   Map<String, dynamic> _predictive = {};
 
   String? _error;
@@ -53,12 +49,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         _service.offersByCategory(),
         _service.skillsFrequency(),
         _service.experienceDistribution(),
-        _service.avgCvScore(),
-        _service.avgAssessmentScore(),
         _service.applicationsPerRequisition(),
         _service.assessmentPassRate(),
-        _service.interviewsScheduled(),
-        _service.cvScreeningDrop(),
       ]);
 
       _pipeline = Map<String, dynamic>.from(results[0] as Map);
@@ -69,16 +61,10 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
           (results[3] as List).map((e) => Map<String, dynamic>.from(e)));
       _skillsFreq = Map<String, dynamic>.from(results[4] as Map);
       _expDist = Map<String, dynamic>.from(results[5] as Map);
-      _cvScore = Map<String, dynamic>.from(results[6] as Map);
-      _assessmentScore = Map<String, dynamic>.from(results[7] as Map);
       _appsPerReq = List<Map<String, dynamic>>.from(
-          (results[8] as List).map((e) => Map<String, dynamic>.from(e)));
+          (results[6] as List).map((e) => Map<String, dynamic>.from(e)));
       _assessmentTrend = List<Map<String, dynamic>>.from(
-          (results[9] as List).map((e) => Map<String, dynamic>.from(e)));
-      _interviewScheduled = List<Map<String, dynamic>>.from(
-          (results[10] as List).map((e) => Map<String, dynamic>.from(e)));
-      _cvDrop = List<Map<String, dynamic>>.from(
-          (results[11] as List).map((e) => Map<String, dynamic>.from(e)));
+          (results[7] as List).map((e) => Map<String, dynamic>.from(e)));
 
       // Clear predictive since route is removed
       _predictive = {};

@@ -19,7 +19,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
   final AdminService admin = AdminService();
   List<Map<String, dynamic>> candidates = [];
   bool loading = true;
-  String? errorMessage;
+  String? statusMessage;
 
   @override
   void initState() {
@@ -30,41 +30,97 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
   Future<void> fetchShortlist() async {
     setState(() {
       loading = true;
-      errorMessage = null;
+      statusMessage = null;
     });
 
+    if (widget.jobId <= 0) {
+      final message = "Select a job to view its applicants.";
+      if (!mounted) return;
+      setState(() {
+        candidates = [];
+        statusMessage = message;
+        loading = false;
+      });
+      return;
+    }
+
     try {
-      final data = await admin.shortlistCandidates(widget.jobId);
-      final List<Map<String, dynamic>> fetched =
-          List<Map<String, dynamic>>.from(data);
+      final rawApplications = await admin.getJobApplications(
+        widget.jobId,
+        page: 1,
+        perPage: 100,
+      );
+      final fetched = (rawApplications).map<Map<String, dynamic>>((dynamic app) {
+        final map = Map<String, dynamic>.from(app as Map);
+        final candidateData = (map['candidate'] is Map)
+            ? Map<String, dynamic>.from(map['candidate'] as Map)
+            : {};
+        return {
+          'application_id': map['application_id'] ?? map['id'],
+          'candidate_id': candidateData['id'] ?? map['candidate_id'],
+          'full_name': candidateData['full_name'] ??
+              candidateData['name'] ??
+              map['full_name'],
+          'email': candidateData['email'],
+          'phone': candidateData['phone'],
+          'status': map['status'],
+          'cv_score': map['cv_score'] ?? map['overall_score'] ?? 0,
+          'assessment_score': map['assessment_score'] ?? 0,
+          'overall_score': map['overall_score'] ??
+              (map['scoring_breakdown']?['overall'] ?? 0),
+          'job_title': map['job_title'],
+          'cv_parser_result': map['cv_parser_result'] ?? {},
+          'candidate': candidateData,
+        };
+      }).toList();
 
       fetched.sort((a, b) {
-        final aScore = a['overall_score'] ?? 0;
-        final bScore = b['overall_score'] ?? 0;
+        final aScore = (a['overall_score'] ?? 0).toDouble();
+        final bScore = (b['overall_score'] ?? 0).toDouble();
         return bScore.compareTo(aScore);
       });
 
-      setState(() => candidates = fetched);
+      if (!mounted) return;
+      setState(() {
+        candidates = fetched;
+        statusMessage =
+            fetched.isEmpty ? "No candidates have applied to this job yet." : null;
+      });
     } catch (e) {
-      debugPrint("Error fetching shortlist: $e");
-      setState(() => errorMessage = "Failed to load candidates: $e");
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error: $e")));
+      debugPrint("Error fetching candidates: $e");
+      if (!mounted) return;
+      setState(() {
+        candidates = [];
+        statusMessage = "Failed to load candidates: $e";
+      });
     } finally {
+      if (!mounted) return;
       setState(() => loading = false);
     }
   }
 
   void openCandidateDetails(Map<String, dynamic> candidate) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CandidateDetailScreen(
-          candidateId: candidate['candidate_id'],
-          applicationId: candidate['application_id'],
+    final candidateId = candidate['candidate_id'] ?? candidate['id'];
+    final applicationId = candidate['application_id'];
+
+    if (candidateId != null) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CandidateDetailScreen(
+            candidateId: candidateId,
+            applicationId: applicationId,
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Candidate ID not found"),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   // Helper method to safely get initials
@@ -109,12 +165,12 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                   color: (themeProvider.isDarkMode
                           ? const Color(0xFF14131E)
                           : Colors.white)
-                      .withOpacity(0.9),
+                      .withValues(alpha: 0.9),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        "Shortlisted Candidates",
+                        "All Candidates",
                         style: TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
@@ -135,25 +191,29 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                         ? Colors.grey.shade800
                         : Colors.grey),
 
-                // Loading / Error / Candidate List
+                // Loading / Status / Candidate List
                 Expanded(
                   child: loading
                       ? const Center(
                           child: CircularProgressIndicator(
                               color: Colors.redAccent),
                         )
-                      : errorMessage != null
+                      : statusMessage != null
                           ? Center(
                               child: Text(
-                                errorMessage!,
+                                statusMessage!,
+                                textAlign: TextAlign.center,
                                 style: TextStyle(
-                                    color: Colors.redAccent, fontSize: 16),
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade300
+                                        : Colors.black54,
+                                    fontSize: 16),
                               ),
                             )
                           : candidates.isEmpty
                               ? Center(
                                   child: Text(
-                                    "No shortlisted candidates found",
+                                    "No candidates found",
                                     style: TextStyle(
                                         color: themeProvider.isDarkMode
                                             ? Colors.grey.shade400
@@ -170,7 +230,11 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                     itemBuilder: (_, index) {
                                       final c = candidates[index];
                                       final overallScore =
-                                          c['overall_score']?.toDouble() ?? 0.0;
+                                          (c['overall_score']?.toDouble() ?? 0.0);
+                                      final cvScore =
+                                          (c['cv_score'] ?? 0).toDouble();
+                                      final assessmentScore =
+                                          (c['assessment_score'] ?? 0).toDouble();
 
                                       return GestureDetector(
                                         onTap: () => openCandidateDetails(c),
@@ -182,7 +246,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                             color: (themeProvider.isDarkMode
                                                     ? const Color(0xFF14131E)
                                                     : Colors.white)
-                                                .withOpacity(0.9),
+                                                .withValues(alpha: 0.9),
                                             borderRadius:
                                                 BorderRadius.circular(12),
                                             border: Border.all(
@@ -192,7 +256,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                             boxShadow: [
                                               BoxShadow(
                                                 color: Colors.black
-                                                    .withOpacity(0.03),
+                                                    .withValues(alpha: 0.03),
                                                 blurRadius: 6,
                                                 offset: const Offset(0, 3),
                                               )
@@ -205,7 +269,9 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                                 backgroundColor:
                                                     Colors.red.shade50,
                                                 child: Text(
-                                                  getInitials(c['full_name']),
+                                                  getInitials(c['full_name'] ??
+                                                      c['name'] ??
+                                                      'Unknown'),
                                                   style: const TextStyle(
                                                       color: Colors.redAccent,
                                                       fontWeight:
@@ -232,8 +298,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                                     ),
                                                     const SizedBox(height: 4),
                                                     Text(
-                                                      "CV: ${c['cv_score'] ?? 'N/A'} | "
-                                                      "Assessment: ${c['assessment_score'] ?? 'N/A'} | "
+                                                      "CV: ${cvScore.toStringAsFixed(0)} | "
+                                                      "Assessment: ${assessmentScore.toStringAsFixed(0)} | "
                                                       "Overall: ${overallScore.toStringAsFixed(1)}",
                                                       style: TextStyle(
                                                           fontSize: 14,
@@ -243,6 +309,18 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                                                   .grey.shade400
                                                               : Colors.black87),
                                                     ),
+                                                    if (c['email'] != null)
+                                                      Text(
+                                                        c['email'],
+                                                        style: TextStyle(
+                                                            fontSize: 12,
+                                                            color: themeProvider
+                                                                    .isDarkMode
+                                                                ? Colors.grey
+                                                                    .shade500
+                                                                : Colors.grey
+                                                                    .shade600),
+                                                      ),
                                                   ],
                                                 ),
                                               ),
@@ -254,17 +332,26 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                                 decoration: BoxDecoration(
                                                   color: c['status'] == "hired"
                                                       ? Colors.green.shade50
-                                                      : Colors.orange.shade50,
+                                                      : c['status'] ==
+                                                              "rejected"
+                                                          ? Colors.red.shade50
+                                                          : Colors
+                                                              .orange.shade50,
                                                   borderRadius:
                                                       BorderRadius.circular(20),
                                                 ),
                                                 child: Text(
-                                                  c['status'] ?? "Pending",
+                                                  (c['status'] ?? "Pending")
+                                                      .toString()
+                                                      .toUpperCase(),
                                                   style: TextStyle(
                                                     color:
                                                         c['status'] == "hired"
                                                             ? Colors.green
-                                                            : Colors.orange,
+                                                            : c['status'] ==
+                                                                    "rejected"
+                                                                ? Colors.red
+                                                                : Colors.orange,
                                                     fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
