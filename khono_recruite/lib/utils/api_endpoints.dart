@@ -128,6 +128,8 @@ class ApiEndpoints {
   // ------------------- Update Application Status -------------------
   static String updateApplicationStatus(int applicationId) =>
       "$adminBase/applications/$applicationId/status";
+  static String updateApplicationRecommendation(int applicationId) =>
+      "$adminBase/applications/$applicationId/recommendation";
 
   // ------------------- Global Search -------------------
   static String searchAll(String query) => "$adminBase/search?q=$query";
@@ -150,6 +152,8 @@ class ApiEndpoints {
   static String getJobStats = "$adminBase/jobs/stats";
   static const viewCandidates = "$adminBase/candidates";
   static String getApplicationById(int id) => "$adminBase/applications/$id";
+  static String getApplicationTimeline(int applicationId) =>
+      "$adminBase/applications/$applicationId/timeline";
   static String getCandidateApplicationsByCandidateId(int candidateId) =>
       "$adminBase/candidates/$candidateId/applications";
   static String shortlistCandidates(int jobId) =>
@@ -160,6 +164,8 @@ class ApiEndpoints {
       "$adminBase/interviews/cancel/$interviewId";
   static const getNotifications = "$adminBase/notifications";
   static const auditLogs = "$adminBase/audits";
+  /// Pipeline activity (application status changes) for HM audit trail / admin
+  static const pipelineActivity = "$adminBase/activity/pipeline";
   static const parseResume = "$adminBase/cv/parse";
   static const cvReviews = "$adminBase/cv-reviews";
   static const getUsers = "$adminBase/users";

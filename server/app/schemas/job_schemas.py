@@ -114,6 +114,23 @@ class JobBaseSchema(Schema):
         validate=Range(min=0)
     )
 
+    # Preferred start window for the role
+    start_date_from = fields.Date(allow_none=True, load_default=None, dump_default=None)
+    start_date_to = fields.Date(allow_none=True, load_default=None, dump_default=None)
+    # Minimum years per skill, e.g. {"Python": 3, "SQL": 2}
+    min_years_per_skill = fields.Dict(
+        keys=fields.Str(),
+        values=fields.Float(),
+        load_default=dict,
+        dump_default=dict
+    )
+    # Must-have certifications
+    required_certifications = fields.List(
+        fields.Str(),
+        load_default=list,
+        dump_default=list
+    )
+
     knockout_rules = fields.List(
         fields.Nested(KnockoutRuleSchema),
         load_default=list,
@@ -245,6 +262,10 @@ class JobUpdateSchema(Schema):
     vacancy = fields.Int(validate=Range(min=1))
     is_active = fields.Bool()
     employment_type = fields.Str()
+    start_date_from = fields.Date(allow_none=True)
+    start_date_to = fields.Date(allow_none=True)
+    min_years_per_skill = fields.Dict(keys=fields.Str(), values=fields.Float(), allow_none=True)
+    required_certifications = fields.List(fields.Str(), allow_none=True)
 
     class Meta:
         unknown = EXCLUDE
@@ -300,7 +321,7 @@ class JobFilterSchema(Schema):
     """Schema for job filtering query parameters"""
 
     page = fields.Int(load_default=1, validate=Range(min=1))
-    per_page = fields.Int(load_default=20, validate=Range(min=1, max=100))
+    per_page = fields.Int(load_default=20, validate=Range(min=1, max=500))
     category = fields.Str(allow_none=True)
     status = fields.Str(
         load_default="active",
@@ -352,7 +373,7 @@ class JobActivityFilterSchema(Schema):
     """Schema for job activity filter query parameters"""
 
     page = fields.Int(load_default=1, validate=Range(min=1))
-    per_page = fields.Int(load_default=50, validate=Range(min=1, max=100))
+    per_page = fields.Int(load_default=50, validate=Range(min=1, max=500))
 
 
 # Initialize schemas

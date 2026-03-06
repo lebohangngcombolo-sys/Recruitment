@@ -279,11 +279,32 @@ class _JobManagementState extends State<JobManagement> {
           else
             ...applications.asMap().entries.map<Widget>((entry) {
               final index = entry.key;
-              final app = entry.value;
+              final app = entry.value is Map ? entry.value as Map<String, dynamic> : <String, dynamic>{};
               final cand = app['candidate'] is Map ? app['candidate'] as Map<String, dynamic> : null;
               final name = cand?['full_name'] ?? 'Unknown';
               final email = cand?['email'] ?? '—';
               final status = app['status'] ?? '—';
+              final cvScore = app['cv_score'];
+              final overallScore = app['overall_score'];
+              final recommendation = app['recommendation']?.toString().trim();
+              final num cvNum = cvScore is num ? cvScore : (double.tryParse(cvScore?.toString() ?? '') ?? 0);
+              final num overallNum = overallScore is num ? overallScore : (double.tryParse(overallScore?.toString() ?? '') ?? 0);
+              final String recLabel = recommendation == null || recommendation.isEmpty
+                  ? '—'
+                  : (recommendation.toLowerCase().contains('proceed')
+                      ? 'Proceed'
+                      : recommendation.toLowerCase().contains('reject')
+                          ? 'Reject'
+                          : recommendation.toLowerCase().contains('hold')
+                              ? 'Hold'
+                              : recommendation);
+              final Color recColor = recLabel == 'Proceed'
+                  ? Colors.green
+                  : recLabel == 'Reject'
+                      ? Colors.red
+                      : recLabel == 'Hold'
+                          ? Colors.orange
+                          : (themeProvider.isDarkMode ? Colors.grey : Colors.black54);
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -296,6 +317,19 @@ class _JobManagementState extends State<JobManagement> {
                         Icon(Icons.person_outline, size: 16, color: textColor),
                         const SizedBox(width: 8),
                         Expanded(flex: 2, child: Text(email, style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: textColor), overflow: TextOverflow.ellipsis)),
+                        _applicantScoreChip(themeProvider, 'CV', cvNum, textColor),
+                        const SizedBox(width: 6),
+                        _applicantScoreChip(themeProvider, 'Overall', overallNum, textColor),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: recColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(recLabel, style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600, color: recColor)),
+                        ),
+                        const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
@@ -328,6 +362,24 @@ class _JobManagementState extends State<JobManagement> {
         children: [
           Text('$label: ', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.black54)),
           Text(value, style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 12, color: themeProvider.isDarkMode ? Colors.white : Colors.black87)),
+        ],
+      ),
+    );
+  }
+
+  Widget _applicantScoreChip(ThemeProvider themeProvider, String label, num value, Color textColor) {
+    final display = value > 0 ? value.toStringAsFixed(0) : '—';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: themeProvider.isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text('$label: ', style: TextStyle(fontFamily: 'Poppins', fontSize: 10, color: textColor.withValues(alpha: 0.8))),
+          Text(display, style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600, color: textColor)),
         ],
       ),
     );
@@ -688,6 +740,15 @@ class _JobFormDialogState extends State<JobFormDialog>
   final AdminService admin = AdminService();
   final TestPackService _testPackService = TestPackService();
 
+  // Preferred start window for the role
+  DateTime? _startDateFrom;
+  DateTime? _startDateTo;
+  // Minimum years per skill, e.g. [{"skill": "Python", "years": 3}, ...]
+  List<Map<String, dynamic>> _minYearsPerSkillList = [];
+  // Must-have certifications
+  List<String> _requiredCertifications = [];
+  final TextEditingController _certificationController = TextEditingController();
+
   // Category options for dropdown
   static const List<String> categoryOptions = [
     "Engineering",
@@ -737,6 +798,16 @@ class _JobFormDialogState extends State<JobFormDialog>
     skillsController.text = existingSkills.map((s) => "• $s").join('\n');
 
     minExpController.text = (widget.job?['min_experience'] ?? 0).toString();
+    final startFrom = widget.job?['start_date_from']?.toString();
+    final startTo = widget.job?['start_date_to']?.toString();
+    if (startFrom != null && startFrom.isNotEmpty) _startDateFrom = DateTime.tryParse(startFrom.substring(0, startFrom.length >= 10 ? 10 : startFrom.length));
+    if (startTo != null && startTo.isNotEmpty) _startDateTo = DateTime.tryParse(startTo.substring(0, startTo.length >= 10 ? 10 : startTo.length));
+    final minYearsRaw = widget.job?['min_years_per_skill'];
+    if (minYearsRaw is Map) {
+      _minYearsPerSkillList = minYearsRaw.entries.map((e) => {"skill": e.key.toString(), "years": (e.value is num) ? (e.value as num).toDouble() : 0.0}).toList();
+    }
+    final certsRaw = widget.job?['required_certifications'];
+    if (certsRaw is List) _requiredCertifications = certsRaw.map((e) => e.toString()).toList();
     jobSummary = widget.job?['job_summary'] ?? '';
     companyDetails = widget.job?['company_details'] ?? '';
     companyDetailsController.text = companyDetails;
@@ -982,6 +1053,7 @@ class _JobFormDialogState extends State<JobFormDialog>
     minExpController.dispose();
     salaryMinController.dispose();
     salaryMaxController.dispose();
+    _certificationController.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -1224,6 +1296,10 @@ class _JobFormDialogState extends State<JobFormDialog>
       'vacancy': 1,
       if (applicationDeadlineController.text.trim().isNotEmpty)
         'application_deadline': applicationDeadlineController.text.trim(),
+      if (_startDateFrom != null) 'start_date_from': _startDateFrom!.toIso8601String().substring(0, 10),
+      if (_startDateTo != null) 'start_date_to': _startDateTo!.toIso8601String().substring(0, 10),
+      'min_years_per_skill': Map.fromEntries(_minYearsPerSkillList.where((e) => (e['skill']?.toString() ?? '').trim().isNotEmpty).map((e) => MapEntry(e['skill']!.toString().trim(), (e['years'] is num) ? (e['years'] as num).toDouble() : 0.0))),
+      'required_certifications': _requiredCertifications.where((s) => s.trim().isNotEmpty).toList(),
       if (_useTestPack && _testPackId != null) 'test_pack_id': _testPackId,
       'assessment_pack': _useTestPack && _testPackId != null
           ? {'questions': []}
@@ -1427,6 +1503,134 @@ class _JobFormDialogState extends State<JobFormDialog>
                                       controller: minExpController,
                                       inputType: TextInputType.number,
                                     ),
+                                    const SizedBox(height: 16),
+                                    Text("Preferred start window", style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w600, color: themeProvider.isDarkMode ? Colors.white : Colors.black87)),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            icon: const Icon(Icons.calendar_today, size: 18),
+                                            label: Text(_startDateFrom == null ? "From" : "${_startDateFrom!.year}-${_startDateFrom!.month.toString().padLeft(2, '0')}-${_startDateFrom!.day.toString().padLeft(2, '0')}", style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)),
+                                            onPressed: () async {
+                                              final d = await showDatePicker(context: context, initialDate: _startDateFrom ?? DateTime.now(), firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365 * 2)));
+                                              if (d != null && mounted) setState(() => _startDateFrom = d);
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: OutlinedButton.icon(
+                                            icon: const Icon(Icons.calendar_today, size: 18),
+                                            label: Text(_startDateTo == null ? "To" : "${_startDateTo!.year}-${_startDateTo!.month.toString().padLeft(2, '0')}-${_startDateTo!.day.toString().padLeft(2, '0')}", style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)),
+                                            onPressed: () async {
+                                              final d = await showDatePicker(context: context, initialDate: _startDateTo ?? _startDateFrom ?? DateTime.now(), firstDate: _startDateFrom ?? DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365 * 2)));
+                                              if (d != null && mounted) setState(() => _startDateTo = d);
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text("Minimum years per skill", style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w600, color: themeProvider.isDarkMode ? Colors.white : Colors.black87)),
+                                        TextButton.icon(
+                                          icon: const Icon(Icons.add, size: 18),
+                                          label: const Text("Add", style: TextStyle(fontSize: 12)),
+                                          onPressed: () => setState(() => _minYearsPerSkillList.add({"skill": "", "years": 0.0})),
+                                        ),
+                                      ],
+                                    ),
+                                    if (_minYearsPerSkillList.isNotEmpty) ...[
+                                      ..._minYearsPerSkillList.asMap().entries.map((entry) {
+                                        final i = entry.key;
+                                        final row = entry.value;
+                                        return Padding(
+                                          padding: const EdgeInsets.only(bottom: 8),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                flex: 2,
+                                                child: TextFormField(
+                                                  initialValue: row['skill']?.toString(),
+                                                  decoration: const InputDecoration(hintText: "Skill", isDense: true),
+                                                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+                                                  onChanged: (v) => setState(() => _minYearsPerSkillList[i]['skill'] = v),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              SizedBox(
+                                                width: 70,
+                                                child: TextFormField(
+                                                  initialValue: row['years']?.toString(),
+                                                  keyboardType: TextInputType.number,
+                                                  decoration: const InputDecoration(hintText: "Years", isDense: true),
+                                                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+                                                  onChanged: (v) => setState(() => _minYearsPerSkillList[i]['years'] = double.tryParse(v) ?? 0),
+                                                ),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(Icons.remove_circle_outline, size: 22),
+                                                onPressed: () => setState(() => _minYearsPerSkillList.removeAt(i)),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }),
+                                      const SizedBox(height: 8),
+                                    ],
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text("Must-have certifications", style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w600, color: themeProvider.isDarkMode ? Colors.white : Colors.black87)),
+                                        TextButton.icon(
+                                          icon: const Icon(Icons.add, size: 18),
+                                          label: const Text("Add", style: TextStyle(fontSize: 12)),
+                                          onPressed: () {
+                                            final c = _certificationController.text.trim();
+                                            if (c.isNotEmpty) {
+                                              setState(() {
+                                                _requiredCertifications.add(c);
+                                                _certificationController.clear();
+                                              });
+                                            }
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: TextFormField(
+                                            controller: _certificationController,
+                                            decoration: const InputDecoration(hintText: "e.g. AWS Certified, PMP", isDense: true),
+                                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
+                                            onFieldSubmitted: (v) {
+                                              if (v.trim().isNotEmpty) setState(() { _requiredCertifications.add(v.trim()); _certificationController.clear(); });
+                                            },
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        ElevatedButton(child: const Text("Add"), onPressed: () {
+                                          final c = _certificationController.text.trim();
+                                          if (c.isNotEmpty) setState(() { _requiredCertifications.add(c); _certificationController.clear(); });
+                                        }),
+                                      ],
+                                    ),
+                                    if (_requiredCertifications.isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Wrap(
+                                        spacing: 6,
+                                        runSpacing: 6,
+                                        children: _requiredCertifications.map((c) => Chip(
+                                          label: Text(c, style: const TextStyle(fontSize: 12)),
+                                          deleteIcon: const Icon(Icons.close, size: 18),
+                                          onDeleted: () => setState(() => _requiredCertifications.remove(c)),
+                                        )).toList(),
+                                      ),
+                                    ],
                                     const SizedBox(height: 16),
                                     CustomTextField(
                                       label:

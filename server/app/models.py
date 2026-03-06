@@ -249,6 +249,13 @@ class Requisition(db.Model):
     salary_range = db.Column(db.String(100), default="", nullable=True)  # e.g. R850k - R1.2m
     application_deadline = db.Column(db.DateTime, nullable=True)
     banner = db.Column(db.String(500), nullable=True)  # company logo / image URL
+    # Preferred start window for the role
+    start_date_from = db.Column(db.Date, nullable=True)
+    start_date_to = db.Column(db.Date, nullable=True)
+    # Minimum years of experience per skill (e.g. {"Python": 3, "SQL": 2})
+    min_years_per_skill = db.Column(JSON, default=dict)
+    # Must-have certifications (e.g. ["AWS Certified", "PMP"])
+    required_certifications = db.Column(JSON, default=list)
 
     applications = db.relationship('Application', back_populates='requisition', lazy=True)
     creator = db.relationship('User', foreign_keys=[created_by], lazy=True)
@@ -297,6 +304,10 @@ class Requisition(db.Model):
             "application_deadline": self.application_deadline.isoformat() if self.application_deadline else None,
             "company": self.company or "",
             "banner": self.banner,
+            "start_date_from": self.start_date_from.isoformat() if self.start_date_from else None,
+            "start_date_to": self.start_date_to.isoformat() if self.start_date_to else None,
+            "min_years_per_skill": self.min_years_per_skill if isinstance(self.min_years_per_skill, dict) else ({}),
+            "required_certifications": self.required_certifications if isinstance(self.required_certifications, list) else [],
         }
     
     def to_dict_with_stats(self):
