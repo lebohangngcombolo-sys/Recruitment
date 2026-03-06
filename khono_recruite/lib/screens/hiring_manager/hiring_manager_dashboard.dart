@@ -26,6 +26,9 @@ import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../utils/api_endpoints.dart';
 import '../../utils/app_config.dart';
+import '../../services/notification_service.dart';
+// ignore: unused_import - json.decode used in fetchAudits, fetchPipelineActivity, fetchChartData
+import 'dart:convert';
 
 class _DashboardCalendarDataSource extends CalendarDataSource {
   _DashboardCalendarDataSource(List<Appointment> source) {
@@ -146,6 +149,14 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     "delete"
   ];
 
+  // Pipeline activity (who advanced/declined and when) - for HM and admin
+  List<Map<String, dynamic>> pipelineActivity = [];
+  bool loadingPipelineActivity = false;
+
+  // Notifications for dashboard widget (status changes + upcoming interviews)
+  List<Map<String, dynamic>> dashboardNotifications = [];
+  bool loadingNotifications = false;
+
   // ---------- Profile image state ----------
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
@@ -165,6 +176,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     fetchCandidates();
     fetchChartData();
     fetchAudits(page: 1);
+    fetchPipelineActivity();
+    fetchDashboardNotifications();
     fetchProfileImage();
     _loadUserName();
     _loadCalendarData();
@@ -819,6 +832,46 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       }
     } catch (e) {
       setState(() => loadingAudits = false);
+    }
+  }
+
+  Future<void> fetchPipelineActivity() async {
+    setState(() => loadingPipelineActivity = true);
+    try {
+      final token = await AuthService.getAccessToken();
+      final uri = Uri.parse(ApiEndpoints.pipelineActivity);
+      final res =
+          await http.get(uri, headers: {"Authorization": "Bearer $token"});
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body) as Map<String, dynamic>;
+        final results = data["results"];
+        setState(() {
+          pipelineActivity = results is List
+              ? List<Map<String, dynamic>>.from(
+                  results.map((e) => Map<String, dynamic>.from(e as Map)))
+              : [];
+          loadingPipelineActivity = false;
+        });
+      } else {
+        setState(() => loadingPipelineActivity = false);
+      }
+    } catch (e) {
+      setState(() => loadingPipelineActivity = false);
+    }
+  }
+
+  Future<void> fetchDashboardNotifications() async {
+    setState(() => loadingNotifications = true);
+    try {
+      final response = await NotificationService.getNotifications();
+      if (!mounted) return;
+      setState(() {
+        dashboardNotifications = response.notifications;
+        loadingNotifications = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => loadingNotifications = false);
     }
   }
 
@@ -1532,6 +1585,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
             // Enhanced Candidates Section
             _buildCandidatesSection(themeProvider),
+            const SizedBox(height: 24),
+
+            // Shortlist / Recommended for interview summary
+            _buildShortlistSummaryCard(themeProvider),
+            const SizedBox(height: 16),
+
+            // Notifications: status changes and upcoming interviews
+            _buildNotificationsFocusCard(themeProvider),
+            const SizedBox(height: 16),
+
+            // Activity trail: who advanced/declined and when
+            _buildActivityTrailCard(themeProvider),
             const SizedBox(height: 24),
 
             // Candidate Demographics Section
@@ -2448,6 +2513,352 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         ],
       ),
     );
+  }
+
+  // ---------------- Shortlist / Recommended for interview ----------------
+  Widget _buildShortlistSummaryCard(ThemeProvider themeProvider) {
+    final inInterview = applicationStatusBreakdown['interview'] is int
+        ? applicationStatusBreakdown['interview'] as int
+        : (applicationStatusBreakdown['interview'] is num
+            ? (applicationStatusBreakdown['interview'] as num).toInt()
+            : 0);
+    final recommended = applicationStatusBreakdown['recommended'] is int
+        ? applicationStatusBreakdown['recommended'] as int
+        : (applicationStatusBreakdown['recommended'] is num
+            ? (applicationStatusBreakdown['recommended'] as num).toInt()
+            : 0);
+    final total = inInterview + recommended;
+    final bg = (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white).withValues(alpha: 0.9);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color.fromARGB(255, 193, 13, 0).withValues(alpha: 0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Shortlist & recommended",
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              if (total > 0)
+                TextButton(
+                  onPressed: () => setState(() => currentScreen = "candidates"),
+                  child: const Text("View all", style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color.fromARGB(255, 193, 13, 0),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _shortlistChip(themeProvider, "In interview", inInterview),
+              const SizedBox(width: 12),
+              _shortlistChip(themeProvider, "Recommended", recommended),
+            ],
+          ),
+          if (total == 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                "No candidates in shortlist or recommended yet.",
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _shortlistChip(ThemeProvider themeProvider, String label, int count) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color.fromARGB(255, 193, 13, 0).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              color: themeProvider.isDarkMode ? Colors.white70 : Colors.black87,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            "$count",
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Color.fromARGB(255, 193, 13, 0),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------- Notifications: status changes & upcoming interviews ----------------
+  Widget _buildNotificationsFocusCard(ThemeProvider themeProvider) {
+    final statusChangeNotifs = dashboardNotifications
+        .where((n) => (n['type']?.toString() ?? '') == 'status_update')
+        .take(5)
+        .toList();
+    final upcomingFromCalendar = _calendarAppointments
+        .where((a) => a.startTime.isAfter(DateTime.now()))
+        .toList()
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+    final upcomingList = upcomingFromCalendar.take(3).toList();
+    final bg = (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white).withValues(alpha: 0.9);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withValues(alpha: 0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Notifications",
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              TextButton(
+                onPressed: () => setState(() => currentScreen = "notifications"),
+                child: const Text("View all", style: TextStyle(fontSize: 12)),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color.fromARGB(255, 193, 13, 0),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "Upcoming interviews",
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: themeProvider.isDarkMode ? Colors.white70 : Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (upcomingList.isEmpty)
+            Text(
+              "No upcoming interviews.",
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+              ),
+            )
+          else
+            ...upcomingList.map((a) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    "${a.subject} — ${DateFormat.MMMd().add_Hm().format(a.startTime)}",
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 11,
+                      color: themeProvider.isDarkMode ? Colors.white70 : Colors.black87,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                )),
+          const SizedBox(height: 10),
+          Text(
+            "Status changes",
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: themeProvider.isDarkMode ? Colors.white70 : Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (statusChangeNotifs.isEmpty)
+            Text(
+              "No recent status updates.",
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+              ),
+            )
+          else
+            ...statusChangeNotifs.take(3).map((n) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    n['message']?.toString() ?? 'Notification',
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 11,
+                      color: themeProvider.isDarkMode ? Colors.white70 : Colors.black87,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                )),
+        ],
+      ),
+    );
+  }
+
+  // ---------------- Activity trail: who advanced/declined and when ----------------
+  Widget _buildActivityTrailCard(ThemeProvider themeProvider) {
+    final bg = (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white).withValues(alpha: 0.9);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.orange.withValues(alpha: 0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Activity trail",
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              Text(
+                "Who advanced/declined and when",
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (loadingPipelineActivity)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent),
+                ),
+              ),
+            )
+          else if (pipelineActivity.isEmpty)
+            Text(
+              "No recent pipeline changes.",
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 12,
+                color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+              ),
+            )
+          else
+            ...pipelineActivity.take(10).map((e) {
+              final ts = e['timestamp']?.toString();
+              final when = ts != null ? _formatActivityTime(ts) : '';
+              final candidate = e['candidate_name']?.toString() ?? 'Candidate';
+              final job = e['job_title']?.toString() ?? 'Job';
+              final newS = e['new_status']?.toString() ?? '';
+              final actor = e['actor_name']?.toString();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.arrow_forward, size: 14, color: Colors.orange.shade700),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        actor != null && actor.isNotEmpty
+                            ? "$candidate → $newS for $job (by $actor, $when)"
+                            : "$candidate → $newS for $job ($when)",
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 11,
+                          color: themeProvider.isDarkMode ? Colors.white70 : Colors.black87,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  String _formatActivityTime(String iso) {
+    try {
+      final dt = DateTime.parse(iso);
+      final now = DateTime.now();
+      final diff = now.difference(dt);
+      if (diff.inDays > 0) return '${diff.inDays}d ago';
+      if (diff.inHours > 0) return '${diff.inHours}h ago';
+      if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+      return 'Just now';
+    } catch (_) {
+      return iso;
+    }
   }
 
   // ---------------- Enhanced Candidates Section ----------------

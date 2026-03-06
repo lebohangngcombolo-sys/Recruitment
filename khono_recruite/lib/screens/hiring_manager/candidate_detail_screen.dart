@@ -1,4 +1,5 @@
 // ignore_for_file: unused_import
+import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -35,10 +36,19 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
   final storage = const FlutterSecureStorage();
 
   Map<String, dynamic>? candidateData;
+  Map<String, dynamic>? application;
+  Map<String, dynamic>? job;
+  List<Map<String, dynamic>> timeline = [];
   List<Map<String, dynamic>> interviews = [];
   bool loading = true;
   String? errorMessage;
   String currentScreen = "candidates";
+
+  static const List<String> _recommendationOptions = [
+    'Proceed to Final Interview',
+    'Hold',
+    'Reject',
+  ];
 
   late final AnimationController _hoverController;
   late final Animation<double> _hoverAnimation;
@@ -65,6 +75,12 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
     super.dispose();
   }
 
+  String _formatList(dynamic v) {
+    if (v == null) return '—';
+    if (v is List) return v.isEmpty ? '—' : v.join(', ');
+    return v.toString();
+  }
+
   Future<void> fetchAllData() async {
     setState(() {
       loading = true;
@@ -73,34 +89,75 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
 
     try {
       final data = await admin.getApplication(widget.applicationId);
-      final application = data['application'] ?? {};
-      final assessment = data['assessment'] ?? {};
+      final app = data['application'] as Map<String, dynamic>? ?? {};
+      final cand = data['candidate'] as Map<String, dynamic>? ?? {};
+      final assessment = data['assessment'] as Map<String, dynamic>? ?? {};
+      final jobPayload = data['job'] as Map<String, dynamic>?;
+
+      application = app;
+      job = jobPayload;
 
       candidateData = {
-        "full_name": application['full_name'] ?? 'Unnamed',
-        "email": application['email'] ?? '',
-        "phone": application['phone'] ?? '',
-        "cv_score": application['cv_score'] ?? 0,
-        "cv_file": application['cv_url'] ?? '',
-        "education": application['education'] ?? '',
-        "skills": application['skills'] ?? '',
-        "work_experience": application['work_experience'] ?? '',
-        "assessment_score": assessment['score'] ?? 'N/A',
+        "full_name": cand['full_name'] ?? app['full_name'] ?? 'Unnamed',
+        "email": cand['email'] ?? '',
+        "phone": cand['phone'] ?? '',
+        "cv_score": app['cv_score'] ?? 0,
+        "cv_file": app['resume_url'] ?? app['cv_url'] ?? '',
+        "education": _formatList(cand['education']),
+        "skills": _formatList(cand['skills']),
+        "work_experience": _formatList(cand['work_experience']),
+        "assessment_score": assessment['percentage_score'] ?? assessment['score'] ?? 'N/A',
         "assessment_recommendation": assessment['recommendation'] ?? 'N/A',
-        "status": application['status'] ?? 'Pending',
-        "candidate_id": application['id'] ?? widget.candidateId,
+        "status": app['status'] ?? 'Pending',
+        "candidate_id": app['candidate_id'] ?? widget.candidateId,
+        "recommendation": app['recommendation'],
+        "cv_parser_result": app['cv_parser_result'],
+        "knockout_rule_violations": app['knockout_rule_violations'],
+        "scoring_breakdown": app['scoring_breakdown'],
+        "overall_score": app['overall_score'],
       };
 
       final interviewData =
           await admin.getCandidateInterviews(widget.candidateId);
       interviews = List<Map<String, dynamic>>.from(interviewData);
+
+      try {
+        final tl = await admin.getApplicationTimeline(widget.applicationId);
+        if (mounted) timeline = tl;
+      } catch (_) {
+        if (mounted) timeline = [];
+      }
     } catch (e) {
       print("Error fetching candidate details: $e");
       errorMessage = "Failed to load data: $e";
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
     } finally {
-      setState(() => loading = false);
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> _setRecommendation(String value) async {
+    try {
+      await admin.updateApplicationRecommendation(widget.applicationId, value);
+      if (!mounted) return;
+      setState(() {
+        candidateData = Map<String, dynamic>.from(candidateData!);
+        candidateData!['recommendation'] = value;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Recommendation set to $value')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to set recommendation: $e'), backgroundColor: Colors.redAccent),
+        );
+      }
     }
   }
 
@@ -133,7 +190,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
         return;
       }
 
-      final data = json.decode(response.body);
+      final data = jsonDecode(response.body);
       final cvUrl = data['cv_url'];
       final fullName = data['candidate_name'] ?? candidateName;
 
@@ -239,7 +296,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
         topRightIcon: Icons.download_outlined,
         onTopRightTap: () {
           downloadCV(
-            candidateData!['candidate_id'],
+            widget.applicationId,
             context,
             candidateData!['full_name'] ?? "candidate",
           );
@@ -286,6 +343,11 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
           ],
         ),
       ),
+      _buildCvMatchBreakdownTile(themeProvider),
+      _buildApplicationRecommendationTile(themeProvider),
+      _buildKnockoutTile(themeProvider),
+      _buildScoringBreakdownTile(themeProvider),
+      _buildTimelineTile(themeProvider),
       _buildFlatTile(
         themeProvider: themeProvider,
         icon: Icons.event_note_outlined,
@@ -371,6 +433,165 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
             children: tiles,
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildCvMatchBreakdownTile(ThemeProvider themeProvider) {
+    final cvResult = candidateData!['cv_parser_result'];
+    if (cvResult == null || cvResult is! Map) {
+      return _buildFlatTile(
+        themeProvider: themeProvider,
+        icon: Icons.fact_check_outlined,
+        child: Text("CV match breakdown not available",
+            style: TextStyle(
+                fontSize: 14,
+                color: themeProvider.isDarkMode ? Colors.white70 : Colors.black54)),
+      );
+    }
+    final map = Map<String, dynamic>.from(cvResult);
+    final missing = map['missing_skills'] is List ? (map['missing_skills'] as List).cast<String>() : <String>[];
+    final suggestions = map['suggestions'] is List ? (map['suggestions'] as List).cast<String>() : <String>[];
+    final matchScore = map['match_score'];
+    final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
+    return _buildFlatTile(
+      themeProvider: themeProvider,
+      icon: Icons.fact_check_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("CV match breakdown", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
+          if (matchScore != null) _dashboardInfo("Match score", matchScore.toString(), themeProvider),
+          if (missing.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text("Missing skills", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textColor)),
+            ...missing.take(10).map((s) => Padding(padding: const EdgeInsets.only(left: 8), child: Text("• $s", style: TextStyle(fontSize: 12, color: textColor)))),
+            if (missing.length > 10) Text("... and ${missing.length - 10} more", style: TextStyle(fontSize: 11, color: textColor)),
+          ],
+          if (suggestions.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text("Suggestions", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textColor)),
+            ...suggestions.take(5).map((s) => Padding(padding: const EdgeInsets.only(left: 8), child: Text("• $s", style: TextStyle(fontSize: 12, color: textColor)))),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildApplicationRecommendationTile(ThemeProvider themeProvider) {
+    final rec = (candidateData!['recommendation'] ?? '').toString();
+    final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
+    return _buildFlatTile(
+      themeProvider: themeProvider,
+      icon: Icons.how_to_vote_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Application recommendation", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
+          const SizedBox(height: 6),
+          if (rec.isNotEmpty) _dashboardInfo("Current", rec, themeProvider),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: _recommendationOptions.map((opt) => ActionChip(
+              label: Text(opt, style: const TextStyle(fontSize: 11)),
+              onPressed: () => _setRecommendation(opt),
+            )).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKnockoutTile(ThemeProvider themeProvider) {
+    final violations = candidateData!['knockout_rule_violations'];
+    final list = violations is List ? List<dynamic>.from(violations) : <dynamic>[];
+    final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
+    if (list.isEmpty) {
+      return _buildFlatTile(
+        themeProvider: themeProvider,
+        icon: Icons.rule_outlined,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Knockout / holds", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
+            const SizedBox(height: 4),
+            Text("None", style: TextStyle(fontSize: 14, color: textColor)),
+          ],
+        ),
+      );
+    }
+    return _buildFlatTile(
+      themeProvider: themeProvider,
+      icon: Icons.rule_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Knockout / holds", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
+          const SizedBox(height: 6),
+          ...list.map((v) => Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text("• ${v is Map ? (v['reason'] ?? v['rule'] ?? v.toString()) : v}", style: TextStyle(fontSize: 13, color: textColor)),
+          )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScoringBreakdownTile(ThemeProvider themeProvider) {
+    final breakdown = candidateData!['scoring_breakdown'];
+    final overall = candidateData!['overall_score'];
+    final weightings = job != null && job!['weightings'] is Map ? Map<String, dynamic>.from(job!['weightings'] as Map) : <String, dynamic>{"cv": 60, "assessment": 40};
+    final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
+    final cvPct = weightings['cv'] ?? 60;
+    final assessPct = weightings['assessment'] ?? 40;
+    return _buildFlatTile(
+      themeProvider: themeProvider,
+      icon: Icons.pie_chart_outline,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Scoring breakdown", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
+          const SizedBox(height: 6),
+          _dashboardInfo("Weights", "CV $cvPct% · Assessment $assessPct%", themeProvider),
+          if (breakdown is Map) ...[
+            if (breakdown['cv'] != null) _dashboardInfo("CV score", breakdown['cv'].toString(), themeProvider),
+            if (breakdown['assessment'] != null) _dashboardInfo("Assessment score", breakdown['assessment'].toString(), themeProvider),
+          ],
+          if (overall != null) _dashboardInfo("Overall", overall is num ? (overall).toStringAsFixed(1) : overall.toString(), themeProvider),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineTile(ThemeProvider themeProvider) {
+    final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
+    return _buildFlatTile(
+      themeProvider: themeProvider,
+      icon: Icons.timeline_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text("Stage timeline", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
+          const SizedBox(height: 8),
+          if (timeline.isEmpty)
+            Text("No status changes recorded", style: TextStyle(fontSize: 14, color: textColor))
+          else
+            ...timeline.take(10).map((e) {
+              final ts = e['timestamp']?.toString();
+              final actor = e['actor_name'] ?? 'Unknown';
+              final oldS = e['old_status'] ?? '';
+              final newS = e['new_status'] ?? '';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  "${ts != null && ts.length >= 16 ? ts.substring(0, 16).replaceAll('T', ' ') : ts} · $actor: $oldS → $newS",
+                  style: TextStyle(fontSize: 12, color: textColor),
+                ),
+              );
+            }),
+          if (timeline.length > 10) Text("... and ${timeline.length - 10} more", style: TextStyle(fontSize: 11, color: textColor)),
+        ],
       ),
     );
   }

@@ -181,6 +181,15 @@ class AdminService {
     int page = 1,
     int perPage = 100,
   }) async {
+    final data = await getApplicationsForMyJobsPage(page: page, perPage: perPage);
+    return data['applications'] ?? [];
+  }
+
+  /// Same as getApplicationsForMyJobs but returns full response with pagination.
+  Future<Map<String, dynamic>> getApplicationsForMyJobsPage({
+    int page = 1,
+    int perPage = 200,
+  }) async {
     final uri = Uri.parse(ApiEndpoints.getApplicationsForMyJobs).replace(
       queryParameters: {
         'page': page.toString(),
@@ -189,13 +198,29 @@ class AdminService {
     );
     final res = await _getWithAuthRetry(uri);
     if (res.statusCode == 200) {
-      final data = json.decode(res.body);
-      return data['applications'] ?? [];
+      return json.decode(res.body) as Map<String, dynamic>;
     } else {
       final error = json.decode(res.body);
       final msg = error['msg'] ?? error['error'] ?? res.body;
       throw Exception('Failed to load candidates: $msg');
     }
+  }
+
+  /// Fetches all applications for the current user's jobs (all pages).
+  Future<List<dynamic>> getAllApplicationsForMyJobs() async {
+    final all = <dynamic>[];
+    int page = 1;
+    const perPage = 500;
+    while (true) {
+      final data = await getApplicationsForMyJobsPage(page: page, perPage: perPage);
+      final list = data['applications'] as List<dynamic>? ?? [];
+      all.addAll(list);
+      final pagination = data['pagination'] as Map<String, dynamic>?;
+      final hasNext = pagination?['has_next'] == true;
+      if (!hasNext || list.length < perPage) break;
+      page++;
+    }
+    return all;
   }
 
   // Get job statistics
@@ -426,6 +451,20 @@ class AdminService {
     throw Exception('Failed to fetch application: ${res.body}');
   }
 
+  /// Per-application audit timeline (who moved status when).
+  Future<List<Map<String, dynamic>>> getApplicationTimeline(int applicationId) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.get(
+      Uri.parse(ApiEndpoints.getApplicationTimeline(applicationId)),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      return List<Map<String, dynamic>>.from(data['results'] ?? []);
+    }
+    throw Exception('Failed to fetch application timeline: ${res.body}');
+  }
+
   /// All applications for a candidate with job details (title, company, employment_type).
   Future<List<Map<String, dynamic>>> getCandidateApplications(int candidateId) async {
     final token = await AuthService.getAccessToken();
@@ -462,6 +501,19 @@ class AdminService {
     );
     if (res.statusCode == 200) return json.decode(res.body);
     throw Exception('Failed to fetch shortlisted candidates: ${res.body}');
+  }
+
+  /// Set hiring committee recommendation: "Proceed to Final Interview" | "Hold" | "Reject"
+  Future<void> updateApplicationRecommendation(int applicationId, String recommendation) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.patch(
+      Uri.parse(ApiEndpoints.updateApplicationRecommendation(applicationId)),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: json.encode({'recommendation': recommendation}),
+    );
+    if (res.statusCode != 200) {
+      throw Exception('Failed to update recommendation: ${res.body}');
+    }
   }
 
   Future<List<Map<String, dynamic>>> getAllApplications() async {

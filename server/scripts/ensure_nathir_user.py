@@ -25,12 +25,12 @@ if os.path.isfile(_env_path):
     from dotenv import load_dotenv
     load_dotenv(_env_path)
 
-EMAIL = "nathir@khonology.com"
+EMAIL = "Ntombi.Nkomo@khonology.com"
 DEFAULT_PASSWORD = "TempPass123!"
 PROFILE = {
-    "first_name": "Nathir",
-    "last_name": "Khonology",
-    "full_name": "Nathir Khonology",
+    "first_name": "Ntombi",
+    "last_name": "Nkomo",
+    "full_name": "Ntombi Nkomo",
 }
 
 
@@ -48,7 +48,7 @@ def main():
         user = User.query.filter(db.func.lower(User.email) == email).first()
         hashed = AuthService.hash_password(password)
         if user:
-            user.role = "admin"
+            user.role = "candidate"
             user.is_verified = True
             user.is_active = True
             user.password = hashed
@@ -67,7 +67,7 @@ def main():
             user = User(
                 email=email,
                 password=hashed,
-                role="admin",
+                role="candidate",
                 profile=dict(PROFILE),
                 is_verified=True,
                 is_active=True,
@@ -87,7 +87,7 @@ def main():
         print("Password verification: OK")
         print(f"\nLogin: {email}")
         print(f"Password: {password}")
-        print("Role: admin (is_verified=True, enrollment_completed=True)")
+        print("Role: candidate (is_verified=True, enrollment_completed=True)")
 
 
 if __name__ == "__main__":

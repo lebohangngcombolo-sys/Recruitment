@@ -1105,6 +1105,11 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
           if (sections.length <= 5) {
             sections.add(pw.Paragraph(text: 'No analytics data to display. Refresh the page and try again.'));
           }
+          sections.add(pw.SizedBox(height: 16));
+          sections.add(pw.Paragraph(
+            text: 'This report contains analytics only. Export shortlist from the Candidates screen.',
+            style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+          ));
           return sections;
         },
       ),

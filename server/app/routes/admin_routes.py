@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.extensions import db
-from app.models import User, Requisition, Candidate, Application, AssessmentResult, Interview, Notification, AuditLog, Conversation, SharedNote, Meeting, CVAnalysis, InterviewFeedback, Offer, OfferStatus
+from app.models import User, Requisition, Candidate, Application, AssessmentResult, Interview, Notification, AuditLog, Conversation, SharedNote, Meeting, CVAnalysis, InterviewFeedback, InterviewNote, InterviewReminder, Offer, OfferStatus
 from datetime import datetime, timedelta
 from app.utils.decorators import role_required
 from app.services.email_service import EmailService
@@ -10,6 +10,7 @@ from flask_cors import cross_origin
 from sqlalchemy import func, and_, or_
 import bleach
 from marshmallow import ValidationError
+import pyotp
 from app.services.job_service import JobService
 from app.schemas.job_schemas import (
     job_create_schema, job_update_schema, job_response_schema,
@@ -614,11 +615,13 @@ def get_applications_for_my_jobs():
 
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 100, type=int)
-        per_page = min(per_page, 200)
+        per_page = min(per_page, 500)  # allow up to 500 per page so hiring manager can load all
 
         query = Application.query.join(Requisition, Application.requisition_id == Requisition.id)
-        if current_user.role == "hiring_manager":
-            query = query.filter(Requisition.created_by == current_user_id)
+        # Admin/hr: all applications. Hiring manager: same as Job Management screen (all jobs
+        # and their applications are visible there), so return all applications so Candidates
+        # screen shows the same applicants they see when expanding jobs.
+        # (No filter by created_by for hiring_manager.)
 
         query = query.order_by(Application.created_at.desc())
         pagination = query.paginate(page=page, per_page=per_page, error_out=False)
@@ -730,8 +733,12 @@ def get_job_statistics():
 @admin_bp.route("/candidates", methods=["GET"])
 @role_required(["admin", "hiring_manager", "hr"])
 def list_candidates():
-    """Get all candidates with comprehensive data including applications and assessments"""
+    """Get all candidates with comprehensive data including applications and assessments.
+    For hiring_manager, only candidates who have applied to jobs they own (or unowned jobs)."""
     try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id) if current_user_id else None
+
         # Get query parameters for filtering and pagination
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 50, type=int)
@@ -740,6 +747,16 @@ def list_candidates():
         
         # Build query
         query = Candidate.query
+        if current_user and current_user.role == "hiring_manager":
+            # Restrict to candidates who have at least one application to this HM's jobs (or unowned jobs)
+            query = query.join(Application, Application.candidate_id == Candidate.id).join(
+                Requisition, Application.requisition_id == Requisition.id
+            ).filter(
+                or_(
+                    Requisition.created_by == current_user_id,
+                    Requisition.created_by.is_(None),
+                )
+            ).distinct()
         
         # Apply search filter
         if search:
@@ -755,7 +772,9 @@ def list_candidates():
         
         # Apply status filter (based on applications)
         if status_filter:
-            query = query.join(Application).filter(Application.status == status_filter)
+            if not (current_user and current_user.role == "hiring_manager"):
+                query = query.join(Application, Application.candidate_id == Candidate.id)
+            query = query.filter(Application.status == status_filter)
         
         # Paginate
         candidates = query.paginate(
@@ -860,18 +879,26 @@ def list_candidates():
 def get_application(application_id):
     application = Application.query.get_or_404(application_id)
     assessment = AssessmentResult.query.filter_by(application_id=application.id).first()
-    
+    job = Requisition.query.get(application.requisition_id) if application.requisition_id else None
+
     # Get candidate data
     candidate = Candidate.query.get(application.candidate_id) if application.candidate_id else None
-    
-    # Get user data for email
     user = None
     if candidate and candidate.user_id:
         user = User.query.get(candidate.user_id)
-    
+
+    job_payload = None
+    if job:
+        job_payload = {
+            "id": job.id,
+            "title": getattr(job, "title", None) or "",
+            "weightings": getattr(job, "weightings", None) or {"cv": 60, "assessment": 40, "interview": 0, "references": 0},
+        }
+
     return jsonify({
         "application": application.to_dict(),
         "assessment": assessment.to_dict() if assessment else {},
+        "job": job_payload,
         "candidate": {
             "full_name": candidate.full_name if candidate else "Unknown Candidate",
             "email": user.email if user else "No email",
@@ -881,6 +908,42 @@ def get_application(application_id):
             "work_experience": candidate.work_experience if candidate else [],
         } if candidate else {}
     })
+
+
+@admin_bp.route("/applications/<int:application_id>/timeline", methods=["GET"])
+@role_required(["admin", "hiring_manager", "hr"])
+def get_application_timeline(application_id):
+    """Per-candidate audit timeline: who moved status when, for this application."""
+    Application.query.get_or_404(application_id)
+    query = AuditLog.query.filter(
+        AuditLog.action.ilike("%Updated application status%")
+    ).order_by(AuditLog.timestamp.desc()).limit(200)
+    logs = query.all()
+    filtered = [log for log in logs if (log.extra_data or {}).get("application_id") == application_id]
+    result = []
+    for log in filtered:
+        actor_name = None
+        if log.admin_id:
+            u = User.query.get(log.admin_id)
+            if u and getattr(u, "profile", None):
+                actor_name = (u.profile.get("first_name") or "") + " " + (u.profile.get("last_name") or "")
+                actor_name = actor_name.strip() or getattr(u, "email", None)
+            else:
+                actor_name = getattr(u, "email", None) if u else None
+        ed = log.extra_data or {}
+        result.append({
+            "id": log.id,
+            "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+            "action": log.action,
+            "details": log.details,
+            "actor_id": log.admin_id,
+            "actor_name": actor_name,
+            "old_status": ed.get("old_status"),
+            "new_status": ed.get("new_status"),
+            "job_title": ed.get("job_title"),
+        })
+    return jsonify({"results": result})
+
 
 @admin_bp.route("/jobs/<int:job_id>/shortlist", methods=["GET"])
 @role_required(["admin", "hiring_manager", "hr"])
@@ -914,14 +977,19 @@ def shortlist_candidates(job_id):
             overall = 0
 
         app.overall_score = overall
+        user = User.query.get(app.candidate.user_id) if app.candidate and app.candidate.user_id else None
         shortlisted.append({
             "application_id": app.id,
             "candidate_id": app.candidate_id,
-            "full_name": app.candidate.full_name,
+            "full_name": app.candidate.full_name if app.candidate else "",
+            "email": user.email if user else "",
+            "job_id": job.id,
+            "job_title": getattr(job, "title", None) or "",
             "cv_score": cv_score,
             "assessment_score": assessment_score,
             "overall_score": overall,
-            "status": app.status
+            "status": app.status,
+            "recommendation": app.recommendation,
         })
 
     db.session.commit()
@@ -1066,6 +1134,102 @@ def delete_user(user_id):
     db.session.commit()
 
     return jsonify({"message": "User deleted successfully"}), 200
+
+
+# ----------------- ACTIVITY / PIPELINE (HM AUDIT TRAIL) -----------------
+@admin_bp.route("/activity/pipeline", methods=["GET"])
+@jwt_required()
+@role_required(["admin", "hiring_manager"])
+def list_pipeline_activity():
+    """
+    Recent application status changes (who advanced/declined and when).
+    For hiring_manager: only applications for jobs they created (requisition.created_by).
+    For admin: all.
+    """
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        if not current_user:
+            return jsonify({"error": "User not found"}), 404
+
+        page = request.args.get("page", 1, type=int)
+        per_page = min(request.args.get("per_page", 20, type=int), 50)
+
+        # Build base query: audit logs for application status updates
+        query = AuditLog.query.filter(
+            AuditLog.action.ilike("%Updated application status%")
+        ).order_by(AuditLog.timestamp.desc())
+
+        if current_user.role == "hiring_manager":
+            # HM only sees activity for jobs they created
+            # Filter by application_id in extra_data -> application must belong to HM's job
+            # We do this in Python to avoid JSON filtering differences across DBs
+            all_logs = query.limit(per_page * 5).all()  # fetch more then filter
+            hm_app_ids = set(
+                a_id for (a_id,) in db.session.query(Application.id).filter(
+                    Application.requisition_id.in_(db.session.query(Requisition.id).filter(
+                        Requisition.created_by == current_user_id
+                    ))
+                ).all()
+            )
+            filtered = []
+            for log in all_logs:
+                if not log.extra_data:
+                    continue
+                app_id = log.extra_data.get("application_id")
+                if app_id is not None and int(app_id) in hm_app_ids:
+                    filtered.append(log)
+                if len(filtered) >= per_page:
+                    break
+            logs = filtered[:per_page]
+            total = len(filtered)
+        else:
+            pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+            logs = pagination.items
+            total = pagination.total
+
+        # Enrich with actor name, candidate name, job title
+        result = []
+        for log in logs:
+            actor_name = None
+            if log.admin_id:
+                u = User.query.get(log.admin_id)
+                if u and u.profile:
+                    actor_name = (u.profile.get("first_name") or "") + " " + (u.profile.get("last_name") or "")
+                    actor_name = actor_name.strip() or u.email
+                else:
+                    actor_name = u.email if u else None
+            ed = log.extra_data or {}
+            candidate_name = None
+            application_id = ed.get("application_id")
+            if application_id:
+                app = Application.query.get(application_id)
+                if app and app.candidate:
+                    candidate_name = app.candidate.full_name
+            result.append({
+                "id": log.id,
+                "timestamp": log.timestamp.isoformat() if log.timestamp else None,
+                "action": log.action,
+                "details": log.details,
+                "actor_id": log.admin_id,
+                "actor_name": actor_name,
+                "candidate_name": candidate_name,
+                "job_title": ed.get("job_title"),
+                "old_status": ed.get("old_status"),
+                "new_status": ed.get("new_status"),
+                "application_id": application_id,
+                "extra_data": ed,
+            })
+
+        return jsonify({
+            "results": result,
+            "total": total,
+            "page": page if current_user.role == "admin" else 1,
+            "per_page": per_page,
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Pipeline activity error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
 
 
 # ----------------- AUDIT LOGS -----------------
@@ -3395,7 +3559,7 @@ def delete_shared_note(note_id):
         note = SharedNote.query.get_or_404(note_id)
         
         # Authorization check - only author or admin can delete
-        user_roles = get_jwt_claims().get("roles", [])
+        user_roles = get_jwt().get("roles", [])
         if note.author_id != user_id and "admin" not in user_roles:
             return jsonify({"error": "Not authorized to delete this note"}), 403
 
@@ -3657,7 +3821,7 @@ def update_meeting(meeting_id):
         meeting = Meeting.query.get_or_404(meeting_id)
         
         # Authorization check
-        user_roles = get_jwt_claims().get("roles", [])
+        user_roles = get_jwt().get("roles", [])
         if meeting.organizer_id != user_id and "admin" not in user_roles:
             return jsonify({"error": "Not authorized to edit this meeting"}), 403
 
@@ -3762,7 +3926,7 @@ def cancel_meeting(meeting_id):
         meeting = Meeting.query.get_or_404(meeting_id)
         
         # Authorization check
-        user_roles = get_jwt_claims().get("roles", [])
+        user_roles = get_jwt().get("roles", [])
         if meeting.organizer_id != user_id and "admin" not in user_roles:
             return jsonify({"error": "Not authorized to cancel this meeting"}), 403
 
@@ -3805,7 +3969,7 @@ def delete_meeting(meeting_id):
         meeting = Meeting.query.get_or_404(meeting_id)
         
         # Authorization check
-        user_roles = get_jwt_claims().get("roles", [])
+        user_roles = get_jwt().get("roles", [])
         if meeting.organizer_id != user_id and "admin" not in user_roles:
             return jsonify({"error": "Not authorized to delete this meeting"}), 403
 
@@ -4650,6 +4814,34 @@ def get_pipeline_quick_stats():
         return jsonify({"error": "Internal server error"}), 500
 
     
+@admin_bp.route("/applications/<int:application_id>/recommendation", methods=["PATCH"])
+@jwt_required()
+@role_required(["admin", "hiring_manager", "hr"])
+def update_application_recommendation(application_id):
+    """Set hiring committee recommendation: Proceed to Final Interview / Hold / Reject."""
+    try:
+        application = Application.query.get_or_404(application_id)
+        data = request.get_json() or {}
+        recommendation = (data.get("recommendation") or "").strip()
+        if not recommendation:
+            return jsonify({"error": "recommendation is required"}), 400
+        if len(recommendation) > 500:
+            return jsonify({"error": "recommendation must be at most 500 characters"}), 400
+        application.recommendation = recommendation
+        db.session.commit()
+        return jsonify({
+            "message": "Recommendation updated",
+            "application": {
+                "id": application.id,
+                "recommendation": application.recommendation,
+            }
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Update recommendation error: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"error": "Internal server error"}), 500
+
+
 @admin_bp.route("/applications/<int:application_id>/status", methods=["PATCH"])
 @role_required(["admin", "hiring_manager", "hr"])
 def update_application_status(application_id):
@@ -4708,7 +4900,7 @@ def update_application_status(application_id):
         
         # Audit log
         current_user_id = get_jwt_identity()
-        AuditLog(
+        audit_entry = AuditLog(
             admin_id=current_user_id,
             action=f"Updated application status from {old_status} to {new_status}",
             target_user_id=application.candidate.user_id if application.candidate else None,
@@ -4717,9 +4909,11 @@ def update_application_status(application_id):
                 "application_id": application_id,
                 "old_status": old_status,
                 "new_status": new_status,
-                "job_title": application.requisition.title if application.requisition else None
+                "job_title": application.requisition.title if application.requisition else None,
+                "requisition_id": application.requisition_id
             }
         )
+        db.session.add(audit_entry)
         db.session.commit()
         
         return jsonify({
