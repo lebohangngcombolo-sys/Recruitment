@@ -1,46 +1,11 @@
 #!/usr/bin/env bash
-# generate_version.sh – outputs version string Ver.YYYY.MM.XYZ.ENV for build-time --dart-define=APP_VERSION
-# X = week of month (A–F), Y = day of week (A=Mon … G=Sun), Z = commit count on origin/dev_main (or HEAD/0)
-
+# Thin wrapper: delegates to generate_version.py for Ver.YYYY.MM.XYZ.ENV (Z = commits today on dev_main).
+# Run from khono_recruite/ or repo root; script dir is khono_recruite/scripts/.
 set -e
-
-# Run from repo root so git commands see the full repo (e.g. when build runs from khono_recruite/)
-REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || true
-if [ -n "${REPO_ROOT:-}" ]; then
-  cd "$REPO_ROOT"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+KHONO_ROOT="$(dirname "$SCRIPT_DIR")"
+cd "$KHONO_ROOT"
+if command -v python3 >/dev/null 2>&1; then
+  exec python3 scripts/generate_version.py
 fi
-
-# Year, month, and day (for both letters and per-day commit counting)
-YEAR="$(date +%Y)"
-MONTH="$(date +%m)"
-DAY_OF_MONTH="$(date +%d)"
-
-# Today string for git date filters (YYYY-MM-DD)
-TODAY="${YEAR}-${MONTH}-${DAY_OF_MONTH}"
-
-# Week of month: 1→A, 2→B, … 6→F
-WEEK_NUM=$(( (10#$DAY_OF_MONTH - 1) / 7 + 1 ))
-# Cap at 6 for letter F
-if [ "$WEEK_NUM" -gt 6 ]; then
-  WEEK_NUM=6
-fi
-WEEK_LETTER="$(printf '%c' $((64 + WEEK_NUM)))"
-
-# Day of week: 1=Mon … 7=Sun → A–G
-DOW_NUM="$(date +%u)"
-DAY_LETTER="$(printf '%c' $((64 + DOW_NUM)))"
-
-# Commit count for *today*:
-# - Prefer commits on origin/dev_main for the current calendar day.
-# - Fall back to commits on HEAD for today.
-# - Finally fall back to 0 if git history is unavailable.
-COMMIT_COUNT="$(git rev-list --count origin/dev_main --since=\"${TODAY}\" 2>/dev/null)" || true
-if [ -z "${COMMIT_COUNT:-}" ]; then
-  COMMIT_COUNT="$(git rev-list --count HEAD --since=\"${TODAY}\" 2>/dev/null)" || true
-fi
-COMMIT_COUNT="${COMMIT_COUNT:-0}"
-
-# Environment
-ENV="${APP_ENV:-DEV}"
-
-echo "Ver.${YEAR}.${MONTH}.${WEEK_LETTER}${DAY_LETTER}${COMMIT_COUNT}.${ENV}"
+exec python scripts/generate_version.py

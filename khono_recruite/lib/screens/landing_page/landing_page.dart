@@ -1929,8 +1929,7 @@ class _LandingPageState extends State<LandingPage>
             Positioned(
               left: 12,
               bottom: 12,
-              child: Text(
-                kAppVersion,
+              child: AppVersionText(
                 style: GoogleFonts.poppins(
                   fontSize: 10,
                   color: Colors.white54,

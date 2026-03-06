@@ -12,9 +12,11 @@ cd "${REPO_ROOT}"
 cd khono_recruite
 
 # Derive API_BASE in the same way as render_build.sh for consistent local testing.
-API_BASE="${API_BASE:-${BACKEND_URL:-http://127.0.0.1:5001}}"
+API_BASE="${API_BASE:-${BACKEND_URL:-http://127.0.0.1:5000}}"
 PUBLIC_BASE="${PUBLIC_API_BASE:-${API_BASE}}"
 
+# Refresh lib/utils/app_version_generated.dart so plain flutter run shows correct version too
+bash scripts/update_version_file.sh 2>/dev/null || true
 # Generate build-time version string. Fall back to a clearly synthetic LOCAL value.
 APP_VERSION="$(bash scripts/generate_version.sh 2>/dev/null || echo 'Ver.0.0.0.LOCAL')"
 echo "Running Flutter web with API_BASE=${API_BASE} APP_VERSION=${APP_VERSION}"
