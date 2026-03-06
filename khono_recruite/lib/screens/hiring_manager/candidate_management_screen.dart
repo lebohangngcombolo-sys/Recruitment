@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../services/admin_service.dart';
 import '../../widgets/custom_button.dart';
 import 'candidate_detail_screen.dart';
@@ -50,7 +51,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
         page: 1,
         perPage: 100,
       );
-      final fetched = (rawApplications).map<Map<String, dynamic>>((dynamic app) {
+      final fetched =
+          (rawApplications).map<Map<String, dynamic>>((dynamic app) {
         final map = Map<String, dynamic>.from(app as Map);
         final candidateData = (map['candidate'] is Map)
             ? Map<String, dynamic>.from(map['candidate'] as Map)
@@ -83,8 +85,9 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
       if (!mounted) return;
       setState(() {
         candidates = fetched;
-        statusMessage =
-            fetched.isEmpty ? "No candidates have applied to this job yet." : null;
+        statusMessage = fetched.isEmpty
+            ? "No candidates have applied to this job yet."
+            : null;
       });
     } catch (e) {
       debugPrint("Error fetching candidates: $e");
@@ -230,11 +233,13 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                     itemBuilder: (_, index) {
                                       final c = candidates[index];
                                       final overallScore =
-                                          (c['overall_score']?.toDouble() ?? 0.0);
+                                          (c['overall_score']?.toDouble() ??
+                                              0.0);
                                       final cvScore =
                                           (c['cv_score'] ?? 0).toDouble();
                                       final assessmentScore =
-                                          (c['assessment_score'] ?? 0).toDouble();
+                                          (c['assessment_score'] ?? 0)
+                                              .toDouble();
 
                                       return GestureDetector(
                                         onTap: () => openCandidateDetails(c),
@@ -356,6 +361,34 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                                   ),
                                                 ),
                                               ),
+                                              const SizedBox(width: 8),
+                                              // CV Preview and Download Buttons
+                                              Column(
+                                                children: [
+                                                  if (c['cv_url'] != null &&
+                                                      c['cv_url'].isNotEmpty)
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                          Icons.visibility,
+                                                          size: 20),
+                                                      onPressed: () =>
+                                                          _previewCV(
+                                                              c['cv_url']),
+                                                      tooltip: 'Preview CV',
+                                                    ),
+                                                  if (c['cv_url'] != null &&
+                                                      c['cv_url'].isNotEmpty)
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                          Icons.download,
+                                                          size: 20),
+                                                      onPressed: () =>
+                                                          _downloadCV(
+                                                              c['cv_url']),
+                                                      tooltip: 'Download CV',
+                                                    ),
+                                                ],
+                                              ),
                                             ],
                                           ),
                                         ),
@@ -370,5 +403,48 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
         ),
       ),
     );
+  }
+
+  // CV Preview and Download Methods
+  Future<void> _previewCV(String cvUrl) async {
+    try {
+      final uri = Uri.parse(cvUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.inAppWebView);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not preview CV')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error previewing CV: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _downloadCV(String cvUrl) async {
+    try {
+      final uri = Uri.parse(cvUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not download CV')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error downloading CV: $e')),
+        );
+      }
+    }
   }
 }

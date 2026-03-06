@@ -30,6 +30,8 @@ class _ProfilePageState extends State<ProfilePage>
     with TickerProviderStateMixin {
   bool loading = true;
   bool showProfileSummary = true;
+  bool _isSaving = false;
+  final _formKey = GlobalKey<FormState>();
 
   String selectedSidebar = "Profile";
 
@@ -442,6 +444,66 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
+  // NEW SAVE PROFILE METHOD
+  Future<void> _saveProfile() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isSaving = true);
+    try {
+      final profileData = {
+        'full_name': fullNameController.text.trim(),
+        'email': emailController.text.trim(),
+        'phone': phoneController.text.trim(),
+        'gender': genderController.text.trim(),
+        'dob': dobController.text.trim(),
+        'nationality': nationalityController.text.trim(),
+        'id_number': idNumberController.text.trim(),
+        'bio': bioController.text.trim(),
+        'location': locationController.text.trim(),
+        'title': titleController.text.trim(),
+        'company': companyController.text.trim(),
+        'years_of_experience': yearsOfExpController.text.trim(),
+        'job_title': jobTitleController.text.trim(),
+        'linkedin': linkedinController.text.trim(),
+        'github': githubController.text.trim(),
+        'portfolio': portfolioController.text.trim(),
+        'cv_text': cvTextController.text.trim(),
+        'cv_url': cvUrlController.text.trim(),
+        'skills': skillsController.text.trim(),
+        'work_experience': workExpController.text.trim(),
+      };
+
+      final response = await http.put(
+        Uri.parse(ApiEndpoints.currentUser),
+        headers: {
+          'Authorization': 'Bearer ${widget.token}',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'profile': profileData}),
+      );
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Profile updated successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        throw Exception('Failed to update profile: ${response.statusCode}');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error saving profile: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() => _isSaving = false);
+    }
+  }
+
   // EXISTING PROFILE METHODS: use /api/auth/me first; candidate uses candidate profile/settings, admin/HM use user.profile
   Future<void> fetchProfileAndSettings() async {
     try {
@@ -457,36 +519,55 @@ class _ProfilePageState extends State<ProfilePage>
         final body = json.decode(meRes.body) as Map<String, dynamic>;
         final user = body['user'] as Map<String, dynamic>? ?? {};
         final profile = user['profile'] as Map<String, dynamic>? ?? {};
-        final candidateProfile = body['candidate_profile'] as Map<String, dynamic>?;
+        final candidateProfile =
+            body['candidate_profile'] as Map<String, dynamic>?;
 
         _isCandidateUser = candidateProfile != null;
 
         if (candidateProfile != null) {
-          fullNameController.text = candidateProfile['full_name']?.toString() ?? "";
+          fullNameController.text =
+              candidateProfile['full_name']?.toString() ?? "";
           emailController.text = user['email']?.toString() ?? "";
           phoneController.text = candidateProfile['phone']?.toString() ?? "";
           genderController.text = candidateProfile['gender']?.toString() ?? "";
           dobController.text = candidateProfile['dob']?.toString() ?? "";
-          nationalityController.text = candidateProfile['nationality']?.toString() ?? "";
-          idNumberController.text = candidateProfile['id_number']?.toString() ?? "";
+          nationalityController.text =
+              candidateProfile['nationality']?.toString() ?? "";
+          idNumberController.text =
+              candidateProfile['id_number']?.toString() ?? "";
           bioController.text = candidateProfile['bio']?.toString() ?? "";
-          locationController.text = candidateProfile['location']?.toString() ?? "";
+          locationController.text =
+              candidateProfile['location']?.toString() ?? "";
           titleController.text = candidateProfile['title']?.toString() ?? "";
           degreeController.text = candidateProfile['degree']?.toString() ?? "";
-          institutionController.text = candidateProfile['institution']?.toString() ?? "";
-          graduationYearController.text = candidateProfile['graduation_year']?.toString() ?? "";
-          skillsController.text = (candidateProfile['skills'] is List) ? (candidateProfile['skills'] as List).join(", ") : "";
-          workExpController.text = (candidateProfile['work_experience'] is List) ? (candidateProfile['work_experience'] as List).join("\n") : (candidateProfile['work_experience']?.toString() ?? "");
-          jobTitleController.text = candidateProfile['job_title']?.toString() ?? "";
-          companyController.text = candidateProfile['company']?.toString() ?? "";
-          yearsOfExpController.text = candidateProfile['years_of_experience']?.toString() ?? "";
-          linkedinController.text = candidateProfile['linkedin']?.toString() ?? "";
+          institutionController.text =
+              candidateProfile['institution']?.toString() ?? "";
+          graduationYearController.text =
+              candidateProfile['graduation_year']?.toString() ?? "";
+          skillsController.text = (candidateProfile['skills'] is List)
+              ? (candidateProfile['skills'] as List).join(", ")
+              : "";
+          workExpController.text = (candidateProfile['work_experience'] is List)
+              ? (candidateProfile['work_experience'] as List).join("\n")
+              : (candidateProfile['work_experience']?.toString() ?? "");
+          jobTitleController.text =
+              candidateProfile['job_title']?.toString() ?? "";
+          companyController.text =
+              candidateProfile['company']?.toString() ?? "";
+          yearsOfExpController.text =
+              candidateProfile['years_of_experience']?.toString() ?? "";
+          linkedinController.text =
+              candidateProfile['linkedin']?.toString() ?? "";
           githubController.text = candidateProfile['github']?.toString() ?? "";
-          portfolioController.text = candidateProfile['portfolio']?.toString() ?? "";
+          portfolioController.text =
+              candidateProfile['portfolio']?.toString() ?? "";
           cvTextController.text = candidateProfile['cv_text']?.toString() ?? "";
           cvUrlController.text = candidateProfile['cv_url']?.toString() ?? "";
-          documents = candidateProfile['documents'] is List ? candidateProfile['documents'] as List : [];
-          _profileImageUrl = candidateProfile['profile_picture']?.toString() ?? "";
+          documents = candidateProfile['documents'] is List
+              ? candidateProfile['documents'] as List
+              : [];
+          _profileImageUrl =
+              candidateProfile['profile_picture']?.toString() ?? "";
         } else {
           fullNameController.text = profile['full_name']?.toString() ?? "";
           emailController.text = user['email']?.toString() ?? "";
@@ -1561,61 +1642,6 @@ class _ProfilePageState extends State<ProfilePage>
             headerColor: Colors.blue.withValues(alpha: 0.1),
           ),
 
-          // Education & Skills Card
-          _modernCard(
-            "Education & Skills",
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (degreeController.text.isNotEmpty)
-                  _infoRow("Degree", degreeController.text),
-                if (institutionController.text.isNotEmpty)
-                  _infoRow("Institution", institutionController.text),
-                if (graduationYearController.text.isNotEmpty)
-                  _infoRow("Graduation Year", graduationYearController.text),
-                if (skillsController.text.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    "Skills",
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.grey.shade700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: skillsController.text.split(',').map((skill) {
-                      final trimmedSkill = skill.trim();
-                      if (trimmedSkill.isEmpty) return const SizedBox.shrink();
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          trimmedSkill,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: Colors.redAccent,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ],
-            ),
-            headerColor: Colors.green.withValues(alpha: 0.1),
-          ),
-
           // Online Profiles Card
           if (linkedinController.text.isNotEmpty ||
               githubController.text.isNotEmpty ||
@@ -1916,7 +1942,7 @@ class _ProfilePageState extends State<ProfilePage>
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: updateProfile,
+                    onPressed: _isSaving ? null : _saveProfile,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.redAccent,
                       foregroundColor: Colors.white,
@@ -1925,13 +1951,15 @@ class _ProfilePageState extends State<ProfilePage>
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Text(
-                      "Save Profile",
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child: _isSaving
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : Text(
+                            "Save Profile",
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
               ],

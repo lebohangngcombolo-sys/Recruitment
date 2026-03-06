@@ -735,7 +735,8 @@ class _JobFormDialogState extends State<JobFormDialog>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please fix the errors in the form (e.g. Job Title, Description).'),
+            content: Text(
+                'Please fix the errors in the form (e.g. Job Title, Description).'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -774,7 +775,8 @@ class _JobFormDialogState extends State<JobFormDialog>
         .toList();
 
     final normalizedQuestions = _normalizeQuestions(questions);
-    final totalWeight = (weightings["cv"] ?? 0) + (weightings["assessment"] ?? 0);
+    final totalWeight =
+        (weightings["cv"] ?? 0) + (weightings["assessment"] ?? 0);
     if (totalWeight != 100) {
       setState(() => weightingsError =
           "Weightings must total 100% (current: $totalWeight%)");
@@ -874,796 +876,320 @@ class _JobFormDialogState extends State<JobFormDialog>
             children: [
               TabBar(
                 controller: _tabController,
-              tabs: const [
-                Tab(text: "Job Details"),
-                Tab(text: "Assessment"),
-              ],
-              labelColor: Colors.redAccent,
-              unselectedLabelColor: themeProvider.isDarkMode
-                  ? Colors.grey.shade400
-                  : Colors.black54,
-              indicatorColor: Colors.redAccent,
-              indicatorWeight: 3,
-            ),
+                tabs: const [
+                  Tab(text: "Job Details"),
+                  Tab(text: "Assessment"),
+                ],
+                labelColor: Colors.redAccent,
+                unselectedLabelColor: themeProvider.isDarkMode
+                    ? Colors.grey.shade400
+                    : Colors.black54,
+                indicatorColor: Colors.redAccent,
+                indicatorWeight: 3,
+              ),
 
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  // Job Details Tab
-                  Container(
-                    color: (themeProvider.isDarkMode
-                            ? const Color(0xFF1A1A2E)
-                            : Colors.white)
-                        .withValues(alpha: 0.95),
-                    child: SingleChildScrollView(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.work,
-                                    color: Colors.redAccent, size: 24),
-                                const SizedBox(width: 12),
-                                Text(
-                                  "Basic Job Information",
-                                  style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: CustomTextField(
-                                    label: "Job Title",
-                                    initialValue: title,
-                                    hintText: "Enter job title",
-                                    onChanged: (v) => title = v,
-                                    validator: (v) => v == null || v.isEmpty
-                                        ? "Enter job title"
-                                        : null,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                IconButton.filled(
-                                  onPressed: _generatingJobDetails
-                                      ? null
-                                      : _generateJobDetailsWithAI,
-                                  icon: _generatingJobDetails
-                                      ? SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.redAccent,
-                                          ),
-                                        )
-                                      : const Icon(Icons.auto_awesome),
-                                  tooltip:
-                                      _generatingJobDetails
-                                          ? "Generating…"
-                                          : "Generate job details from title (AI)",
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-                            Card(
-                              elevation: 4,
-                              shadowColor: Colors.black26,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              color: (themeProvider.isDarkMode
-                                      ? const Color(0xFF1A1A2E)
-                                      : Colors.white)
-                                  .withValues(alpha: 0.95),
-                              child: Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(Icons.assignment,
-                                            color: Colors.orangeAccent,
-                                            size: 24),
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          "Job Requirements",
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.white
-                                                : Colors.black87,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 20),
-                                    CustomTextField(
-                                      label: "Responsibilities",
-                                      controller: responsibilitiesController,
-                                      hintText:
-                                          "Bullet points of key responsibilities",
-                                      maxLines: 4,
-                                      expands: false,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    CustomTextField(
-                                      label: "Qualifications",
-                                      controller: qualificationsController,
-                                      hintText:
-                                          "Bullet points of required qualifications",
-                                      maxLines: 4,
-                                      expands: false,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    CustomTextField(
-                                      label: "Required Skills",
-                                      controller: skillsController,
-                                      hintText:
-                                          "Bullet points of essential skills",
-                                      maxLines: 3,
-                                      expands: false,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    CustomTextField(
-                                      label: "Minimum Experience (years)",
-                                      controller: minExpController,
-                                      inputType: TextInputType.number,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    CustomTextField(
-                                      label:
-                                          "Application deadline (YYYY-MM-DD)",
-                                      controller: applicationDeadlineController,
-                                      hintText: "e.g. 2025-12-31",
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-
-                            // Company Information Section
-                            Card(
-                              elevation: 4,
-                              shadowColor: Colors.black26,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              color: (themeProvider.isDarkMode
-                                      ? const Color(0xFF1A1A2E)
-                                      : Colors.white)
-                                  .withValues(alpha: 0.95),
-                              child: Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(Icons.business,
-                                            color: Colors.greenAccent,
-                                            size: 24),
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          "Company Information",
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.white
-                                                : Colors.black87,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 20),
-                                    CustomTextField(
-                                      label: "Description",
-                                      controller: descriptionController,
-                                      hintText: "Enter job description",
-                                      maxLines: 5,
-                                      expands: false,
-                                      onChanged: (v) => description = v,
-                                      validator: (v) => v == null || v.isEmpty
-                                          ? "Enter description"
-                                          : null,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    CustomTextField(
-                                      label: "Company Details",
-                                      controller: companyDetailsController,
-                                      hintText: "About the company",
-                                      maxLines: 4,
-                                      expands: false,
-                                      onChanged: (v) => companyDetails = v,
-                                    ),
-                                    const SizedBox(height: 20),
-                                    DropdownButtonFormField<String>(
-                                      value: category.isEmpty ? null : category,
-                                      decoration: const InputDecoration(
-                                        labelText: "Category",
-                                      ),
-                                      items: categoryOptions
-                                          .map((cat) => DropdownMenuItem(
-                                                value: cat,
-                                                child: Text(cat),
-                                              ))
-                                          .toList(),
-                                      onChanged: (value) => setState(
-                                          () => category = value ?? ''),
-                                    ),
-                                    const SizedBox(height: 24),
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        "Salary",
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: CustomTextField(
-                                            label: "Salary Min",
-                                            controller: salaryMinController,
-                                            inputType: TextInputType.number,
-                                            hintText: "e.g. 30000",
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: CustomTextField(
-                                            label: "Salary Max",
-                                            controller: salaryMaxController,
-                                            inputType: TextInputType.number,
-                                            hintText: "e.g. 45000",
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: CustomTextField(
-                                            label: "Currency",
-                                            initialValue: salaryCurrency,
-                                            hintText: "ZAR, USD, EUR",
-                                            onChanged: (v) {
-                                              setState(() {
-                                                salaryCurrency =
-                                                    v.isEmpty ? "ZAR" : v;
-                                              });
-                                            },
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child:
-                                              DropdownButtonFormField<String>(
-                                            value: salaryPeriod,
-                                            decoration: InputDecoration(
-                                              labelText: "Period",
-                                              border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                              ),
-                                            ),
-                                            items: const [
-                                              DropdownMenuItem(
-                                                value: "monthly",
-                                                child: Text("Per month"),
-                                              ),
-                                              DropdownMenuItem(
-                                                value: "yearly",
-                                                child: Text("Per year"),
-                                              ),
-                                            ],
-                                            onChanged: (value) {
-                                              if (value != null) {
-                                                setState(
-                                                    () => salaryPeriod = value);
-                                              }
-                                            },
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-
-                            // Assessment Configuration Section
-                            Card(
-                              elevation: 4,
-                              shadowColor: Colors.black26,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              color: (themeProvider.isDarkMode
-                                      ? const Color(0xFF1A1A2E)
-                                      : Colors.white)
-                                  .withValues(alpha: 0.95),
-                              child: Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(Icons.assessment,
-                                            color: Colors.blueAccent, size: 24),
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          "Assessment Configuration",
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.white
-                                                : Colors.black87,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 20),
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        "Evaluation weightings (must total 100%)",
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    WeightingConfigurationWidget(
-                                      weightings: weightings,
-                                      errorText: weightingsError,
-                                      onChanged: (updated) {
-                                        setState(() {
-                                          weightings = updated;
-                                          final total = updated.values
-                                              .fold<int>(0, (a, b) => a + b);
-                                          weightingsError = total == 100
-                                              ? null
-                                              : "Weightings must total 100%";
-                                        });
-                                      },
-                                    ),
-                                    const SizedBox(height: 20),
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        "Knockout rules",
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    KnockoutRulesBuilder(
-                                      rules: knockoutRules,
-                                      onChanged: (updated) {
-                                        setState(() => knockoutRules = updated);
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Use a test pack or create custom questions
-                        Text(
-                          "Assessment",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: themeProvider.isDarkMode
-                                ? Colors.grey.shade300
-                                : Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Radio<bool>(
-                              value: true,
-                              groupValue: _useTestPack,
-                              onChanged: (v) =>
-                                  setState(() => _useTestPack = true),
-                              activeColor: Colors.redAccent,
-                            ),
-                            const Text("Use a test pack"),
-                            const SizedBox(width: 24),
-                            Radio<bool>(
-                              value: false,
-                              groupValue: _useTestPack,
-                              onChanged: (v) => setState(() {
-                                _useTestPack = false;
-                                _testPackId = null;
-                              }),
-                              activeColor: Colors.redAccent,
-                            ),
-                            const Text("Create custom questions"),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        if (_useTestPack) ...[
-                          if (_loadingTestPacks)
-                            const Padding(
-                              padding: EdgeInsets.all(16),
-                              child: Center(
-                                  child: CircularProgressIndicator(
-                                      color: Colors.redAccent)),
-                            )
-                          else
-                            DropdownButtonFormField<int?>(
-                              value: _testPackId,
-                              decoration: InputDecoration(
-                                labelText: "Select test pack",
-                                border: const OutlineInputBorder(),
-                                labelStyle: TextStyle(
-                                  color: themeProvider.isDarkMode
-                                      ? Colors.grey.shade400
-                                      : Colors.black87,
-                                ),
-                              ),
-                              dropdownColor: themeProvider.isDarkMode
-                                  ? const Color(0xFF14131E)
-                                  : Colors.white,
-                              items: [
-                                const DropdownMenuItem<int?>(
-                                  value: null,
-                                  child: Text("None"),
-                                ),
-                                ..._testPacks.map(
-                                  (p) => DropdownMenuItem<int?>(
-                                    value: p.id,
-                                    child: Text(
-                                      "${p.name} (${p.category}) – ${p.questionCount} questions",
-                                      style: TextStyle(
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    // Job Details Tab
+                    Container(
+                      color: (themeProvider.isDarkMode
+                              ? const Color(0xFF1A1A2E)
+                              : Colors.white)
+                          .withValues(alpha: 0.95),
+                      child: SingleChildScrollView(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.work,
+                                      color: Colors.redAccent, size: 24),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    "Basic Job Information",
+                                    style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
                                         color: themeProvider.isDarkMode
                                             ? Colors.white
-                                            : Colors.black87,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              onChanged: (v) {
-                                setState(() {
-                                  _testPackId = v;
-                                  _cherryPickSelected = [];
-                                  if (v != null) {
-                                    for (final p in _testPacks) {
-                                      if (p.id == v) {
-                                        _cherryPickSelected = List.filled(
-                                            p.questions.length, true);
-                                        break;
-                                      }
-                                    }
-                                  }
-                                });
-                              },
-                            ),
-                          const SizedBox(height: 16),
-                          if (_testPackId != null) ...[
-                            _buildCherryPickSection(themeProvider),
-                          ],
-                          if (_testPackId != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                "Questions will be taken from the selected pack when candidates apply.",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: themeProvider.isDarkMode
-                                      ? Colors.grey.shade400
-                                      : Colors.black54,
-                                ),
-                              ),
-                            ),
-                        ],
-                        if (!_useTestPack) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                "Assessment Questions",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: themeProvider.isDarkMode
-                                      ? Colors.white
-                                      : Colors.black87,
-                                ),
-                              ),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      color:
-                                          Colors.green.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.green),
-                                    ),
-                                    child: IconButton(
-                                      icon: const Icon(Icons.psychology,
-                                          color: Colors.green),
-                                      onPressed: _showAIQuestionDialog,
-                                      tooltip: "Generate AI Questions",
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.blue.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.blue),
-                                    ),
-                                    child: IconButton(
-                                      icon: const Icon(Icons.save_alt,
-                                          color: Colors.blue),
-                                      onPressed: _saveAsTestPack,
-                                      tooltip: "Save as Test Pack",
-                                    ),
+                                            : Colors.black87),
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-                        Expanded(
-                          child: ListView.builder(
-                            itemCount: questions.length,
-                            itemBuilder: (_, index) {
-                              final q = questions[index];
-                              return Card(
+                              const SizedBox(height: 20),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: CustomTextField(
+                                      label: "Job Title",
+                                      initialValue: title,
+                                      hintText: "Enter job title",
+                                      onChanged: (v) => title = v,
+                                      validator: (v) => v == null || v.isEmpty
+                                          ? "Enter job title"
+                                          : null,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton.filled(
+                                    onPressed: _generatingJobDetails
+                                        ? null
+                                        : _generateJobDetailsWithAI,
+                                    icon: _generatingJobDetails
+                                        ? SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.redAccent,
+                                            ),
+                                          )
+                                        : const Icon(Icons.auto_awesome),
+                                    tooltip: _generatingJobDetails
+                                        ? "Generating…"
+                                        : "Generate job details from title (AI)",
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              Card(
+                                elevation: 4,
+                                shadowColor: Colors.black26,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
                                 color: (themeProvider.isDarkMode
-                                        ? const Color(0xFF14131E)
+                                        ? const Color(0xFF1A1A2E)
                                         : Colors.white)
-                                    .withValues(alpha: 0.9),
-                                margin: const EdgeInsets.symmetric(vertical: 8),
+                                    .withValues(alpha: 0.95),
                                 child: Padding(
-                                  padding: const EdgeInsets.all(16),
+                                  padding: const EdgeInsets.all(20),
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      // Question Header
                                       Row(
                                         children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: Colors.blue
-                                                  .withValues(alpha: 0.1),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              border: Border.all(
-                                                  color: Colors.blue
-                                                      .withValues(alpha: 0.3)),
-                                            ),
-                                            child: Text(
-                                              "Question ${index + 1}",
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.blue,
-                                              ),
-                                            ),
-                                          ),
-                                          const Spacer(),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: Colors.orange
-                                                  .withValues(alpha: 0.1),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              border: Border.all(
-                                                  color: Colors.orange
-                                                      .withValues(alpha: 0.3)),
-                                            ),
-                                            child: Text(
-                                              "Weight: ${q["weight"] ?? 1}",
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.orange,
-                                              ),
+                                          Icon(Icons.assignment,
+                                              color: Colors.orangeAccent,
+                                              size: 24),
+                                          const SizedBox(width: 12),
+                                          Text(
+                                            "Job Requirements",
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black87,
                                             ),
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 12),
-
-                                      // Question Field
+                                      const SizedBox(height: 20),
                                       CustomTextField(
-                                        label: "Question",
-                                        initialValue: q["question"],
-                                        hintText: "Enter your question here",
+                                        label: "Responsibilities",
+                                        controller: responsibilitiesController,
+                                        hintText:
+                                            "Bullet points of key responsibilities",
+                                        maxLines: 4,
+                                        expands: false,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      CustomTextField(
+                                        label: "Qualifications",
+                                        controller: qualificationsController,
+                                        hintText:
+                                            "Bullet points of required qualifications",
+                                        maxLines: 4,
+                                        expands: false,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      CustomTextField(
+                                        label: "Required Skills",
+                                        controller: skillsController,
+                                        hintText:
+                                            "Bullet points of essential skills",
                                         maxLines: 3,
                                         expands: false,
-                                        onChanged: (v) => q["question"] = v,
                                       ),
                                       const SizedBox(height: 16),
+                                      CustomTextField(
+                                        label: "Minimum Experience (years)",
+                                        controller: minExpController,
+                                        inputType: TextInputType.number,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      CustomTextField(
+                                        label:
+                                            "Application deadline (YYYY-MM-DD)",
+                                        controller:
+                                            applicationDeadlineController,
+                                        hintText: "e.g. 2025-12-31",
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
 
-                                      // Options Section
-                                      Text(
-                                        "Answer Options",
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
+                              // Company Information Section
+                              Card(
+                                elevation: 4,
+                                shadowColor: Colors.black26,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                color: (themeProvider.isDarkMode
+                                        ? const Color(0xFF1A1A2E)
+                                        : Colors.white)
+                                    .withValues(alpha: 0.95),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(Icons.business,
+                                              color: Colors.greenAccent,
+                                              size: 24),
+                                          const SizedBox(width: 12),
+                                          Text(
+                                            "Company Information",
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 20),
+                                      CustomTextField(
+                                        label: "Description",
+                                        controller: descriptionController,
+                                        hintText: "Enter job description",
+                                        maxLines: 5,
+                                        expands: false,
+                                        onChanged: (v) => description = v,
+                                        validator: (v) => v == null || v.isEmpty
+                                            ? "Enter description"
+                                            : null,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      CustomTextField(
+                                        label: "Company Details",
+                                        controller: companyDetailsController,
+                                        hintText: "About the company",
+                                        maxLines: 4,
+                                        expands: false,
+                                        onChanged: (v) => companyDetails = v,
+                                      ),
+                                      const SizedBox(height: 20),
+                                      DropdownButtonFormField<String>(
+                                        value:
+                                            category.isEmpty ? null : category,
+                                        decoration: const InputDecoration(
+                                          labelText: "Category",
+                                        ),
+                                        items: categoryOptions
+                                            .map((cat) => DropdownMenuItem(
+                                                  value: cat,
+                                                  child: Text(cat),
+                                                ))
+                                            .toList(),
+                                        onChanged: (value) => setState(
+                                            () => category = value ?? ''),
+                                      ),
+                                      const SizedBox(height: 24),
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          "Salary",
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
                                         ),
                                       ),
-                                      const SizedBox(height: 8),
-                                      ...List.generate(4, (i) {
-                                        return Padding(
-                                          padding:
-                                              const EdgeInsets.only(bottom: 12),
-                                          child: Row(
-                                            children: [
-                                              // Option Indicator
-                                              Container(
-                                                width: 32,
-                                                height: 32,
-                                                decoration: BoxDecoration(
-                                                  color: q["answer"] == i
-                                                      ? Colors.green.withValues(
-                                                          alpha: 0.2)
-                                                      : Colors.grey.withValues(
-                                                          alpha: 0.1),
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                  border: Border.all(
-                                                    color: q["answer"] == i
-                                                        ? Colors.green
-                                                        : Colors.grey
-                                                            .withValues(
-                                                                alpha: 0.3),
-                                                    width: q["answer"] == i
-                                                        ? 2
-                                                        : 1,
-                                                  ),
-                                                ),
-                                                child: Center(
-                                                  child: Text(
-                                                    String.fromCharCode(
-                                                        65 + i), // A, B, C, D
-                                                    style: TextStyle(
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      color: q["answer"] == i
-                                                          ? Colors.green
-                                                          : Colors
-                                                              .grey.shade600,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-
-                                              // Option Field
-                                              Expanded(
-                                                child: CustomTextField(
-                                                  label:
-                                                      "Option ${String.fromCharCode(65 + i)}",
-                                                  initialValue: q["options"][i],
-                                                  hintText:
-                                                      "Enter option ${String.fromCharCode(65 + i)}",
-                                                  maxLines: 2,
-                                                  expands: false,
-                                                  onChanged: (v) =>
-                                                      q["options"][i] = v,
-                                                ),
-                                              ),
-
-                                              // Correct Answer Indicator
-                                              IconButton(
-                                                onPressed: () => setState(
-                                                    () => q["answer"] = i),
-                                                icon: Icon(
-                                                  q["answer"] == i
-                                                      ? Icons.check_circle
-                                                      : Icons
-                                                          .radio_button_unchecked,
-                                                  color: q["answer"] == i
-                                                      ? Colors.green
-                                                      : Colors.grey.shade400,
-                                                ),
-                                                tooltip:
-                                                    "Mark as correct answer",
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      }),
-
-                                      const SizedBox(height: 16),
-
-                                      // Weight Field
+                                      const SizedBox(height: 12),
                                       Row(
                                         children: [
                                           Expanded(
                                             child: CustomTextField(
-                                              label: "Question Weight",
-                                              initialValue:
-                                                  q["weight"].toString(),
-                                              hintText: "Enter weight (1-10)",
+                                              label: "Salary Min",
+                                              controller: salaryMinController,
                                               inputType: TextInputType.number,
-                                              onChanged: (v) => q["weight"] =
-                                                  double.tryParse(v) ?? 1,
+                                              hintText: "e.g. 30000",
                                             ),
                                           ),
-                                          const SizedBox(width: 16),
-                                          Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.red
-                                                  .withValues(alpha: 0.1),
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              border: Border.all(
-                                                  color: Colors.red
-                                                      .withValues(alpha: 0.3)),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: CustomTextField(
+                                              label: "Salary Max",
+                                              controller: salaryMaxController,
+                                              inputType: TextInputType.number,
+                                              hintText: "e.g. 45000",
                                             ),
-                                            child: IconButton(
-                                              icon: const Icon(Icons.delete,
-                                                  color: Colors.red),
-                                              onPressed: () {
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: CustomTextField(
+                                              label: "Currency",
+                                              initialValue: salaryCurrency,
+                                              hintText: "ZAR, USD, EUR",
+                                              onChanged: (v) {
                                                 setState(() {
-                                                  questions.removeAt(index);
+                                                  salaryCurrency =
+                                                      v.isEmpty ? "ZAR" : v;
                                                 });
                                               },
-                                              tooltip: "Delete Question",
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child:
+                                                DropdownButtonFormField<String>(
+                                              value: salaryPeriod,
+                                              decoration: InputDecoration(
+                                                labelText: "Period",
+                                                border: OutlineInputBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                              ),
+                                              items: const [
+                                                DropdownMenuItem(
+                                                  value: "monthly",
+                                                  child: Text("Per month"),
+                                                ),
+                                                DropdownMenuItem(
+                                                  value: "yearly",
+                                                  child: Text("Per year"),
+                                                ),
+                                              ],
+                                              onChanged: (value) {
+                                                if (value != null) {
+                                                  setState(() =>
+                                                      salaryPeriod = value);
+                                                }
+                                              },
                                             ),
                                           ),
                                         ],
@@ -1671,45 +1197,540 @@ class _JobFormDialogState extends State<JobFormDialog>
                                     ],
                                   ),
                                 ),
-                              );
-                            },
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Assessment Configuration Section
+                              Card(
+                                elevation: 4,
+                                shadowColor: Colors.black26,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                color: (themeProvider.isDarkMode
+                                        ? const Color(0xFF1A1A2E)
+                                        : Colors.white)
+                                    .withValues(alpha: 0.95),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(Icons.assessment,
+                                              color: Colors.blueAccent,
+                                              size: 24),
+                                          const SizedBox(width: 12),
+                                          Text(
+                                            "Assessment Configuration",
+                                            style: TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 20),
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          "Evaluation weightings (must total 100%)",
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      WeightingConfigurationWidget(
+                                        weightings: weightings,
+                                        errorText: weightingsError,
+                                        onChanged: (updated) {
+                                          setState(() {
+                                            weightings = updated;
+                                            final total = updated.values
+                                                .fold<int>(0, (a, b) => a + b);
+                                            weightingsError = total == 100
+                                                ? null
+                                                : "Weightings must total 100%";
+                                          });
+                                        },
+                                      ),
+                                      const SizedBox(height: 20),
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          "Knockout rules",
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      KnockoutRulesBuilder(
+                                        rules: knockoutRules,
+                                        onChanged: (updated) {
+                                          setState(
+                                              () => knockoutRules = updated);
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        if (!_useTestPack) ...[
-                          const SizedBox(height: 12),
-                          CustomButton(
-                              text: "Add Question", onPressed: addQuestion),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ), // End of TabBarView
-            ),
-
-            Container(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      "Cancel",
-                      style: TextStyle(
-                        color: themeProvider.isDarkMode
-                            ? Colors.grey.shade400
-                            : Colors.black87,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  CustomButton(text: "Save Job", onPressed: saveJob),
-                ],
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Use a test pack or create custom questions
+                          Text(
+                            "Assessment",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.grey.shade300
+                                  : Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Radio<bool>(
+                                value: true,
+                                groupValue: _useTestPack,
+                                onChanged: (v) =>
+                                    setState(() => _useTestPack = true),
+                                activeColor: Colors.redAccent,
+                              ),
+                              const Text("Use a test pack"),
+                              const SizedBox(width: 24),
+                              Radio<bool>(
+                                value: false,
+                                groupValue: _useTestPack,
+                                onChanged: (v) => setState(() {
+                                  _useTestPack = false;
+                                  _testPackId = null;
+                                }),
+                                activeColor: Colors.redAccent,
+                              ),
+                              const Text("Create custom questions"),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          if (_useTestPack) ...[
+                            if (_loadingTestPacks)
+                              const Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Center(
+                                    child: CircularProgressIndicator(
+                                        color: Colors.redAccent)),
+                              )
+                            else
+                              DropdownButtonFormField<int?>(
+                                value: _testPackId,
+                                decoration: InputDecoration(
+                                  labelText: "Select test pack",
+                                  border: const OutlineInputBorder(),
+                                  labelStyle: TextStyle(
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade400
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                dropdownColor: themeProvider.isDarkMode
+                                    ? const Color(0xFF14131E)
+                                    : Colors.white,
+                                items: [
+                                  const DropdownMenuItem<int?>(
+                                    value: null,
+                                    child: Text("None"),
+                                  ),
+                                  ..._testPacks.map(
+                                    (p) => DropdownMenuItem<int?>(
+                                      value: p.id,
+                                      child: Text(
+                                        "${p.name} (${p.category}) – ${p.questionCount} questions",
+                                        style: TextStyle(
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.white
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                onChanged: (v) {
+                                  setState(() {
+                                    _testPackId = v;
+                                    _cherryPickSelected = [];
+                                    if (v != null) {
+                                      for (final p in _testPacks) {
+                                        if (p.id == v) {
+                                          _cherryPickSelected = List.filled(
+                                              p.questions.length, true);
+                                          break;
+                                        }
+                                      }
+                                    }
+                                  });
+                                },
+                              ),
+                            const SizedBox(height: 16),
+                            if (_testPackId != null) ...[
+                              _buildCherryPickSection(themeProvider),
+                            ],
+                            if (_testPackId != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  "Questions will be taken from the selected pack when candidates apply.",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade400
+                                        : Colors.black54,
+                                  ),
+                                ),
+                              ),
+                          ],
+                          if (!_useTestPack) ...[
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  "Assessment Questions",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color:
+                                            Colors.green.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.green),
+                                      ),
+                                      child: IconButton(
+                                        icon: const Icon(Icons.psychology,
+                                            color: Colors.green),
+                                        onPressed: _showAIQuestionDialog,
+                                        tooltip: "Generate AI Questions",
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color:
+                                            Colors.blue.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.blue),
+                                      ),
+                                      child: IconButton(
+                                        icon: const Icon(Icons.save_alt,
+                                            color: Colors.blue),
+                                        onPressed: _saveAsTestPack,
+                                        tooltip: "Save as Test Pack",
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: questions.length,
+                              itemBuilder: (_, index) {
+                                final q = questions[index];
+                                return Card(
+                                  color: (themeProvider.isDarkMode
+                                          ? const Color(0xFF14131E)
+                                          : Colors.white)
+                                      .withValues(alpha: 0.9),
+                                  margin:
+                                      const EdgeInsets.symmetric(vertical: 8),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // Question Header
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue
+                                                    .withValues(alpha: 0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                    color: Colors.blue
+                                                        .withValues(
+                                                            alpha: 0.3)),
+                                              ),
+                                              child: Text(
+                                                "Question ${index + 1}",
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.blue,
+                                                ),
+                                              ),
+                                            ),
+                                            const Spacer(),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.orange
+                                                    .withValues(alpha: 0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                    color: Colors.orange
+                                                        .withValues(
+                                                            alpha: 0.3)),
+                                              ),
+                                              child: Text(
+                                                "Weight: ${q["weight"] ?? 1}",
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.orange,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+
+                                        // Question Field
+                                        CustomTextField(
+                                          label: "Question",
+                                          initialValue: q["question"],
+                                          hintText: "Enter your question here",
+                                          maxLines: 3,
+                                          expands: false,
+                                          onChanged: (v) => q["question"] = v,
+                                        ),
+                                        const SizedBox(height: 16),
+
+                                        // Options Section
+                                        Text(
+                                          "Answer Options",
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        ...List.generate(4, (i) {
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                                bottom: 12),
+                                            child: Row(
+                                              children: [
+                                                // Option Indicator
+                                                Container(
+                                                  width: 32,
+                                                  height: 32,
+                                                  decoration: BoxDecoration(
+                                                    color: q["answer"] == i
+                                                        ? Colors.green
+                                                            .withValues(
+                                                                alpha: 0.2)
+                                                        : Colors.grey
+                                                            .withValues(
+                                                                alpha: 0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
+                                                    border: Border.all(
+                                                      color: q["answer"] == i
+                                                          ? Colors.green
+                                                          : Colors.grey
+                                                              .withValues(
+                                                                  alpha: 0.3),
+                                                      width: q["answer"] == i
+                                                          ? 2
+                                                          : 1,
+                                                    ),
+                                                  ),
+                                                  child: Center(
+                                                    child: Text(
+                                                      String.fromCharCode(
+                                                          65 + i), // A, B, C, D
+                                                      style: TextStyle(
+                                                        fontSize: 14,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: q["answer"] == i
+                                                            ? Colors.green
+                                                            : Colors
+                                                                .grey.shade600,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+
+                                                // Option Field
+                                                Expanded(
+                                                  child: CustomTextField(
+                                                    label:
+                                                        "Option ${String.fromCharCode(65 + i)}",
+                                                    initialValue: q["options"]
+                                                        [i],
+                                                    hintText:
+                                                        "Enter option ${String.fromCharCode(65 + i)}",
+                                                    maxLines: 2,
+                                                    expands: false,
+                                                    onChanged: (v) =>
+                                                        q["options"][i] = v,
+                                                  ),
+                                                ),
+
+                                                // Correct Answer Indicator
+                                                IconButton(
+                                                  onPressed: () => setState(
+                                                      () => q["answer"] = i),
+                                                  icon: Icon(
+                                                    q["answer"] == i
+                                                        ? Icons.check_circle
+                                                        : Icons
+                                                            .radio_button_unchecked,
+                                                    color: q["answer"] == i
+                                                        ? Colors.green
+                                                        : Colors.grey.shade400,
+                                                  ),
+                                                  tooltip:
+                                                      "Mark as correct answer",
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }),
+
+                                        const SizedBox(height: 16),
+
+                                        // Weight Field
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: CustomTextField(
+                                                label: "Question Weight",
+                                                initialValue:
+                                                    q["weight"].toString(),
+                                                hintText: "Enter weight (1-10)",
+                                                inputType: TextInputType.number,
+                                                onChanged: (v) => q["weight"] =
+                                                    double.tryParse(v) ?? 1,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 16),
+                                            Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.red
+                                                    .withValues(alpha: 0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                border: Border.all(
+                                                    color: Colors.red
+                                                        .withValues(
+                                                            alpha: 0.3)),
+                                              ),
+                                              child: IconButton(
+                                                icon: const Icon(Icons.delete,
+                                                    color: Colors.red),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    questions.removeAt(index);
+                                                  });
+                                                },
+                                                tooltip: "Delete Question",
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          if (!_useTestPack) ...[
+                            const SizedBox(height: 12),
+                            CustomButton(
+                                text: "Add Question", onPressed: addQuestion),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ), // End of TabBarView
               ),
-            ), // Closing Container
-          ], // Closing Column children
-        ),
+
+              Container(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        "Cancel",
+                        style: TextStyle(
+                          color: themeProvider.isDarkMode
+                              ? Colors.grey.shade400
+                              : Colors.black87,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    CustomButton(text: "Save Job", onPressed: saveJob),
+                  ],
+                ),
+              ), // Closing Container
+            ], // Closing Column children
+          ),
         ), // Form
       ),
     );
@@ -1760,25 +1781,104 @@ class _AIQuestionDialogState extends State<AIQuestionDialog> {
         questionCount: questionCount,
       );
 
-      widget.onQuestionsGenerated(questions);
-      Navigator.pop(context);
+      if (questions != null && questions.isNotEmpty) {
+        widget.onQuestionsGenerated(questions);
+        Navigator.pop(context);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Generated $questionCount questions successfully!"),
-          backgroundColor: Colors.green,
-        ),
-      );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Generated $questionCount questions successfully!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        // Fallback to manual question creation
+        _showManualQuestionDialog();
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Error generating questions: $e"),
-          backgroundColor: Colors.red,
-        ),
-      );
+      debugPrint('Error generating questions: $e');
+      _showErrorDialog(
+          'AI generation failed: $e. You can create questions manually.');
     } finally {
       setState(() => _isGenerating = false);
     }
+  }
+
+  void _showManualQuestionDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Create Questions Manually'),
+        content: Text(
+            'AI generation failed. Would you like to create questions manually?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _showManualQuestionForm();
+            },
+            child: Text('Create Manually'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showManualQuestionForm() {
+    // Implement manual question creation form
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Manual Question Creation'),
+        content: Text(
+            'Manual question creation form would go here. For now, using fallback questions.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              // Create fallback questions
+              final fallbackQuestions = _generateFallbackQuestions();
+              widget.onQuestionsGenerated(fallbackQuestions);
+              Navigator.pop(context);
+              Navigator.pop(context); // Close the manual form dialog too
+            },
+            child: Text('Use Fallback Questions'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _generateFallbackQuestions() {
+    return List.generate(
+        questionCount,
+        (index) => {
+              'id': 'fallback-$index',
+              'question':
+                  'Describe your approach to ${widget.jobTitle} task #${index + 1}.',
+              'type': 'text',
+              'difficulty': difficulty.toLowerCase(),
+              'points': 10,
+            });
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Error'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
