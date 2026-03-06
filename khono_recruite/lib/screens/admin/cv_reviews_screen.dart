@@ -69,6 +69,140 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
     });
   }
 
+  void _showMatchBreakdownDialog(
+      BuildContext context,
+      Map<String, dynamic> review,
+      ThemeProvider themeProvider) {
+    final parser = review['cv_parser_result'] is Map
+        ? Map<String, dynamic>.from(review['cv_parser_result'] as Map)
+        : <String, dynamic>{};
+    final missingSkills = List<String>.from(parser['missing_skills'] ?? []);
+    final suggestions = List<String>.from(parser['suggestions'] ?? []);
+    final matchScoreNum = parser['match_score'];
+    final recommendation = parser['recommendation'];
+    final knockoutViolations =
+        List<dynamic>.from(review['knockout_rule_violations'] ?? []);
+
+    final isDark = themeProvider.isDarkMode;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(
+          'CV match breakdown',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (matchScoreNum != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Match vs role: $matchScoreNum%',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white70 : Colors.black87,
+                    ),
+                  ),
+                ),
+              if (missingSkills.isNotEmpty) ...[
+                Text(
+                  'Missing skills',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: missingSkills
+                      .take(15)
+                      .map((s) => Chip(
+                            label: Text(s, style: GoogleFonts.inter(fontSize: 11)),
+                            backgroundColor: Colors.orange.withValues(alpha: 0.2),
+                            padding: EdgeInsets.zero,
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ))
+                      .toList(),
+                ),
+                const SizedBox(height: 12),
+              ],
+              if (suggestions.isNotEmpty) ...[
+                Text(
+                  'Suggestions',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ...suggestions.take(5).map((s) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        s.toString(),
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                    )),
+                const SizedBox(height: 12),
+              ],
+              if (recommendation != null &&
+                  recommendation.toString().trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Gaps / recommendation: $recommendation',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                      color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
+                    ),
+                  ),
+                ),
+              if (knockoutViolations.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Knockout (hold)',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.orange,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ...knockoutViolations.take(5).map((v) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        v.toString(),
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
+                        ),
+                      ),
+                    )),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -511,6 +645,56 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                               3),
                                                     ),
                                                   ],
+                                                ),
+                                                const SizedBox(height: 12),
+                                                // Role & Screening
+                                                Text(
+                                                  review['requisition_title']?.toString() ?? '—',
+                                                  style: GoogleFonts.inter(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: themeProvider.isDarkMode
+                                                        ? Colors.grey.shade400
+                                                        : Colors.grey.shade700,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                      horizontal: 8, vertical: 4),
+                                                  decoration: BoxDecoration(
+                                                    color: (review['screening_outcome']?.toString() ?? '')
+                                                            .toLowerCase()
+                                                            .contains('hold')
+                                                        ? Colors.orange.withValues(alpha: 0.2)
+                                                        : Colors.green.withValues(alpha: 0.2),
+                                                    borderRadius: BorderRadius.circular(8),
+                                                  ),
+                                                  child: Text(
+                                                    review['screening_outcome']?.toString() ?? 'Screened',
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.w600,
+                                                      color: themeProvider.isDarkMode
+                                                          ? Colors.white70
+                                                          : Colors.black87,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                TextButton.icon(
+                                                  onPressed: () => _showMatchBreakdownDialog(
+                                                      context, review, themeProvider),
+                                                  icon: const Icon(Icons.info_outline, size: 14),
+                                                  label: Text(
+                                                    'Match breakdown',
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w600,
+                                                    ),
+                                                  ),
                                                 ),
                                                 const SizedBox(height: 16),
 

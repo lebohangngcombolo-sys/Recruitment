@@ -1044,6 +1044,49 @@ def mark_notification_read(notification_id):
 
 
 
+def _build_cv_review_item(app):
+    """Build a single CV review payload for list_cv_reviews and list_all_cvs."""
+    candidate = None
+    cv_url = None
+    cv_parser = app.cv_parser_result or {}
+
+    if app.candidate_id:
+        candidate = Candidate.query.get(app.candidate_id)
+        cv_url = candidate.cv_url if candidate else None
+
+    requisition = app.requisition
+    has_knockout = bool(app.knockout_rule_violations and len(app.knockout_rule_violations) > 0)
+    screening_outcome = "Hold (knockout)" if has_knockout else "Screened"
+
+    return {
+        "application_id": app.id,
+        "requisition_id": app.requisition_id,
+        "requisition_title": requisition.title if requisition else None,
+        "status": app.status,
+        "resume_url": app.resume_url,
+        "cv_score": app.cv_score,
+        "cv_parser_result": {
+            "skills": cv_parser.get("skills", []),
+            "education": cv_parser.get("education", []),
+            "work_experience": cv_parser.get("work_experience", []),
+            "missing_skills": cv_parser.get("missing_skills", []),
+            "suggestions": cv_parser.get("suggestions", []),
+            "match_score": cv_parser.get("match_score"),
+            "recommendation": cv_parser.get("recommendation"),
+        },
+        "knockout_rule_violations": app.knockout_rule_violations or [],
+        "screening_outcome": screening_outcome,
+        "application_recommendation": app.recommendation,
+        "assessment_score": app.assessment_score,
+        "overall_score": app.overall_score,
+        "scoring_breakdown": app.scoring_breakdown or {},
+        "candidate_id": candidate.id if candidate else None,
+        "full_name": candidate.full_name if candidate else None,
+        "gender": candidate.gender if candidate else None,
+        "cv_url": cv_url,
+    }
+
+
 @admin_bp.route("/cv-reviews", methods=["GET", "OPTIONS"])
 @role_required(["admin", "hiring_manager", "hr"])
 @cross_origin()
@@ -1052,38 +1095,21 @@ def list_cv_reviews():
         return '', 200
 
     applications = Application.query.all()
-    reviews = []
-
-    for app in applications:
-        candidate = None
-        cv_url = None
-        cv_parser = app.cv_parser_result or {}
-
-        if app.candidate_id:
-            candidate = Candidate.query.get(app.candidate_id)
-            cv_url = candidate.cv_url if candidate else None
-
-        reviews.append({
-            "application_id": app.id,
-            "status": app.status,
-            "resume_url": app.resume_url,
-            "cv_score": app.cv_score,
-            "cv_parser_result": {
-                "skills": cv_parser.get("skills", []),
-                "education": cv_parser.get("education", []),
-                "work_experience": cv_parser.get("work_experience", []),
-            },
-            "application_recommendation": app.recommendation,
-            "assessment_score": app.assessment_score,
-            "overall_score": app.overall_score,
-
-            "candidate_id": candidate.id if candidate else None,
-            "full_name": candidate.full_name if candidate else None,
-            "gender": candidate.gender if candidate else None,
-            "cv_url": cv_url,
-        })
-
+    reviews = [_build_cv_review_item(app) for app in applications]
     return jsonify(reviews), 200
+
+
+@admin_bp.route("/cvs", methods=["GET", "OPTIONS"])
+@role_required(["admin", "hiring_manager", "hr"])
+@cross_origin()
+def list_all_cvs():
+    """List all applications with CV data (same shape as cv-reviews for All CVs tab)."""
+    if request.method == "OPTIONS":
+        return '', 200
+
+    applications = Application.query.all()
+    result = [_build_cv_review_item(app) for app in applications]
+    return jsonify(result), 200
 
 
 
@@ -4644,6 +4670,7 @@ def get_pipeline_stages_count():
         stages = [
             {"id": "screening", "name": "Screening", "icon": "filter_list", "color": "#4285F4"},
             {"id": "assessment", "name": "Assessment", "icon": "assessment", "color": "#FBBC04"},
+            {"id": "recommended", "name": "Recommended", "icon": "how_to_vote", "color": "#9C27B0"},
             {"id": "interview", "name": "Interview", "icon": "video_call", "color": "#34A853"},
             {"id": "offer", "name": "Offer", "icon": "work_outline", "color": "#EA4335"},
             {"id": "hired", "name": "Hired", "icon": "check_circle", "color": "#673AB7"},
@@ -4673,6 +4700,7 @@ def get_pipeline_stages_count():
 
             result.append({
                 **stage,
+                "stage_name": stage["name"],
                 "count": count or 0,
                 "percentage": 0
             })
@@ -4857,7 +4885,7 @@ def update_application_status(application_id):
             return jsonify({"error": "Status is required"}), 400
         
         # Validate status transition
-        valid_statuses = ['screening', 'assessment', 'interview', 'offer', 'hired', 'rejected']
+        valid_statuses = ['screening', 'assessment', 'recommended', 'interview', 'offer', 'hired', 'rejected']
         if new_status not in valid_statuses:
             return jsonify({
                 "error": f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
@@ -4898,20 +4926,28 @@ def update_application_status(application_id):
         
         db.session.commit()
         
-        # Audit log
+        # Audit log; lock snapshot when moving recommended -> interview for audit
         current_user_id = get_jwt_identity()
+        extra_data = {
+            "application_id": application_id,
+            "old_status": old_status,
+            "new_status": new_status,
+            "job_title": application.requisition.title if application.requisition else None,
+            "requisition_id": application.requisition_id
+        }
+        if old_status == "recommended" and new_status == "interview":
+            extra_data["locked_snapshot"] = {
+                "cv_score": application.cv_score,
+                "assessment_score": application.assessment_score,
+                "overall_score": application.overall_score,
+                "recommendation": application.recommendation,
+            }
         audit_entry = AuditLog(
             admin_id=current_user_id,
             action=f"Updated application status from {old_status} to {new_status}",
             target_user_id=application.candidate.user_id if application.candidate else None,
             details=f"Application {application_id} status updated",
-            extra_data={
-                "application_id": application_id,
-                "old_status": old_status,
-                "new_status": new_status,
-                "job_title": application.requisition.title if application.requisition else None,
-                "requisition_id": application.requisition_id
-            }
+            extra_data=extra_data
         )
         db.session.add(audit_entry)
         db.session.commit()

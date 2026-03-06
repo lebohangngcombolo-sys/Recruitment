@@ -153,6 +153,22 @@ class RecruitmentService {
     }
   }
 
+  Future<bool> updateApplicationRecommendation(
+      int applicationId, String recommendation) async {
+    try {
+      final response = await http.patch(
+        Uri.parse(ApiEndpoints.updateApplicationRecommendation(applicationId)),
+        headers: _headers,
+        body: jsonEncode({'recommendation': recommendation}),
+      );
+
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('Error updating application recommendation: $e');
+      return false;
+    }
+  }
+
   // ==================== REQUISITIONS/JOBS ====================
   Future<List<Map<String, dynamic>>> getRequisitions() async {
     try {

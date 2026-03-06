@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../services/recruitment_service.dart';
+import 'job_management.dart';
 
 class RecruitmentPipelinePage extends StatefulWidget {
   final String token;
@@ -191,6 +192,56 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
     } catch (e) {
       debugPrint('Error updating application status: $e');
       _showErrorSnackbar('Failed to update status');
+    }
+  }
+
+  Future<void> _handleRecommendationAction(
+      int applicationId, String action) async {
+    try {
+      String recommendation;
+      String? newStatus;
+      if (action == 'rec_proceed') {
+        recommendation = 'Proceed to Final Interview';
+        newStatus = 'interview';
+      } else if (action == 'rec_hold') {
+        recommendation = 'Hold';
+      } else if (action == 'rec_reject') {
+        recommendation = 'Reject';
+        newStatus = 'rejected';
+      } else {
+        return;
+      }
+      final recOk = await _recruitmentService.updateApplicationRecommendation(
+          applicationId, recommendation);
+      if (!recOk) {
+        _showErrorSnackbar('Failed to update recommendation');
+        return;
+      }
+      if (newStatus != null) {
+        final statusOk = await _recruitmentService.updateApplicationStatus(
+            applicationId, newStatus);
+        if (!statusOk) {
+          _showErrorSnackbar('Recommendation set; status update failed');
+          return;
+        }
+      }
+      _showSuccessSnackbar(
+          action == 'rec_proceed'
+              ? 'Moved to Final Interview'
+              : action == 'rec_hold'
+                  ? 'Recommendation set to Hold'
+                  : 'Rejected');
+      final index =
+          _applications.indexWhere((app) => app['id'] == applicationId);
+      if (index != -1) {
+        setState(() {
+          _applications[index]['recommendation'] = recommendation;
+          if (newStatus != null) _applications[index]['status'] = newStatus;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error in recommendation action: $e');
+      _showErrorSnackbar('Action failed');
     }
   }
 
@@ -519,9 +570,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             itemBuilder: (context) => [
               const PopupMenuItem(value: 'all', child: Text('All Candidates')),
               const PopupMenuItem(value: 'screening', child: Text('Screening')),
-              const PopupMenuItem(value: 'interview', child: Text('Interview')),
               const PopupMenuItem(
                   value: 'assessment', child: Text('Assessment')),
+              const PopupMenuItem(
+                  value: 'recommended', child: Text('Recommended')),
+              const PopupMenuItem(value: 'interview', child: Text('Interview')),
               const PopupMenuItem(value: 'offer', child: Text('Offer Stage')),
               const PopupMenuItem(value: 'hired', child: Text('Hired')),
               const PopupMenuItem(value: 'rejected', child: Text('Rejected')),
@@ -558,8 +611,12 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           // Add New Button
           ElevatedButton.icon(
             onPressed: () {
-              // Navigate to create requisition page
-              // Navigator.push(...);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => JobManagement(),
+                ),
+              ).then((_) => _loadInitialData());
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color.fromARGB(255, 135, 20, 20),
@@ -648,7 +705,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: _pipelineStages.map((stage) {
-                  final stageName = stage['stage_name'] ?? '';
+                  final stageName =
+                      stage['stage_name'] ?? stage['name'] ?? '';
                   final count = stage['count'] ?? 0;
                   final color = _getStageColor(stageName);
                   final icon = _getStageIcon(stageName);
@@ -667,6 +725,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                       'Screening', Icons.filter_list, 0, Colors.blue),
                   _buildPipelineStage(
                       'Assessment', Icons.assessment, 0, Colors.orange),
+                  _buildPipelineStage(
+                      'Recommended', Icons.how_to_vote, 0, Colors.deepPurple),
                   _buildPipelineStage(
                       'Interview', Icons.video_call, 0, Colors.purple),
                   _buildPipelineStage(
@@ -900,13 +960,24 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                   ),
                 ),
                 PopupMenuButton<String>(
-                  onSelected: (value) =>
-                      _updateApplicationStatus(app['id'], value),
+                  onSelected: (value) {
+                    if (value == 'rec_proceed' ||
+                        value == 'rec_hold' ||
+                        value == 'rec_reject') {
+                      _handleRecommendationAction(app['id'], value);
+                    } else {
+                      _updateApplicationStatus(app['id'], value);
+                    }
+                  },
                   itemBuilder: (context) => [
                     const PopupMenuItem(
                         value: 'screening', child: Text('Move to Screening')),
                     const PopupMenuItem(
-                        value: 'assessment', child: Text('Move to Assessment')),
+                        value: 'assessment',
+                        child: Text('Move to Assessment')),
+                    const PopupMenuItem(
+                        value: 'recommended',
+                        child: Text('Move to Recommended')),
                     const PopupMenuItem(
                         value: 'interview', child: Text('Move to Interview')),
                     const PopupMenuItem(
@@ -915,6 +986,14 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                         value: 'hired', child: Text('Mark as Hired')),
                     const PopupMenuItem(
                         value: 'rejected', child: Text('Reject')),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                        value: 'rec_proceed',
+                        child: Text('Proceed to Final Interview')),
+                    const PopupMenuItem(
+                        value: 'rec_hold', child: Text('Hold')),
+                    const PopupMenuItem(
+                        value: 'rec_reject', child: Text('Reject')),
                   ],
                   child: Icon(Icons.more_vert,
                       color: Colors.grey.shade500, size: 20),
@@ -1034,20 +1113,40 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               ),
               const SizedBox(width: 16),
               PopupMenuButton<String>(
-                onSelected: (value) =>
-                    _updateApplicationStatus(app['id'], value),
+                onSelected: (value) {
+                  if (value == 'rec_proceed' ||
+                      value == 'rec_hold' ||
+                      value == 'rec_reject') {
+                    _handleRecommendationAction(app['id'], value);
+                  } else {
+                    _updateApplicationStatus(app['id'], value);
+                  }
+                },
                 itemBuilder: (context) => [
                   const PopupMenuItem(
                       value: 'screening', child: Text('Move to Screening')),
                   const PopupMenuItem(
-                      value: 'assessment', child: Text('Move to Assessment')),
+                      value: 'assessment',
+                      child: Text('Move to Assessment')),
+                  const PopupMenuItem(
+                      value: 'recommended',
+                      child: Text('Move to Recommended')),
                   const PopupMenuItem(
                       value: 'interview', child: Text('Move to Interview')),
                   const PopupMenuItem(
                       value: 'offer', child: Text('Move to Offer')),
                   const PopupMenuItem(
                       value: 'hired', child: Text('Mark as Hired')),
-                  const PopupMenuItem(value: 'rejected', child: Text('Reject')),
+                  const PopupMenuItem(
+                      value: 'rejected', child: Text('Reject')),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(
+                      value: 'rec_proceed',
+                      child: Text('Proceed to Final Interview')),
+                  const PopupMenuItem(
+                      value: 'rec_hold', child: Text('Hold')),
+                  const PopupMenuItem(
+                      value: 'rec_reject', child: Text('Reject')),
                 ],
                 child: Icon(Icons.more_vert, color: Colors.grey.shade500),
               ),
@@ -1061,7 +1160,14 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildApplicationsBoard(List<Map<String, dynamic>> applications) {
-    final columns = ['screening', 'assessment', 'interview', 'offer', 'hired'];
+    final columns = [
+      'screening',
+      'assessment',
+      'recommended',
+      'interview',
+      'offer',
+      'hired'
+    ];
 
     return SizedBox(
       height: 600,
@@ -2296,6 +2402,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         return Colors.blue;
       case 'assessment':
         return Colors.orange;
+      case 'recommended':
+        return Colors.deepPurple;
       case 'interview':
         return Colors.purple;
       case 'offer':
@@ -2315,6 +2423,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         return Colors.blue;
       case 'assessment':
         return Colors.orange;
+      case 'recommended':
+        return Colors.deepPurple;
       case 'interview':
         return Colors.purple;
       case 'offer':
@@ -2332,6 +2442,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         return Icons.filter_list;
       case 'assessment':
         return Icons.assessment;
+      case 'recommended':
+        return Icons.how_to_vote;
       case 'interview':
         return Icons.video_call;
       case 'offer':
