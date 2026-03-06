@@ -8,6 +8,7 @@ import '../../services/candidate_service.dart';
 import '../../utils/api_endpoints.dart';
 import 'assessment_page.dart';
 import 'cv_upload_page.dart';
+import 'pick_interview_slot_page.dart';
 
 /// Display status for UI. Backend status is mapped to one of these.
 enum _DisplayStatus { inProgress, applied, interview, offer, rejected }
@@ -649,6 +650,46 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                                   style: GoogleFonts.poppins(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 15,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (assessmentDone && cvDone &&
+                              (app['interview_status']?.toString().toLowerCase() ?? '') != 'scheduled') ...[
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => PickInterviewSlotPage(
+                                        applicationId: app['application_id'] as int,
+                                        jobTitle: app['job_title']?.toString() ?? 'Interview',
+                                      ),
+                                    ),
+                                  ).then((_) {
+                                    _closeDrawer();
+                                    _fetchApplications();
+                                  });
+                                },
+                                icon: const Icon(Icons.event_available, size: 20, color: Color(0xFFC10D00)),
+                                label: Text(
+                                  'Pick a slot',
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
+                                    color: const Color(0xFFC10D00),
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFFC10D00),
+                                  side: const BorderSide(color: Color(0xFFC10D00)),
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
                                   ),
                                 ),
                               ),

@@ -66,6 +66,10 @@ class ApiEndpoints {
   static const submitAssessment = "$candidateBase/applications";
   static const uploadResume = "$candidateBase/upload_resume";
   static const getApplications = "$candidateBase/applications";
+  static String getApplicationInterviewSlots(int applicationId) =>
+      "$candidateBase/applications/$applicationId/interview-slots";
+  static String bookInterviewSlot(int applicationId) =>
+      "$candidateBase/applications/$applicationId/book-slot";
   static const getAvailableJobs = "$candidateBase/jobs";
   static const saveDraft = "$candidateBase/apply/save_draft";
   static const getDrafts = "$candidateBase/applications/drafts";
@@ -103,6 +107,11 @@ class ApiEndpoints {
 
   // ------------------- Interviews (calendar) -------------------
   static const getInterviewsForCalendar = "$adminBase/interviews/calendar";
+  static const getInterviewsAll = "$adminBase/interviews/all";
+  static const getInterviewSlots = "$adminBase/interview-slots";
+  static const getInterviewSlotsAvailable = "$adminBase/interview-slots/available";
+  static String rescheduleInterview(int id) => "$adminBase/interviews/reschedule/$id";
+  static String cancelInterview(int id) => "$adminBase/interviews/cancel/$id";
 
   // ------------------- Test packs -------------------
   static const getTestPacks = "$adminBase/test-packs";
@@ -154,14 +163,20 @@ class ApiEndpoints {
   static String getApplicationById(int id) => "$adminBase/applications/$id";
   static String getApplicationTimeline(int applicationId) =>
       "$adminBase/applications/$applicationId/timeline";
+  static String addApplicationTimelineNote(int applicationId) =>
+      "$adminBase/applications/$applicationId/timeline/notes";
   static String getCandidateApplicationsByCandidateId(int candidateId) =>
       "$adminBase/candidates/$candidateId/applications";
   static String shortlistCandidates(int jobId) =>
       "$adminBase/jobs/$jobId/shortlist";
+  /// GET – Export shortlist as CSV (returns file attachment)
+  static String shortlistExport(int jobId) =>
+      "$adminBase/jobs/$jobId/shortlist/export";
   static const scheduleInterview = "$adminBase/interviews";
+  static const interviewSlots = "$adminBase/interview-slots";
+  static const interviewSlotsAvailable = "$adminBase/interview-slots/available";
+  static String deleteInterviewSlot(int id) => "$adminBase/interview-slots/$id";
   static const getAllInterviews = "$adminBase/interviews";
-  static String cancelInterview(int interviewId) =>
-      "$adminBase/interviews/cancel/$interviewId";
   static const getNotifications = "$adminBase/notifications";
   static const auditLogs = "$adminBase/audits";
   /// Pipeline activity (application status changes) for HM audit trail / admin
@@ -181,11 +196,7 @@ class ApiEndpoints {
   static String getCandidateInterviews(int candidateId) =>
       "$adminBase/interviews?candidate_id=$candidateId";
 
-  /// PUT/PATCH – Reschedule an interview
-  static String rescheduleInterview(int interviewId) =>
-      "$adminBase/interviews/reschedule/$interviewId";
-
-  /// DELETE – Cancel an interview
+  /// DELETE – Cancel an interview (alias; use cancelInterview(id) or this for consistency with getInterviewEndpoints)
   static String cancelSingleInterview(int interviewId) =>
       "$adminBase/interviews/cancel/$interviewId";
 
@@ -330,6 +341,10 @@ class ApiEndpoints {
   static String deleteMeeting(int id) => "$adminBase/meetings/$id";
   static String cancelMeeting(int id) => "$adminBase/meetings/$id/cancel";
   static const getUpcomingMeetings = "$adminBase/meetings/upcoming";
+
+  // ------------------- Notification preferences (admin/HM: status changes, upcoming interviews) -------------------
+  static const getNotificationPreferences = "$adminBase/notification-preferences";
+  static const updateNotificationPreferences = "$adminBase/notification-preferences";
 
   // ------------------- Interview Calendar (Google Calendar) -------------------
   /// GET – Sync & compare upcoming interviews with Google Calendar
@@ -481,7 +496,7 @@ class ApiEndpoints {
   static const updateCandidateSettings = "$candidateBase/settings";
   static const changeCandidatePassword =
       "$candidateBase/settings/change_password";
-  static const updateNotificationPreferences =
+  static const updateCandidateNotificationPreferences =
       "$candidateBase/settings/notifications";
   static const deactivateCandidateAccount =
       "$candidateBase/settings/deactivate";

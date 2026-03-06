@@ -263,6 +263,49 @@ class CandidateService {
     }
   }
 
+  // ---------- SELF-SERVICE: INTERVIEW SLOTS (pick a slot) ----------
+  static Future<List<Map<String, dynamic>>> getApplicationInterviewSlots(
+      int applicationId, String token) async {
+    final response = await http.get(
+      Uri.parse(ApiEndpoints.getApplicationInterviewSlots(applicationId)),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    if (response.statusCode == 200) {
+      final data = _safeJsonDecode(response.body);
+      if (data is Map<String, dynamic>) {
+        final list = data['slots'];
+        if (list is List) {
+          return list
+              .map<Map<String, dynamic>>(
+                  (e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+        }
+      }
+      return [];
+    }
+    throw Exception('Failed to fetch slots: ${response.body}');
+  }
+
+  static Future<Map<String, dynamic>> bookInterviewSlot(
+      int applicationId, int slotId, String token) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.bookInterviewSlot(applicationId)),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({'slot_id': slotId}),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return Map<String, dynamic>.from(jsonDecode(response.body));
+    }
+    final err = _safeJsonDecode(response.body);
+    throw Exception(err is Map ? (err['error'] ?? response.body) : response.body);
+  }
+
   // ---------- GET MY INTERVIEWS (for dashboard scheduled count) ----------
   static Future<Map<String, dynamic>> getInterviews(String token) async {
     final response = await http.get(

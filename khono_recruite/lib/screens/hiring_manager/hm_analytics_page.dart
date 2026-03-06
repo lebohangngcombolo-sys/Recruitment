@@ -6,6 +6,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:syncfusion_flutter_charts/charts.dart';
 import '../../../constants/app_colors.dart';
 import '../../services/analytics_service.dart';
+import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
 import 'package:intl/intl.dart';
 import '../../utils/app_config.dart';
@@ -35,6 +36,16 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   List<Map<String, dynamic>> _assessmentTrend = [];
 
   String? _error;
+
+  // Shortlist & Recommendation section
+  final AdminService _admin = AdminService();
+  int? _shortlistJobId;
+  List<Map<String, dynamic>> _shortlistJobs = [];
+  List<Map<String, dynamic>> _shortlistCandidates = [];
+  bool _shortlistLoading = false;
+  bool _shortlistExporting = false;
+  bool _shortlistExportingCsv = false;
+  bool _shortlistJobsLoaded = false;
 
   // Same design system as CV review screen (light/dark)
   static const Color _kPrimary = Color(0xFFC10D00);
@@ -227,6 +238,87 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   void initState() {
     super.initState();
     _loadAllAnalytics();
+    _loadShortlistJobs();
+  }
+
+  static const List<String> _shortlistRecommendationOptions = [
+    'Proceed to Final Interview',
+    'Hold',
+    'Reject',
+  ];
+
+  Future<void> _loadShortlistJobs() async {
+    if (_shortlistJobsLoaded) return;
+    try {
+      final data = await _admin.listJobsEnhanced(status: 'active', perPage: 200);
+      final raw = (data['jobs'] as List<dynamic>?) ?? [];
+      final jobs = raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      if (mounted) {
+        setState(() {
+          _shortlistJobs = jobs;
+          _shortlistJobsLoaded = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _shortlistJobsLoaded = true);
+    }
+  }
+
+  Future<void> _loadShortlistForJob(int? jobId) async {
+    if (jobId == null) {
+      setState(() {
+        _shortlistJobId = null;
+        _shortlistCandidates = [];
+      });
+      return;
+    }
+    setState(() {
+      _shortlistJobId = jobId;
+      _shortlistLoading = true;
+    });
+    try {
+      final list = await _admin.shortlistCandidates(jobId);
+      if (mounted) {
+        setState(() {
+          _shortlistCandidates = List<Map<String, dynamic>>.from(
+              list.map((e) => Map<String, dynamic>.from(e as Map)));
+          _shortlistLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _shortlistCandidates = [];
+          _shortlistLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load shortlist: $e', style: GoogleFonts.poppins())),
+        );
+      }
+    }
+  }
+
+  Future<void> _setShortlistRecommendation(int applicationId, String value) async {
+    try {
+      await _admin.updateApplicationRecommendation(applicationId, value);
+      if (!mounted) return;
+      setState(() {
+        final idx = _shortlistCandidates.indexWhere(
+            (x) => (x['application_id'] ?? x['id']) == applicationId);
+        if (idx >= 0) _shortlistCandidates[idx]['recommendation'] = value;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Recommendation set to $value', style: GoogleFonts.poppins())),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to set recommendation: $e', style: GoogleFonts.poppins()), backgroundColor: Colors.redAccent),
+        );
+      }
+    }
   }
 
   Future<void> _loadAllAnalytics() async {
@@ -493,8 +585,337 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         }),
         const SizedBox(height: 24),
         _buildDetailedReports(),
+        const SizedBox(height: 32),
+        _buildShortlistAndRecommendationSection(),
       ],
     );
+  }
+
+  Widget _buildShortlistAndRecommendationSection() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : Colors.black87;
+
+    return _buildThemedCard(
+      Padding(
+        padding: const EdgeInsets.all(_kChartCardPadding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.people_alt_rounded, color: _kPrimary, size: _kChartIconSize),
+                const SizedBox(width: 12),
+                Text(
+                  'Shortlist & Recommendation',
+                  style: GoogleFonts.poppins(fontSize: _kChartTitleSize, fontWeight: FontWeight.bold, color: textColor),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                SizedBox(
+                  width: 280,
+                  child: DropdownButtonFormField<int?>(
+                    value: _shortlistJobId,
+                    decoration: InputDecoration(
+                      labelText: 'Job / Requisition',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    items: [
+                      const DropdownMenuItem<int?>(value: null, child: Text('Select a job')),
+                      ..._shortlistJobs.map((j) {
+                        final id = j['id'] as int?;
+                        final title = (j['title'] ?? j['job_title'] ?? 'Job #$id').toString();
+                        return DropdownMenuItem<int?>(value: id, child: Text(title, overflow: TextOverflow.ellipsis));
+                      }),
+                    ],
+                    onChanged: (v) {
+                      setState(() => _shortlistJobId = v);
+                      _loadShortlistForJob(v);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                FilledButton.icon(
+                  onPressed: _shortlistJobId == null || _shortlistLoading
+                      ? null
+                      : () => _loadShortlistForJob(_shortlistJobId),
+                  icon: _shortlistLoading
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.refresh, size: 18),
+                  label: Text(_shortlistLoading ? 'Loading…' : 'Refresh', style: GoogleFonts.poppins()),
+                  style: FilledButton.styleFrom(backgroundColor: _kPrimary, foregroundColor: Colors.white),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            if (_shortlistCandidates.isEmpty && !_shortlistLoading)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text(
+                    _shortlistJobId == null
+                        ? 'Select a job to view ranked shortlist and set recommendations.'
+                        : 'No shortlisted candidates for this job.',
+                    style: GoogleFonts.poppins(color: _textSecondary(context), fontSize: 14),
+                  ),
+                ),
+              )
+            else if (_shortlistCandidates.isNotEmpty) ...[
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  headingRowColor: WidgetStateProperty.all((isDark ? Colors.grey.shade900 : Colors.grey.shade200).withValues(alpha: 0.8)),
+                  columns: const [
+                    DataColumn(label: Text('Rank')),
+                    DataColumn(label: Text('Candidate')),
+                    DataColumn(label: Text('CV')),
+                    DataColumn(label: Text('Assessment')),
+                    DataColumn(label: Text('Overall')),
+                    DataColumn(label: Text('Recommendation')),
+                    DataColumn(label: Text('Action')),
+                  ],
+                  rows: List.generate(_shortlistCandidates.length, (i) {
+                    final c = _shortlistCandidates[i];
+                    final appId = c['application_id'] ?? c['id'];
+                    final rec = (c['recommendation'] ?? '').toString();
+                    final cvScore = c['cv_score'];
+                    final assessScore = c['assessment_score'];
+                    final overallScore = c['overall_score'];
+                    return DataRow(
+                      cells: [
+                        DataCell(Text('${i + 1}', style: GoogleFonts.poppins(fontSize: 12, color: textColor))),
+                        DataCell(Text((c['full_name'] ?? c['name'] ?? '—').toString(), style: GoogleFonts.poppins(fontSize: 12, color: textColor), overflow: TextOverflow.ellipsis)),
+                        DataCell(Text(_scoreStr(cvScore), style: GoogleFonts.poppins(fontSize: 12, color: textColor))),
+                        DataCell(Text(_scoreStr(assessScore), style: GoogleFonts.poppins(fontSize: 12, color: textColor))),
+                        DataCell(Text(_scoreStr(overallScore), style: GoogleFonts.poppins(fontSize: 12, color: textColor))),
+                        DataCell(Text(rec.isEmpty ? '—' : rec, style: GoogleFonts.poppins(fontSize: 11, color: textColor), overflow: TextOverflow.ellipsis)),
+                        DataCell(
+                          appId != null
+                              ? PopupMenuButton<String>(
+                                  padding: EdgeInsets.zero,
+                                  icon: Icon(Icons.more_vert, size: 20, color: textColor),
+                                  onSelected: (value) => _setShortlistRecommendation(appId as int, value),
+                                  itemBuilder: (context) => _shortlistRecommendationOptions
+                                      .map((opt) => PopupMenuItem(value: opt, child: Text(opt, style: GoogleFonts.poppins(fontSize: 12))))
+                                      .toList(),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    );
+                  }),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _shortlistExportingCsv ? null : _exportShortlistCsv,
+                    icon: _shortlistExportingCsv
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.table_chart_outlined, size: 20),
+                    label: Text(_shortlistExportingCsv ? 'Exporting…' : 'Export shortlist CSV', style: GoogleFonts.poppins()),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _kPrimary,
+                      side: const BorderSide(color: _kPrimary),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton.icon(
+                    onPressed: _shortlistExporting ? null : _exportShortlistPdf,
+                    icon: _shortlistExporting
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.picture_as_pdf_outlined, size: 20),
+                    label: Text(_shortlistExporting ? 'Exporting…' : 'Export shortlist PDF', style: GoogleFonts.poppins()),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _kPrimary,
+                      side: const BorderSide(color: _kPrimary),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _scoreStr(dynamic v) {
+    if (v == null) return '—';
+    if (v is num) return v.toStringAsFixed(0);
+    return v.toString();
+  }
+
+  static String _csvEscape(String s) {
+    if (s.contains(',') || s.contains('"') || s.contains('\n') || s.contains('\r')) {
+      return '"${s.replaceAll('"', '""')}"';
+    }
+    return s;
+  }
+
+  Future<void> _exportShortlistCsv() async {
+    if (_shortlistJobId == null || _shortlistCandidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Select a job and load shortlist first.', style: GoogleFonts.poppins())),
+      );
+      return;
+    }
+    setState(() => _shortlistExportingCsv = true);
+    try {
+      const header = 'Rank,Candidate,Email,CV Score,Assessment Score,Overall Score,Status,Recommendation';
+      final rows = _shortlistCandidates.asMap().entries.map((e) {
+        final i = e.key + 1;
+        final c = e.value;
+        final cv = c['cv_score'] != null ? (c['cv_score'] is num ? (c['cv_score'] as num).toString() : c['cv_score'].toString()) : '';
+        final assess = c['assessment_score'] != null ? (c['assessment_score'] is num ? (c['assessment_score'] as num).toString() : c['assessment_score'].toString()) : '';
+        final ov = c['overall_score'] != null ? (c['overall_score'] is num ? (c['overall_score'] as num).toString() : c['overall_score'].toString()) : '';
+        return '$i,${_csvEscape((c['full_name'] ?? c['name'] ?? '').toString())},${_csvEscape((c['email'] ?? '').toString())},$cv,$assess,$ov,${_csvEscape((c['status'] ?? '').toString())},${_csvEscape((c['recommendation'] ?? '').toString())}';
+      });
+      final csv = '$header\n${rows.join('\n')}';
+      final filename = 'shortlist_${_shortlistJobId}_${DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first}.csv';
+      await analytics_export.downloadShortlistCsv(context, csv, filename);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Shortlist CSV download started.', style: GoogleFonts.poppins())),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export failed: $e', style: GoogleFonts.poppins()), backgroundColor: Colors.redAccent),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _shortlistExportingCsv = false);
+    }
+  }
+
+  Future<Uint8List?> _buildShortlistPdfForJob() async {
+    if (_shortlistJobId == null || _shortlistCandidates.isEmpty) return null;
+    final match = _shortlistJobs.where((j) => j['id'] == _shortlistJobId).toList();
+    final jobTitle = match.isEmpty ? 'Job' : (match.first['title'] ?? match.first['job_title'] ?? 'Job').toString();
+    Uint8List headerBytes;
+    Uint8List footerBytes;
+    try {
+      headerBytes = (await rootBundle.load('assets/images/logo2.png')).buffer.asUint8List();
+      footerBytes = (await rootBundle.load('assets/images/logo.png')).buffer.asUint8List();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load logo images: $e', style: GoogleFonts.poppins())),
+        );
+      }
+      return null;
+    }
+    final headerImage = pw.MemoryImage(headerBytes);
+    final footerImage = pw.MemoryImage(footerBytes);
+    pw.ThemeData pdfTheme;
+    try {
+      final poppinsRegular = await rootBundle.load('assets/fonts/Poppins-Regular.ttf');
+      final poppinsBold = await rootBundle.load('assets/fonts/Poppins-Bold.ttf');
+      pdfTheme = pw.ThemeData.withFont(
+        base: pw.Font.ttf(Uint8List.fromList(poppinsRegular.buffer.asUint8List()).buffer.asByteData()),
+        bold: pw.Font.ttf(Uint8List.fromList(poppinsBold.buffer.asUint8List()).buffer.asByteData()),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load fonts: $e', style: GoogleFonts.poppins())),
+        );
+      }
+      return null;
+    }
+    final generatedOn = DateFormat('EEEE, d MMMM yyyy · HH:mm').format(DateTime.now());
+    final doc = pw.Document(theme: pdfTheme);
+    doc.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(24),
+        header: (pw.Context context) => pw.Container(
+          alignment: pw.Alignment.center,
+          margin: const pw.EdgeInsets.only(bottom: 12),
+          child: pw.Image(headerImage, width: 180, height: 56),
+        ),
+        footer: (pw.Context context) => pw.Container(
+          margin: const pw.EdgeInsets.only(top: 12),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Image(footerImage, width: 140, height: 42),
+              pw.Text('Page ${context.pageNumber + 1}', style: const pw.TextStyle(fontSize: 10)),
+            ],
+          ),
+        ),
+        build: (pw.Context context) {
+          return [
+            pw.Header(level: 0, text: 'Shortlist & Recommendation', textStyle: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 6),
+            pw.Paragraph(text: 'Report generated for: Hiring Committee · $jobTitle', style: const pw.TextStyle(fontSize: 10)),
+            pw.Paragraph(text: 'Generated on: $generatedOn', style: const pw.TextStyle(fontSize: 10)),
+            pw.SizedBox(height: 12),
+            pw.Table.fromTextArray(
+              context: context,
+              data: [
+                ['Rank', 'Candidate', 'Email', 'CV', 'Assessment', 'Overall', 'Status', 'Recommendation'],
+                ...List.generate(_shortlistCandidates.length, (i) {
+                  final c = _shortlistCandidates[i];
+                  final cv = _scoreStr(c['cv_score']);
+                  final assess = _scoreStr(c['assessment_score']);
+                  final ov = _scoreStr(c['overall_score']);
+                  return [
+                    '${i + 1}',
+                    (c['full_name'] ?? c['name'] ?? '—').toString(),
+                    (c['email'] ?? '—').toString(),
+                    cv,
+                    assess,
+                    ov,
+                    (c['status'] ?? '—').toString(),
+                    (c['recommendation'] ?? '—').toString(),
+                  ];
+                }),
+              ],
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+              cellStyle: const pw.TextStyle(fontSize: 9),
+            ),
+          ];
+        },
+      ),
+    );
+    return doc.save();
+  }
+
+  Future<void> _exportShortlistPdf() async {
+    if (_shortlistJobId == null || _shortlistCandidates.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Select a job and load shortlist first.', style: GoogleFonts.poppins())),
+      );
+      return;
+    }
+    setState(() => _shortlistExporting = true);
+    try {
+      final bytes = await _buildShortlistPdfForJob();
+      if (bytes == null || !mounted) return;
+      final filename = 'shortlist_${_shortlistJobId}_${DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first}.pdf';
+      analytics_export.downloadShortlistPdf(context, bytes, filename);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Shortlist PDF download started.', style: GoogleFonts.poppins())),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export failed: $e', style: GoogleFonts.poppins()), backgroundColor: Colors.redAccent),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _shortlistExporting = false);
+    }
   }
 
   // ---------------- Stylish Charts ----------------
@@ -1107,7 +1528,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
           }
           sections.add(pw.SizedBox(height: 16));
           sections.add(pw.Paragraph(
-            text: 'This report contains analytics only. Export shortlist from the Candidates screen.',
+            text: 'This report contains analytics only. Export shortlist (PDF or CSV) from the Shortlist & Recommendation section on this page.',
             style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
           ));
           return sections;

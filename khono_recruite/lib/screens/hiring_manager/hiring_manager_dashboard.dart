@@ -10,11 +10,13 @@ import '../notifications/notifications_screen.dart';
 import 'job_management.dart';
 import '../admin/interviews_list_screen.dart';
 import 'offer_list_screen.dart';
+import 'review_queue_screen.dart';
 import 'hm_analytics_page.dart';
 import 'hm_team_collaboration_page.dart';
 import 'hiring_manager_profile_screen.dart';
 import 'hiring_manager_settings_screen.dart';
 import 'pipeline_page.dart';
+import 'meeting_screen.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io';
 import 'dart:typed_data';
@@ -1017,11 +1019,23 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                   'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
                                   'CV Reviews', 'cv_reviews'),
                               _sidebarEntry(
+                                  Icons.account_tree,
+                                  'Pipeline', 'pipeline'),
+                              _sidebarEntry(
+                                  Icons.request_quote,
+                                  'Offers', 'offers'),
+                              _sidebarEntry(
+                                  Icons.pending_actions,
+                                  'Review queue', 'review_queue'),
+                              _sidebarEntry(
                                   'assets/icons/data-analytics.png',
                                   'Analytics', 'analytics'),
                               _sidebarEntry(
                                   'assets/icons/teamC.png',
                                   'Team Collaboration', 'team_collaboration'),
+                              _sidebarEntry(
+                                  Icons.video_call,
+                                  'Meetings', 'meetings'),
                               _sidebarEntry(
                                   'assets/images/Notification_Red_White.png',
                                   'Notifications', 'notifications'),
@@ -1131,7 +1145,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     contentPadding: const EdgeInsets.symmetric(
                                         vertical: 14, horizontal: 10),
                                   ),
-                                  onSubmitted: (query) {
+                                    onSubmitted: (query) {
                                     final q = query.toLowerCase();
                                     setState(() {
                                       if (q.contains('job')) {
@@ -1141,8 +1155,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                       } else if (q.contains('interview')) {
                                         currentScreen = "interviews";
                                       } else if (q.contains('pipeline')) {
-                                        // For now, treat pipeline as analytics view
-                                        currentScreen = "analytics";
+                                        currentScreen = "pipeline";
+                                      } else if (q.contains('offer')) {
+                                        currentScreen = "offers";
+                                      } else if (q.contains('meeting')) {
+                                        currentScreen = "meetings";
                                       } else if (q.contains('analytics') ||
                                           q.contains('report')) {
                                         currentScreen = "analytics";
@@ -1409,10 +1426,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         return const InterviewListScreen();
       case "cv_reviews":
         return CVReviewsScreen();
+      case "pipeline":
+        return RecruitmentPipelinePage(token: widget.token);
+      case "offers":
+        return AdminOfferListScreen(token: widget.token);
+      case "review_queue":
+        return const HiringManagerReviewQueueScreen();
       case "analytics":
         return HMAnalyticsPage();
       case "team_collaboration":
         return HMTeamCollaborationPage();
+      case "meetings":
+        return const HMMeetingsPage();
       case "notifications":
         return NotificationsScreen();
       case "settings":

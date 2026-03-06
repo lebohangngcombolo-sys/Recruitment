@@ -619,6 +619,40 @@ class Interview(db.Model):
         
         return feedback_stats
 
+
+# ------------------- INTERVIEW SLOT (HM availability for smart scheduling) -------------------
+class InterviewSlot(db.Model):
+    """Available time slots defined by hiring manager for interview scheduling."""
+    __tablename__ = 'interview_slots'
+    id = db.Column(db.Integer, primary_key=True)
+    hiring_manager_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    requisition_id = db.Column(db.Integer, db.ForeignKey('requisitions.id'), nullable=True)  # null = any job
+    start_time = db.Column(db.DateTime, nullable=False)
+    end_time = db.Column(db.DateTime, nullable=False)
+    meeting_link = db.Column(db.String(500), nullable=True)
+    interview_type = db.Column(db.String(50), default='Online')
+    interview_id = db.Column(db.Integer, db.ForeignKey('interviews.id'), nullable=True)  # set when booked
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    hiring_manager = db.relationship('User', backref='interview_slots')
+    requisition = db.relationship('Requisition', backref='interview_slots')
+    interview = db.relationship('Interview', backref=db.backref('interview_slot', uselist=False))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "hiring_manager_id": self.hiring_manager_id,
+            "requisition_id": self.requisition_id,
+            "start_time": self.start_time.isoformat() if self.start_time else None,
+            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "meeting_link": self.meeting_link,
+            "interview_type": self.interview_type,
+            "interview_id": self.interview_id,
+            "is_available": self.interview_id is None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 # ------------------- CV ANALYSIS -------------------
 class CVAnalysis(db.Model):
     __tablename__ = "cv_analyses"
