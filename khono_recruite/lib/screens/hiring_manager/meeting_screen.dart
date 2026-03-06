@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../constants/app_colors.dart';
 import '../../../providers/theme_provider.dart';
 import '../../services/admin_service.dart';
+import 'interview_slots_screen.dart';
 
 class HMMeetingsPage extends StatefulWidget {
   const HMMeetingsPage({super.key});
@@ -20,11 +21,53 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
   bool _isLoading = true;
   int _selectedTab = 0; // 0: Upcoming, 1: Past, 2: All
   String _searchQuery = '';
+  bool _notifyStatusChanges = true;
+  bool _notifyUpcomingInterviews = true;
+  bool _prefsLoading = false;
 
   @override
   void initState() {
     super.initState();
     _loadMeetings();
+    _loadNotificationPreferences();
+  }
+
+  Future<void> _loadNotificationPreferences() async {
+    setState(() => _prefsLoading = true);
+    try {
+      final prefs = await _apiService.getNotificationPreferences();
+      if (!mounted) return;
+      setState(() {
+        _notifyStatusChanges = prefs['status_changes'] as bool? ?? true;
+        _notifyUpcomingInterviews = prefs['upcoming_interviews'] as bool? ?? true;
+      });
+    } catch (_) {
+      // keep defaults
+    } finally {
+      if (mounted) setState(() => _prefsLoading = false);
+    }
+  }
+
+  Future<void> _updateNotificationPrefs({bool? statusChanges, bool? upcomingInterviews}) async {
+    try {
+      await _apiService.updateNotificationPreferences(
+        statusChanges: statusChanges ?? _notifyStatusChanges,
+        upcomingInterviews: upcomingInterviews ?? _notifyUpcomingInterviews,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (statusChanges != null) _notifyStatusChanges = statusChanges;
+        if (upcomingInterviews != null) _notifyUpcomingInterviews = upcomingInterviews;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Notification preferences saved')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save: $e'), backgroundColor: AppColors.primaryRed),
+      );
+    }
   }
 
   Future<void> _loadMeetings() async {
@@ -105,7 +148,11 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(themeProvider),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
+              _buildInterviewSlotsAndBookingLinks(themeProvider),
+              const SizedBox(height: 12),
+              _buildNotificationPreferences(themeProvider),
+              const SizedBox(height: 16),
               Expanded(child: _buildMeetingsSection(themeProvider)),
             ],
           ),
@@ -136,6 +183,110 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildInterviewSlotsAndBookingLinks(ThemeProvider themeProvider) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        ActionChip(
+          avatar: const Icon(Icons.schedule, size: 18, color: AppColors.primaryRed),
+          label: Text('Interview slots', style: GoogleFonts.inter()),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const InterviewSlotsPage()),
+          ),
+        ),
+        ActionChip(
+          avatar: const Icon(Icons.book_online, size: 18, color: AppColors.primaryRed),
+          label: Text('Self-service booking', style: GoogleFonts.inter()),
+          onPressed: () => showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text('Self-service booking', style: GoogleFonts.poppins()),
+              content: Text(
+                'Candidates can book interview times from the link sent in their interview email. '
+                'Add available slots in "Interview slots" so they can choose a time.',
+                style: GoogleFonts.inter(),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNotificationPreferences(ThemeProvider themeProvider) {
+    if (_prefsLoading) {
+      return const SizedBox(height: 32, child: Center(child: CircularProgressIndicator()));
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: themeProvider.isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Notifications',
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w600,
+              color: themeProvider.isDarkMode ? Colors.white : AppColors.textDark,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Status changes (e.g. interview scheduled, rescheduled)',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: themeProvider.isDarkMode ? Colors.grey.shade400 : AppColors.textGrey,
+                  ),
+                ),
+              ),
+              Switch(
+                value: _notifyStatusChanges,
+                onChanged: (v) => _updateNotificationPrefs(statusChanges: v),
+                activeColor: AppColors.primaryRed,
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Upcoming interviews (reminders)',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: themeProvider.isDarkMode ? Colors.grey.shade400 : AppColors.textGrey,
+                  ),
+                ),
+              ),
+              Switch(
+                value: _notifyUpcomingInterviews,
+                onChanged: (v) => _updateNotificationPrefs(upcomingInterviews: v),
+                activeColor: AppColors.primaryRed,
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 

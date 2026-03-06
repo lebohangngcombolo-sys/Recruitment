@@ -215,10 +215,12 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
           ),
         ),
         build: (pw.Context context) {
+          final reportFor = widget.jobId <= 0 ? 'Hiring Committee (all jobs)' : 'Hiring Committee';
           final rows = <pw.Widget>[
             pw.Header(level: 0, text: 'Shortlist / Candidates Report', textStyle: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 6),
-            pw.Paragraph(text: '$title · Generated on: $generatedOn', style: const pw.TextStyle(fontSize: 10)),
+            pw.Paragraph(text: 'Report generated for: $reportFor · $title', style: const pw.TextStyle(fontSize: 10)),
+            pw.Paragraph(text: 'Generated on: $generatedOn', style: const pw.TextStyle(fontSize: 10)),
             pw.SizedBox(height: 12),
           ];
           if (list.isEmpty) {

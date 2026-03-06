@@ -7,7 +7,7 @@ from app.extensions import bcrypt
 import cloudinary.uploader
 import cloudinary.utils
 from app.models import (
-    User, Candidate, Requisition, Application, AssessmentResult, Notification, AuditLog, CVAnalysis, Interview
+    User, Candidate, Requisition, Application, AssessmentResult, Notification, AuditLog, CVAnalysis, Interview, InterviewSlot
 )
 from datetime import datetime
 from werkzeug.utils import secure_filename
@@ -506,6 +506,112 @@ def get_applications():
         return jsonify(result)
     except Exception as e:
         current_app.logger.error(f"Get applications error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+# ----------------- SELF-SERVICE: INTERVIEW SLOTS (pick a slot) -----------------
+@candidate_bp.route("/applications/<int:application_id>/interview-slots", methods=["GET"])
+@role_required(["candidate"])
+def get_application_interview_slots(application_id):
+    """Get available interview slots for this application (same job / HM). Candidate must own the application."""
+    try:
+        application = Application.query.get_or_404(application_id)
+        candidate = Candidate.query.filter_by(user_id=get_jwt_identity()).first_or_404()
+        if application.candidate_id != candidate.id:
+            return jsonify({"error": "Unauthorized"}), 403
+        job = application.requisition
+        if not job:
+            return jsonify({"error": "Job not found"}), 404
+        hm_id = job.created_by
+        if not hm_id:
+            return jsonify({"slots": []}), 200
+        now = datetime.utcnow()
+        slots = InterviewSlot.query.filter(
+            InterviewSlot.hiring_manager_id == hm_id,
+            InterviewSlot.interview_id.is_(None),
+            InterviewSlot.start_time >= now,
+            (InterviewSlot.requisition_id == job.id) | (InterviewSlot.requisition_id.is_(None)),
+        ).order_by(InterviewSlot.start_time.asc()).all()
+        return jsonify({"slots": [s.to_dict() for s in slots]}), 200
+    except Exception as e:
+        current_app.logger.error(f"Get interview slots error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@candidate_bp.route("/applications/<int:application_id>/book-slot", methods=["POST"])
+@role_required(["candidate"])
+def book_interview_slot(application_id):
+    """Candidate self-service: book an available slot. Creates interview and updates application status."""
+    try:
+        application = Application.query.get_or_404(application_id)
+        candidate = Candidate.query.filter_by(user_id=get_jwt_identity()).first_or_404()
+        if application.candidate_id != candidate.id:
+            return jsonify({"error": "Unauthorized"}), 403
+        data = request.get_json() or {}
+        slot_id = data.get("slot_id")
+        if not slot_id:
+            return jsonify({"error": "slot_id required"}), 400
+        slot = InterviewSlot.query.get_or_404(slot_id)
+        if slot.interview_id is not None:
+            return jsonify({"error": "This slot is no longer available"}), 400
+        job = application.requisition
+        if not job or (slot.requisition_id is not None and slot.requisition_id != job.id):
+            return jsonify({"error": "Slot does not apply to this application"}), 400
+        if slot.hiring_manager_id != job.created_by:
+            return jsonify({"error": "Slot does not apply to this application"}), 400
+        if slot.start_time < datetime.utcnow():
+            return jsonify({"error": "This slot has passed"}), 400
+
+        interview = Interview(
+            candidate_id=candidate.id,
+            application_id=application.id,
+            hiring_manager_id=slot.hiring_manager_id,
+            scheduled_time=slot.start_time,
+            interview_type=slot.interview_type or "Online",
+            meeting_link=slot.meeting_link,
+        )
+        db.session.add(interview)
+        db.session.flush()
+        slot.interview_id = interview.id
+        if application.status not in ("hired", "rejected"):
+            application.status = "interview"
+        application.interview_status = "scheduled"
+        application.last_interview_date = slot.start_time
+
+        notif = Notification(
+            user_id=candidate.user_id,
+            message=f"Your interview has been scheduled for {slot.start_time.strftime('%Y-%m-%d %H:%M')}.",
+            type="interview",
+            interview_id=interview.id,
+        )
+        db.session.add(notif)
+        db.session.commit()
+
+        try:
+            from app.services.email_service import EmailService
+            EmailService.send_interview_invitation(
+                email=candidate.user.email if candidate.user else None,
+                candidate_name=candidate.full_name,
+                interview_date=slot.start_time.strftime("%A, %d %B %Y at %H:%M"),
+                interview_type=slot.interview_type or "Online",
+                meeting_link=slot.meeting_link,
+                calendar_link=None,
+            )
+        except Exception as e:
+            current_app.logger.warning(f"Book slot email failed: {e}")
+
+        return jsonify({
+            "message": "Interview scheduled successfully.",
+            "interview": {
+                "id": interview.id,
+                "scheduled_time": interview.scheduled_time.isoformat(),
+                "interview_type": interview.interview_type,
+                "meeting_link": interview.meeting_link,
+            },
+        }), 201
+    except Exception as e:
+        current_app.logger.error(f"Book slot error: {e}", exc_info=True)
+        db.session.rollback()
         return jsonify({"error": "Internal server error"}), 500
 
 
