@@ -21,6 +21,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   String searchQuery = '';
   String selectedGender = 'All';
   String selectedScoreFilter = 'All';
+  final Set<int> _expandedIds = {};
 
   @override
   void initState() {
@@ -121,6 +122,156 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
     if (score >= 70) return 'Excellent';
     if (score >= 50) return 'Good';
     return 'Needs Review';
+  }
+
+  Widget _buildMatchBreakdown(
+      Map<String, dynamic> review, ThemeProvider themeProvider) {
+    final parser = review['cv_parser_result'] is Map
+        ? Map<String, dynamic>.from(review['cv_parser_result'] as Map)
+        : <String, dynamic>{};
+    final missingSkills =
+        List<String>.from(parser['missing_skills'] ?? []);
+    final suggestions = List<String>.from(parser['suggestions'] ?? []);
+    final matchScore = parser['recommendation'];
+    final matchScoreNum = parser['match_score'];
+    final knockoutViolations =
+        List<dynamic>.from(review['knockout_rule_violations'] ?? []);
+
+    final isDark = themeProvider.isDarkMode;
+    final textColor = isDark ? Colors.white70 : Colors.black87;
+    final subColor = isDark ? Colors.white54 : Colors.black54;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(_kMainPadding),
+      margin: const EdgeInsets.symmetric(horizontal: _kMainPadding),
+      decoration: BoxDecoration(
+        color: isDark
+            ? _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity * 0.8)
+            : Colors.grey.shade50,
+        border: Border(
+          left: BorderSide(
+            color: _kPrimary.withValues(alpha: 0.6),
+            width: 3,
+          ),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'CV match breakdown',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: textColor,
+            ),
+          ),
+          const SizedBox(height: _kSmallGap),
+          if (matchScoreNum != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: _kSmallGap),
+              child: Row(
+                children: [
+                  Text(
+                    'Match vs role: ',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: subColor,
+                    ),
+                  ),
+                  Text(
+                    '${matchScoreNum != null ? matchScoreNum : '—'}%',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (missingSkills.isNotEmpty) ...[
+            Text(
+              'Missing skills',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: subColor,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: missingSkills
+                  .take(15)
+                  .map((s) => Chip(
+                        label: Text(
+                          s,
+                          style: GoogleFonts.poppins(fontSize: 11),
+                        ),
+                        backgroundColor: Colors.orange.withValues(alpha: 0.2),
+                        padding: EdgeInsets.zero,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: _kSmallGap),
+          ],
+          if (suggestions.isNotEmpty) ...[
+            Text(
+              'Suggestions',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: subColor,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ...suggestions.take(5).map((s) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    s.toString(),
+                    style: GoogleFonts.poppins(fontSize: 11, color: textColor),
+                  ),
+                )),
+            const SizedBox(height: _kSmallGap),
+          ],
+          if (matchScore != null && matchScore.toString().trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Gaps / recommendation: ${matchScore}',
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontStyle: FontStyle.italic,
+                  color: subColor,
+                ),
+              ),
+            ),
+          if (knockoutViolations.isNotEmpty) ...[
+            const SizedBox(height: _kSmallGap),
+            Text(
+              'Knockout (hold)',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.orange,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ...knockoutViolations.take(5).map((v) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    v is String ? v : v.toString(),
+                    style: GoogleFonts.poppins(fontSize: 11, color: subColor),
+                  ),
+                )),
+          ],
+        ],
+      ),
+    );
   }
 
   static const double _kTranslucentOpacity = 0.9;
@@ -560,6 +711,27 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                                 ? Colors.white70
                                                                 : Colors.black87))),
                                             ),
+                                            Expanded(
+                                                flex: 2,
+                                                child: Text('Role',
+                                                    style: GoogleFonts.poppins(
+                                                        fontWeight: FontWeight.w600,
+                                                        fontSize: 14,
+                                                        color: themeProvider.isDarkMode
+                                                            ? Colors.white70
+                                                            : Colors.black87)),
+                                            ),
+                                            Expanded(
+                                                flex: 1,
+                                                child: Center(
+                                                    child: Text('Screening',
+                                                        style: GoogleFonts.poppins(
+                                                            fontWeight: FontWeight.w600,
+                                                            fontSize: 14,
+                                                            color: themeProvider.isDarkMode
+                                                                ? Colors.white70
+                                                                : Colors.black87))),
+                                            ),
                                             const SizedBox(width: 100),
                                           ],
                                         ),
@@ -575,6 +747,9 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                           itemCount: displayedCVs.length,
                                           itemBuilder: (context, index) {
                                             final review = displayedCVs[index];
+                                            final appId = review['application_id'] as int? ?? review['application_id'];
+                                            final id = appId is int ? appId : index;
+                                            final isExpanded = _expandedIds.contains(id);
                                             final hasScore = review.containsKey('cv_score') &&
                                                 review['cv_score'] != null;
                                             final score = hasScore
@@ -582,168 +757,242 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                 : 0.0;
                                             final cvUrl = review['cv_url'] as String?;
                                             final isLast = index == displayedCVs.length - 1;
-                                            return Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                  horizontal: _kMainPadding, vertical: _kSmallGap),
-                                              decoration: BoxDecoration(
-                                                color: themeProvider.isDarkMode
-                                                    ? _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity)
-                                                    : Colors.white.withValues(alpha: _kCardOpacityLight),
-                                                borderRadius: isLast
-                                                    ? const BorderRadius.vertical(
-                                                        bottom: Radius.circular(_kCardRadius))
-                                                    : null,
-                                                border: isLast
-                                                    ? null
-                                                    : Border(
-                                                        bottom: BorderSide(
+                                            final screeningOutcome = review['screening_outcome'] as String? ?? 'Screened';
+                                            final requisitionTitle = review['requisition_title'] as String? ?? '—';
+                                            return Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(
+                                                      horizontal: _kMainPadding, vertical: _kSmallGap),
+                                                  decoration: BoxDecoration(
+                                                    color: themeProvider.isDarkMode
+                                                        ? _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity)
+                                                        : Colors.white.withValues(alpha: _kCardOpacityLight),
+                                                    borderRadius: isLast && !isExpanded
+                                                        ? const BorderRadius.vertical(
+                                                            bottom: Radius.circular(_kCardRadius))
+                                                        : null,
+                                                    border: isLast && !isExpanded
+                                                        ? null
+                                                        : Border(
+                                                            bottom: BorderSide(
+                                                              color: themeProvider.isDarkMode
+                                                                  ? Colors.white.withValues(alpha: 0.15)
+                                                                  : Colors.black.withValues(alpha: 0.12),
+                                                              width: 1,
+                                                            ),
+                                                          ),
+                                                  ),
+                                                  child: Row(
+                                                    children: [
+                                                      IconButton(
+                                                        icon: Icon(
+                                                          isExpanded ? Icons.expand_less : Icons.expand_more,
                                                           color: themeProvider.isDarkMode
-                                                              ? Colors.white.withValues(alpha: 0.15)
-                                                              : Colors.black.withValues(alpha: 0.12),
-                                                          width: 1,
+                                                              ? Colors.white70
+                                                              : Colors.black54,
+                                                          size: 20,
+                                                        ),
+                                                        onPressed: () => setState(() {
+                                                          if (isExpanded) {
+                                                            _expandedIds.remove(id);
+                                                          } else {
+                                                            _expandedIds.add(id);
+                                                          }
+                                                        }),
+                                                        padding: EdgeInsets.zero,
+                                                        constraints: const BoxConstraints(
+                                                            minWidth: 32, minHeight: 32),
+                                                      ),
+                                                      Expanded(
+                                                        flex: 2,
+                                                        child: Row(
+                                                          children: [
+                                                            Container(
+                                                              width: 36,
+                                                              height: 36,
+                                                              decoration: const BoxDecoration(
+                                                                shape: BoxShape.circle,
+                                                                color: _kPrimary,
+                                                              ),
+                                                              child: const Icon(
+                                                                Icons.person,
+                                                                color: Colors.white,
+                                                                size: 18,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(width: _kSmallGap),
+                                                            Expanded(
+                                                              child: Text(
+                                                                review['full_name'] ?? 'Unknown',
+                                                                style: GoogleFonts.poppins(
+                                                                  fontSize: 13,
+                                                                  fontWeight: FontWeight.w500,
+                                                                  color: themeProvider.isDarkMode
+                                                                      ? Colors.white
+                                                                      : Colors.black,
+                                                                ),
+                                                                maxLines: 1,
+                                                                overflow: TextOverflow.ellipsis,
+                                                              ),
+                                                            ),
+                                                          ],
                                                         ),
                                                       ),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  Expanded(
-                                                    flex: 2,
-                                                    child: Row(
-                                                      children: [
-                                                        Container(
-                                                          width: 36,
-                                                          height: 36,
-                                                          decoration: const BoxDecoration(
-                                                            shape: BoxShape.circle,
-                                                            color: _kPrimary,
-                                                          ),
-                                                          child: const Icon(
-                                                            Icons.person,
-                                                            color: Colors.white,
-                                                            size: 18,
+                                                      Expanded(
+                                                        flex: 1,
+                                                        child: Center(
+                                                          child: Container(
+                                                            padding: const EdgeInsets.symmetric(
+                                                                horizontal: 10, vertical: 6),
+                                                            decoration: BoxDecoration(
+                                                              color: _kPrimary.withValues(
+                                                                  alpha: (review['gender'] == null ||
+                                                                          review['gender'] == '' ||
+                                                                          review['gender'] == 'N/A')
+                                                                      ? _kCardAndHeaderOpacity
+                                                                      : _kTranslucentOpacity),
+                                                              borderRadius:
+                                                                  BorderRadius.circular(_kCardRadius),
+                                                            ),
+                                                            child: Text(
+                                                              review['gender'] ?? 'N/A',
+                                                              style: GoogleFonts.poppins(
+                                                                fontSize: 10,
+                                                                fontWeight: FontWeight.w600,
+                                                                color: Colors.white,
+                                                              ),
+                                                              textAlign: TextAlign.center,
+                                                              maxLines: 1,
+                                                              overflow: TextOverflow.ellipsis,
+                                                            ),
                                                           ),
                                                         ),
-                                                        const SizedBox(width: _kSmallGap),
-                                                        Expanded(
+                                                      ),
+                                                      Expanded(
+                                                        flex: 1,
+                                                        child: Center(
+                                                          child: Row(
+                                                            mainAxisSize: MainAxisSize.min,
+                                                            children: [
+                                                              Icon(
+                                                                hasScore ? Icons.star : Icons.star_border,
+                                                                color: themeProvider.isDarkMode
+                                                                    ? (hasScore ? Colors.white : Colors.white70)
+                                                                    : Colors.black,
+                                                                size: 16,
+                                                              ),
+                                                              const SizedBox(width: 4),
+                                                              Text(
+                                                                hasScore
+                                                                    ? '${score.toStringAsFixed(1)}%'
+                                                                    : '—',
+                                                                style: GoogleFonts.poppins(
+                                                                  fontSize: 12,
+                                                                  fontWeight: FontWeight.w600,
+                                                                  color: themeProvider.isDarkMode
+                                                                      ? (hasScore ? Colors.white : Colors.white70)
+                                                                      : Colors.black,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      Expanded(
+                                                        flex: 2,
+                                                        child: Tooltip(
+                                                          message: requisitionTitle,
                                                           child: Text(
-                                                            review['full_name'] ?? 'Unknown',
+                                                            requisitionTitle,
                                                             style: GoogleFonts.poppins(
-                                                              fontSize: 13,
-                                                              fontWeight: FontWeight.w500,
+                                                              fontSize: 12,
                                                               color: themeProvider.isDarkMode
-                                                                  ? Colors.white
-                                                                  : Colors.black,
+                                                                  ? Colors.white70
+                                                                  : Colors.black87,
                                                             ),
                                                             maxLines: 1,
                                                             overflow: TextOverflow.ellipsis,
                                                           ),
                                                         ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    flex: 1,
-                                                    child: Center(
-                                                      child: Container(
-                                                        padding: const EdgeInsets.symmetric(
-                                                            horizontal: 10, vertical: 6),
-                                                        decoration: BoxDecoration(
-                                                          color: _kPrimary.withValues(
-                                                              alpha: (review['gender'] == null ||
-                                                                      review['gender'] == '' ||
-                                                                      review['gender'] == 'N/A')
-                                                                  ? _kCardAndHeaderOpacity
-                                                                  : _kTranslucentOpacity),
-                                                          borderRadius:
-                                                              BorderRadius.circular(_kCardRadius),
-                                                        ),
-                                                        child: Text(
-                                                          review['gender'] ?? 'N/A',
-                                                          style: GoogleFonts.poppins(
-                                                            fontSize: 10,
-                                                            fontWeight: FontWeight.w600,
-                                                            color: Colors.white,
-                                                          ),
-                                                          textAlign: TextAlign.center,
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow.ellipsis,
-                                                        ),
                                                       ),
-                                                    ),
-                                                  ),
-                                                  Expanded(
-                                                    flex: 1,
-                                                    child: Center(
-                                                      child: Row(
-                                                        mainAxisSize: MainAxisSize.min,
-                                                        children: [
-                                                          Icon(
-                                                            hasScore ? Icons.star : Icons.star_border,
-                                                            color: themeProvider.isDarkMode
-                                                                ? (hasScore ? Colors.white : Colors.white70)
-                                                                : Colors.black,
-                                                            size: 16,
-                                                          ),
-                                                          const SizedBox(width: 4),
-                                                          Text(
-                                                            hasScore
-                                                                ? '${score.toStringAsFixed(1)}%'
-                                                                : '—',
-                                                            style: GoogleFonts.poppins(
-                                                              fontSize: 12,
-                                                              fontWeight: FontWeight.w600,
-                                                              color: themeProvider.isDarkMode
-                                                                  ? (hasScore ? Colors.white : Colors.white70)
-                                                                  : Colors.black,
+                                                      Expanded(
+                                                        flex: 1,
+                                                        child: Center(
+                                                          child: Container(
+                                                            padding: const EdgeInsets.symmetric(
+                                                                horizontal: 8, vertical: 4),
+                                                            decoration: BoxDecoration(
+                                                              color: screeningOutcome
+                                                                      .toLowerCase()
+                                                                      .contains('hold')
+                                                                  ? Colors.orange.withValues(alpha: 0.9)
+                                                                  : Colors.green.withValues(alpha: 0.9),
+                                                              borderRadius:
+                                                                  BorderRadius.circular(_kCardRadius),
+                                                            ),
+                                                            child: Text(
+                                                              screeningOutcome,
+                                                              style: GoogleFonts.poppins(
+                                                                fontSize: 10,
+                                                                fontWeight: FontWeight.w600,
+                                                                color: Colors.white,
+                                                              ),
+                                                              textAlign: TextAlign.center,
+                                                              maxLines: 1,
+                                                              overflow: TextOverflow.ellipsis,
                                                             ),
                                                           ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  SizedBox(
-                                                    width: 100,
-                                                    child: ElevatedButton(
-                                                      onPressed: cvUrl != null && cvUrl.isNotEmpty
-                                                          ? () => launch(cvUrl)
-                                                          : null,
-                                                      style: ElevatedButton.styleFrom(
-                                                        backgroundColor: cvUrl != null &&
-                                                                cvUrl.isNotEmpty
-                                                            ? _kPrimary
-                                                            : (themeProvider.isDarkMode
-                                                                ? _kDarkSurface
-                                                                    .withValues(alpha: _kCardAndHeaderOpacity)
-                                                                : Colors.grey.shade300
-                                                                    .withValues(alpha: _kCardOpacityLight)),
-                                                        foregroundColor: Colors.white,
-                                                        padding: const EdgeInsets.symmetric(
-                                                            horizontal: 8, vertical: 8),
-                                                        minimumSize: Size.zero,
-                                                        shape: RoundedRectangleBorder(
-                                                          borderRadius:
-                                                              BorderRadius.circular(_kCardRadius),
                                                         ),
-                                                        elevation: cvUrl != null && cvUrl.isNotEmpty ? 2 : 0,
                                                       ),
-                                                      child: Row(
-                                                        mainAxisSize: MainAxisSize.min,
-                                                        children: [
-                                                          Icon(Icons.remove_red_eye, size: 14),
-                                                          const SizedBox(width: 4),
-                                                          Text(
-                                                            'Preview',
-                                                            style: GoogleFonts.poppins(
-                                                              fontWeight: FontWeight.w600,
-                                                              fontSize: 11,
+                                                      SizedBox(
+                                                        width: 100,
+                                                        child: ElevatedButton(
+                                                          onPressed: cvUrl != null && cvUrl.isNotEmpty
+                                                              ? () => launchUrl(Uri.parse(cvUrl))
+                                                              : null,
+                                                          style: ElevatedButton.styleFrom(
+                                                            backgroundColor: cvUrl != null &&
+                                                                    cvUrl.isNotEmpty
+                                                                ? _kPrimary
+                                                                : (themeProvider.isDarkMode
+                                                                    ? _kDarkSurface
+                                                                        .withValues(alpha: _kCardAndHeaderOpacity)
+                                                                    : Colors.grey.shade300
+                                                                        .withValues(alpha: _kCardOpacityLight)),
+                                                            foregroundColor: Colors.white,
+                                                            padding: const EdgeInsets.symmetric(
+                                                                horizontal: 8, vertical: 8),
+                                                            minimumSize: Size.zero,
+                                                            shape: RoundedRectangleBorder(
+                                                              borderRadius:
+                                                                  BorderRadius.circular(_kCardRadius),
                                                             ),
+                                                            elevation: cvUrl != null && cvUrl.isNotEmpty ? 2 : 0,
                                                           ),
-                                                        ],
+                                                          child: Row(
+                                                            mainAxisSize: MainAxisSize.min,
+                                                            children: [
+                                                              Icon(Icons.remove_red_eye, size: 14),
+                                                              const SizedBox(width: 4),
+                                                              Text(
+                                                                'Preview',
+                                                                style: GoogleFonts.poppins(
+                                                                  fontWeight: FontWeight.w600,
+                                                                  fontSize: 11,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
                                                       ),
-                                                    ),
+                                                    ],
                                                   ),
-                                                ],
-                                              ),
+                                                ),
+                                                if (isExpanded)
+                                                  _buildMatchBreakdown(review, themeProvider),
+                                              ],
                                             );
                                           },
                                         ),

@@ -86,11 +86,13 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
   }
 
   Future<void> fetchInterviews() async {
+    if (!mounted) return;
     setState(() => loading = true);
     try {
       final response = await AuthService.authorizedGet(
         "${ApiEndpoints.adminBase}/interviews/all",
       );
+      if (!mounted) return;
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         setState(() {
@@ -104,10 +106,9 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => loading = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 

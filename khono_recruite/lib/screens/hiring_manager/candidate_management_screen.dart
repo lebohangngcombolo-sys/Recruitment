@@ -453,12 +453,12 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                         Expanded(
                           flex: 1,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
                             decoration: BoxDecoration(
                               color: statusColor.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Text(status, style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600, color: statusColor)),
+                            child: Text(status, style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600, color: statusColor), overflow: TextOverflow.ellipsis, maxLines: 1),
                           ),
                         ),
                         Expanded(
@@ -466,16 +466,18 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (rec.isNotEmpty)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: recColor.withValues(alpha: 0.15),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(rec, style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w500, color: recColor), overflow: TextOverflow.ellipsis, maxLines: 1),
-                                ),
-                              const SizedBox(width: 4),
+                              Expanded(
+                                child: rec.isNotEmpty
+                                    ? Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: recColor.withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(rec, style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w500, color: recColor), overflow: TextOverflow.ellipsis, maxLines: 1),
+                                      )
+                                    : const SizedBox.shrink(),
+                              ),
                               PopupMenuButton<String>(
                                 padding: EdgeInsets.zero,
                                 icon: Icon(Icons.more_vert, size: 18, color: textColor),
@@ -487,7 +489,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                             ],
                           ),
                         ),
-                        const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                        const SizedBox(width: 8),
+                        Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
                       ],
                     ),
                   ),
