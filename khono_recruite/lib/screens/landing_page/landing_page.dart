@@ -8,8 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
-import 'dart:io'
-    if (dart.library.html) 'package:khono_recruite/io_stub.dart'
+import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart'
     show File;
 import 'dart:typed_data';
 
@@ -164,9 +163,8 @@ class _LandingPageState extends State<LandingPage>
   }
 
   Future<void> _loadInitialData() async {
-    String? effectiveToken = widget.token?.trim().isNotEmpty == true
-        ? widget.token
-        : null;
+    String? effectiveToken =
+        widget.token?.trim().isNotEmpty == true ? widget.token : null;
     if (effectiveToken == null || effectiveToken.isEmpty) {
       effectiveToken = await AuthService.getAccessToken();
       if (mounted &&
@@ -279,8 +277,8 @@ class _LandingPageState extends State<LandingPage>
     try {
       final List<Map<String, dynamic>> jobs =
           _hasToken && _effectiveToken != null
-          ? await CandidateService.getAvailableJobs(_effectiveToken!)
-          : await CandidateService.getPublicJobs();
+              ? await CandidateService.getAvailableJobs(_effectiveToken!)
+              : await CandidateService.getPublicJobs();
       if (!mounted) return;
 
       _safeSetState(() {
@@ -398,15 +396,13 @@ class _LandingPageState extends State<LandingPage>
     }
 
     if (_selectedJobFilter != 'All Jobs') {
-      filtered = filtered
-          .where((job) => job['title'] == _selectedJobFilter)
-          .toList();
+      filtered =
+          filtered.where((job) => job['title'] == _selectedJobFilter).toList();
     }
 
     if (_selectedRoleFilter != 'All Roles') {
-      filtered = filtered
-          .where((job) => job['role'] == _selectedRoleFilter)
-          .toList();
+      filtered =
+          filtered.where((job) => job['role'] == _selectedRoleFilter).toList();
     }
 
     if (_selectedPlaceFilter != 'All Locations') {
@@ -646,9 +642,8 @@ class _LandingPageState extends State<LandingPage>
             CircleAvatar(
               radius: 40,
               backgroundColor: primaryColor.withOpacity(0.2),
-              backgroundImage: logoUrl.isNotEmpty
-                  ? NetworkImage(logoUrl)
-                  : null,
+              backgroundImage:
+                  logoUrl.isNotEmpty ? NetworkImage(logoUrl) : null,
               child: logoUrl.isEmpty
                   ? Icon(Icons.business, color: strokeColor, size: 24)
                   : null,
@@ -744,9 +739,8 @@ class _LandingPageState extends State<LandingPage>
                               context.push('/job-details', extra: job);
                             },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: hasApplied
-                            ? Colors.grey.shade700
-                            : primaryColor,
+                        backgroundColor:
+                            hasApplied ? Colors.grey.shade700 : primaryColor,
                         foregroundColor: Colors.white,
                         disabledBackgroundColor: Colors.grey.shade700,
                         disabledForegroundColor: Colors.white70,
@@ -858,15 +852,15 @@ class _LandingPageState extends State<LandingPage>
                               ),
                             ),
                             textTheme: Theme.of(context).textTheme.copyWith(
-                              bodyLarge: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                              bodyMedium: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
+                                  bodyLarge: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                  ),
+                                  bodyMedium: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                  ),
+                                ),
                           ),
                           child: DropdownButtonFormField<String>(
                             value: _selectedJobFilter == 'All Jobs'
@@ -950,15 +944,15 @@ class _LandingPageState extends State<LandingPage>
                               ),
                             ),
                             textTheme: Theme.of(context).textTheme.copyWith(
-                              bodyLarge: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                              bodyMedium: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 16,
-                              ),
-                            ),
+                                  bodyLarge: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                  ),
+                                  bodyMedium: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                  ),
+                                ),
                           ),
                           child: DropdownButtonFormField<String>(
                             value: _selectedPlaceFilter == 'All Locations'
@@ -1752,10 +1746,10 @@ class _LandingPageState extends State<LandingPage>
                                   );
                                   final isSelected =
                                       _selectedCategoryIndex.clamp(
-                                        0,
-                                        _categoryNames.length - 1,
-                                      ) ==
-                                      idx;
+                                            0,
+                                            _categoryNames.length - 1,
+                                          ) ==
+                                          idx;
                                   return InkWell(
                                     onTap: () => _safeSetState(() {
                                       _selectedCategoryIndex = idx;
@@ -1966,37 +1960,36 @@ class _LandingPageState extends State<LandingPage>
                                               TextButton(
                                                 onPressed:
                                                     _categoryCurrentPage > 0
-                                                    ? () => _safeSetState(
-                                                        () =>
-                                                            _categoryCurrentPage--,
-                                                      )
-                                                    : null,
+                                                        ? () => _safeSetState(
+                                                              () =>
+                                                                  _categoryCurrentPage--,
+                                                            )
+                                                        : null,
                                                 child: Text(
                                                   'Previous',
                                                   style: GoogleFonts.poppins(
                                                     color:
                                                         _categoryCurrentPage > 0
-                                                        ? strokeColor
-                                                        : Colors.white38,
+                                                            ? strokeColor
+                                                            : Colors.white38,
                                                   ),
                                                 ),
                                               ),
                                               SizedBox(width: 8),
                                               TextButton(
-                                                onPressed:
-                                                    (_categoryCurrentPage + 1) *
+                                                onPressed: (_categoryCurrentPage +
+                                                                1) *
                                                             _categoryPageSize <
                                                         _categoryListTotalCount
                                                     ? () => _safeSetState(
-                                                        () =>
-                                                            _categoryCurrentPage++,
-                                                      )
+                                                          () =>
+                                                              _categoryCurrentPage++,
+                                                        )
                                                     : null,
                                                 child: Text(
                                                   'Next',
                                                   style: GoogleFonts.poppins(
-                                                    color:
-                                                        (_categoryCurrentPage +
+                                                    color: (_categoryCurrentPage +
                                                                     1) *
                                                                 _categoryPageSize <
                                                             _categoryListTotalCount
@@ -2119,6 +2112,13 @@ class _LandingPageState extends State<LandingPage>
           ),
         ),
       ),
+    );
+  }
+
+  Widget AppVersionText({required TextStyle style}) {
+    return Text(
+      'v1.0.0',
+      style: style,
     );
   }
 }
