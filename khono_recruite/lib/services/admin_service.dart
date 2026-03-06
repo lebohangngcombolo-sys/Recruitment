@@ -163,6 +163,30 @@ class AdminService {
     }
   }
 
+  /// Applications for all jobs created by the current user (hiring manager).
+  /// Returns same shape as getJobApplications per item, with job_id and job_title on each.
+  Future<List<dynamic>> getApplicationsForMyJobs({
+    int page = 1,
+    int perPage = 100,
+  }) async {
+    final authHeaders = await _getAuthHeaders();
+    final uri = Uri.parse(ApiEndpoints.getApplicationsForMyJobs).replace(
+      queryParameters: {
+        'page': page.toString(),
+        'per_page': perPage.toString(),
+      },
+    );
+    final res = await http.get(uri, headers: authHeaders);
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      return data['applications'] ?? [];
+    } else {
+      final error = json.decode(res.body);
+      throw Exception(
+          'Failed to load candidates: ${error['error'] ?? res.body}');
+    }
+  }
+
   // Get job statistics
   Future<Map<String, dynamic>> getJobStatistics() async {
     final authHeaders = await _getAuthHeaders();

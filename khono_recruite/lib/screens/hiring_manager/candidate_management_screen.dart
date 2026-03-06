@@ -33,23 +33,21 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
       statusMessage = null;
     });
 
-    if (widget.jobId <= 0) {
-      final message = "Select a job to view its applicants.";
-      if (!mounted) return;
-      setState(() {
-        candidates = [];
-        statusMessage = message;
-        loading = false;
-      });
-      return;
-    }
-
     try {
-      final rawApplications = await admin.getJobApplications(
-        widget.jobId,
-        page: 1,
-        perPage: 100,
-      );
+      List<dynamic> rawApplications;
+      if (widget.jobId <= 0) {
+        rawApplications = await admin.getApplicationsForMyJobs(
+          page: 1,
+          perPage: 200,
+        );
+      } else {
+        rawApplications = await admin.getJobApplications(
+          widget.jobId,
+          page: 1,
+          perPage: 100,
+        );
+      }
+
       final fetched = (rawApplications).map<Map<String, dynamic>>((dynamic app) {
         final map = Map<String, dynamic>.from(app as Map);
         final candidateData = (map['candidate'] is Map)
@@ -69,6 +67,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
           'overall_score': map['overall_score'] ??
               (map['scoring_breakdown']?['overall'] ?? 0),
           'job_title': map['job_title'],
+          'job_id': map['job_id'],
           'cv_parser_result': map['cv_parser_result'] ?? {},
           'candidate': candidateData,
         };
@@ -83,8 +82,11 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
       if (!mounted) return;
       setState(() {
         candidates = fetched;
-        statusMessage =
-            fetched.isEmpty ? "No candidates have applied to this job yet." : null;
+        statusMessage = fetched.isEmpty
+            ? (widget.jobId <= 0
+                ? "No candidates have applied to your jobs yet."
+                : "No candidates have applied to this job yet.")
+            : null;
       });
     } catch (e) {
       debugPrint("Error fetching candidates: $e");
@@ -309,6 +311,20 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                                                   .grey.shade400
                                                               : Colors.black87),
                                                     ),
+                                                    if (c['job_title'] != null &&
+                                                        c['job_title'].toString().isNotEmpty)
+                                                      Padding(
+                                                        padding: const EdgeInsets.only(top: 2),
+                                                        child: Text(
+                                                          c['job_title'].toString(),
+                                                          style: TextStyle(
+                                                              fontSize: 12,
+                                                              fontStyle: FontStyle.italic,
+                                                              color: themeProvider.isDarkMode
+                                                                  ? Colors.grey.shade500
+                                                                  : Colors.grey.shade600),
+                                                        ),
+                                                      ),
                                                     if (c['email'] != null)
                                                       Text(
                                                         c['email'],

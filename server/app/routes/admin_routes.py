@@ -601,6 +601,60 @@ def get_job_applications(job_id):
         }), 500
 
 
+@admin_bp.route("/jobs/applications/for-my-jobs", methods=["GET"])
+@jwt_required()
+@role_required(["admin", "hiring_manager", "hr"])
+def get_applications_for_my_jobs():
+    """Get all applications for jobs created by the current user (hiring manager). Admins/hr get all."""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        if not current_user:
+            return jsonify({"error": "User not found"}), 404
+
+        page = request.args.get("page", 1, type=int)
+        per_page = request.args.get("per_page", 100, type=int)
+        per_page = min(per_page, 200)
+
+        query = Application.query.join(Requisition, Application.requisition_id == Requisition.id)
+        if current_user.role == "hiring_manager":
+            query = query.filter(Requisition.created_by == current_user_id)
+
+        query = query.order_by(Application.created_at.desc())
+        pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+        applications = pagination.items
+
+        enriched = []
+        for app in applications:
+            app_dict = app.to_dict()
+            app_dict["job_id"] = app.requisition_id
+            app_dict["job_title"] = app.requisition.title if app.requisition else None
+            cand = Candidate.query.get(app.candidate_id) if app.candidate_id else None
+            user = User.query.get(cand.user_id) if cand and cand.user_id else None
+            app_dict["candidate"] = {
+                "id": cand.id if cand else None,
+                "full_name": cand.full_name if cand else "Unknown",
+                "email": user.email if user else "",
+                "phone": (cand.phone or "") if cand else "",
+            } if cand else {"full_name": "Unknown", "email": "", "phone": ""}
+            enriched.append(app_dict)
+
+        return jsonify({
+            "applications": enriched,
+            "pagination": {
+                "page": pagination.page,
+                "per_page": pagination.per_page,
+                "total_pages": pagination.pages,
+                "total_items": pagination.total,
+                "has_next": pagination.has_next,
+                "has_prev": pagination.has_prev,
+            },
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Get applications for my jobs error: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
+
+
 @admin_bp.route("/jobs/stats", methods=["GET"])
 @jwt_required()
 @role_required(["admin", "hiring_manager", "hr"])
