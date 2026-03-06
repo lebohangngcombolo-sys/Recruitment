@@ -20,6 +20,7 @@ class HMAnalyticsPage extends StatefulWidget {
 
 class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   bool _isLoading = true;
+  bool _isExporting = false;
   String _selectedTimeRange = 'Last 6 Months';
   final AnalyticsService _service =
       AnalyticsService(baseUrl: AppConfig.apiBase);
@@ -306,9 +307,18 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
                 color: _textPrimary(context))),
         Row(children: [
           ElevatedButton.icon(
-            onPressed: () => _export(),
-            icon: const Icon(Icons.download),
-            label: Text('Export', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+            onPressed: _isExporting ? null : () => _export(),
+            icon: _isExporting
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Icon(Icons.download),
+            label: Text(_isExporting ? 'Exporting...' : 'Export', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(
                 backgroundColor: _kPrimary,
                 foregroundColor: Colors.white,
@@ -896,6 +906,24 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
     final headerImage = pw.MemoryImage(headerBytes);
     final footerImage = pw.MemoryImage(footerBytes);
 
+    // Load Poppins for PDF theme (use copy of ByteData; Font.ttf consumes the stream)
+    pw.ThemeData pdfTheme;
+    try {
+      final poppinsRegular = await rootBundle.load('assets/fonts/Poppins-Regular.ttf');
+      final poppinsBold = await rootBundle.load('assets/fonts/Poppins-Bold.ttf');
+      pdfTheme = pw.ThemeData.withFont(
+        base: pw.Font.ttf(Uint8List.fromList(poppinsRegular.buffer.asUint8List()).buffer.asByteData()),
+        bold: pw.Font.ttf(Uint8List.fromList(poppinsBold.buffer.asUint8List()).buffer.asByteData()),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load Poppins font: $e', style: GoogleFonts.poppins())),
+        );
+      }
+      return null;
+    }
+
     String hmName = '—';
     String hmEmail = '—';
     String hmRole = 'Hiring Manager';
@@ -921,7 +949,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
 
     final generatedOn = DateFormat('EEEE, d MMMM yyyy · HH:mm').format(DateTime.now());
 
-    final doc = pw.Document();
+    final doc = pw.Document(theme: pdfTheme);
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
@@ -1032,10 +1060,16 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
       );
       return;
     }
-    final bytes = await _buildPdf();
-    if (bytes == null || !mounted) return;
-    final filename = 'analytics_export_${DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first}.pdf';
-    analytics_export.downloadAnalyticsPdf(context, bytes, filename);
+    if (!mounted) return;
+    setState(() => _isExporting = true);
+    try {
+      final bytes = await _buildPdf();
+      if (bytes == null || !mounted) return;
+      final filename = 'analytics_export_${DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first}.pdf';
+      analytics_export.downloadAnalyticsPdf(context, bytes, filename);
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
   }
 
   void _viewDetailedReport(String title) {
