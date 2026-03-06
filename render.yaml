@@ -91,3 +91,7 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
+      # Frontend build environment used in Ver.YYYY.MM.XYZ.ENV suffix (see scripts/generate_version.sh).
+      # For production, we use APP_ENV=PROD; override this per-environment in the Render dashboard if needed.
+      - key: APP_ENV
+        value: PROD
