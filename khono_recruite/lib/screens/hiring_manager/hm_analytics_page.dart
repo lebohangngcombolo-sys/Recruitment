@@ -21,6 +21,7 @@ class HMAnalyticsPage extends StatefulWidget {
 class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   bool _isLoading = true;
   bool _isExporting = false;
+  String? _exportStatusMessage;
   String _selectedTimeRange = 'Last 6 Months';
   final AnalyticsService _service =
       AnalyticsService(baseUrl: AppConfig.apiBase);
@@ -265,31 +266,86 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTextStyle(
-      style: GoogleFonts.poppins(fontSize: 14, color: _textPrimary(context)),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 16),
-              _buildTimeRangeSelector(),
-              const SizedBox(height: 16),
-              _isLoading
-                  ? SizedBox(
-                      height: 400,
-                      child: _buildLoadingState(),
-                    )
-                  : _error != null
-                      ? SizedBox(
-                          height: 200,
-                          child: _buildError(),
-                        )
-                      : _buildAnalyticsContent(),
-            ],
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: DefaultTextStyle(
+            style: GoogleFonts.poppins(fontSize: 14, color: _textPrimary(context)),
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildHeader(),
+                    const SizedBox(height: 16),
+                    _buildTimeRangeSelector(),
+                    const SizedBox(height: 16),
+                    _isLoading
+                        ? SizedBox(
+                            height: 400,
+                            child: _buildLoadingState(),
+                          )
+                        : _error != null
+                            ? SizedBox(
+                                height: 200,
+                                child: _buildError(),
+                              )
+                            : _buildAnalyticsContent(),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (_exportStatusMessage != null) _buildExportStatusOverlay(),
+      ],
+    );
+  }
+
+  Widget _buildExportStatusOverlay() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Positioned.fill(
+      child: Material(
+        color: Colors.black54,
+        child: Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            decoration: BoxDecoration(
+              color: isDark ? _kDarkSurface.withValues(alpha: 0.98) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(color: Colors.black26, blurRadius: 16, spreadRadius: 2),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_isExporting)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(_kPrimary),
+                      ),
+                    ),
+                  ),
+                Text(
+                  _exportStatusMessage!,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    color: _textPrimary(context),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -889,7 +945,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
     ));
   }
 
-  Future<Uint8List?> _buildPdf() async {
+  Future<Uint8List?> _buildPdf({void Function(String)? onProgress}) async {
+    if (mounted) onProgress?.call('Loading logos and images...');
     Uint8List headerBytes;
     Uint8List footerBytes;
     try {
@@ -906,6 +963,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
     final headerImage = pw.MemoryImage(headerBytes);
     final footerImage = pw.MemoryImage(footerBytes);
 
+    if (mounted) onProgress?.call('Loading fonts...');
     // Load Poppins for PDF theme (use copy of ByteData; Font.ttf consumes the stream)
     pw.ThemeData pdfTheme;
     try {
@@ -924,6 +982,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
       return null;
     }
 
+    if (mounted) onProgress?.call('Fetching your profile...');
     String hmName = '—';
     String hmEmail = '—';
     String hmRole = 'Hiring Manager';
@@ -947,6 +1006,7 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
       }
     } catch (_) {}
 
+    if (mounted) onProgress?.call('Building PDF document...');
     final generatedOn = DateFormat('EEEE, d MMMM yyyy · HH:mm').format(DateTime.now());
 
     final doc = pw.Document(theme: pdfTheme);
@@ -1061,14 +1121,42 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
       return;
     }
     if (!mounted) return;
-    setState(() => _isExporting = true);
+    setState(() {
+      _isExporting = true;
+      _exportStatusMessage = 'Loading logos and images...';
+    });
     try {
-      final bytes = await _buildPdf();
-      if (bytes == null || !mounted) return;
+      final bytes = await _buildPdf(
+        onProgress: (msg) {
+          if (mounted) setState(() => _exportStatusMessage = msg);
+        },
+      );
+      if (bytes == null || !mounted) {
+        if (mounted) setState(() { _isExporting = false; _exportStatusMessage = null; });
+        return;
+      }
       final filename = 'analytics_export_${DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first}.pdf';
       analytics_export.downloadAnalyticsPdf(context, bytes, filename);
+      if (!mounted) return;
+      setState(() {
+        _isExporting = false;
+        _exportStatusMessage = 'Done! You can open the downloaded document.';
+      });
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _exportStatusMessage = null);
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isExporting = false;
+          _exportStatusMessage = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export failed: $e', style: GoogleFonts.poppins())),
+        );
+      }
     } finally {
-      if (mounted) setState(() => _isExporting = false);
+      if (mounted && _isExporting) setState(() { _isExporting = false; _exportStatusMessage = null; });
     }
   }
 

@@ -39,6 +39,20 @@ class AdminService {
     };
   }
 
+  /// Performs GET with auth; on 401 refreshes token and retries once.
+  Future<http.Response> _getWithAuthRetry(Uri uri) async {
+    var authHeaders = await _getAuthHeaders();
+    var res = await http.get(uri, headers: authHeaders);
+    if (res.statusCode == 401) {
+      final newToken = await AuthService.refreshAccessToken();
+      if (newToken != null) {
+        authHeaders = {...headers, 'Authorization': 'Bearer $newToken'};
+        res = await http.get(uri, headers: authHeaders);
+      }
+    }
+    return res;
+  }
+
   // Enhanced listJobs with filtering
   // In AdminService class
   Future<Map<String, dynamic>> listJobsEnhanced({
@@ -132,58 +146,55 @@ class AdminService {
     }
   }
 
-  // Get job applications
+  // Get job applications. Retries once with refreshed token on 401.
   Future<List<dynamic>> getJobApplications(
     int jobId, {
     int page = 1,
     int perPage = 20,
     String? status,
   }) async {
-    final authHeaders = await _getAuthHeaders();
-
     final queryParams = {
       'page': page.toString(),
       'per_page': perPage.toString(),
     };
-
     if (status != null) queryParams['status'] = status;
 
     final uri = Uri.parse('${ApiEndpoints.adminJobs}/$jobId/applications')
         .replace(queryParameters: queryParams);
 
-    final res = await http.get(uri, headers: authHeaders);
+    final res = await _getWithAuthRetry(uri);
 
     if (res.statusCode == 200) {
       final data = json.decode(res.body);
       return data['applications'] ?? [];
     } else {
       final error = json.decode(res.body);
-      throw Exception(
-          'Failed to get job applications: ${error['error'] ?? res.body}');
+      final msg = error['msg'] ?? error['error'] ?? res.body;
+      throw Exception('Failed to get job applications: $msg');
     }
   }
 
   /// Applications for all jobs created by the current user (hiring manager).
   /// Returns same shape as getJobApplications per item, with job_id and job_title on each.
+  /// Retries once with refreshed token on 401.
   Future<List<dynamic>> getApplicationsForMyJobs({
     int page = 1,
     int perPage = 100,
   }) async {
-    final authHeaders = await _getAuthHeaders();
     final uri = Uri.parse(ApiEndpoints.getApplicationsForMyJobs).replace(
       queryParameters: {
         'page': page.toString(),
         'per_page': perPage.toString(),
       },
     );
-    final res = await http.get(uri, headers: authHeaders);
+    final res = await _getWithAuthRetry(uri);
     if (res.statusCode == 200) {
       final data = json.decode(res.body);
       return data['applications'] ?? [];
     } else {
       final error = json.decode(res.body);
-      throw Exception(
-          'Failed to load candidates: ${error['error'] ?? res.body}');
+      final msg = error['msg'] ?? error['error'] ?? res.body;
+      throw Exception('Failed to load candidates: $msg');
     }
   }
 
