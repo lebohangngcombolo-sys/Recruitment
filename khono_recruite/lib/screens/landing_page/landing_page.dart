@@ -15,6 +15,7 @@ import 'dart:typed_data';
 // Import your existing services
 import '../../services/candidate_service.dart';
 import '../../services/auth_service.dart';
+import '../../utils/app_version.dart';
 
 /// New landing screen: hero, explore by category, job cards. Optional [token] for logged-in state.
 /// Teammate will refine the real "candidate dashboard" (applications, profile, etc.) in candidate_dashboard.dart.
@@ -2116,9 +2117,6 @@ class _LandingPageState extends State<LandingPage>
   }
 
   Widget AppVersionText({required TextStyle style}) {
-    return Text(
-      'v1.0.0',
-      style: style,
-    );
+    return Text(kDisplayVersion, style: style);
   }
 }
