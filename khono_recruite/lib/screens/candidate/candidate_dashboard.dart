@@ -18,6 +18,7 @@ import 'assessments_results_screen.dart';
 import '../../screens/candidate/user_profile_page.dart';
 import 'saved_application_screen.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 
 class CandidateDashboard extends StatefulWidget {
   final String token;
@@ -34,7 +35,12 @@ class _CandidateDashboardState extends State<CandidateDashboard>
 
   // ignore: unused_field
   int _currentTab = 0;
-  final List<String> _jobTypes = ['Featured', 'Full Time', 'Part Time', 'Remote'];
+  final List<String> _jobTypes = [
+    'Featured',
+    'Full Time',
+    'Part Time',
+    'Remote'
+  ];
   static const int _jobListPageSize = 8;
   int _jobListCurrentPage = 0;
   final Color primaryColor = Color(0xFF991A1A);
@@ -95,10 +101,12 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       if (response['unauthorized'] == true && mounted) {
         // Token expired and refresh failed; keep showing persisted name if any, and prompt re-login
         final persisted = await AuthService.getPersistedDisplayName();
-        _safeSetState(() => _userName = (persisted != null && persisted.isNotEmpty) ? persisted : null);
+        _safeSetState(() => _userName =
+            (persisted != null && persisted.isNotEmpty) ? persisted : null);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(response['error']?.toString() ?? 'Session expired. Please log in again.'),
+            content: Text(response['error']?.toString() ??
+                'Session expired. Please log in again.'),
             backgroundColor: Colors.red.shade700,
             action: SnackBarAction(
               label: 'Log in',
@@ -115,7 +123,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       final profile = user['profile'] is Map ? user['profile'] as Map : null;
 
       String? displayName;
-      if (candidateProfile != null && candidateProfile['full_name']?.toString().trim().isNotEmpty == true) {
+      if (candidateProfile != null &&
+          candidateProfile['full_name']?.toString().trim().isNotEmpty == true) {
         displayName = candidateProfile['full_name'].toString().trim();
       }
       if (displayName == null || displayName.isEmpty) {
@@ -131,11 +140,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         if (combined.isNotEmpty) displayName = combined;
       }
 
-      if (mounted) _safeSetState(() => _userName = (displayName != null && displayName.isNotEmpty) ? displayName : null);
+      if (mounted)
+        _safeSetState(() => _userName =
+            (displayName != null && displayName.isNotEmpty)
+                ? displayName
+                : null);
     } catch (_) {
       if (mounted) {
         final persisted = await AuthService.getPersistedDisplayName();
-        _safeSetState(() => _userName = (persisted != null && persisted.isNotEmpty) ? persisted : null);
+        _safeSetState(() => _userName =
+            (persisted != null && persisted.isNotEmpty) ? persisted : null);
       }
     }
   }
@@ -146,16 +160,19 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     _safeSetState(() => _loadingJobs = true);
     try {
       final list = await CandidateService.getAvailableJobs(widget.token)
-          .timeout(_jobsFetchTimeout, onTimeout: () => <Map<String, dynamic>>[]);
-      if (mounted) _safeSetState(() {
-        _jobs = list;
-        _loadingJobs = false;
-      });
+          .timeout(_jobsFetchTimeout,
+              onTimeout: () => <Map<String, dynamic>>[]);
+      if (mounted)
+        _safeSetState(() {
+          _jobs = list;
+          _loadingJobs = false;
+        });
     } catch (_) {
-      if (mounted) _safeSetState(() {
-        _jobs = [];
-        _loadingJobs = false;
-      });
+      if (mounted)
+        _safeSetState(() {
+          _jobs = [];
+          _loadingJobs = false;
+        });
     }
   }
 
@@ -188,11 +205,14 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   Map<String, dynamic>? _inProgressApplication;
   List<Map<String, dynamic>> _inProgressApplications = [];
   List<Map<String, dynamic>> _completedApplications = [];
+
   /// Form submitted but assessment not done (status 'applied') — show "Applied" on job cards, not in Continue section.
   List<Map<String, dynamic>> _appliedOnlyApplications = [];
   int _interviewsScheduledCount = 0;
   bool _dashboardCountsLoaded = false;
-  static const String _kCachedInProgressApps = 'candidate_in_progress_applications';
+  static const String _kCachedInProgressApps =
+      'candidate_in_progress_applications';
+
   /// In-memory cache so "Continue Your Application" shows on first paint after login (same session).
   // ignore: unused_field
   static List<Map<String, dynamic>>? _cachedInProgressApps;
@@ -209,14 +229,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               .whereType<Map>()
               .map((e) => Map<String, dynamic>.from(e))
               .toList();
-          if (maps.isNotEmpty) _safeSetState(() => _inProgressApplications = maps);
+          if (maps.isNotEmpty)
+            _safeSetState(() => _inProgressApplications = maps);
         }
       }
     } catch (_) {}
     // Do NOT set _dashboardCountsLoaded here — only _fetchDashboardCounts does, so Continue section stays empty until API returns
   }
 
-  Future<void> _saveCachedInProgressApplications(List<Map<String, dynamic>> list) async {
+  Future<void> _saveCachedInProgressApplications(
+      List<Map<String, dynamic>> list) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kCachedInProgressApps, jsonEncode(list));
@@ -231,7 +253,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       ]);
       if (mounted) {
         final apps = List<dynamic>.from(results[0]);
-        final submittedOrCompletedList = apps.where(_isSubmittedOrCompletedApplication).toList();
+        final submittedOrCompletedList =
+            apps.where(_isSubmittedOrCompletedApplication).toList();
         final submittedOrCompletedMaps = submittedOrCompletedList
             .whereType<Map>()
             .map((e) => Map<String, dynamic>.from(e))
@@ -251,8 +274,31 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             .whereType<Map>()
             .map((e) => Map<String, dynamic>.from(e))
             .toList();
-        final firstInProgress = inProgressMaps.isNotEmpty ? inProgressMaps.first : null;
+        final firstInProgress =
+            inProgressMaps.isNotEmpty ? inProgressMaps.first : null;
         _CandidateDashboardState._cachedInProgressApps = inProgressMaps;
+
+        // Fetch scheduled interviews count
+        int interviewsCount = 0;
+        try {
+          final candidateData = await AuthService.getCurrentUser();
+          if (candidateData['id'] != null) {
+            final candidateId = candidateData['id'];
+            final interviewsResponse = await http.get(
+              Uri.parse('${ApiEndpoints.getCandidateInterviews(candidateId)}'),
+              headers: {'Authorization': 'Bearer ${widget.token}'},
+            );
+
+            if (interviewsResponse.statusCode == 200) {
+              final interviewsData = jsonDecode(interviewsResponse.body);
+              final interviews = interviewsData['interviews'] as List? ?? [];
+              interviewsCount = interviews.length;
+            }
+          }
+        } catch (e) {
+          interviewsCount = 0;
+        }
+
         _safeSetState(() {
           _applicationsCount = submittedOrCompletedMaps.length;
           _savedCount = results[1].length;
@@ -260,14 +306,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           _inProgressApplications = inProgressMaps;
           _completedApplications = completedMaps;
           _appliedOnlyApplications = appliedOnlyMaps;
-          _interviewsScheduledCount = 0; // TODO: fetch from candidate interviews API
+          _interviewsScheduledCount = interviewsCount;
           _dashboardCountsLoaded = true;
         });
         _saveCachedInProgressApplications(inProgressMaps);
         // If pending apply job is for a job we've already applied/completed, clear it so it doesn't show in Continue.
         final pending = await AuthService.getPendingApplyJob();
         if (pending != null && pending['id'] != null) {
-          final pid = pending['id'] is int ? pending['id'] as int : int.tryParse(pending['id'].toString());
+          final pid = pending['id'] is int
+              ? pending['id'] as int
+              : int.tryParse(pending['id'].toString());
           if (pid != null) {
             final alreadyHas = submittedOrCompletedMaps.any((a) {
               final jid = a['job_id'];
@@ -282,16 +330,17 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         }
       }
     } catch (_) {
-      if (mounted) _safeSetState(() {
-        _applicationsCount = 0;
-        _savedCount = 0;
-        _inProgressApplication = null;
-        _inProgressApplications = [];
-        _completedApplications = [];
-        _appliedOnlyApplications = [];
-        _interviewsScheduledCount = 0;
-        _dashboardCountsLoaded = true;
-      });
+      if (mounted)
+        _safeSetState(() {
+          _applicationsCount = 0;
+          _savedCount = 0;
+          _inProgressApplication = null;
+          _inProgressApplications = [];
+          _completedApplications = [];
+          _appliedOnlyApplications = [];
+          _interviewsScheduledCount = 0;
+          _dashboardCountsLoaded = true;
+        });
     }
   }
 
@@ -397,7 +446,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         alignment: Alignment.topRight,
         insetPadding: EdgeInsets.only(top: 72, right: 12, left: 24, bottom: 24),
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: panelWidth, maxHeight: maxPanelHeight),
+          constraints:
+              BoxConstraints(maxWidth: panelWidth, maxHeight: maxPanelHeight),
           child: Container(
             padding: EdgeInsets.zero,
             decoration: BoxDecoration(
@@ -420,9 +470,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                     children: [
                       IconButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        icon: Icon(Icons.arrow_back, size: 22, color: Colors.black87),
+                        icon: Icon(Icons.arrow_back,
+                            size: 22, color: Colors.black87),
                         padding: EdgeInsets.zero,
-                        constraints: BoxConstraints(minWidth: 40, minHeight: 40),
+                        constraints:
+                            BoxConstraints(minWidth: 40, minHeight: 40),
                       ),
                       SizedBox(width: 4),
                       Text(
@@ -436,65 +488,69 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       Spacer(),
                       IconButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        icon: Icon(Icons.close, size: 22, color: Colors.black87),
+                        icon:
+                            Icon(Icons.close, size: 22, color: Colors.black87),
                         padding: EdgeInsets.zero,
-                        constraints: BoxConstraints(minWidth: 40, minHeight: 40),
+                        constraints:
+                            BoxConstraints(minWidth: 40, minHeight: 40),
                       ),
                     ],
                   ),
                 ),
-                  Divider(height: 1),
-                  ConstrainedBox(
-                    constraints: BoxConstraints(maxHeight: maxPanelHeight - 80),
-                      child: notifications.isEmpty
-                          ? Padding(
-                              padding: EdgeInsets.symmetric(vertical: 32, horizontal: 20),
-                              child: Text(
-                                'No notifications yet. Updates from hiring managers will appear here.',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 13,
-                                  color: Colors.grey.shade600,
+                Divider(height: 1),
+                ConstrainedBox(
+                  constraints: BoxConstraints(maxHeight: maxPanelHeight - 80),
+                  child: notifications.isEmpty
+                      ? Padding(
+                          padding: EdgeInsets.symmetric(
+                              vertical: 32, horizontal: 20),
+                          child: Text(
+                            'No notifications yet. Updates from hiring managers will appear here.',
+                            textAlign: TextAlign.center,
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          padding: EdgeInsets.symmetric(vertical: 4),
+                          itemCount: notifications.length,
+                          itemBuilder: (context, index) {
+                            final notification = notifications[index];
+                            return ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 4),
+                              leading: Icon(
+                                Icons.notifications_outlined,
+                                color: primaryColor,
+                                size: 22,
+                              ),
+                              title: Text(
+                                notification['message'] ?? 'New notification',
+                                style: GoogleFonts.poppins(fontSize: 14),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              subtitle: Padding(
+                                padding: EdgeInsets.only(top: 2),
+                                child: Text(
+                                  _formatDate(notification['created_at']),
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    color: Colors.grey,
+                                  ),
                                 ),
                               ),
-                            )
-                          : ListView.builder(
-                              shrinkWrap: true,
-                              padding: EdgeInsets.symmetric(vertical: 4),
-                              itemCount: notifications.length,
-                              itemBuilder: (context, index) {
-                                final notification = notifications[index];
-                                return ListTile(
-                                  dense: true,
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                                  leading: Icon(
-                                    Icons.notifications_outlined,
-                                    color: primaryColor,
-                                    size: 22,
-                                  ),
-                                  title: Text(
-                                    notification['message'] ?? 'New notification',
-                                    style: GoogleFonts.poppins(fontSize: 14),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  subtitle: Padding(
-                                    padding: EdgeInsets.only(top: 2),
-                                    child: Text(
-                                      _formatDate(notification['created_at']),
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 11,
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                  ),
-                ],
-              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
+          ),
         ),
       ),
     );
@@ -757,7 +813,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   /// Primary nav link with optional tap and subtle active state (dashboard theme).
-  Widget _buildNavLink(String label, {bool isActive = false, VoidCallback? onTap}) {
+  Widget _buildNavLink(String label,
+      {bool isActive = false, VoidCallback? onTap}) {
     return GestureDetector(
       onTap: onTap,
       child: Padding(
@@ -766,7 +823,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           label,
           style: GoogleFonts.poppins(
             fontSize: 15,
-            color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.85),
+            color:
+                isActive ? Colors.white : Colors.white.withValues(alpha: 0.85),
             fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
           ),
         ),
@@ -777,7 +835,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   void _scrollToJobsSection() {
     final ctx = _jobsSectionKey.currentContext;
     if (ctx != null) {
-      Scrollable.ensureVisible(ctx, duration: Duration(milliseconds: 400), alignment: 0.1);
+      Scrollable.ensureVisible(ctx,
+          duration: Duration(milliseconds: 400), alignment: 0.1);
     }
   }
 
@@ -815,13 +874,20 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   Widget _buildJobTableRow(Map<String, dynamic> job) {
-    final company = (job['company']?.toString().trim().isNotEmpty == true) ? (job['company'] ?? '') : '—';
-    final location = (job['location']?.toString().trim().isNotEmpty == true) ? (job['location'] ?? '') : '—';
-    final jobType = _formatJobType(job['type'] ?? job['employment_type'] ?? 'Full Time');
+    final company = (job['company']?.toString().trim().isNotEmpty == true)
+        ? (job['company'] ?? '')
+        : '—';
+    final location = (job['location']?.toString().trim().isNotEmpty == true)
+        ? (job['location'] ?? '')
+        : '—';
+    final jobType =
+        _formatJobType(job['type'] ?? job['employment_type'] ?? 'Full Time');
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08), width: 1)),
+        border: Border(
+            bottom: BorderSide(
+                color: Colors.white.withValues(alpha: 0.08), width: 1)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -884,7 +950,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 style: OutlinedButton.styleFrom(
                   backgroundColor: Color(0xFF3A3A3A),
                   side: BorderSide(color: Colors.white38),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
                   padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 ),
                 child: Text(
@@ -1019,11 +1086,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     final byType = typeFilter == 'Featured'
         ? _jobs
         : _jobs.where((j) {
-            final t = (j['type'] ?? j['employment_type'] ?? '').toString().toLowerCase();
+            final t = (j['type'] ?? j['employment_type'] ?? '')
+                .toString()
+                .toLowerCase();
             final loc = (j['location'] ?? '').toString().toLowerCase();
-            if (typeFilter == 'Full Time') return t.contains('full') || t == 'full_time';
-            if (typeFilter == 'Part Time') return t.contains('part') || t == 'part_time';
-            if (typeFilter == 'Remote') return loc.contains('remote') || t.contains('remote');
+            if (typeFilter == 'Full Time')
+              return t.contains('full') || t == 'full_time';
+            if (typeFilter == 'Part Time')
+              return t.contains('part') || t == 'part_time';
+            if (typeFilter == 'Remote')
+              return loc.contains('remote') || t.contains('remote');
             return true;
           }).toList();
     return byType.where((j) => !_hasAnyApplicationForJob(j)).toList();
@@ -1038,7 +1110,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   // ignore: unused_element
-  int _getFilteredJobsTotalCount(int typeIndex) => _getFilteredJobs(typeIndex).length;
+  int _getFilteredJobsTotalCount(int typeIndex) =>
+      _getFilteredJobs(typeIndex).length;
 
   Widget _buildJobList(int typeIndex) {
     final jobs = _getFilteredJobs(typeIndex);
@@ -1081,7 +1154,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 _buildJobTableHeader(),
                 ...paginatedJobs.map((job) {
                   final j = Map<String, dynamic>.from(job);
-                  if (!j.containsKey('type') && j.containsKey('employment_type')) {
+                  if (!j.containsKey('type') &&
+                      j.containsKey('employment_type')) {
                     j['type'] = j['employment_type'];
                   }
                   return _buildJobTableRow(j);
@@ -1121,7 +1195,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   Future<void> _handleApplyNow(Map<String, dynamic> job) async {
-    final token = widget.token.isNotEmpty ? widget.token : await AuthService.getAccessToken();
+    final token = widget.token.isNotEmpty
+        ? widget.token
+        : await AuthService.getAccessToken();
     if (token == null || token.isEmpty) {
       _showSignInToApplyDialog(job);
       return;
@@ -1177,7 +1253,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             },
             child: Text(
               'Create account',
-              style: GoogleFonts.poppins(color: strokeColor, fontWeight: FontWeight.w600),
+              style: GoogleFonts.poppins(
+                  color: strokeColor, fontWeight: FontWeight.w600),
             ),
           ),
           ElevatedButton(
@@ -1190,11 +1267,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             style: ElevatedButton.styleFrom(
               backgroundColor: strokeColor,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
             child: Text(
               'Log in',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 14),
+              style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w600, fontSize: 14),
             ),
           ),
         ],
@@ -1254,7 +1333,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 end: Alignment.bottomRight,
               ),
               onTap: () {
-                context.push('/jobs-applied?token=${Uri.encodeComponent(widget.token)}');
+                context.push(
+                    '/jobs-applied?token=${Uri.encodeComponent(widget.token)}');
               },
             ),
           ),
@@ -1272,7 +1352,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 end: Alignment.bottomRight,
               ),
               onTap: () {
-                context.push('/jobs-applied?token=${Uri.encodeComponent(widget.token)}');
+                context.push(
+                    '/jobs-applied?token=${Uri.encodeComponent(widget.token)}');
               },
             ),
           ),
@@ -1331,7 +1412,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         }),
       );
       final data = jsonDecode(res.body);
-      if (res.statusCode == 201 && data is Map && data['application_id'] != null) {
+      if (res.statusCode == 201 &&
+          data is Map &&
+          data['application_id'] != null) {
         if (!mounted) return;
         await AuthService.clearPendingApplyJob();
         if (!mounted) return;
@@ -1354,11 +1437,15 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           _fetchDashboardCounts();
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('This application is already in your list. Refreshing.')),
+            const SnackBar(
+                content: Text(
+                    'This application is already in your list. Refreshing.')),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(err.isNotEmpty ? err : 'Could not start application')),
+            SnackBar(
+                content:
+                    Text(err.isNotEmpty ? err : 'Could not start application')),
           );
         }
       } else {
@@ -1366,7 +1453,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              data is Map ? (data['error']?.toString() ?? 'Could not start application') : 'Could not start application',
+              data is Map
+                  ? (data['error']?.toString() ?? 'Could not start application')
+                  : 'Could not start application',
             ),
           ),
         );
@@ -1387,9 +1476,12 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     if (d == null) return '';
     final now = DateTime.now();
     final diff = now.difference(d);
-    if (diff.inDays > 0) return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
-    if (diff.inHours > 0) return '${diff.inHours} hour${diff.inHours == 1 ? '' : 's'} ago';
-    if (diff.inMinutes > 0) return '${diff.inMinutes} minute${diff.inMinutes == 1 ? '' : 's'} ago';
+    if (diff.inDays > 0)
+      return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'} ago';
+    if (diff.inHours > 0)
+      return '${diff.inHours} hour${diff.inHours == 1 ? '' : 's'} ago';
+    if (diff.inMinutes > 0)
+      return '${diff.inMinutes} minute${diff.inMinutes == 1 ? '' : 's'} ago';
     return 'Just now';
   }
 
@@ -1406,6 +1498,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       final id = jobId is int ? jobId : int.tryParse(jobId.toString());
       if (id != null) seenJobIds.add(id);
     }
+
     for (final app in _completedApplications) {
       addJobId(app['job_id']);
     }
@@ -1436,7 +1529,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     if (_pendingApplyJob != null) {
       final pendingId = _pendingApplyJob!['id'];
       if (pendingId != null) {
-        final id = pendingId is int ? pendingId : int.tryParse(pendingId.toString());
+        final id =
+            pendingId is int ? pendingId : int.tryParse(pendingId.toString());
         if (id != null && !seenJobIds.contains(id)) {
           seenJobIds.add(id);
           items.add({
@@ -1519,7 +1613,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               itemBuilder: (context, index) {
                 return SizedBox(
                   width: 380,
-                  child: _buildIncompleteApplicationCard(items[index], compact: true),
+                  child: _buildIncompleteApplicationCard(items[index],
+                      compact: true),
                 );
               },
             ),
@@ -1530,11 +1625,14 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   /// Estimate progress 0–100 from draft_data / last_saved_screen.
-  int _progressPercent(Map<String, dynamic>? draftData, String? lastSavedScreen) {
-    if (draftData == null || draftData.isEmpty) return lastSavedScreen != null ? 25 : 0;
+  int _progressPercent(
+      Map<String, dynamic>? draftData, String? lastSavedScreen) {
+    if (draftData == null || draftData.isEmpty)
+      return lastSavedScreen != null ? 25 : 0;
     final screen = (lastSavedScreen ?? '').toString().toLowerCase();
     if (screen.contains('assessment')) {
-      final assessment = draftData['assessment'] ?? draftData['assessment.assessment'];
+      final assessment =
+          draftData['assessment'] ?? draftData['assessment.assessment'];
       if (assessment is Map && assessment.isNotEmpty) return 75;
       return 50;
     }
@@ -1542,7 +1640,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return 25;
   }
 
-  Widget _buildIncompleteApplicationCard(Map<String, dynamic> item, {bool compact = false}) {
+  Widget _buildIncompleteApplicationCard(Map<String, dynamic> item,
+      {bool compact = false}) {
     final type = item['type'] as String?;
     String title;
     String? company;
@@ -1573,7 +1672,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       progressPercent = _progressPercent(draftData, lastSaved);
       if (progressPercent == 0) progressPercent = 25;
       showProgressBar = true;
-      final timeAgo = savedAt != null && savedAt.isNotEmpty ? _timeAgo(savedAt) : null;
+      final timeAgo =
+          savedAt != null && savedAt.isNotEmpty ? _timeAgo(savedAt) : null;
       if (timeAgo != null && timeAgo.isNotEmpty) {
         statusLine = '$progressPercent% complete - last updated $timeAgo';
       } else {
@@ -1595,7 +1695,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                     ),
                   ),
                 ).then((_) {
-                  if (mounted) _safeSetState(() => _navigatingToAssessment = false);
+                  if (mounted)
+                    _safeSetState(() => _navigatingToAssessment = false);
                   _fetchDashboardCounts();
                 });
               });
@@ -1650,7 +1751,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               SizedBox(height: 6),
               Row(
                 children: [
-                  Icon(Icons.location_on_outlined, size: 14, color: Colors.white54),
+                  Icon(Icons.location_on_outlined,
+                      size: 14, color: Colors.white54),
                   SizedBox(width: 4),
                   Expanded(
                     child: Text(
@@ -1688,7 +1790,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 if (showProgressBar && progressPercent >= 25)
                   Padding(
                     padding: EdgeInsets.only(right: 6),
-                    child: Icon(Icons.check_circle, size: 14, color: Colors.green.shade400),
+                    child: Icon(Icons.check_circle,
+                        size: 14, color: Colors.green.shade400),
                   ),
                 Expanded(
                   child: Text(
@@ -1730,7 +1833,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       ),
                     ),
                     SizedBox(width: 4),
-                    Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.white),
+                    Icon(Icons.arrow_forward_rounded,
+                        size: 18, color: Colors.white),
                   ],
                 ),
               ),
@@ -1882,7 +1986,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       _buildNavLink('Browse Jobs', onTap: _scrollToJobsSection),
                       SizedBox(width: 28),
                       _buildNavLink('Applications', onTap: () {
-                        context.push('/jobs-applied?token=${Uri.encodeComponent(widget.token)}');
+                        context.push(
+                            '/jobs-applied?token=${Uri.encodeComponent(widget.token)}');
                       }),
                       SizedBox(width: 28),
                       _buildNavLink('Assessments', onTap: () {
@@ -1899,7 +2004,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                         clipBehavior: Clip.none,
                         children: [
                           IconButton(
-                            icon: Icon(Icons.notifications_outlined, color: Colors.white, size: 24),
+                            icon: Icon(Icons.notifications_outlined,
+                                color: Colors.white, size: 24),
                             onPressed: () => _showNotificationsDialog(),
                           ),
                           if (notifications.isNotEmpty)
@@ -1907,14 +2013,18 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                               right: 6,
                               top: 6,
                               child: Container(
-                                padding: EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                padding: EdgeInsets.symmetric(
+                                    horizontal: 5, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: strokeColor,
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
-                                  notifications.length > 99 ? '99+' : notifications.length.toString(),
-                                  style: GoogleFonts.poppins(color: Colors.white, fontSize: 10),
+                                  notifications.length > 99
+                                      ? '99+'
+                                      : notifications.length.toString(),
+                                  style: GoogleFonts.poppins(
+                                      color: Colors.white, fontSize: 10),
                                 ),
                               ),
                             ),
@@ -1923,13 +2033,17 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       SizedBox(width: 8),
                       PopupMenuButton<String>(
                         offset: Offset(0, 48),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
                         color: Color(0xFF2C2C2C),
                         onSelected: (value) {
                           if (value == 'profile') {
-                            Navigator.push(context, MaterialPageRoute(
-                              builder: (_) => ProfilePage(token: widget.token),
-                            ));
+                            Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      ProfilePage(token: widget.token),
+                                ));
                           } else if (value == 'logout') {
                             _showLogoutConfirmation(context);
                           }
@@ -1939,9 +2053,12 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                             value: 'profile',
                             child: Row(
                               children: [
-                                Icon(Icons.person_outline, color: Colors.white70, size: 20),
+                                Icon(Icons.person_outline,
+                                    color: Colors.white70, size: 20),
                                 SizedBox(width: 12),
-                                Text('My Profile', style: GoogleFonts.poppins(color: Colors.white)),
+                                Text('My Profile',
+                                    style: GoogleFonts.poppins(
+                                        color: Colors.white)),
                               ],
                             ),
                           ),
@@ -1950,19 +2067,24 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                             value: 'logout',
                             child: Row(
                               children: [
-                                Icon(Icons.logout, color: Colors.white70, size: 20),
+                                Icon(Icons.logout,
+                                    color: Colors.white70, size: 20),
                                 SizedBox(width: 12),
-                                Text('Log Out', style: GoogleFonts.poppins(color: Colors.white)),
+                                Text('Log Out',
+                                    style: GoogleFonts.poppins(
+                                        color: Colors.white)),
                               ],
                             ),
                           ),
                         ],
                         child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           child: CircleAvatar(
                             radius: 18,
                             backgroundColor: primaryColor,
-                            child: Icon(Icons.person, color: Colors.white, size: 22),
+                            child: Icon(Icons.person,
+                                color: Colors.white, size: 22),
                           ),
                         ),
                       ),
@@ -2011,18 +2133,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                                       color: Colors.white,
                                       fontWeight: FontWeight.w600,
                                       fontSize: 15),
-                                  unselectedLabelStyle:
-                                      GoogleFonts.poppins(
-                                          color: Colors.white70,
-                                          fontSize: 15),
+                                  unselectedLabelStyle: GoogleFonts.poppins(
+                                      color: Colors.white70, fontSize: 15),
                                   labelColor: Colors.white,
                                   unselectedLabelColor: Colors.white70,
                                   indicatorColor: primaryColor,
                                   indicatorWeight: 3,
                                   onTap: (index) => _safeSetState(() {
-                                        _currentTab = index;
-                                        _jobListCurrentPage = 0;
-                                      }),
+                                    _currentTab = index;
+                                    _jobListCurrentPage = 0;
+                                  }),
                                   tabs: _jobTypes
                                       .map((type) => Tab(
                                           child: Text(type,

@@ -8,12 +8,14 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
-import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart' show File;
+import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart'
+    show File;
 import 'dart:typed_data';
 
 // Import your existing services
 import '../../services/candidate_service.dart';
 import '../../services/auth_service.dart';
+import '../../utils/app_version.dart';
 
 /// New landing screen: hero, explore by category, job cards. Optional [token] for logged-in state.
 /// Teammate will refine the real "candidate dashboard" (applications, profile, etc.) in candidate_dashboard.dart.
@@ -46,8 +48,9 @@ class _LandingPageState extends State<LandingPage>
   final Color primaryColor = Color(0xFF991A1A);
   final Color strokeColor = Color(0xFFC10D00); // Accent (e.g. backgrounds)
   final Color borderColor = Colors.white; // Borders for inputs, buttons, cards
-  final Color fillColor =
-      Color(0xFFf2f2f2).withOpacity(0.2); // Fill with 20% opacity
+  final Color fillColor = Color(
+    0xFFf2f2f2,
+  ).withOpacity(0.2); // Fill with 20% opacity
 
   /// Token from AuthService when route doesn't pass one (e.g. user at "/" while logged in).
   String? _authToken;
@@ -67,7 +70,8 @@ class _LandingPageState extends State<LandingPage>
   String _selectedPlaceFilter = 'All Locations';
   String _selectedJobTypeFilter = 'All Types';
   final TextEditingController _searchController = TextEditingController();
-  final TextEditingController _categorySearchController = TextEditingController();
+  final TextEditingController _categorySearchController =
+      TextEditingController();
   String _categoryLocationFilter = 'All Locations';
   static const int _entriesPerPage = 4;
   int _categoryPageSize = _entriesPerPage;
@@ -138,7 +142,8 @@ class _LandingPageState extends State<LandingPage>
     return _authToken != null && _authToken!.trim().isNotEmpty;
   }
 
-  String? get _effectiveToken => widget.token?.trim().isNotEmpty == true ? widget.token : _authToken;
+  String? get _effectiveToken =>
+      widget.token?.trim().isNotEmpty == true ? widget.token : _authToken;
 
   /// Job ids the user has already applied to (in progress or completed). Used to show "Applied" instead of "Apply Now".
   Set<int> get _appliedJobIds {
@@ -159,10 +164,13 @@ class _LandingPageState extends State<LandingPage>
   }
 
   Future<void> _loadInitialData() async {
-    String? effectiveToken = widget.token?.trim().isNotEmpty == true ? widget.token : null;
+    String? effectiveToken =
+        widget.token?.trim().isNotEmpty == true ? widget.token : null;
     if (effectiveToken == null || effectiveToken.isEmpty) {
       effectiveToken = await AuthService.getAccessToken();
-      if (mounted && effectiveToken != null && effectiveToken.trim().isNotEmpty) {
+      if (mounted &&
+          effectiveToken != null &&
+          effectiveToken.trim().isNotEmpty) {
         _safeSetState(() => _authToken = effectiveToken);
       }
     }
@@ -187,7 +195,9 @@ class _LandingPageState extends State<LandingPage>
 
   bool _isAuthError(Object e) {
     final s = e.toString().toLowerCase();
-    return s.contains('401') || s.contains('missing or invalid jwt') || s.contains('unauthorized');
+    return s.contains('401') ||
+        s.contains('missing or invalid jwt') ||
+        s.contains('unauthorized');
   }
 
   // ---------- Fetch profile image ----------
@@ -198,7 +208,7 @@ class _LandingPageState extends State<LandingPage>
         Uri.parse("$apiBase/profile"),
         headers: {
           'Authorization': 'Bearer ${_effectiveToken ?? ''}',
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
       );
 
@@ -266,15 +276,16 @@ class _LandingPageState extends State<LandingPage>
 
     _safeSetState(() => loadingJobs = true);
     try {
-      final List<Map<String, dynamic>> jobs = _hasToken && _effectiveToken != null
-          ? await CandidateService.getAvailableJobs(_effectiveToken!)
-          : await CandidateService.getPublicJobs();
+      final List<Map<String, dynamic>> jobs =
+          _hasToken && _effectiveToken != null
+              ? await CandidateService.getAvailableJobs(_effectiveToken!)
+              : await CandidateService.getPublicJobs();
       if (!mounted) return;
 
       _safeSetState(() {
         availableJobs = List<Map<String, dynamic>>.from(jobs);
       });
-        } catch (e) {
+    } catch (e) {
       if (_isAuthError(e) && mounted) {
         _safeSetState(() => _authToken = null);
         await AuthService.clearAuthState();
@@ -282,7 +293,9 @@ class _LandingPageState extends State<LandingPage>
         try {
           final jobs = await CandidateService.getPublicJobs();
           if (mounted) {
-            _safeSetState(() => availableJobs = List<Map<String, dynamic>>.from(jobs));
+            _safeSetState(
+              () => availableJobs = List<Map<String, dynamic>>.from(jobs),
+            );
           }
         } catch (_) {}
       } else {
@@ -418,7 +431,11 @@ class _LandingPageState extends State<LandingPage>
     if (index == 0) return source;
     final category = _categoryNames[index];
     // Match any word in the category (e.g. "Cloud & DevOps" -> cloud, devops)
-    final terms = category.toLowerCase().split(RegExp(r'\s+|\s*&\s*')).where((s) => s.length > 1).toList();
+    final terms = category
+        .toLowerCase()
+        .split(RegExp(r'\s+|\s*&\s*'))
+        .where((s) => s.length > 1)
+        .toList();
     if (terms.isEmpty) return source;
     return source.where((job) {
       final role = (job['role']?.toString() ?? '').toLowerCase();
@@ -444,8 +461,11 @@ class _LandingPageState extends State<LandingPage>
     }
     if (_categoryLocationFilter != 'All Locations') {
       list = list
-          .where((job) =>
-              (job['location']?.toString() ?? 'Remote') == _categoryLocationFilter)
+          .where(
+            (job) =>
+                (job['location']?.toString() ?? 'Remote') ==
+                _categoryLocationFilter,
+          )
           .toList();
     }
     return list;
@@ -528,7 +548,7 @@ class _LandingPageState extends State<LandingPage>
             messages.add({
               "type": "chat",
               "text":
-                  "AI: Failed to get response (status ${response.statusCode})"
+                  "AI: Failed to get response (status ${response.statusCode})",
             });
           });
         }
@@ -561,10 +581,7 @@ class _LandingPageState extends State<LandingPage>
           "Content-Type": "application/json",
           "Authorization": "Bearer ${_effectiveToken ?? ''}",
         },
-        body: jsonEncode({
-          "job_description": jobDesc,
-          "cv_text": cvText,
-        }),
+        body: jsonEncode({"job_description": jobDesc, "cv_text": cvText}),
       );
 
       if (response.statusCode == 200) {
@@ -585,11 +602,7 @@ class _LandingPageState extends State<LandingPage>
   }
 
   // Updated UI methods with your logic
-  Widget _buildNavItem(
-    String title, {
-    bool isActive = false,
-    Color? color,
-  }) {
+  Widget _buildNavItem(String title, {bool isActive = false, Color? color}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Text(
@@ -603,8 +616,13 @@ class _LandingPageState extends State<LandingPage>
   }
 
   // Updated to handle real job data — dark theme to match the app
-  Widget _buildJobItem(String title, String location, String type,
-      String salary, Map<String, dynamic> job) {
+  Widget _buildJobItem(
+    String title,
+    String location,
+    String type,
+    String salary,
+    Map<String, dynamic> job,
+  ) {
     final logoUrl = (job['company_logo']?.toString().trim() ?? '');
     final jobId = job['id'];
     final id = jobId is int ? jobId : int.tryParse(jobId?.toString() ?? '');
@@ -618,18 +636,15 @@ class _LandingPageState extends State<LandingPage>
         side: BorderSide(color: Colors.white12, width: 1),
       ),
       child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
         padding: EdgeInsets.all(16),
         child: Row(
           children: [
             CircleAvatar(
               radius: 40,
               backgroundColor: primaryColor.withOpacity(0.2),
-              backgroundImage: logoUrl.isNotEmpty
-                  ? NetworkImage(logoUrl)
-                  : null,
+              backgroundImage:
+                  logoUrl.isNotEmpty ? NetworkImage(logoUrl) : null,
               child: logoUrl.isEmpty
                   ? Icon(Icons.business, color: strokeColor, size: 24)
                   : null,
@@ -642,9 +657,10 @@ class _LandingPageState extends State<LandingPage>
                   Text(
                     title,
                     style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white),
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                   SizedBox(height: 8),
                   Wrap(
@@ -654,12 +670,15 @@ class _LandingPageState extends State<LandingPage>
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.location_on,
-                              size: 16, color: strokeColor),
+                          Icon(Icons.location_on, size: 16, color: strokeColor),
                           SizedBox(width: 4),
-                          Text(location,
-                              style: GoogleFonts.poppins(
-                                  color: Colors.white70, fontSize: 14)),
+                          Text(
+                            location,
+                            style: GoogleFonts.poppins(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
                         ],
                       ),
                       Row(
@@ -667,20 +686,31 @@ class _LandingPageState extends State<LandingPage>
                         children: [
                           Icon(Icons.schedule, size: 16, color: strokeColor),
                           SizedBox(width: 4),
-                          Text(type,
-                              style: GoogleFonts.poppins(
-                                  color: Colors.white70, fontSize: 14)),
+                          Text(
+                            type,
+                            style: GoogleFonts.poppins(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
                         ],
                       ),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.attach_money,
-                              size: 16, color: strokeColor),
+                          Icon(
+                            Icons.attach_money,
+                            size: 16,
+                            color: strokeColor,
+                          ),
                           SizedBox(width: 4),
-                          Text(salary,
-                              style: GoogleFonts.poppins(
-                                  color: Colors.white70, fontSize: 14)),
+                          Text(
+                            salary,
+                            style: GoogleFonts.poppins(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
                         ],
                       ),
                     ],
@@ -693,23 +723,25 @@ class _LandingPageState extends State<LandingPage>
                 Row(
                   children: [
                     IconButton(
-                      icon: Icon(Icons.favorite_border,
-                          color: strokeColor, size: 22),
+                      icon: Icon(
+                        Icons.favorite_border,
+                        color: strokeColor,
+                        size: 22,
+                      ),
                       onPressed: () => _saveJob(job),
                     ),
                     SizedBox(width: 4),
                     ElevatedButton(
-                        onPressed: hasApplied
-                            ? null
-                            : () async {
-                                await AuthService.clearAuthState();
-                                if (!context.mounted) return;
-                                context.push('/job-details', extra: job);
-                              },
+                      onPressed: hasApplied
+                          ? null
+                          : () async {
+                              await AuthService.clearAuthState();
+                              if (!context.mounted) return;
+                              context.push('/job-details', extra: job);
+                            },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: hasApplied
-                            ? Colors.grey.shade700
-                            : primaryColor,
+                        backgroundColor:
+                            hasApplied ? Colors.grey.shade700 : primaryColor,
                         foregroundColor: Colors.white,
                         disabledBackgroundColor: Colors.grey.shade700,
                         disabledForegroundColor: Colors.white70,
@@ -718,10 +750,12 @@ class _LandingPageState extends State<LandingPage>
                         ),
                       ),
                       child: Text(
-                          hasApplied ? 'Applied' : 'Apply Now',
-                          style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500)),
+                        hasApplied ? 'Applied' : 'Apply Now',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -729,7 +763,9 @@ class _LandingPageState extends State<LandingPage>
                 Text(
                   'Date Line: ${job['deadline'] ?? '01 Jan, 2045'}',
                   style: GoogleFonts.poppins(
-                      fontSize: 12, color: Colors.white54),
+                    fontSize: 12,
+                    color: Colors.white54,
+                  ),
                 ),
               ],
             ),
@@ -777,18 +813,24 @@ class _LandingPageState extends State<LandingPage>
                           controller: _searchController,
                           onChanged: (value) => setState(() {}),
                           style: GoogleFonts.poppins(
-                              color: Colors.white, fontSize: 16),
+                            color: Colors.white,
+                            fontSize: 16,
+                          ),
                           decoration: InputDecoration(
                             hintText: 'Keyword',
                             hintStyle: GoogleFonts.poppins(
-                                color: Colors.white, fontSize: 16),
+                              color: Colors.white,
+                              fontSize: 16,
+                            ),
                             filled: false,
                             border: OutlineInputBorder(
                               borderSide: BorderSide.none,
                               borderRadius: BorderRadius.circular(4),
                             ),
                             contentPadding: EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
                           ),
                         ),
                       ),
@@ -806,24 +848,34 @@ class _LandingPageState extends State<LandingPage>
                             hintColor: Colors.white,
                             inputDecorationTheme: InputDecorationTheme(
                               hintStyle: GoogleFonts.poppins(
-                                  color: Colors.white, fontSize: 16),
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
                             ),
                             textTheme: Theme.of(context).textTheme.copyWith(
-                              bodyLarge: GoogleFonts.poppins(
-                                  color: Colors.white, fontSize: 16),
-                              bodyMedium: GoogleFonts.poppins(
-                                  color: Colors.white, fontSize: 16),
-                            ),
+                                  bodyLarge: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                  ),
+                                  bodyMedium: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                  ),
+                                ),
                           ),
                           child: DropdownButtonFormField<String>(
                             value: _selectedJobFilter == 'All Jobs'
                                 ? null
                                 : _selectedJobFilter,
                             style: GoogleFonts.poppins(
-                                color: Colors.white, fontSize: 16),
+                              color: Colors.white,
+                              fontSize: 16,
+                            ),
                             dropdownColor: Colors.black,
-                            icon:
-                                Icon(Icons.arrow_drop_down, color: Colors.white),
+                            icon: Icon(
+                              Icons.arrow_drop_down,
+                              color: Colors.white,
+                            ),
                             iconEnabledColor: Colors.white,
                             iconDisabledColor: Colors.white,
                             iconSize: 24,
@@ -834,27 +886,43 @@ class _LandingPageState extends State<LandingPage>
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
                               hintText: 'All Jobs',
                               hintStyle: GoogleFonts.poppins(
-                                  color: Colors.white, fontSize: 16),
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
                             ),
                             selectedItemBuilder: (context) => _jobTitles
-                                .map((String s) => Text(s,
+                                .map(
+                                  (String s) => Text(
+                                    s,
                                     style: GoogleFonts.poppins(
-                                        color: Colors.white, fontSize: 16)))
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                )
                                 .toList(),
                             items: _jobTitles
-                                .map((category) => DropdownMenuItem(
-                                      value: category,
-                                      child: Text(category,
-                                          style: GoogleFonts.poppins(
-                                              color: Colors.white,
-                                              fontSize: 16)),
-                                    ))
+                                .map(
+                                  (category) => DropdownMenuItem(
+                                    value: category,
+                                    child: Text(
+                                      category,
+                                      style: GoogleFonts.poppins(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                )
                                 .toList(),
-                            onChanged: (value) =>
-                                setState(() => _selectedJobFilter = value ?? 'All Jobs'),
+                            onChanged: (value) => setState(
+                              () => _selectedJobFilter = value ?? 'All Jobs',
+                            ),
                           ),
                         ),
                       ),
@@ -872,24 +940,34 @@ class _LandingPageState extends State<LandingPage>
                             hintColor: Colors.white,
                             inputDecorationTheme: InputDecorationTheme(
                               hintStyle: GoogleFonts.poppins(
-                                  color: Colors.white, fontSize: 16),
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
                             ),
                             textTheme: Theme.of(context).textTheme.copyWith(
-                              bodyLarge: GoogleFonts.poppins(
-                                  color: Colors.white, fontSize: 16),
-                              bodyMedium: GoogleFonts.poppins(
-                                  color: Colors.white, fontSize: 16),
-                            ),
+                                  bodyLarge: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                  ),
+                                  bodyMedium: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                  ),
+                                ),
                           ),
                           child: DropdownButtonFormField<String>(
                             value: _selectedPlaceFilter == 'All Locations'
                                 ? null
                                 : _selectedPlaceFilter,
                             style: GoogleFonts.poppins(
-                                color: Colors.white, fontSize: 16),
+                              color: Colors.white,
+                              fontSize: 16,
+                            ),
                             dropdownColor: Colors.black,
-                            icon:
-                                Icon(Icons.arrow_drop_down, color: Colors.white),
+                            icon: Icon(
+                              Icons.arrow_drop_down,
+                              color: Colors.white,
+                            ),
                             iconEnabledColor: Colors.white,
                             iconDisabledColor: Colors.white,
                             iconSize: 24,
@@ -900,27 +978,44 @@ class _LandingPageState extends State<LandingPage>
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
                               hintText: 'All Locations',
                               hintStyle: GoogleFonts.poppins(
-                                  color: Colors.white, fontSize: 16),
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
                             ),
                             selectedItemBuilder: (context) => _locations
-                                .map((String s) => Text(s,
+                                .map(
+                                  (String s) => Text(
+                                    s,
                                     style: GoogleFonts.poppins(
-                                        color: Colors.white, fontSize: 16)))
+                                      color: Colors.white,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                )
                                 .toList(),
                             items: _locations
-                                .map((location) => DropdownMenuItem(
-                                      value: location,
-                                      child: Text(location,
-                                          style: GoogleFonts.poppins(
-                                              color: Colors.white,
-                                              fontSize: 16)),
-                                    ))
+                                .map(
+                                  (location) => DropdownMenuItem(
+                                    value: location,
+                                    child: Text(
+                                      location,
+                                      style: GoogleFonts.poppins(
+                                        color: Colors.white,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ),
+                                )
                                 .toList(),
-                            onChanged: (value) =>
-                                setState(() => _selectedPlaceFilter = value ?? 'All Locations'),
+                            onChanged: (value) => setState(
+                              () => _selectedPlaceFilter =
+                                  value ?? 'All Locations',
+                            ),
                           ),
                         ),
                       ),
@@ -950,9 +1045,13 @@ class _LandingPageState extends State<LandingPage>
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
-                  child: Text('Search',
-                      style: GoogleFonts.poppins(
-                          color: Colors.white, fontSize: 16)),
+                  child: Text(
+                    'Search',
+                    style: GoogleFonts.poppins(
+                      color: Colors.white,
+                      fontSize: 16,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1040,7 +1139,8 @@ class _LandingPageState extends State<LandingPage>
                             ? Colors.white.withOpacity(0.2)
                             : Colors.transparent,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
                       child: Text(
@@ -1066,7 +1166,8 @@ class _LandingPageState extends State<LandingPage>
                             ? Colors.white.withOpacity(0.2)
                             : Colors.transparent,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
                       child: Text(
@@ -1110,8 +1211,7 @@ class _LandingPageState extends State<LandingPage>
                         ? Colors.white.withOpacity(0.2)
                         : Colors.black.withOpacity(0.5),
                     borderRadius: BorderRadius.circular(8),
-                    border:
-                        Border.all(color: Colors.white.withOpacity(0.1)),
+                    border: Border.all(color: Colors.white.withOpacity(0.1)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(8),
@@ -1130,9 +1230,7 @@ class _LandingPageState extends State<LandingPage>
         ),
         if (_isLoading)
           Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(4),
-            ),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(4)),
             child: LinearProgressIndicator(
               color: Colors.white.withOpacity(0.7),
               backgroundColor: Colors.black.withOpacity(0.3),
@@ -1146,8 +1244,7 @@ class _LandingPageState extends State<LandingPage>
                 decoration: BoxDecoration(
                   color: Colors.black.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: Colors.white.withOpacity(0.2)),
+                  border: Border.all(color: Colors.white.withOpacity(0.2)),
                 ),
                 child: TextField(
                   controller: messageController,
@@ -1155,10 +1252,14 @@ class _LandingPageState extends State<LandingPage>
                   decoration: InputDecoration(
                     hintText: "Ask about career advice...",
                     hintStyle: GoogleFonts.poppins(
-                        color: Colors.white54, fontSize: 12),
+                      color: Colors.white54,
+                      fontSize: 12,
+                    ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
                   ),
                 ),
               ),
@@ -1200,8 +1301,7 @@ class _LandingPageState extends State<LandingPage>
                 decoration: BoxDecoration(
                   color: Colors.black.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: Colors.white.withOpacity(0.2)),
+                  border: Border.all(color: Colors.white.withOpacity(0.2)),
                 ),
                 child: TextField(
                   controller: jobDescController,
@@ -1228,8 +1328,7 @@ class _LandingPageState extends State<LandingPage>
                 decoration: BoxDecoration(
                   color: Colors.black.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: Colors.white.withOpacity(0.2)),
+                  border: Border.all(color: Colors.white.withOpacity(0.2)),
                 ),
                 child: TextField(
                   controller: cvController,
@@ -1253,8 +1352,7 @@ class _LandingPageState extends State<LandingPage>
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.3),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: Colors.white.withOpacity(0.2)),
+                      border: Border.all(color: Colors.white.withOpacity(0.2)),
                     ),
                     child: TextButton.icon(
                       onPressed: () async {
@@ -1266,16 +1364,23 @@ class _LandingPageState extends State<LandingPage>
                           setState(() => uploadedResume = result.files.first);
                         }
                       },
-                      icon: const Icon(Icons.upload_file,
-                          size: 14, color: Colors.white),
+                      icon: const Icon(
+                        Icons.upload_file,
+                        size: 14,
+                        color: Colors.white,
+                      ),
                       label: Text(
                         "Upload Resume",
                         style: GoogleFonts.poppins(
-                            fontSize: 11, color: Colors.white),
+                          fontSize: 11,
+                          color: Colors.white,
+                        ),
                       ),
                       style: TextButton.styleFrom(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 6),
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
                       ),
                     ),
                   ),
@@ -1290,7 +1395,9 @@ class _LandingPageState extends State<LandingPage>
                         child: Text(
                           uploadedResume!.name,
                           style: GoogleFonts.poppins(
-                              color: Colors.white54, fontSize: 10),
+                            color: Colors.white54,
+                            fontSize: 10,
+                          ),
                         ),
                       ),
                     ),
@@ -1301,8 +1408,7 @@ class _LandingPageState extends State<LandingPage>
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(8),
-                  border:
-                      Border.all(color: Colors.white.withOpacity(0.3)),
+                  border: Border.all(color: Colors.white.withOpacity(0.3)),
                 ),
                 child: TextButton(
                   onPressed: _isParsing
@@ -1324,8 +1430,9 @@ class _LandingPageState extends State<LandingPage>
                           width: 16,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
                         )
                       : Text(
@@ -1344,8 +1451,7 @@ class _LandingPageState extends State<LandingPage>
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.5),
                     borderRadius: BorderRadius.circular(8),
-                    border:
-                        Border.all(color: Colors.white.withOpacity(0.2)),
+                    border: Border.all(color: Colors.white.withOpacity(0.2)),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
@@ -1378,14 +1484,16 @@ class _LandingPageState extends State<LandingPage>
               Text(
                 title,
                 style: GoogleFonts.poppins(
-                    color: Colors.white,
-                    fontSize: 48,
-                    fontWeight: FontWeight.bold),
+                  color: Colors.white,
+                  fontSize: 48,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               SizedBox(height: 16),
-              Text(description,
-                  style:
-                      GoogleFonts.poppins(color: Colors.white, fontSize: 18)),
+              Text(
+                description,
+                style: GoogleFonts.poppins(color: Colors.white, fontSize: 18),
+              ),
               SizedBox(height: 32),
               Row(
                 children: [
@@ -1396,16 +1504,22 @@ class _LandingPageState extends State<LandingPage>
                       foregroundColor: Colors.white,
                       elevation: 2,
                       shadowColor: Colors.black.withOpacity(0.25),
-                      padding: EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 28,
+                        vertical: 16,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: Text('Get Started',
-                        style: GoogleFonts.poppins(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600)),
+                    child: Text(
+                      'Get Started',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                   SizedBox(width: 16),
                   ElevatedButton(
@@ -1415,16 +1529,22 @@ class _LandingPageState extends State<LandingPage>
                       foregroundColor: Colors.white,
                       elevation: 2,
                       shadowColor: Colors.black.withOpacity(0.25),
-                      padding: EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 28,
+                        vertical: 16,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    child: Text('Login',
-                        style: GoogleFonts.poppins(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600)),
+                    child: Text(
+                      'Login',
+                      style: GoogleFonts.poppins(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -1466,9 +1586,14 @@ class _LandingPageState extends State<LandingPage>
           ),
           child: Padding(
             padding: const EdgeInsets.all(8.0),
-            child: Image.asset(assetPath,
-                width: 24, height: 24, fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => Icon(Icons.link, size: 24, color: Colors.white70)),
+            child: Image.asset(
+              assetPath,
+              width: 24,
+              height: 24,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) =>
+                  Icon(Icons.link, size: 24, color: Colors.white70),
+            ),
           ),
         ),
       ),
@@ -1488,10 +1613,7 @@ class _LandingPageState extends State<LandingPage>
           children: [
             // Fixed background that fills the entire screen
             Positioned.fill(
-              child: Image.asset(
-                'assets/images/dark.png',
-                fit: BoxFit.cover,
-              ),
+              child: Image.asset('assets/images/dark.png', fit: BoxFit.cover),
             ),
 
             // Main content with transparent background
@@ -1515,7 +1637,10 @@ class _LandingPageState extends State<LandingPage>
                         ),
                         child: GestureDetector(
                           onTap: () => context.go('/'),
-                          child: _buildNavItem('Home', isActive: _currentTab == 0),
+                          child: _buildNavItem(
+                            'Home',
+                            isActive: _currentTab == 0,
+                          ),
                         ),
                       ),
                       Container(
@@ -1524,10 +1649,7 @@ class _LandingPageState extends State<LandingPage>
                         ),
                         child: GestureDetector(
                           onTap: () => context.push('/about-us'),
-                          child: _buildNavItem(
-                            'About Us',
-                            color: Colors.white,
-                          ),
+                          child: _buildNavItem('About Us', color: Colors.white),
                         ),
                       ),
                       Container(
@@ -1536,10 +1658,7 @@ class _LandingPageState extends State<LandingPage>
                         ),
                         child: GestureDetector(
                           onTap: () => context.push('/contact'),
-                          child: _buildNavItem(
-                            'Contact',
-                            color: Colors.white,
-                          ),
+                          child: _buildNavItem('Contact', color: Colors.white),
                         ),
                       ),
                       ElevatedButton(
@@ -1550,16 +1669,21 @@ class _LandingPageState extends State<LandingPage>
                           elevation: 2,
                           shadowColor: Colors.black.withOpacity(0.25),
                           padding: EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 12),
+                            horizontal: 24,
+                            vertical: 12,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
                         ),
-                        child: Text('The Academy',
-                            style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600)),
+                        child: Text(
+                          'The Academy',
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 16),
                     ],
@@ -1596,9 +1720,10 @@ class _LandingPageState extends State<LandingPage>
                           Text(
                             'Explore By Category',
                             style: GoogleFonts.poppins(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white),
+                              fontSize: 32,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                           SizedBox(height: 20),
                           Container(
@@ -1613,9 +1738,19 @@ class _LandingPageState extends State<LandingPage>
                             child: SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
                               child: Row(
-                                children: List.generate(_categoryNames.length, (int i) {
-                                  final idx = i.clamp(0, _categoryNames.length - 1);
-                                  final isSelected = _selectedCategoryIndex.clamp(0, _categoryNames.length - 1) == idx;
+                                children: List.generate(_categoryNames.length, (
+                                  int i,
+                                ) {
+                                  final idx = i.clamp(
+                                    0,
+                                    _categoryNames.length - 1,
+                                  );
+                                  final isSelected =
+                                      _selectedCategoryIndex.clamp(
+                                            0,
+                                            _categoryNames.length - 1,
+                                          ) ==
+                                          idx;
                                   return InkWell(
                                     onTap: () => _safeSetState(() {
                                       _selectedCategoryIndex = idx;
@@ -1623,7 +1758,9 @@ class _LandingPageState extends State<LandingPage>
                                     }),
                                     child: Container(
                                       padding: EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 14),
+                                        horizontal: 16,
+                                        vertical: 14,
+                                      ),
                                       margin: EdgeInsets.only(right: 8),
                                       decoration: BoxDecoration(
                                         border: Border(
@@ -1661,11 +1798,14 @@ class _LandingPageState extends State<LandingPage>
                             decoration: InputDecoration(
                               hintText: 'Search by title, role, or location...',
                               hintStyle: GoogleFonts.poppins(
-                                  color: Colors.white38, fontSize: 15),
+                                color: Colors.white38,
+                                fontSize: 15,
+                              ),
                               prefixIcon: Icon(
-                                  Icons.search_rounded,
-                                  color: Colors.white54,
-                                  size: 22),
+                                Icons.search_rounded,
+                                color: Colors.white54,
+                                size: 22,
+                              ),
                               filled: true,
                               fillColor: Colors.white.withOpacity(0.06),
                               border: OutlineInputBorder(
@@ -1675,13 +1815,19 @@ class _LandingPageState extends State<LandingPage>
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 borderSide: BorderSide(
-                                    color: Colors.white12, width: 1),
+                                  color: Colors.white12,
+                                  width: 1,
+                                ),
                               ),
                               contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 16),
+                                horizontal: 20,
+                                vertical: 16,
+                              ),
                             ),
                             style: GoogleFonts.poppins(
-                                color: Colors.white, fontSize: 15),
+                              color: Colors.white,
+                              fontSize: 15,
+                            ),
                           ),
                           SizedBox(height: 16),
                           // Location chips
@@ -1689,31 +1835,40 @@ class _LandingPageState extends State<LandingPage>
                             scrollDirection: Axis.horizontal,
                             child: Row(
                               children: _categorySectionLocations.map((loc) {
-                                final isSelected = _categoryLocationFilter == loc;
+                                final isSelected =
+                                    _categoryLocationFilter == loc;
                                 return Padding(
                                   padding: EdgeInsets.only(right: 8),
                                   child: FilterChip(
-                                    label: Text(loc,
-                                        style: GoogleFonts.poppins(
-                                            fontSize: 13,
-                                            color: isSelected
-                                                ? Colors.white
-                                                : Colors.white70)),
+                                    label: Text(
+                                      loc,
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : Colors.white70,
+                                      ),
+                                    ),
                                     selected: isSelected,
                                     onSelected: (_) => _safeSetState(() {
                                       _categoryLocationFilter = loc;
                                       _categoryCurrentPage = 0;
                                     }),
                                     backgroundColor: Color(0xFF1e1212),
-                                    selectedColor: primaryColor.withOpacity(0.6),
+                                    selectedColor: primaryColor.withOpacity(
+                                      0.6,
+                                    ),
                                     checkmarkColor: Colors.white,
                                     side: BorderSide(
-                                        color: isSelected
-                                            ? strokeColor
-                                            : Colors.white24,
-                                        width: 1),
+                                      color: isSelected
+                                          ? strokeColor
+                                          : Colors.white24,
+                                      width: 1,
+                                    ),
                                     padding: EdgeInsets.symmetric(
-                                        horizontal: 14, vertical: 10),
+                                      horizontal: 14,
+                                      vertical: 10,
+                                    ),
                                   ),
                                 );
                               }).toList(),
@@ -1724,7 +1879,9 @@ class _LandingPageState extends State<LandingPage>
                           _categoryListFilteredJobs.isEmpty
                               ? Container(
                                   padding: EdgeInsets.symmetric(
-                                      vertical: 48, horizontal: 24),
+                                    vertical: 48,
+                                    horizontal: 24,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: Colors.white.withOpacity(0.03),
                                     borderRadius: BorderRadius.circular(16),
@@ -1732,23 +1889,28 @@ class _LandingPageState extends State<LandingPage>
                                   child: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.work_off_rounded,
-                                          size: 48, color: Colors.white24),
+                                      Icon(
+                                        Icons.work_off_rounded,
+                                        size: 48,
+                                        color: Colors.white24,
+                                      ),
                                       SizedBox(height: 16),
                                       Text(
                                         'No positions match your filters',
                                         style: GoogleFonts.poppins(
-                                            color: Colors.white70,
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w500),
+                                          color: Colors.white70,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                       SizedBox(height: 8),
                                       Text(
                                         'Try a different search or location, or check back later.',
                                         textAlign: TextAlign.center,
                                         style: GoogleFonts.poppins(
-                                            color: Colors.white54,
-                                            fontSize: 14),
+                                          color: Colors.white54,
+                                          fontSize: 14,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -1756,28 +1918,31 @@ class _LandingPageState extends State<LandingPage>
                               : Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    ..._categoryListPaginatedJobs.map((job) =>
-                                        Padding(
-                                          padding: EdgeInsets.only(bottom: 12),
-                                          child: _buildJobItem(
-                                            job['title'] ?? 'Position',
-                                            job['location'] ?? 'Location',
-                                            job['type'] ?? 'Type',
-                                            job['salary'] ?? 'Salary',
-                                            job,
-                                          ),
-                                        )),
+                                    ..._categoryListPaginatedJobs.map(
+                                      (job) => Padding(
+                                        padding: EdgeInsets.only(bottom: 12),
+                                        child: _buildJobItem(
+                                          job['title'] ?? 'Position',
+                                          job['location'] ?? 'Location',
+                                          job['type'] ?? 'Type',
+                                          job['salary'] ?? 'Salary',
+                                          job,
+                                        ),
+                                      ),
+                                    ),
                                     SizedBox(height: 16),
                                     // Pagination footer — solid background to match app
                                     Container(
                                       padding: EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 14),
+                                        horizontal: 16,
+                                        vertical: 14,
+                                      ),
                                       decoration: BoxDecoration(
                                         color: Color(0xFF252525),
-                                        borderRadius:
-                                            BorderRadius.circular(8),
+                                        borderRadius: BorderRadius.circular(8),
                                         border: Border.all(
-                                            color: Colors.white10),
+                                          color: Colors.white10,
+                                        ),
                                       ),
                                       child: Row(
                                         mainAxisAlignment:
@@ -1786,8 +1951,9 @@ class _LandingPageState extends State<LandingPage>
                                           Text(
                                             'Showing ${_categoryListTotalCount == 0 ? 0 : (_categoryCurrentPage * _categoryPageSize) + 1} to ${(_categoryCurrentPage * _categoryPageSize + _categoryListPaginatedJobs.length).clamp(0, _categoryListTotalCount)} of $_categoryListTotalCount entries',
                                             style: GoogleFonts.poppins(
-                                                color: Colors.white70,
-                                                fontSize: 13),
+                                              color: Colors.white70,
+                                              fontSize: 13,
+                                            ),
                                           ),
                                           Row(
                                             mainAxisSize: MainAxisSize.min,
@@ -1796,37 +1962,42 @@ class _LandingPageState extends State<LandingPage>
                                                 onPressed:
                                                     _categoryCurrentPage > 0
                                                         ? () => _safeSetState(
-                                                            () =>
-                                                                _categoryCurrentPage--)
+                                                              () =>
+                                                                  _categoryCurrentPage--,
+                                                            )
                                                         : null,
-                                                child: Text('Previous',
-                                                    style: GoogleFonts.poppins(
-                                                        color:
-                                                            _categoryCurrentPage >
-                                                                    0
-                                                                ? strokeColor
-                                                                : Colors
-                                                                    .white38)),
+                                                child: Text(
+                                                  'Previous',
+                                                  style: GoogleFonts.poppins(
+                                                    color:
+                                                        _categoryCurrentPage > 0
+                                                            ? strokeColor
+                                                            : Colors.white38,
+                                                  ),
+                                                ),
                                               ),
                                               SizedBox(width: 8),
                                               TextButton(
                                                 onPressed: (_categoryCurrentPage +
-                                                              1) *
-                                                          _categoryPageSize <
-                                                      _categoryListTotalCount
+                                                                1) *
+                                                            _categoryPageSize <
+                                                        _categoryListTotalCount
                                                     ? () => _safeSetState(
-                                                        () =>
-                                                            _categoryCurrentPage++)
+                                                          () =>
+                                                              _categoryCurrentPage++,
+                                                        )
                                                     : null,
-                                                child: Text('Next',
-                                                    style: GoogleFonts.poppins(
-                                                        color: (_categoryCurrentPage +
+                                                child: Text(
+                                                  'Next',
+                                                  style: GoogleFonts.poppins(
+                                                    color: (_categoryCurrentPage +
                                                                     1) *
                                                                 _categoryPageSize <
                                                             _categoryListTotalCount
-                                                            ? strokeColor
-                                                            : Colors
-                                                                .white38)),
+                                                        ? strokeColor
+                                                        : Colors.white38,
+                                                  ),
+                                                ),
                                               ),
                                             ],
                                           ),
@@ -1846,12 +2017,18 @@ class _LandingPageState extends State<LandingPage>
                       decoration: BoxDecoration(),
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 60, vertical: 40),
+                        horizontal: 60,
+                        vertical: 40,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Image.asset('assets/images/logo3.png',
-                              width: 220, height: 120, fit: BoxFit.contain),
+                          Image.asset(
+                            'assets/images/logo3.png',
+                            width: 220,
+                            height: 120,
+                            fit: BoxFit.contain,
+                          ),
                           const SizedBox(height: 20),
                           Container(
                             decoration: BoxDecoration(
@@ -1860,16 +2037,26 @@ class _LandingPageState extends State<LandingPage>
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                _socialIcon('assets/icons/Instagram1.png',
-                                    'https://www.instagram.com/yourprofile'),
-                                _socialIcon('assets/icons/x1.png',
-                                    'https://x.com/yourprofile'),
-                                _socialIcon('assets/icons/LinkedIn1.png',
-                                    'https://www.linkedin.com/in/yourprofile'),
-                                _socialIcon('assets/icons/facebook1.png',
-                                    'https://www.facebook.com/yourprofile'),
-                                _socialIcon('assets/icons/YouTube1.png',
-                                    'https://www.youtube.com/yourchannel'),
+                                _socialIcon(
+                                  'assets/icons/Instagram1.png',
+                                  'https://www.instagram.com/yourprofile',
+                                ),
+                                _socialIcon(
+                                  'assets/icons/x1.png',
+                                  'https://x.com/yourprofile',
+                                ),
+                                _socialIcon(
+                                  'assets/icons/LinkedIn1.png',
+                                  'https://www.linkedin.com/in/yourprofile',
+                                ),
+                                _socialIcon(
+                                  'assets/icons/facebook1.png',
+                                  'https://www.facebook.com/yourprofile',
+                                ),
+                                _socialIcon(
+                                  'assets/icons/YouTube1.png',
+                                  'https://www.youtube.com/yourchannel',
+                                ),
                               ],
                             ),
                           ),
@@ -1877,7 +2064,9 @@ class _LandingPageState extends State<LandingPage>
                           Text(
                             "┬⌐ 2025 Khonology. All rights reserved.",
                             style: GoogleFonts.poppins(
-                                color: Colors.white54, fontSize: 12),
+                              color: Colors.white54,
+                              fontSize: 12,
+                            ),
                           ),
                         ],
                       ),
@@ -1897,15 +2086,21 @@ class _LandingPageState extends State<LandingPage>
                   ),
                   child: _buildLuxuryChatbotPanel(),
                 ),
+              ), // chatbot
+            // ===== APP VERSION (bottom-left, display only, not clickable) =====
+            Positioned(
+              left: 12,
+              bottom: 12,
+              child: AppVersionText(
+                style: GoogleFonts.poppins(fontSize: 10, color: Colors.white54),
               ),
+            ),
           ],
         ),
 
         // Floating Chatbot Icon
         floatingActionButton: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(30),
-          ),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(30)),
           child: FloatingActionButton(
             onPressed: () => _safeSetState(() => chatbotOpen = !chatbotOpen),
             backgroundColor: primaryColor,
@@ -1919,5 +2114,9 @@ class _LandingPageState extends State<LandingPage>
         ),
       ),
     );
+  }
+
+  Widget AppVersionText({required TextStyle style}) {
+    return Text(kDisplayVersion, style: style);
   }
 }

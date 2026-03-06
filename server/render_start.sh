@@ -3,6 +3,10 @@ set -euo pipefail
 
 export FLASK_APP=app:create_app
 
+# Expose the current git SHA to the Flask app for health/version endpoints.
+GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+export GIT_SHA
+
 # Run migrations before starting the web server
 set +e
 python - <<'PY'
