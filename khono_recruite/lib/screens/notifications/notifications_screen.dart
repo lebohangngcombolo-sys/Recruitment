@@ -86,11 +86,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _onTapNotification(Map<String, dynamic> n) async {
     final id = n['id'];
     if (id != null && (n['is_read'] != true)) {
-      await NotificationService.markAsRead(id is int ? id : int.tryParse(id.toString()) ?? 0);
+      await NotificationService.markAsRead(
+          id is int ? id : int.tryParse(id.toString()) ?? 0);
       if (mounted) {
         setState(() {
           final idx = _notifications.indexWhere((e) => e['id'] == id);
-          if (idx >= 0) _notifications[idx] = {..._notifications[idx], 'is_read': true};
+          if (idx >= 0)
+            _notifications[idx] = {..._notifications[idx], 'is_read': true};
           if (_unreadCount > 0) _unreadCount--;
         });
       }
@@ -115,18 +117,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           appBar: AppBar(
             title: Text(
               'Notifications',
-              style: TextStyle(
-                color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-              ),
+              style: Theme.of(context).textTheme.titleLarge,
             ),
-            backgroundColor: (themeProvider.isDarkMode
-                    ? const Color(0xFF14131E)
-                    : Colors.white)
-                .withOpacity(0.9),
+            backgroundColor:
+                Theme.of(context).colorScheme.surface.withOpacity(0.9),
             elevation: 1,
-            iconTheme: IconThemeData(
-              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-            ),
+            iconTheme: Theme.of(context).iconTheme,
           ),
           body: _loading
               ? Center(
@@ -181,13 +177,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               final n = _notifications[index];
                               final isUnread = n['is_read'] != true;
                               final createdAt = n['created_at'] != null
-                                  ? DateTime.tryParse(n['created_at'].toString())
+                                  ? DateTime.tryParse(
+                                      n['created_at'].toString())
                                   : null;
 
                               return TweenAnimationBuilder<double>(
                                 tween: Tween(begin: 0, end: 1),
-                                duration: Duration(
-                                    milliseconds: 500 + (index * 100)),
+                                duration:
+                                    Duration(milliseconds: 500 + (index * 100)),
                                 builder: (context, opacity, child) {
                                   return Opacity(
                                     opacity: opacity,
@@ -213,12 +210,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                             .withOpacity(0.9),
                                         borderRadius: BorderRadius.circular(16),
                                         border: Border.all(
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.grey.shade800
-                                              : Colors.grey[300]!),
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.grey.shade800
+                                                : Colors.grey[300]!),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.black.withOpacity(0.05),
+                                            color:
+                                                Colors.black.withOpacity(0.05),
                                             blurRadius: 6,
                                             offset: const Offset(0, 3),
                                           ),
@@ -247,10 +245,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                                 Text(
                                                   _titleFor(n),
                                                   style: TextStyle(
-                                                    color: themeProvider
-                                                            .isDarkMode
-                                                        ? Colors.white
-                                                        : Colors.black,
+                                                    color:
+                                                        themeProvider.isDarkMode
+                                                            ? Colors.white
+                                                            : Colors.black,
                                                     fontWeight: isUnread
                                                         ? FontWeight.bold
                                                         : FontWeight.w600,
@@ -259,7 +257,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                                 ),
                                                 const SizedBox(height: 6),
                                                 Text(
-                                                  n['message']?.toString() ?? '',
+                                                  n['message']?.toString() ??
+                                                      '',
                                                   style: TextStyle(
                                                     color: themeProvider
                                                             .isDarkMode
@@ -273,8 +272,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                                     alignment:
                                                         Alignment.bottomRight,
                                                     child: Padding(
-                                                      padding: const EdgeInsets.only(
-                                                          top: 8),
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              top: 8),
                                                       child: Text(
                                                         '${createdAt.year}-${createdAt.month.toString().padLeft(2, '0')}-${createdAt.day.toString().padLeft(2, '0')} '
                                                         '${createdAt.hour.toString().padLeft(2, '0')}:${createdAt.minute.toString().padLeft(2, '0')}',
@@ -282,8 +282,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                                           fontSize: 12,
                                                           color: themeProvider
                                                                   .isDarkMode
-                                                              ? Colors.grey
-                                                                  .shade500
+                                                              ? Colors
+                                                                  .grey.shade500
                                                               : Colors.grey,
                                                         ),
                                                       ),
@@ -301,8 +301,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             },
                           ),
                         ),
-                      ),
-                    ),
-                );
+        ),
+      ),
+    );
   }
 }

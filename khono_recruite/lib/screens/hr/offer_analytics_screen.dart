@@ -107,15 +107,20 @@ class _OfferAnalyticsScreenState extends State<OfferAnalyticsScreen> {
                 const Spacer(),
                 Text(
                   value,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white),
+                      color: Theme.of(context).colorScheme.onBackground),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            Text(title, style: const TextStyle(color: Colors.white70)),
+            Text(title,
+                style: TextStyle(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onBackground
+                        .withOpacity(0.7))),
           ],
         ),
       ),

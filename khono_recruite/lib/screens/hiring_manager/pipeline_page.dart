@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:http/http.dart' as http;
 import '../../services/recruitment_service.dart';
+import '../../utils/api_endpoints.dart';
 
 class RecruitmentPipelinePage extends StatefulWidget {
   final String token;
@@ -1767,6 +1770,98 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               icon: Icon(Icons.video_call,
                   color: const Color.fromARGB(255, 135, 20, 20), size: 24),
             ),
+          // Add Edit Button
+          IconButton(
+            onPressed: () => _showEditInterviewDialog(interview),
+            icon: Icon(Icons.edit, color: Colors.blue, size: 20),
+            tooltip: 'Edit Interview',
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Interview Edit Dialog
+  void _showEditInterviewDialog(Map<String, dynamic> interview) {
+    final titleController =
+        TextEditingController(text: interview['candidate_name'] ?? '');
+    final typeController =
+        TextEditingController(text: interview['interview_type'] ?? 'Interview');
+    final interviewerController =
+        TextEditingController(text: interview['interviewer_name'] ?? '');
+    final meetingLinkController =
+        TextEditingController(text: interview['meeting_link'] ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Edit Interview'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: titleController,
+                decoration: InputDecoration(labelText: 'Candidate Name'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: typeController,
+                decoration: InputDecoration(labelText: 'Interview Type'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: interviewerController,
+                decoration: InputDecoration(labelText: 'Interviewer'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: meetingLinkController,
+                decoration: InputDecoration(labelText: 'Meeting Link'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              try {
+                final response = await http.put(
+                  Uri.parse(
+                      '${ApiEndpoints.updateInterviewStatus(interview['id'])}'),
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ${widget.token}',
+                  },
+                  body: jsonEncode({
+                    'candidate_name': titleController.text,
+                    'interview_type': typeController.text,
+                    'interviewer_name': interviewerController.text,
+                    'meeting_link': meetingLinkController.text,
+                  }),
+                );
+
+                if (response.statusCode == 200) {
+                  Navigator.pop(context);
+                  _loadTabData(2); // Refresh calendar/interviews tab
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Interview updated successfully')),
+                  );
+                } else {
+                  throw Exception('Failed to update interview');
+                }
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error updating interview: $e')),
+                );
+              }
+            },
+            child: Text('Update'),
+          ),
         ],
       ),
     );

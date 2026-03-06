@@ -50,7 +50,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
 
       if (kDebugMode) debugPrint("Meetings response: $meetingsResponse");
       final meetingsData = meetingsResponse['meetings'] as List<dynamic>? ?? [];
-      if (kDebugMode) debugPrint("Fetched ${meetingsData.length} meetings from API");
+      if (kDebugMode)
+        debugPrint("Fetched ${meetingsData.length} meetings from API");
 
       // Convert to Meeting objects
       final loadedMeetings =
@@ -74,7 +75,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
         _meetings.clear();
         _meetings.addAll(filteredMeetings);
       });
-      if (kDebugMode) debugPrint("Displayed meetings count: ${_meetings.length}");
+      if (kDebugMode)
+        debugPrint("Displayed meetings count: ${_meetings.length}");
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -98,6 +100,17 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
       backgroundColor: themeProvider.isDarkMode
           ? const Color(0xFF0B0B13)
           : const Color(0xFFF5F6FA),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: Icon(
+            Icons.arrow_back,
+            color: themeProvider.isDarkMode ? Colors.white : AppColors.textDark,
+          ),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
