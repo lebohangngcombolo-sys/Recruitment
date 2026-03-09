@@ -3,10 +3,11 @@ class ApiEndpoints {
   static const authBase = "http://127.0.0.1:5000/api/auth";
   static const candidateBase = "http://127.0.0.1:5000/api/candidate";
   static const adminBase = "http://127.0.0.1:5000/api/admin";
-  static const chatbotBase = "http://127.0.0.1:5000/api/chatbot";
-  static const hmBase = "http://127.0.0.1:5000/api/admin";
-  static const chatBase = "http://127.0.0.1:5000/api/chat";
   static const analyticsBase = "http://127.0.0.1:5000/api/analytics";
+  static const chatBase = "http://127.0.0.1:5000/api/chat";
+  static const aiBase = "http://127.0.0.1:5000/api/ai";
+  static const generateJobDetails = "$aiBase/generate_job_details";
+  static const generateQuestions = "$aiBase/generate_questions";
 
   // NEW: Offer management base URL (matches your Flask blueprint)
   static const offerBase = "http://127.0.0.1:5000/api/offer";
@@ -18,14 +19,18 @@ class ApiEndpoints {
   // ------------------- Auth -------------------
   static const register = "$authBase/register";
   static const verify = "$authBase/verify";
+  static const resendVerification = "$authBase/resend-verification";
   static const login = "$authBase/login";
   static const logout = "$authBase/logout";
   static const forgotPassword = "$authBase/forgot-password";
   static const resetPassword = "$authBase/reset-password";
   static const changePassword = "$authBase/change-password";
   static const currentUser = "$authBase/me";
+  static const refresh = "$authBase/refresh";
   static const adminEnroll = "$authBase/admin-enroll";
   static const firebaseLogin = "$authBase/firebase-login";
+  static const updateAuthProfile = "$authBase/profile";
+  static const uploadAuthProfilePicture = "$authBase/upload_profile_picture";
 
   // ------------------- OAuth (UPDATED FOR SUPABASE) -------------------
   static const googleOAuth = "$authBase/google";
@@ -48,6 +53,10 @@ class ApiEndpoints {
   static const regenerateBackupCodes =
       "$authBase/mfa/regenerate-backup-codes"; // POST - Regenerate backup codes
   static const String parserCV = "$authBase/cv/parse"; // POST Multipart
+
+  // ------------------- Public (no auth) -------------------
+  static const publicBase = "http://127.0.0.1:5000/api/public";
+  static const getPublicJobs = "$publicBase/jobs";
 
   // ------------------- Candidate -------------------
   static const enrollment = "$candidateBase/enrollment";
@@ -83,6 +92,29 @@ class ApiEndpoints {
   // ------------------- Jobs with Statistics -------------------
   static const getJobsWithStats = "$adminBase/jobs/with-stats";
 
+  // ------------------- Analytics / Demographics -------------------
+  static const getGenderDistribution =
+      "$adminBase/analytics/gender-distribution";
+  static const getEthnicityDistribution =
+      "$adminBase/analytics/ethnicity-distribution";
+
+  // ------------------- CVs -------------------
+  static const allCVs = "$adminBase/cvs";
+
+  // ------------------- Interviews (calendar) -------------------
+  static const getInterviewsForCalendar = "$adminBase/interviews/calendar";
+
+  // ------------------- Test packs -------------------
+  static const getTestPacks = "$adminBase/test-packs";
+  static String getTestPackById(int id) => "$adminBase/test-packs/$id";
+  static const createTestPack = "$adminBase/test-packs";
+  static String updateTestPack(int id) => "$adminBase/test-packs/$id";
+  static String deleteTestPack(int id) => "$adminBase/test-packs/$id";
+
+  // ------------------- Notifications -------------------
+  static String markNotificationRead(int notificationId) =>
+      "$adminBase/notifications/$notificationId/read";
+
   // ------------------- Interviews by Timeframe -------------------
   static String getInterviewsByTimeframe(String timeframe) =>
       "$adminBase/interviews/dashboard/$timeframe"; // today, upcoming, past, week, month
@@ -113,9 +145,13 @@ class ApiEndpoints {
   static String getJobActivity(int id) => "$adminBase/jobs/$id/activity";
   static String getJobApplications(int id) =>
       "$adminBase/jobs/$id/applications";
+  static const getApplicationsForMyJobs =
+      "$adminBase/jobs/applications/for-my-jobs";
   static String getJobStats = "$adminBase/jobs/stats";
   static const viewCandidates = "$adminBase/candidates";
   static String getApplicationById(int id) => "$adminBase/applications/$id";
+  static String getCandidateApplicationsByCandidateId(int candidateId) =>
+      "$adminBase/candidates/$candidateId/applications";
   static String shortlistCandidates(int jobId) =>
       "$adminBase/jobs/$jobId/shortlist";
   static const scheduleInterview = "$adminBase/interviews";
@@ -305,10 +341,6 @@ class ApiEndpoints {
   static String getInterviewCalendarStatus(int interviewId) =>
       "$adminBase/interviews/$interviewId/calendar/status";
 
-  // ------------------- AI Chatbot -------------------
-  static const parseCV = "$chatbotBase/parse_cv";
-  static const askBot = "$chatbotBase/ask";
-
   // ==================== CHAT FEATURE ENDPOINTS ====================
 
   // Thread Management
@@ -404,31 +436,24 @@ class ApiEndpoints {
 
   // Analytics blueprint routes
   static const getApplicationsPerRequisition =
-      "$analyticsBase/analytics/applications-per-requisition";
+      "$analyticsBase/applications-per-requisition";
   static const getApplicationToInterviewConversion =
-      "$analyticsBase/analytics/conversion/application-to-interview";
+      "$analyticsBase/conversion/application-to-interview";
   static const getInterviewToOfferConversion =
-      "$analyticsBase/analytics/conversion/interview-to-offer";
-  static const getStageDropoff = "$analyticsBase/analytics/dropoff";
-  static const getTimePerStage = "$analyticsBase/analytics/time-per-stage";
-  static const getMonthlyApplications =
-      "$analyticsBase/analytics/applications/monthly";
-  static const getCVScreeningDrop =
-      "$analyticsBase/analytics/cv-screening-drop";
-  static const getAssessmentPassRate =
-      "$analyticsBase/analytics/assessments/pass-rate";
-  static const getInterviewScheduling =
-      "$analyticsBase/analytics/interviews/scheduled";
-  static const getOffersByCategory =
-      "$analyticsBase/analytics/offers-by-category";
-  static const getAvgCVScore =
-      "$analyticsBase/analytics/candidate/avg-cv-score";
+      "$analyticsBase/conversion/interview-to-offer";
+  static const getStageDropoff = "$analyticsBase/dropoff";
+  static const getTimePerStage = "$analyticsBase/time-per-stage";
+  static const getMonthlyApplications = "$analyticsBase/applications/monthly";
+  static const getCVScreeningDrop = "$analyticsBase/cv-screening-drop";
+  static const getAssessmentPassRate = "$analyticsBase/assessments/pass-rate";
+  static const getInterviewScheduling = "$analyticsBase/interviews/scheduled";
+  static const getOffersByCategory = "$analyticsBase/offers-by-category";
+  static const getAvgCVScore = "$analyticsBase/candidate/avg-cv-score";
   static const getAvgAssessmentScore =
-      "$analyticsBase/analytics/candidate/avg-assessment-score";
-  static const getSkillsFrequency =
-      "$analyticsBase/analytics/candidate/skills-frequency";
+      "$analyticsBase/candidate/avg-assessment-score";
+  static const getSkillsFrequency = "$analyticsBase/candidate/skills-frequency";
   static const getExperienceDistribution =
-      "$analyticsBase/analytics/candidate/experience-distribution";
+      "$analyticsBase/candidate/experience-distribution";
 
   // ==================== CANDIDATE ENDPOINTS ====================
   static const getCandidateProfile = "$candidateBase/profile";

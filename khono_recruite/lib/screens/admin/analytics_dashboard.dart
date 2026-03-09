@@ -90,10 +90,10 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                   color: (themeProvider.isDarkMode
                           ? const Color(0xFF14131E)
                           : Colors.white)
-                      .withOpacity(0.92),
+                      .withValues(alpha: 0.92),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.15),
+                      color: Colors.black.withValues(alpha: 0.15),
                       blurRadius: 25,
                       offset: const Offset(0, 6),
                     ),
@@ -120,7 +120,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                               : Colors.grey.shade50,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.08),
+                              color: Colors.black.withValues(alpha: 0.08),
                               blurRadius: 12,
                               offset: const Offset(0, 3),
                             ),
@@ -151,6 +151,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                                     ? Colors.white
                                     : const Color(0xFF14131E),
                                 letterSpacing: -0.8,
+                                fontFamily: 'Poppins',
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -162,6 +163,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                                     : Colors.grey.shade600,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w400,
+                                fontFamily: 'Poppins',
                               ),
                             ),
                           ],
@@ -178,7 +180,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                               color: (themeProvider.isDarkMode
                                       ? const Color(0xFF14131E)
                                       : Colors.white)
-                                  .withOpacity(0.95),
+                                  .withValues(alpha: 0.95),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: themeProvider.isDarkMode
@@ -188,7 +190,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                               ),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.08),
+                                  color: Colors.black.withValues(alpha: 0.08),
                                   blurRadius: 12,
                                   offset: const Offset(0, 3),
                                 ),
@@ -208,6 +210,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                                       : const Color(0xFF14131E),
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
+                                  fontFamily: 'Poppins',
                                 ),
                                 items: const [
                                   DropdownMenuItem(
@@ -231,7 +234,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                                   : Colors.grey.shade50,
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black.withOpacity(0.08),
+                                  color: Colors.black.withValues(alpha: 0.08),
                                   blurRadius: 12,
                                   offset: const Offset(0, 3),
                                 ),
@@ -292,7 +295,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.redAccent.withOpacity(0.2),
+                color: Colors.redAccent.withValues(alpha: 0.2),
                 width: 3,
               ),
             ),
@@ -313,6 +316,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
               color: themeProvider.isDarkMode
                   ? Colors.white70
                   : Colors.grey.shade800,
+              fontFamily: 'Poppins',
             ),
           ),
           const SizedBox(height: 14),
@@ -323,6 +327,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                   ? Colors.white54
                   : Colors.grey.shade500,
               fontSize: 14,
+              fontFamily: 'Poppins',
             ),
           ),
         ],
@@ -345,8 +350,8 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                 shape: BoxShape.circle,
                 gradient: LinearGradient(
                   colors: [
-                    Colors.redAccent.withOpacity(0.1),
-                    Colors.redAccent.withOpacity(0.05),
+                    Colors.redAccent.withValues(alpha: 0.1),
+                    Colors.redAccent.withValues(alpha: 0.05),
                   ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
@@ -362,6 +367,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
                 color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                fontFamily: 'Poppins',
               ),
             ),
             const SizedBox(height: 18),
@@ -370,6 +376,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
               style: TextStyle(
                 color: Colors.grey.shade600,
                 fontSize: 14,
+                fontFamily: 'Poppins',
               ),
               textAlign: TextAlign.center,
             ),
@@ -386,13 +393,14 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                 ),
                 padding:
                     const EdgeInsets.symmetric(horizontal: 36, vertical: 16),
-                shadowColor: Colors.redAccent.withOpacity(0.3),
+                shadowColor: Colors.redAccent.withValues(alpha: 0.3),
               ),
               child: Text(
                 'Try Again',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 15,
+                  fontFamily: 'Poppins',
                 ),
               ),
             ),
@@ -618,6 +626,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+              fontFamily: 'Poppins',
             ),
           ),
           const SizedBox(height: 20),
@@ -685,6 +694,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                         color: themeProvider.isDarkMode
                             ? Colors.white
                             : Colors.black87,
+                        fontFamily: 'Poppins',
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -734,6 +744,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                         color: themeProvider.isDarkMode
                             ? Colors.white
                             : Colors.black87,
+                        fontFamily: 'Poppins',
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -820,6 +831,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                         color: themeProvider.isDarkMode
                             ? Colors.white
                             : Colors.black87,
+                        fontFamily: 'Poppins',
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -858,6 +870,7 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                         color: themeProvider.isDarkMode
                             ? Colors.white
                             : Colors.black87,
+                        fontFamily: 'Poppins',
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -1157,11 +1170,11 @@ class _ProfessionalAnalyticsCard extends StatelessWidget {
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.92),
+                .withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 28,
             offset: const Offset(0, 10),
           ),
@@ -1186,7 +1199,7 @@ class _ProfessionalAnalyticsCard extends StatelessWidget {
                   gradient: LinearGradient(
                     colors: [
                       Colors.redAccent,
-                      Colors.redAccent.withOpacity(0.7)
+                      Colors.redAccent.withValues(alpha: 0.7)
                     ],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
@@ -1260,11 +1273,11 @@ class _ProfessionalStatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.92),
+                .withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.12),
+            color: Colors.black.withValues(alpha: 0.12),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
@@ -1294,7 +1307,7 @@ class _ProfessionalStatCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: gradient.first.withOpacity(0.4),
+                      color: gradient.first.withValues(alpha: 0.4),
                       blurRadius: 12,
                       offset: const Offset(0, 6),
                     ),
@@ -1307,10 +1320,10 @@ class _ProfessionalStatCard extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.15),
+                  color: color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: color.withOpacity(0.3),
+                    color: color.withValues(alpha: 0.3),
                     width: 1.5,
                   ),
                 ),

@@ -26,23 +26,6 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen> {
   final List<FocusNode> _focusNodes = List.generate(6, (index) => FocusNode());
   final List<TextEditingController> _digitControllers =
       List.generate(6, (index) => TextEditingController());
-  bool _isVerifying = false;
-
-  void _verifyToken() {
-    if (_tokenController.text.length != 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Please enter a valid 6-digit code")),
-      );
-      return;
-    }
-
-    setState(() => _isVerifying = true);
-
-    // 🆕 Call the onVerify callback with the token
-    widget.onVerify(_tokenController.text);
-
-    setState(() => _isVerifying = false);
-  }
 
   void _onDigitChanged(String value, int index) {
     if (value.isNotEmpty) {
@@ -63,18 +46,6 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen> {
     } else if (value.isEmpty && index > 0) {
       // Move to previous field when backspace is pressed on empty field
       FocusScope.of(context).requestFocus(_focusNodes[index - 1]);
-    }
-  }
-
-  void _onDigitPasted(String value) {
-    // Handle paste by filling all boxes with the pasted value
-    if (value.length == 6) {
-      for (int i = 0; i < 6; i++) {
-        _digitControllers[i].text = value[i];
-      }
-      _tokenController.text = value;
-      // Move focus to last field
-      FocusScope.of(context).requestFocus(_focusNodes[5]);
     }
   }
 
@@ -188,33 +159,32 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen> {
                               maxLength: 1,
                               style: const TextStyle(
                                 fontSize: 24,
-                                color: Colors.white,
+                                color: Color(0xFFC10D00), // #c10d00
                                 fontWeight: FontWeight.bold,
                               ),
                               decoration: InputDecoration(
                                 counterText: '',
                                 filled: true,
-                                fillColor:
-                                    Colors.transparent, // 100% transparent
+                                fillColor: Color(
+                                    0x33f2f2f2), // #f2f2f2 with 20% opacity
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
                                   borderSide: const BorderSide(
-                                    color: Colors.red, // Red border
+                                    color: Color(0xFFC10D00), // #c10d00 stroke
                                     width: 2,
                                   ),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
                                   borderSide: const BorderSide(
-                                    color: Colors
-                                        .redAccent, // Brighter red when focused
+                                    color: Color(0xFFC10D00), // #c10d00 stroke
                                     width: 2,
                                   ),
                                 ),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
                                   borderSide: const BorderSide(
-                                    color: Colors.red,
+                                    color: Color(0xFFC10D00), // #c10d00 stroke
                                     width: 2,
                                   ),
                                 ),

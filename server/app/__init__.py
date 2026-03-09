@@ -1,8 +1,11 @@
-from flask import Flask
+from flask import Flask, request, jsonify
 from .extensions import db, jwt, mail, cloudinary_client, mongo_client, migrate, cors, bcrypt, oauth, limiter, socketio
 from .models import *
-from .routes import auth, admin_routes, candidate_routes, ai_routes, mfa_routes, sso_routes, analytics_routes, chat_routes, offer_routes  # import sso_routes
+from .routes import auth, admin_routes, candidate_routes, ai_routes, mfa_routes, sso_routes, analytics_routes, chat_routes, offer_routes, public_routes, test_pack_routes
 from .websocket_handler import register_websocket_handlers
+import firebase_admin
+from firebase_admin import credentials
+import os
 
 def create_app():
     app = Flask(__name__)
@@ -17,31 +20,89 @@ def create_app():
     cloudinary_client.init_app(app)
     migrate.init_app(app, db)
     limiter.init_app(app)
+
+    # Initialize Firebase Admin SDK
+    try:
+        firebase_service_account_key_file = os.getenv('FIREBASE_SERVICE_ACCOUNT_KEY_FILE')
+        if firebase_service_account_key_file:
+            if not os.path.isabs(firebase_service_account_key_file):
+                # Resolve relative to server root (parent of app package)
+                _server_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                firebase_service_account_key_file = os.path.normpath(
+                    os.path.join(_server_root, firebase_service_account_key_file)
+                )
+            if os.path.isfile(firebase_service_account_key_file):
+                cred = credentials.Certificate(firebase_service_account_key_file)
+                firebase_admin.initialize_app(cred)
+                app.logger.info("Firebase Admin SDK initialized successfully.")
+            else:
+                app.logger.warning(
+                    f"Firebase key file not found: {firebase_service_account_key_file}. "
+                    "Firebase Admin SDK not initialized."
+                )
+        else:
+            app.logger.warning("FIREBASE_SERVICE_ACCOUNT_KEY_FILE environment variable not set. Firebase Admin SDK not initialized.")
+    except Exception as e:
+        app.logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
+        # Depending on your application's needs, you might want to exit or handle this more gracefully.
+        # For now, we'll just log the error.
     socketio.init_app(
         app,
         cors_allowed_origins="*",
-        async_mode='eventlet',  # or 'gevent' depending on your setup
+        async_mode='threading',  # use threading to avoid eventlet/gevent compatibility problems
         manage_session=False,
         ping_timeout=60,
         ping_interval=25
     )
+    # In production, restrict CORS to FRONTEND_URL when set; in local dev allow all origins (Flutter web uses random localhost ports).
+    _cors_origins = ["*"]
+    if app.config.get("FLASK_ENV") == "production":
+        _frontend = (app.config.get("FRONTEND_URL") or "").strip().rstrip("/")
+        if _frontend:
+            _cors_origins = [_frontend]
+        else:
+            _cors_origins = ["*"]
     cors.init_app(
         app,
-        origins=["*"],  # Allow all origins for development
+        origins=_cors_origins,
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
-        supports_credentials=True
+        allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"],
+        supports_credentials=False,  # Required when using origins="*"; auth uses header not cookies
+        automatic_options=True  # Ensure automatic OPTIONS handling
     )
+
+    # Ensure CORS headers on every response (including 4xx/5xx and errors). When Render free tier
+    # wakes from sleep, gateway timeouts may not reach the app; when the app does respond, CORS must be present.
+    @app.after_request
+    def _add_cors_headers(response):
+        from flask import request
+        if "Access-Control-Allow-Origin" not in response.headers:
+            origin = request.environ.get("HTTP_ORIGIN")
+            if _cors_origins and "*" in _cors_origins:
+                response.headers["Access-Control-Allow-Origin"] = "*"
+            elif origin and _cors_origins and origin in _cors_origins:
+                response.headers["Access-Control-Allow-Origin"] = origin
+            elif _cors_origins:
+                response.headers["Access-Control-Allow-Origin"] = _cors_origins[0]
+            else:
+                response.headers["Access-Control-Allow-Origin"] = "*"
+        if "Access-Control-Allow-Methods" not in response.headers:
+            response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        if "Access-Control-Allow-Headers" not in response.headers:
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Accept"
+        return response
 
     # ---------------- Register Blueprints ----------------
     auth.init_auth_routes(app)  # existing auth routes
     app.register_blueprint(admin_routes.admin_bp, url_prefix="/api/admin")
+    app.register_blueprint(test_pack_routes.test_pack_bp, url_prefix="/api/admin")
     app.register_blueprint(candidate_routes.candidate_bp, url_prefix="/api/candidate")
     app.register_blueprint(ai_routes.ai_bp)
     app.register_blueprint(mfa_routes.mfa_bp, url_prefix="/api/auth")  # MFA routes
     app.register_blueprint(analytics_routes.analytics_bp, url_prefix="/api")
     app.register_blueprint(chat_routes.chat_bp, url_prefix="/api/chat")
     app.register_blueprint(offer_routes.offer_bp, url_prefix="/api/offer")
+    app.register_blueprint(public_routes.public_bp, url_prefix="/api/public")
 
     # ---------------- Register SSO Blueprint ----------------
     sso_routes.register_sso_provider(app)      # initialize Auth0 / SSO provider

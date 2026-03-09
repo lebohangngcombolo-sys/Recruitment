@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io' show File;
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -9,12 +8,15 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../providers/theme_provider.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
+import '../../utils/app_version.dart';
 
 // ------------------- API Base URL -------------------
-const String candidateBase = "http://127.0.0.1:5000/api/candidate";
+final String candidateBase = ApiEndpoints.candidateBase;
 
 class ProfilePage extends StatefulWidget {
   final String token;
@@ -28,6 +30,8 @@ class _ProfilePageState extends State<ProfilePage>
     with TickerProviderStateMixin {
   bool loading = true;
   bool showProfileSummary = true;
+  bool _isSaving = false;
+  final _formKey = GlobalKey<FormState>();
 
   String selectedSidebar = "Profile";
 
@@ -82,7 +86,8 @@ class _ProfilePageState extends State<ProfilePage>
 
   List<dynamic> documents = [];
 
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  final String apiBase = ApiEndpoints.candidateBase;
+  bool _isCandidateUser = false;
 
   @override
   void initState() {
@@ -107,14 +112,16 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Future<void> _enableMfa() async {
-    setState(() => _mfaLoading = true);
+    if (mounted) setState(() => _mfaLoading = true);
     try {
       final result = await AuthService.enableMfa();
       if (result.containsKey('qr_code')) {
-        setState(() {
-          _mfaSecret = result['secret'];
-          _mfaQrCode = result['qr_code'];
-        });
+        if (mounted) {
+          setState(() {
+            _mfaSecret = result['secret'];
+            _mfaQrCode = result['qr_code'];
+          });
+        }
         _showMfaSetupDialog();
       }
     } catch (e) {
@@ -122,20 +129,22 @@ class _ProfilePageState extends State<ProfilePage>
         SnackBar(content: Text("Failed to enable MFA: $e")),
       );
     } finally {
-      setState(() => _mfaLoading = false);
+      if (mounted) setState(() => _mfaLoading = false);
     }
   }
 
   Future<void> _verifyMfaSetup(String token) async {
-    setState(() => _mfaLoading = true);
+    if (mounted) setState(() => _mfaLoading = true);
     try {
       final result = await AuthService.verifyMfaSetup(token);
       if (result.containsKey('backup_codes')) {
-        setState(() {
-          _mfaEnabled = true;
-          _backupCodes = List<String>.from(result['backup_codes']);
-          _backupCodesRemaining = _backupCodes.length;
-        });
+        if (mounted) {
+          setState(() {
+            _mfaEnabled = true;
+            _backupCodes = List<String>.from(result['backup_codes']);
+            _backupCodesRemaining = _backupCodes.length;
+          });
+        }
         Navigator.pop(context); // Close setup dialog
         _showBackupCodesDialog();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -147,22 +156,24 @@ class _ProfilePageState extends State<ProfilePage>
         SnackBar(content: Text("MFA setup failed: $e")),
       );
     } finally {
-      setState(() => _mfaLoading = false);
+      if (mounted) setState(() => _mfaLoading = false);
     }
   }
 
   Future<void> _disableMfa(String password) async {
-    setState(() => _mfaLoading = true);
+    if (mounted) setState(() => _mfaLoading = true);
     try {
       final result = await AuthService.disableMfa(password);
       if (result.containsKey('message')) {
-        setState(() {
-          _mfaEnabled = false;
-          _mfaSecret = null;
-          _mfaQrCode = null;
-          _backupCodes = [];
-          _backupCodesRemaining = 0;
-        });
+        if (mounted) {
+          setState(() {
+            _mfaEnabled = false;
+            _mfaSecret = null;
+            _mfaQrCode = null;
+            _backupCodes = [];
+            _backupCodesRemaining = 0;
+          });
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("MFA disabled successfully")),
         );
@@ -172,7 +183,7 @@ class _ProfilePageState extends State<ProfilePage>
         SnackBar(content: Text("Failed to disable MFA: $e")),
       );
     } finally {
-      setState(() => _mfaLoading = false);
+      if (mounted) setState(() => _mfaLoading = false);
     }
   }
 
@@ -194,7 +205,7 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Future<void> _regenerateBackupCodes() async {
-    setState(() => _mfaLoading = true);
+    if (mounted) setState(() => _mfaLoading = true);
     try {
       final result = await AuthService.regenerateBackupCodes();
       if (result.containsKey('backup_codes')) {
@@ -212,7 +223,7 @@ class _ProfilePageState extends State<ProfilePage>
         SnackBar(content: Text("Failed to regenerate backup codes: $e")),
       );
     } finally {
-      setState(() => _mfaLoading = false);
+      if (mounted) setState(() => _mfaLoading = false);
     }
   }
 
@@ -439,66 +450,161 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  // EXISTING PROFILE METHODS
+  // NEW SAVE PROFILE METHOD
+  Future<void> _saveProfile() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isSaving = true);
+    try {
+      final profileData = {
+        'full_name': fullNameController.text.trim(),
+        'email': emailController.text.trim(),
+        'phone': phoneController.text.trim(),
+        'gender': genderController.text.trim(),
+        'dob': dobController.text.trim(),
+        'nationality': nationalityController.text.trim(),
+        'id_number': idNumberController.text.trim(),
+        'bio': bioController.text.trim(),
+        'location': locationController.text.trim(),
+        'title': titleController.text.trim(),
+        'company': companyController.text.trim(),
+        'years_of_experience': yearsOfExpController.text.trim(),
+        'job_title': jobTitleController.text.trim(),
+        'linkedin': linkedinController.text.trim(),
+        'github': githubController.text.trim(),
+        'portfolio': portfolioController.text.trim(),
+        'cv_text': cvTextController.text.trim(),
+        'cv_url': cvUrlController.text.trim(),
+        'skills': skillsController.text.trim(),
+        'work_experience': workExpController.text.trim(),
+      };
+
+      final response = await http.put(
+        Uri.parse(ApiEndpoints.currentUser),
+        headers: {
+          'Authorization': 'Bearer ${widget.token}',
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({'profile': profileData}),
+      );
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Profile updated successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        throw Exception('Failed to update profile: ${response.statusCode}');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error saving profile: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      setState(() => _isSaving = false);
+    }
+  }
+
+  // EXISTING PROFILE METHODS: use /api/auth/me first; candidate uses candidate profile/settings, admin/HM use user.profile
   Future<void> fetchProfileAndSettings() async {
     try {
-      final profileRes = await http.get(
-        Uri.parse("$apiBase/profile"),
+      final meRes = await http.get(
+        Uri.parse(ApiEndpoints.currentUser),
         headers: {
           'Authorization': 'Bearer ${widget.token}',
           'Content-Type': 'application/json'
         },
       );
 
-      if (profileRes.statusCode == 200) {
-        final data = json.decode(profileRes.body)['data'];
-        final user = data['user'] ?? {};
-        final candidate = data['candidate'] ?? {};
+      if (meRes.statusCode == 200) {
+        final body = json.decode(meRes.body) as Map<String, dynamic>;
+        final user = body['user'] as Map<String, dynamic>? ?? {};
+        final profile = user['profile'] as Map<String, dynamic>? ?? {};
+        final candidateProfile =
+            body['candidate_profile'] as Map<String, dynamic>?;
 
-        fullNameController.text = candidate['full_name'] ?? "";
-        emailController.text = user['profile']['email'] ?? "";
-        phoneController.text = candidate['phone'] ?? "";
-        genderController.text = candidate['gender'] ?? "";
-        dobController.text = candidate['dob'] ?? "";
-        nationalityController.text = candidate['nationality'] ?? "";
-        idNumberController.text = candidate['id_number'] ?? "";
-        bioController.text = candidate['bio'] ?? "";
-        locationController.text = candidate['location'] ?? "";
-        titleController.text = candidate['title'] ?? "";
+        _isCandidateUser = candidateProfile != null;
 
-        degreeController.text = candidate['degree'] ?? "";
-        institutionController.text = candidate['institution'] ?? "";
-        graduationYearController.text = candidate['graduation_year'] ?? "";
-        skillsController.text = (candidate['skills'] ?? []).join(", ");
-        workExpController.text =
-            (candidate['work_experience'] ?? []).join("\n");
-        jobTitleController.text = candidate['job_title'] ?? "";
-        companyController.text = candidate['company'] ?? "";
-        yearsOfExpController.text = candidate['years_of_experience'] ?? "";
-        linkedinController.text = candidate['linkedin'] ?? "";
-        githubController.text = candidate['github'] ?? "";
-        portfolioController.text = candidate['portfolio'] ?? "";
-        cvTextController.text = candidate['cv_text'] ?? "";
-        cvUrlController.text = candidate['cv_url'] ?? "";
-        documents = candidate['documents'] ?? [];
-        _profileImageUrl = candidate['profile_picture'] ?? "";
-      }
+        if (candidateProfile != null) {
+          fullNameController.text =
+              candidateProfile['full_name']?.toString() ?? "";
+          emailController.text = user['email']?.toString() ?? "";
+          phoneController.text = candidateProfile['phone']?.toString() ?? "";
+          genderController.text = candidateProfile['gender']?.toString() ?? "";
+          dobController.text = candidateProfile['dob']?.toString() ?? "";
+          nationalityController.text =
+              candidateProfile['nationality']?.toString() ?? "";
+          idNumberController.text =
+              candidateProfile['id_number']?.toString() ?? "";
+          bioController.text = candidateProfile['bio']?.toString() ?? "";
+          locationController.text =
+              candidateProfile['location']?.toString() ?? "";
+          titleController.text = candidateProfile['title']?.toString() ?? "";
+          degreeController.text = candidateProfile['degree']?.toString() ?? "";
+          institutionController.text =
+              candidateProfile['institution']?.toString() ?? "";
+          graduationYearController.text =
+              candidateProfile['graduation_year']?.toString() ?? "";
+          skillsController.text = (candidateProfile['skills'] is List)
+              ? (candidateProfile['skills'] as List).join(", ")
+              : "";
+          workExpController.text = (candidateProfile['work_experience'] is List)
+              ? (candidateProfile['work_experience'] as List).join("\n")
+              : (candidateProfile['work_experience']?.toString() ?? "");
+          jobTitleController.text =
+              candidateProfile['job_title']?.toString() ?? "";
+          companyController.text =
+              candidateProfile['company']?.toString() ?? "";
+          yearsOfExpController.text =
+              candidateProfile['years_of_experience']?.toString() ?? "";
+          linkedinController.text =
+              candidateProfile['linkedin']?.toString() ?? "";
+          githubController.text = candidateProfile['github']?.toString() ?? "";
+          portfolioController.text =
+              candidateProfile['portfolio']?.toString() ?? "";
+          cvTextController.text = candidateProfile['cv_text']?.toString() ?? "";
+          cvUrlController.text = candidateProfile['cv_url']?.toString() ?? "";
+          documents = candidateProfile['documents'] is List
+              ? candidateProfile['documents'] as List
+              : [];
+          _profileImageUrl =
+              candidateProfile['profile_picture']?.toString() ?? "";
+        } else {
+          fullNameController.text = profile['full_name']?.toString() ?? "";
+          emailController.text = user['email']?.toString() ?? "";
+          phoneController.text = profile['phone']?.toString() ?? "";
+          _profileImageUrl = profile['profile_picture']?.toString() ?? "";
+        }
 
-      final settingsRes = await http.get(
-        Uri.parse("$apiBase/settings"),
-        headers: {
-          'Authorization': 'Bearer ${widget.token}',
-          'Content-Type': 'application/json'
-        },
-      );
+        final settings = user['settings'] as Map<String, dynamic>? ?? {};
+        darkMode = settings['dark_mode'] == true;
+        notificationsEnabled = settings['notifications_enabled'] != false;
+        enrollmentCompleted = user['enrollment_completed'] == true;
+        jobAlertsEnabled = settings['job_alerts_enabled'] != false;
+        profileVisible = settings['profile_visible'] != false;
 
-      if (settingsRes.statusCode == 200) {
-        final data = json.decode(settingsRes.body);
-        darkMode = data['dark_mode'] ?? false;
-        notificationsEnabled = data['notifications_enabled'] ?? true;
-        enrollmentCompleted = data['enrollment_completed'] ?? false;
-        jobAlertsEnabled = data['job_alerts_enabled'] ?? true;
-        profileVisible = data['profile_visible'] ?? true;
+        if (_isCandidateUser) {
+          final settingsRes = await http.get(
+            Uri.parse("$apiBase/settings"),
+            headers: {
+              'Authorization': 'Bearer ${widget.token}',
+              'Content-Type': 'application/json'
+            },
+          );
+          if (settingsRes.statusCode == 200) {
+            final data = json.decode(settingsRes.body) as Map<String, dynamic>;
+            darkMode = data['dark_mode'] == true;
+            notificationsEnabled = data['notifications_enabled'] != false;
+            enrollmentCompleted = data['enrollment_completed'] == true;
+            jobAlertsEnabled = data['job_alerts_enabled'] != false;
+            profileVisible = data['profile_visible'] != false;
+          }
+        }
       }
     } catch (e) {
       debugPrint("Error fetching profile/settings: $e");
@@ -539,11 +645,13 @@ class _ProfilePageState extends State<ProfilePage>
       final respJson = json.decode(respStr);
 
       if (response.statusCode == 200 && respJson['success'] == true) {
-        setState(() {
-          _profileImageUrl = respJson['data']['profile_picture'];
-          _profileImage = null;
-          _profileImageBytes = null;
-        });
+        if (mounted) {
+          setState(() {
+            _profileImageUrl = respJson['data']['profile_picture'];
+            _profileImage = null;
+            _profileImageBytes = null;
+          });
+        }
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Profile picture updated")));
       } else {
@@ -588,19 +696,41 @@ class _ProfilePageState extends State<ProfilePage>
         "user_profile": {"email": emailController.text},
       };
 
-      final res = await http.put(
-        Uri.parse("$apiBase/profile"),
-        headers: {
-          'Authorization': 'Bearer ${widget.token}',
-          'Content-Type': 'application/json'
-        },
-        body: json.encode(payload),
-      );
-
-      if (res.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Profile updated successfully")));
-        setState(() => showProfileSummary = true);
+      if (_isCandidateUser) {
+        final res = await http.put(
+          Uri.parse("$apiBase/profile"),
+          headers: {
+            'Authorization': 'Bearer ${widget.token}',
+            'Content-Type': 'application/json'
+          },
+          body: json.encode(payload),
+        );
+        if (res.statusCode == 200) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Profile updated successfully")));
+          if (mounted) setState(() => showProfileSummary = true);
+        }
+      } else {
+        final res = await http.put(
+          Uri.parse(ApiEndpoints.updateAuthProfile),
+          headers: {
+            'Authorization': 'Bearer ${widget.token}',
+            'Content-Type': 'application/json'
+          },
+          body: json.encode({
+            "profile": {
+              "full_name": fullNameController.text,
+              "phone": phoneController.text,
+            }
+          }),
+        );
+        if (res.statusCode == 200) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Profile updated successfully")));
+          if (mounted) setState(() => showProfileSummary = true);
+        }
       }
     } catch (e) {
       debugPrint("Error updating profile: $e");
@@ -655,7 +785,7 @@ class _ProfilePageState extends State<ProfilePage>
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 16,
             offset: const Offset(0, 8),
           ),
@@ -668,7 +798,7 @@ class _ProfilePageState extends State<ProfilePage>
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: headerColor ?? Colors.redAccent.withOpacity(0.1),
+              color: headerColor ?? Colors.redAccent.withValues(alpha: 0.1),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(20),
                 topRight: Radius.circular(20),
@@ -743,7 +873,7 @@ class _ProfilePageState extends State<ProfilePage>
                     : Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: Colors.black.withValues(alpha: 0.05),
                     blurRadius: 8,
                     offset: const Offset(2, 0),
                   ),
@@ -821,7 +951,7 @@ class _ProfilePageState extends State<ProfilePage>
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.1),
+                              color: Colors.green.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(color: Colors.green),
                             ),
@@ -874,8 +1004,9 @@ class _ProfilePageState extends State<ProfilePage>
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Material(
-        color:
-            isSelected ? Colors.redAccent.withOpacity(0.1) : Colors.transparent,
+        color: isSelected
+            ? Colors.redAccent.withValues(alpha: 0.1)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: () {
@@ -968,7 +1099,7 @@ class _ProfilePageState extends State<ProfilePage>
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                       ),
                     ],
@@ -1003,8 +1134,8 @@ class _ProfilePageState extends State<ProfilePage>
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: _mfaEnabled
-                            ? Colors.green.withOpacity(0.1)
-                            : Colors.orange.withOpacity(0.1),
+                            ? Colors.green.withValues(alpha: 0.1)
+                            : Colors.orange.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
@@ -1207,7 +1338,7 @@ class _ProfilePageState extends State<ProfilePage>
                   ),
                 ],
               ),
-              headerColor: Colors.blue.withOpacity(0.1),
+              headerColor: Colors.blue.withValues(alpha: 0.1),
             ),
           ],
 
@@ -1228,7 +1359,7 @@ class _ProfilePageState extends State<ProfilePage>
                     "Your account is now protected with 2FA"),
               ],
             ),
-            headerColor: Colors.purple.withOpacity(0.1),
+            headerColor: Colors.purple.withValues(alpha: 0.1),
           ),
         ],
       ),
@@ -1258,7 +1389,7 @@ class _ProfilePageState extends State<ProfilePage>
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
+                    color: Colors.blue.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: Colors.blue, size: 20),
@@ -1311,7 +1442,7 @@ class _ProfilePageState extends State<ProfilePage>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 18),
@@ -1411,17 +1542,6 @@ class _ProfilePageState extends State<ProfilePage>
   Widget _buildProfileSummary() {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
-    Future<void> _launchUrl(String url) async {
-      final uri = Uri.tryParse(url) ?? Uri();
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Could not launch URL")),
-        );
-      }
-    }
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -1441,7 +1561,7 @@ class _ProfilePageState extends State<ProfilePage>
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                       ),
                     ],
@@ -1465,7 +1585,7 @@ class _ProfilePageState extends State<ProfilePage>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: Colors.redAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
@@ -1473,7 +1593,9 @@ class _ProfilePageState extends State<ProfilePage>
                     Icon(Icons.edit, color: Colors.redAccent, size: 16),
                     const SizedBox(width: 6),
                     GestureDetector(
-                      onTap: () => setState(() => showProfileSummary = false),
+                      onTap: () {
+                        if (mounted) setState(() => showProfileSummary = false);
+                      },
                       child: Text(
                         "Edit Profile",
                         style: GoogleFonts.inter(
@@ -1527,62 +1649,7 @@ class _ProfilePageState extends State<ProfilePage>
                 ],
               ],
             ),
-            headerColor: Colors.blue.withOpacity(0.1),
-          ),
-
-          // Education & Skills Card
-          _modernCard(
-            "Education & Skills",
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (degreeController.text.isNotEmpty)
-                  _infoRow("Degree", degreeController.text),
-                if (institutionController.text.isNotEmpty)
-                  _infoRow("Institution", institutionController.text),
-                if (graduationYearController.text.isNotEmpty)
-                  _infoRow("Graduation Year", graduationYearController.text),
-                if (skillsController.text.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    "Skills",
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.grey.shade700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: skillsController.text.split(',').map((skill) {
-                      final trimmedSkill = skill.trim();
-                      if (trimmedSkill.isEmpty) return const SizedBox.shrink();
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          trimmedSkill,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: Colors.redAccent,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ],
-            ),
-            headerColor: Colors.green.withOpacity(0.1),
+            headerColor: Colors.blue.withValues(alpha: 0.1),
           ),
 
           // Online Profiles Card
@@ -1604,7 +1671,7 @@ class _ProfilePageState extends State<ProfilePage>
                         "Portfolio", portfolioController.text, Icons.public),
                 ],
               ),
-              headerColor: Colors.purple.withOpacity(0.1),
+              headerColor: Colors.purple.withValues(alpha: 0.1),
             ),
         ],
       ),
@@ -1706,7 +1773,9 @@ class _ProfilePageState extends State<ProfilePage>
           Row(
             children: [
               IconButton(
-                onPressed: () => setState(() => showProfileSummary = true),
+                onPressed: () {
+                  if (mounted) setState(() => showProfileSummary = true);
+                },
                 icon: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -1716,7 +1785,7 @@ class _ProfilePageState extends State<ProfilePage>
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                       ),
                     ],
@@ -1743,131 +1812,149 @@ class _ProfilePageState extends State<ProfilePage>
             "Personal Information",
             Column(
               children: [
-                GestureDetector(
-                  onTap: _pickProfileImage,
-                  child: Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: 50,
-                        backgroundImage: _getProfileImageProvider(),
-                      ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 2,
+                // Profile picture and basic info
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: _pickProfileImage,
+                      child: Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 50,
+                            backgroundImage: _getProfileImageProvider(),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.redAccent,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 2,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.camera_alt,
+                                color: Colors.white,
+                                size: 20,
+                              ),
                             ),
                           ),
-                          child: const Icon(
-                            Icons.camera_alt,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Administrator",
+                            style: GoogleFonts.poppins(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.white
+                                  : Colors.grey.shade800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            emailController.text.isNotEmpty
+                                ? emailController.text
+                                : "admin@example.com",
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.grey.shade400
+                                  : Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 30),
+
+                // Two-column form layout
+                Row(
+                  children: [
+                    // Left column
+                    Expanded(
+                      child: Column(
+                        children: [
+                          CustomTextField(
+                            label: "First Name",
+                            controller: fullNameController,
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Surname",
+                            controller: TextEditingController(text: "Radebe"),
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Email Address",
+                            controller: emailController,
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Phone Number",
+                            controller: phoneController,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    // Right column
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _buildDepartmentDropdown(),
+                          const SizedBox(height: 16),
+                          _buildDesignationDropdown(),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Preferred Name",
+                            controller: TextEditingController(
+                                text: "Nathii Nathi SGOOD"),
+                          ),
+                          const SizedBox(height: 16),
+                          CustomTextField(
+                            label: "Manager",
+                            controller: TextEditingController(
+                                text: "Gladness Mulaudzi"),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 30),
+
+                // Version info
+                Align(
+                  alignment: Alignment.bottomLeft,
+                  child: AppVersionText(
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: themeProvider.isDarkMode
+                          ? Colors.grey.shade500
+                          : Colors.grey.shade400,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 20),
-                CustomTextField(
-                    label: "Full Name", controller: fullNameController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Email", controller: emailController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Phone", controller: phoneController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Gender", controller: genderController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Date of Birth", controller: dobController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Nationality", controller: nationalityController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "ID Number", controller: idNumberController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Bio", controller: bioController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Location", controller: locationController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "Title", controller: titleController),
-              ],
-            ),
-          ),
 
-          _modernCard(
-            "Education & Skills",
-            Column(
-              children: [
-                CustomTextField(label: "Degree", controller: degreeController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Institution", controller: institutionController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Graduation Year",
-                    controller: graduationYearController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Skills (comma separated)",
-                    controller: skillsController),
-              ],
-            ),
-          ),
-
-          _modernCard(
-            "Work Experience",
-            Column(
-              children: [
-                CustomTextField(
-                    label: "Job Title", controller: jobTitleController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Company", controller: companyController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Years of Experience",
-                    controller: yearsOfExpController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Work Experience Details",
-                    controller: workExpController,
-                    maxLines: 4),
-              ],
-            ),
-          ),
-
-          _modernCard(
-            "Online Profiles & CV",
-            Column(
-              children: [
-                CustomTextField(
-                    label: "LinkedIn", controller: linkedinController),
-                const SizedBox(height: 12),
-                CustomTextField(label: "GitHub", controller: githubController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Portfolio", controller: portfolioController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "CV Text",
-                    controller: cvTextController,
-                    maxLines: 4),
-                const SizedBox(height: 12),
-                CustomTextField(label: "CV URL", controller: cvUrlController),
-                const SizedBox(height: 20),
+                // Save button
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: updateProfile,
+                    onPressed: _isSaving ? null : _saveProfile,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.redAccent,
                       foregroundColor: Colors.white,
@@ -1876,13 +1963,15 @@ class _ProfilePageState extends State<ProfilePage>
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: Text(
-                      "Save Profile",
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child: _isSaving
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : Text(
+                            "Save Profile",
+                            style: GoogleFonts.inter(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
               ],
@@ -1993,7 +2082,7 @@ class _ProfilePageState extends State<ProfilePage>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.redAccent.withOpacity(0.1),
+              color: Colors.redAccent.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: Colors.redAccent, size: 20),
@@ -2164,6 +2253,122 @@ class _ProfilePageState extends State<ProfilePage>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDepartmentDropdown() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final departments = [
+      'Finance',
+      'Human Resources',
+      'Information Technology',
+      'Marketing',
+      'Sales',
+      'Operations',
+      'Engineering',
+      'Other',
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: themeProvider.isDarkMode
+              ? Colors.grey.shade600
+              : Colors.grey.shade300,
+        ),
+      ),
+      child: DropdownButtonFormField<String>(
+        initialValue: 'Finance',
+        decoration: InputDecoration(
+          labelText: 'Department',
+          labelStyle: GoogleFonts.inter(
+            color: themeProvider.isDarkMode
+                ? Colors.grey.shade400
+                : Colors.grey.shade600,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+        ),
+        dropdownColor:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        style: GoogleFonts.inter(
+          color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+        ),
+        items: departments.map((String department) {
+          return DropdownMenuItem<String>(
+            value: department,
+            child: Text(department),
+          );
+        }).toList(),
+        onChanged: (String? newValue) {
+          // Handle department change
+        },
+      ),
+    );
+  }
+
+  Widget _buildDesignationDropdown() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final designations = [
+      'Business Analyst',
+      'Software Engineer',
+      'Project Manager',
+      'HR Manager',
+      'Marketing Specialist',
+      'Sales Executive',
+      'CEO',
+      'CTO',
+      'CFO',
+      'Other',
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: themeProvider.isDarkMode
+              ? Colors.grey.shade600
+              : Colors.grey.shade300,
+        ),
+      ),
+      child: DropdownButtonFormField<String>(
+        initialValue: 'Business Analyst',
+        decoration: InputDecoration(
+          labelText: 'Designation',
+          labelStyle: GoogleFonts.inter(
+            color: themeProvider.isDarkMode
+                ? Colors.grey.shade400
+                : Colors.grey.shade600,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 12,
+          ),
+        ),
+        dropdownColor:
+            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+        style: GoogleFonts.inter(
+          color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+        ),
+        items: designations.map((String designation) {
+          return DropdownMenuItem<String>(
+            value: designation,
+            child: Text(designation),
+          );
+        }).toList(),
+        onChanged: (String? newValue) {
+          // Handle designation change
+        },
       ),
     );
   }

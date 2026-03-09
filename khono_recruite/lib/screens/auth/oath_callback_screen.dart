@@ -27,8 +27,19 @@ class _OAuthCallbackScreenState extends State<OAuthCallbackScreen> {
     final role = uri.queryParameters['role'];
 
     if (accessToken != null && role != null) {
-      // Store tokens securely
+      // Store tokens securely (also persists to SharedPreferences)
       await AuthService.storeTokens(accessToken, refreshToken, role);
+
+      // Fetch and store user info for WebSocket/user ID lookup
+      try {
+        final userProfile = await AuthService.getUserProfile(accessToken);
+        final user = userProfile['user'] ?? userProfile;
+        if (user is Map<String, dynamic>) {
+          await AuthService.saveUserInfo(user);
+        }
+      } catch (_) {
+        // Best-effort: proceed without blocking navigation
+      }
 
       if (!mounted) return;
 
@@ -92,10 +103,10 @@ class _OAuthCallbackScreenState extends State<OAuthCallbackScreen> {
                   width: 360,
                   padding: const EdgeInsets.all(30),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.12),
+                    color: Colors.white.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(25),
                     border: Border.all(
-                        color: Colors.white.withOpacity(0.3), width: 1),
+                        color: Colors.white.withValues(alpha: 0.3), width: 1),
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,

@@ -1,16 +1,51 @@
 import os
 from datetime import timedelta
-from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+# Load .env from server directory so DATABASE_URL is always from the same place
+# (whether running from repo root or server/ via flask db upgrade, run.py, etc.)
+_server_dir = Path(__file__).resolve().parent.parent  # app/config.py -> app -> server
+_env_path = _server_dir / ".env"
+if _env_path.exists():
+    from dotenv import load_dotenv
+    load_dotenv(_env_path)
+else:
+    from dotenv import load_dotenv
+    load_dotenv()
+
+
+def _database_uri():
+    """Single source for DB URL: .env DATABASE_URL. Add sslmode=require for remote (e.g. Render)."""
+    url = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost:5432/recruitment_db')
+    url = (url or "").strip()
+    if not url:
+        return 'postgresql://user:password@localhost:5432/recruitment_db'
+
+    # Render (and some guides) provide DATABASE_URL starting with `postgres://...`
+    # SQLAlchemy expects `postgresql://...`.
+    if url.startswith('postgres://'):
+        url = 'postgresql://' + url[len('postgres://'):]
+
+    # Render and other cloud Postgres often require SSL for external connections
+    if 'sslmode=' not in url and ('render.com' in url or 'localhost' not in url.split('@')[-1].split('/')[0]):
+        separator = '?' if '?' not in url else '&'
+        url = f"{url}{separator}sslmode=require"
+    return url
+
 
 class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key')
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key')
     
-    # PostgreSQL
-    SQLALCHEMY_DATABASE_URI = os.getenv('DATABASE_URL', 'postgresql://user:password@localhost/recruitment_db')
+    # PostgreSQL (from .env DATABASE_URL; SSL enabled for remote e.g. Render)
+    SQLALCHEMY_DATABASE_URI = _database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Resilient to Render free-tier (sleep/wake) and dropped connections
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "connect_args": {"connect_timeout": 30},
+        "pool_recycle": 300,
+    }
     
     # MongoDB
     MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/recruitment_cv')
@@ -18,18 +53,34 @@ class Config:
     # Redis
     #REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
     
-    # JWT
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
-    JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
+    # JWT (access token: after this time of inactivity the app may need to refresh or re-login)
+    def _parse_positive(s: str, default: int) -> int:
+        try:
+            n = int((s or "").strip())
+            return max(1, n) if n > 0 else default
+        except (ValueError, TypeError):
+            return default
+    _access_days = (os.getenv('JWT_ACCESS_TOKEN_DAYS') or "").strip()
+    _access_hours = os.getenv('JWT_ACCESS_TOKEN_HOURS', '2')
+    if _access_days:
+        JWT_ACCESS_TOKEN_EXPIRES = timedelta(days=_parse_positive(_access_days, 1))
+    else:
+        JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=_parse_positive(_access_hours, 1))
+    JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=_parse_positive(os.getenv('JWT_REFRESH_TOKEN_DAYS', '30'), 30))
     JWT_TOKEN_LOCATION = ["headers", "query_string"]  # Allow token in headers or query string
     JWT_QUERY_STRING_NAME = "access_token"            # Query param name
     
-    # Email
+    # Email (SMTP and/or SendGrid HTTP API; Render typically uses SENDGRID_API_KEY)
     MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
     MAIL_PORT = int(os.getenv('MAIL_PORT', 587))
     MAIL_USE_TLS = os.getenv('MAIL_USE_TLS', 'True').lower() == 'true'
     MAIL_USERNAME = os.getenv('MAIL_USERNAME')
     MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
+    MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER')
+    _mt = (os.getenv('MAIL_TIMEOUT') or '60').strip()
+    MAIL_TIMEOUT = int(_mt) if _mt else 60
+    SENDGRID_API_KEY = (os.getenv('SENDGRID_API_KEY') or '').strip() or None
+    SENDGRID_API_URL = (os.getenv('SENDGRID_API_URL') or 'https://api.sendgrid.com/v3/mail/send').strip()
     
     # OAuth Configuration
     GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID')
@@ -46,9 +97,11 @@ class Config:
     CV_UPLOAD_FOLDER = os.getenv('CV_UPLOAD_FOLDER', 'uploads/cvs')
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
     
-    # Frontend URL
+    # Frontend URL (for CORS and email links). Set on Render to e.g. https://recruitment-web-59qy.onrender.com
     FRONTEND_URL = os.getenv('FRONTEND_URL')
-    
+    # So CORS production logic in create_app() runs; Render sets FLASK_ENV=production
+    FLASK_ENV = os.getenv('FLASK_ENV', 'development')
+
     # SSO Configuration for Company Hub Integration
     SSO_JWT_SECRET = os.getenv('SSO_JWT_SECRET', 'our-super-secret-code-123')  # Same as hub!
     PORTAL_HUB_URL = os.getenv('PORTAL_HUB_URL', 'http://localhost:5001')  # Hub address

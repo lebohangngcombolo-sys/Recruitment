@@ -6,12 +6,12 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../providers/theme_provider.dart';
+import 'package:provider/provider.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
+import '../../providers/theme_provider.dart';
 
 // ------------------- API Base URL -------------------
 const String candidateBase = "http://127.0.0.1:5000/api/candidate";
@@ -26,15 +26,14 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage>
     with TickerProviderStateMixin {
-  bool loading = true;
-  bool showProfileSummary = true;
+  bool loading = false;
+  bool showProfileSummary = false;
   String selectedSidebar = "Profile";
   String? _selectedGender;
   String? _selectedNationality;
   String? _selectedTitle;
   DateTime? _selectedDate;
   List<TextEditingController> _workExpControllers = [TextEditingController()];
-  List<TextEditingController> _educationControllers = [TextEditingController()];
 
   // Profile Controllers
   final TextEditingController fullNameController = TextEditingController();
@@ -53,7 +52,16 @@ class _ProfilePageState extends State<ProfilePage>
   final TextEditingController institutionController = TextEditingController();
   final TextEditingController graduationYearController =
       TextEditingController();
+
+  /// Extra education rows (institution, degree, year). First row uses degreeController/institutionController/graduationYearController.
+  final List<Map<String, TextEditingController>> _educationExtraRows = [];
+
   final TextEditingController skillsController = TextEditingController();
+  /// Skills as a list for chip-based UI; reference-like items are separated into _referenceEntries.
+  List<String> _skillList = [];
+  /// Parsed reference lines (moved out of skills); shown under Work Experience.
+  List<String> _referenceEntries = [];
+  final TextEditingController _addSkillController = TextEditingController();
   final TextEditingController workExpController = TextEditingController();
   final TextEditingController jobTitleController = TextEditingController();
   final TextEditingController companyController = TextEditingController();
@@ -77,7 +85,7 @@ class _ProfilePageState extends State<ProfilePage>
   bool profileVisible = true;
   bool enrollmentCompleted = false;
 
-  // 🆕 MFA State
+  // ≡ƒåò MFA State
   bool _mfaEnabled = false;
   bool _mfaLoading = false;
   String? _mfaSecret;
@@ -86,6 +94,8 @@ class _ProfilePageState extends State<ProfilePage>
   int _backupCodesRemaining = 0;
 
   List<dynamic> documents = [];
+  List<String> _certifications = [];
+  List<String> _languages = [];
   final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
   // Add these helper methods in the _ProfilePageState class (around line 150, after the state variables):
@@ -121,6 +131,254 @@ class _ProfilePageState extends State<ProfilePage>
         {'value': 'eng', 'label': 'Eng.'},
         {'value': 'other', 'label': 'Other'}
       ];
+
+  void _addSkillFromInput() {
+    final text = _addSkillController.text.trim();
+    if (text.isEmpty) return;
+    final toAdd = text.split(',').map((e) => e.trim()).where((s) => s.isNotEmpty).toList();
+    setState(() {
+      for (final s in toAdd) {
+        if (!_skillList.contains(s)) _skillList.add(s);
+      }
+      _addSkillController.clear();
+    });
+  }
+
+  /// True if this token looks like reference text (contact, role, email, phone, "Name - Org") rather than a skill.
+  bool _looksLikeReference(String s) {
+    if (s.isEmpty) return true;
+    final t = s.trim();
+    final lower = t.toLowerCase();
+    // Email
+    if (t.contains('@') && (t.contains('.') || lower.contains('email'))) return true;
+    // Phone: with or without spaces e.g. +27 81 025 6782 or +27810256782
+    if (RegExp(r'\+[\d\s]{10,}').hasMatch(t) || RegExp(r'\d{10,}').hasMatch(t.replaceAll(' ', ''))) return true;
+    if (RegExp(r'\+?\d{10,}').hasMatch(t)) return true;
+    // Explicit reference/role keywords
+    if (lower.contains('reference') || lower.contains('facilitator') || lower.contains('senior coach')) return true;
+    if (lower.contains('.co.za') || lower.contains('.com')) return true;
+    // "Name - Organization" or "Name - Role" pattern (people's names with a dash)
+    if (t.contains(' - ') && t.split(' - ').length >= 2) return true;
+    // Long text is likely a reference line or description, not a skill
+    if (t.length > 70) return true;
+    return false;
+  }
+
+  /// True only if we're confident this is a skill. When in doubt, we exclude (treat as reference).
+  bool _looksLikeSkill(String s) {
+    if (s.isEmpty) return false;
+    final t = s.trim();
+    if (t.length > 50) return false;
+    if (t.contains('@') || t.contains(' - ')) return false;
+    if (RegExp(r'\+[\d\s]+').hasMatch(t) || RegExp(r'\d{10,}').hasMatch(t.replaceAll(' ', ''))) return false;
+    if (t.toLowerCase().contains('reference') || t.toLowerCase().contains('.co.za')) return false;
+    return true;
+  }
+
+  /// True if the text looks like an institution name (e.g. "DYICT Academy", "University of X") so we put it in Institution.
+  bool _looksLikeInstitutionName(String text) {
+    if (text.isEmpty) return false;
+    final lower = text.trim().toLowerCase();
+    const institutionKeywords = [
+      'academy', 'university', 'universities', 'college', 'school', 'institute', 'campus',
+      'polytechnic', 'varsity', 'faculty', 'department of ', 'high school', 'secondary school',
+    ];
+    return institutionKeywords.any((k) => lower.contains(k));
+  }
+
+  /// Programme/degree keywords so we can split "DYICT Academy Java" -> institution + "Java".
+  static const _programmeKeywords = [
+    'java', 'matric', 'bsc', 'bsc.', 'ba', 'ba.', 'bcom', 'beng', 'btech', 'mbchb', 'llb',
+    'certificate', 'diploma', 'degree', 'aws', 'python', 'javascript', 'cloud practitioner',
+    'national diploma', 'higher certificate', 'nqf', 'honours', 'masters', 'phd', 'mba',
+  ];
+
+  /// If [text] contains both institution-like and programme-like parts, returns (institution, degree); otherwise (null, null).
+  List<String>? _splitInstitutionAndProgramme(String text) {
+    final t = text.trim();
+    if (t.isEmpty || !_looksLikeInstitutionName(t)) return null;
+    final lower = t.toLowerCase();
+    for (final keyword in _programmeKeywords) {
+      if (!lower.contains(keyword)) continue;
+      final idx = lower.indexOf(keyword);
+      final programmePart = t.substring(idx, idx + keyword.length).trim();
+      final before = t.substring(0, idx).trim();
+      final after = t.substring(idx + keyword.length).trim();
+      // Prefer "Institution Programme" (e.g. "DYICT Academy Java") -> institution before, degree after
+      if (before.isNotEmpty && after.isEmpty) {
+        return [before, programmePart];
+      }
+      if (before.isEmpty && after.isNotEmpty) {
+        return [after, programmePart];
+      }
+      if (before.isNotEmpty && after.isNotEmpty) {
+        return [before, '$programmePart $after'.trim()];
+      }
+      return [before.isEmpty ? after : before, programmePart];
+    }
+    return null;
+  }
+
+  /// Ensures institution-like text goes to institution; if programme name (e.g. Java) is in the same string, puts it in degree.
+  void _correctInstitutionVsDegree(Map<String, String> entry) {
+    final d = (entry['degree'] ?? '').trim();
+    final i = (entry['institution'] ?? '').trim();
+    if (i.isNotEmpty) return;
+    if (d.isEmpty) return;
+    final split = _splitInstitutionAndProgramme(d);
+    if (split != null && split.length >= 2) {
+      entry['institution'] = split[0];
+      entry['degree'] = split[1];
+      return;
+    }
+    if (_looksLikeInstitutionName(d)) {
+      entry['institution'] = d;
+      entry['degree'] = '';
+    }
+  }
+
+  /// Heuristic parser for legacy free-text education strings, e.g.
+  /// "Amazon Web Services (AWS) 2025 AWS Cloud Practitioner".
+  /// Tries to extract institution, 4-digit graduation year, and degree/programme.
+  Map<String, String> _parseEducationString(String raw) {
+    final result = <String, String>{};
+    final text = raw.trim();
+    if (text.isEmpty) return result;
+
+    final yearRegex = RegExp(r'(19|20)\d{2}');
+    final match = yearRegex.firstMatch(text);
+    if (match == null) {
+      // No obvious year, treat entire string as degree/programme.
+      result['degree'] = text;
+      return result;
+    }
+
+    final institution = text.substring(0, match.start).trim();
+    var after = text.substring(match.end).trim();
+
+    // If there's another year later in the string, assume it's the start of
+    // another qualification and ignore everything after it for this entry.
+    final secondMatch = yearRegex.firstMatch(after);
+    if (secondMatch != null) {
+      after = after.substring(0, secondMatch.start).trim();
+    }
+
+    if (institution.isNotEmpty) {
+      result['institution'] = institution;
+    }
+    result['graduation_year'] = match.group(0) ?? '';
+    if (after.isNotEmpty) {
+      result['degree'] = after;
+    }
+    return result;
+  }
+
+  /// Parses a long combined string into multiple education entries by splitting on 4-digit years.
+  /// e.g. "AWS (AWS) 2025 AWS Cloud Practitioner DYICT Academy 2023 Java Programmer"
+  ///   -> [{ institution: "Amazon Web Services (AWS)", year: "2025", degree: "AWS Cloud Practitioner" }, { institution: "DYICT Academy", year: "2023", degree: "Java Programmer SE 8" }]
+  List<Map<String, String>> _parseAllEducationFromString(String raw) {
+    final list = <Map<String, String>>[];
+    final text = raw.trim();
+    if (text.isEmpty) return list;
+
+    final yearRegex = RegExp(r'(19|20)\d{2}');
+    final matches = yearRegex.allMatches(text).toList();
+    if (matches.isEmpty) {
+      final m = {'degree': text, 'institution': '', 'graduation_year': ''};
+      _correctInstitutionVsDegree(m);
+      list.add(m);
+      return list;
+    }
+
+    for (int i = 0; i < matches.length; i++) {
+      final start = i == 0 ? 0 : matches[i - 1].end;
+      final yearStart = matches[i].start;
+      final yearEnd = matches[i].end;
+      final end = i == matches.length - 1 ? text.length : matches[i + 1].start;
+
+      final institution = text.substring(start, yearStart).trim();
+      final year = text.substring(yearStart, yearEnd).trim();
+      final degree = text.substring(yearEnd, end).trim();
+
+      final m = <String, String>{
+        if (institution.isNotEmpty) 'institution': institution,
+        'graduation_year': year,
+        if (degree.isNotEmpty) 'degree': degree,
+      };
+      _correctInstitutionVsDegree(m);
+      list.add(m);
+    }
+    return list;
+  }
+
+  /// Parses education string that may be multi-line (one qualification per line) or one combined line with multiple years.
+  /// Handles both real newlines and literal "\n" (backslash-n) as stored in some DBs/APIs.
+  List<Map<String, String>> _parseAllEducationFromStringMulti(String raw) {
+    String text = raw.trim();
+    if (text.isEmpty) return [];
+    // Normalize literal backslash-n to real newline (DB/API sometimes stores "entry1\nentry2" as literal \n)
+    text = text.replaceAll(r'\n', '\n').replaceAll('\\n', '\n');
+    if (text.contains('\n')) {
+      final list = <Map<String, String>>[];
+      for (final line in text.split('\n')) {
+        final t = line.trim();
+        if (t.isEmpty) continue;
+        list.addAll(_parseAllEducationFromString(t));
+      }
+      return list;
+    }
+    return _parseAllEducationFromString(text);
+  }
+
+  /// Builds one or more education entries from an API map. If degree/institution contains \n, splits into multiple entries.
+  void _addEducationEntryFromMap(
+    dynamic map,
+    String flatDegree,
+    String flatInstitution,
+    String flatGraduationYear,
+    List<Map<String, String>> into,
+  ) {
+    if (map is! Map) return;
+    String d = (map['level'] ?? map['degree'] ?? map['qualification'] ?? map['programme'] ?? flatDegree).toString().trim();
+    String i = (map['institution'] ?? map['school'] ?? map['school_name'] ?? flatInstitution).toString().trim();
+    String y = (map['graduation_year'] ?? map['year'] ?? map['completion_year'] ?? flatGraduationYear).toString().trim();
+    // Normalize literal \n so DB-stored "entry1\nentry2" is split
+    d = d.replaceAll(r'\n', '\n').replaceAll('\\n', '\n');
+    i = i.replaceAll(r'\n', '\n').replaceAll('\\n', '\n');
+    // If degree or institution has newlines, treat each line as a separate qualification (e.g. AWS + Matric)
+    if (d.contains('\n') || i.contains('\n')) {
+      final degreeLines = d.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+      final instLines = i.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+      final yearLines = y.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+      final maxLen = [degreeLines.length, instLines.length, yearLines.length].reduce((a, b) => a > b ? a : b);
+      if (maxLen == 0) return;
+      for (int idx = 0; idx < maxLen; idx++) {
+        String lineD = idx < degreeLines.length ? degreeLines[idx] : '';
+        String lineI = idx < instLines.length ? instLines[idx] : '';
+        String lineY = idx < yearLines.length ? yearLines[idx] : (yearLines.isNotEmpty ? yearLines.last : y);
+        if (lineD.isEmpty && lineI.isEmpty) continue;
+        final parsed = _parseEducationString(lineD.isEmpty ? lineI : lineD);
+        if (lineD.isEmpty) lineD = parsed['degree'] ?? lineI;
+        if (lineI.isEmpty) lineI = parsed['institution'] ?? '';
+        if (lineY.isEmpty) lineY = parsed['graduation_year'] ?? y;
+        final m = {'degree': lineD, 'institution': lineI, 'graduation_year': lineY};
+        _correctInstitutionVsDegree(m);
+        into.add(m);
+      }
+      return;
+    }
+    // Single entry: when institution or year is missing but level/degree contains a year, parse to extract
+    final yearInLevel = RegExp(r'(19|20)\d{2}').hasMatch(d);
+    if (d.isNotEmpty && (i.isEmpty || y.isEmpty || (yearInLevel && i.isEmpty))) {
+      final parsed = _parseEducationString(d);
+      if (i.isEmpty) i = parsed['institution'] ?? i;
+      if (y.isEmpty) y = parsed['graduation_year'] ?? y;
+      d = parsed['degree'] ?? d;
+    }
+    final single = {'degree': d, 'institution': i, 'graduation_year': y};
+    _correctInstitutionVsDegree(single);
+    into.add(single);
+  }
 
   // Helper method to get value from stored data
   String? _getValueFromStoredData(
@@ -164,7 +422,19 @@ class _ProfilePageState extends State<ProfilePage>
     _loadMfaStatus();
   }
 
-  // 🆕 MFA METHODS (unchanged)
+  @override
+  void dispose() {
+    _addSkillController.dispose();
+    for (final row in _educationExtraRows) {
+      row['institution']?.dispose();
+      row['degree']?.dispose();
+      row['year']?.dispose();
+    }
+    _educationExtraRows.clear();
+    super.dispose();
+  }
+
+  // ≡ƒåò MFA METHODS (unchanged)
   Future<void> _loadMfaStatus() async {
     try {
       final result = await AuthService.getMfaStatus();
@@ -495,7 +765,7 @@ class _ProfilePageState extends State<ProfilePage>
               ),
               const SizedBox(height: 16),
               Text(
-                "⚠️ These codes won't be shown again. Make sure to save them now!",
+                "ΓÜá∩╕Å These codes won't be shown again. Make sure to save them now!",
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   color: Colors.redAccent,
@@ -627,9 +897,43 @@ class _ProfilePageState extends State<ProfilePage>
         final user = data['user'] ?? {};
         final candidate = data['candidate'] ?? {};
 
-        fullNameController.text = candidate['full_name'] ?? "";
-        emailController.text = user['profile']['email'] ?? "";
-        phoneController.text = candidate['phone'] ?? "";
+        // --------- BASIC IDENTITY FIELDS (with robust fallbacks) ---------
+        // Full name: prefer candidate full_name, then user profile / user fields, then email username.
+        final profileMap =
+            (user['profile'] is Map) ? user['profile'] as Map : <String, dynamic>{};
+        String fullName = (candidate['full_name'] ?? '').toString().trim();
+        if (fullName.isEmpty) {
+          fullName = (profileMap['full_name'] ??
+                  profileMap['name'] ??
+                  user['full_name'] ??
+                  user['name'] ??
+                  '${user['first_name'] ?? ''} ${user['last_name'] ?? ''}')
+              .toString()
+              .trim();
+        }
+        if (fullName.isEmpty) {
+          final rawEmail =
+              (profileMap['email'] ?? user['email'] ?? data['email'] ?? '')
+                  .toString();
+          fullName = rawEmail.contains('@')
+              ? rawEmail.split('@').first
+              : rawEmail;
+        }
+        fullNameController.text = fullName;
+
+        // Email: prefer profile.email, then user.email, then data.email.
+        final email = (profileMap['email'] ?? user['email'] ?? data['email'] ?? '')
+            .toString();
+        emailController.text = email;
+
+        // Phone: prefer candidate.phone, then other common phone keys.
+        phoneController.text = (candidate['phone'] ??
+                candidate['phone_number'] ??
+                candidate['mobile'] ??
+                profileMap['phone'] ??
+                profileMap['phone_number'] ??
+                '')
+            .toString();
 
         // Initialize dropdown values using helper methods
         final storedGender = candidate['gender'] ?? "";
@@ -655,28 +959,124 @@ class _ProfilePageState extends State<ProfilePage>
 
         idNumberController.text = candidate['id_number'] ?? "";
         bioController.text = candidate['bio'] ?? "";
-        locationController.text = candidate['location'] ?? "";
+        // Prefer address (from enrollment) then location
+        locationController.text = (candidate['address'] ?? candidate['location'] ?? "").toString();
 
-        // Initialize education and work experience
-        final degree = candidate['degree'] ?? "";
-        final institution = candidate['institution'] ?? "";
-        final graduationYear = candidate['graduation_year'] ?? "";
+        // Initialize education from enrollment format: education list [{level, institution, graduation_year}] or string with \n
+        String degree = candidate['degree'] ?? "";
+        String institution = candidate['institution'] ?? "";
+        String graduationYear = candidate['graduation_year'] ?? "";
+        dynamic rawEducation = candidate['education'];
+        // Some backends store education in profile
+        if ((rawEducation == null || (rawEducation is List && rawEducation.isEmpty) || (rawEducation is String && rawEducation.toString().trim().isEmpty)) &&
+            candidate['profile'] is Map) {
+          final prof = candidate['profile'] as Map;
+          rawEducation = rawEducation ?? prof['education'];
+        }
+        final List<Map<String, String>> allEducationEntries = [];
 
-        if (degree.isNotEmpty || institution.isNotEmpty) {
-          _educationControllers.clear();
-          _educationControllers.add(TextEditingController(
-              text:
-                  "$degree${institution.isNotEmpty ? ' at $institution' : ''}${graduationYear.isNotEmpty ? ' ($graduationYear)' : ''}"));
-        } else {
-          _educationControllers = [TextEditingController()];
+        if (rawEducation is List && rawEducation.isNotEmpty) {
+          for (var e in rawEducation) {
+            if (e is Map) {
+              _addEducationEntryFromMap(e, degree, institution, graduationYear, allEducationEntries);
+            } else {
+              final str = e is String ? e : e.toString();
+              if (str.trim().isEmpty) continue;
+              // Split by \n (and literal \n) so DB string "entry1\nentry2" yields multiple qualifications
+              allEducationEntries.addAll(_parseAllEducationFromStringMulti(str));
+              if (allEducationEntries.isEmpty) {
+                final parsed = _parseEducationString(str);
+                final m = <String, String>{
+                  'degree': parsed['degree'] ?? str,
+                  'institution': parsed['institution'] ?? '',
+                  'graduation_year': parsed['graduation_year'] ?? '',
+                };
+                _correctInstitutionVsDegree(m);
+                allEducationEntries.add(m);
+              }
+            }
+          }
+        } else if (rawEducation is String && rawEducation.trim().isNotEmpty) {
+          final entries = _parseAllEducationFromStringMulti(rawEducation);
+          if (entries.isNotEmpty) {
+            allEducationEntries.addAll(entries);
+          } else {
+            final parsed = _parseEducationString(rawEducation);
+            final m = <String, String>{
+              'degree': parsed['degree'] ?? rawEducation,
+              'institution': parsed['institution'] ?? '',
+              'graduation_year': parsed['graduation_year'] ?? '',
+            };
+            _correctInstitutionVsDegree(m);
+            allEducationEntries.add(m);
+          }
+        } else if (institution.isEmpty && graduationYear.isEmpty && degree.isNotEmpty) {
+          allEducationEntries.addAll(_parseAllEducationFromStringMulti(degree));
+          if (allEducationEntries.isEmpty) {
+            final parsed = _parseEducationString(degree);
+            final m = <String, String>{
+              'degree': parsed['degree'] ?? degree,
+              'institution': parsed['institution'] ?? '',
+              'graduation_year': parsed['graduation_year'] ?? '',
+            };
+            _correctInstitutionVsDegree(m);
+            allEducationEntries.add(m);
+          }
+        }
+        // When list is empty but flat fields exist (e.g. from enrollment), use them as one entry so matric/degree autofill
+        if (allEducationEntries.isEmpty &&
+            (degree.isNotEmpty || institution.isNotEmpty || graduationYear.isNotEmpty)) {
+          final m = <String, String>{
+            'degree': degree,
+            'institution': institution,
+            'graduation_year': graduationYear,
+          };
+          _correctInstitutionVsDegree(m);
+          allEducationEntries.add(m);
         }
 
+        // Dispose previous extra rows and clear
+        for (final row in _educationExtraRows) {
+          row['institution']?.dispose();
+          row['degree']?.dispose();
+          row['year']?.dispose();
+        }
+        _educationExtraRows.clear();
+
+        if (allEducationEntries.isNotEmpty) {
+          degree = allEducationEntries.first['degree'] ?? degree;
+          institution = allEducationEntries.first['institution'] ?? institution;
+          graduationYear = allEducationEntries.first['graduation_year'] ?? graduationYear;
+          degreeController.text = degree;
+          institutionController.text = institution;
+          graduationYearController.text = graduationYear;
+          for (int i = 1; i < allEducationEntries.length; i++) {
+            final e = allEducationEntries[i];
+            _educationExtraRows.add({
+              'institution': TextEditingController(text: e['institution'] ?? ''),
+              'degree': TextEditingController(text: e['degree'] ?? ''),
+              'year': TextEditingController(text: e['graduation_year'] ?? ''),
+            });
+          }
+        }
+
+        // Work experience from enrollment: list of {position, company, description}
         final workExperience = candidate['work_experience'] ?? [];
         if (workExperience.isNotEmpty && workExperience is List) {
           _workExpControllers.clear();
           for (var exp in workExperience) {
-            _workExpControllers
-                .add(TextEditingController(text: exp.toString()));
+            String text = exp.toString();
+            if (exp is Map) {
+              final pos = exp['position'] ?? exp['title'] ?? '';
+              final co = exp['company'] ?? '';
+              final desc = exp['description'] ?? '';
+              text = [
+                if (pos.isNotEmpty) pos,
+                if (co.isNotEmpty) 'at $co',
+                if (desc.isNotEmpty) desc
+              ].join(' • ');
+            }
+            _workExpControllers.add(TextEditingController(text: text));
           }
         } else {
           _workExpControllers = [TextEditingController()];
@@ -687,7 +1087,31 @@ class _ProfilePageState extends State<ProfilePage>
           workExpController.text = _workExpControllers.first.text;
         }
 
-        skillsController.text = (candidate['skills'] ?? []).join(", ");
+        // Parse skills: separate actual skills from reference-like text (show references under Work Experience)
+        final rawSkills = candidate['skills'];
+        final List<String> allTokens = rawSkills is List
+            ? (rawSkills.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList())
+            : (rawSkills?.toString() ?? '').split(RegExp(r',|\n')).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+        final prof = candidate['profile'];
+        final refList = prof is Map ? prof['references'] : null;
+        _referenceEntries = refList is List
+            ? List<String>.from(refList.map((e) => e.toString()))
+            : [];
+        _skillList = [];
+        for (final token in allTokens) {
+          final t = token.trim();
+          if (t.isEmpty) continue;
+          // Only show as skill if we're confident; when in doubt, put under Work Experience (references).
+          if (_looksLikeReference(t)) {
+            if (!_referenceEntries.contains(t)) _referenceEntries.add(t);
+          } else if (_looksLikeSkill(t)) {
+            if (!_skillList.contains(t)) _skillList.add(t);
+          } else {
+            // Unrecognized / borderline: don't include as skill, show as reference.
+            if (!_referenceEntries.contains(t)) _referenceEntries.add(t);
+          }
+        }
+        skillsController.text = _skillList.join(", ");
         jobTitleController.text = candidate['job_title'] ?? "";
         companyController.text = candidate['company'] ?? "";
         yearsOfExpController.text = candidate['years_of_experience'] ?? "";
@@ -696,6 +1120,11 @@ class _ProfilePageState extends State<ProfilePage>
         portfolioController.text = candidate['portfolio'] ?? "";
         documents = candidate['documents'] ?? [];
         _profileImageUrl = candidate['profile_picture'] ?? "";
+        // From enrollment: certifications and languages (persisted with profile)
+        _certifications = List<String>.from(
+            (candidate['certifications'] ?? []).map((e) => e.toString()));
+        _languages = List<String>.from(
+            (candidate['languages'] ?? []).map((e) => e.toString()));
       }
 
       final settingsRes = await http.get(
@@ -777,25 +1206,33 @@ class _ProfilePageState extends State<ProfilePage>
           .where((text) => text.isNotEmpty)
           .toList();
 
-      // Collect all education entries
-      final educationEntries = _educationControllers
-          .map((controller) => controller.text.trim())
-          .where((text) => text.isNotEmpty)
-          .toList();
-
       // For backward compatibility, set the first work experience to the original controller
       if (workExpEntries.isNotEmpty) {
         workExpController.text = workExpEntries.first;
       }
 
-      // For backward compatibility, set the first education to the original controllers
-      if (educationEntries.isNotEmpty) {
-        // You might want to parse the education string back into degree, institution, year
-        // For now, we'll just use the first entry
-        final firstEducation = educationEntries.first;
-        degreeController.text = firstEducation;
-        institutionController.text = "";
-        graduationYearController.text = "";
+      // Build structured education entries from separate fields (first row + extra rows)
+      final educationEntries = <Map<String, String>>[];
+      if (degreeController.text.trim().isNotEmpty ||
+          institutionController.text.trim().isNotEmpty ||
+          graduationYearController.text.trim().isNotEmpty) {
+        educationEntries.add({
+          'level': degreeController.text.trim(),
+          'institution': institutionController.text.trim(),
+          'graduation_year': graduationYearController.text.trim(),
+        });
+      }
+      for (final row in _educationExtraRows) {
+        final i = row['institution']?.text.trim() ?? '';
+        final d = row['degree']?.text.trim() ?? '';
+        final y = row['year']?.text.trim() ?? '';
+        if (d.isNotEmpty || i.isNotEmpty || y.isNotEmpty) {
+          educationEntries.add({
+            'level': d,
+            'institution': i,
+            'graduation_year': y,
+          });
+        }
       }
 
       final payload = {
@@ -814,8 +1251,8 @@ class _ProfilePageState extends State<ProfilePage>
         "degree": degreeController.text,
         "institution": institutionController.text,
         "graduation_year": graduationYearController.text,
-        "skills":
-            skillsController.text.split(",").map((e) => e.trim()).toList(),
+        "education": educationEntries,
+        "skills": _skillList,
         "work_experience": workExpEntries,
         "job_title": jobTitleController.text,
         "company": companyController.text,
@@ -838,7 +1275,6 @@ class _ProfilePageState extends State<ProfilePage>
       if (res.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Profile updated successfully")));
-        setState(() => showProfileSummary = true);
       }
     } catch (e) {
       debugPrint("Error updating profile: $e");
@@ -882,6 +1318,104 @@ class _ProfilePageState extends State<ProfilePage>
     return const AssetImage("assets/images/profile_placeholder.png");
   }
 
+  /// Fixed height for each education card so all cards align and avoid overflow.
+  static const double _kEducationCardHeight = 320;
+
+  Widget _buildEducationCard({
+    required TextEditingController institutionController,
+    required TextEditingController degreeController,
+    required TextEditingController graduationYearController,
+    VoidCallback? onRemove,
+  }) {
+    return SizedBox(
+      height: _kEducationCardHeight,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            CustomTextField(
+              label: "Institution",
+              controller: institutionController,
+              backgroundColor: Colors.transparent,
+              borderColor: Colors.grey.shade300,
+              focusedBorderColor: Colors.redAccent,
+              borderRadius: 12,
+              borderWidth: 1.5,
+              focusedBorderWidth: 2,
+              textColor: Colors.black87,
+              labelColor: Colors.black,
+              hintColor: Colors.grey.shade500,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+              hintText: "e.g., University of Cape Town",
+              prefixIcon: const Icon(Icons.school_outlined, size: 20),
+            ),
+            const SizedBox(height: 12),
+            CustomTextField(
+              label: "Degree / Programme",
+              controller: degreeController,
+              backgroundColor: Colors.transparent,
+              borderColor: Colors.grey.shade300,
+              focusedBorderColor: Colors.redAccent,
+              borderRadius: 12,
+              borderWidth: 1.5,
+              focusedBorderWidth: 2,
+              textColor: Colors.black87,
+              labelColor: Colors.black,
+              hintColor: Colors.grey.shade500,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+              hintText: "e.g., BSc, Matric Certificate",
+              prefixIcon: const Icon(Icons.menu_book_outlined, size: 20),
+            ),
+            const SizedBox(height: 12),
+            CustomTextField(
+              label: "Graduation Year",
+              controller: graduationYearController,
+              backgroundColor: Colors.transparent,
+              borderColor: Colors.grey.shade300,
+              focusedBorderColor: Colors.redAccent,
+              borderRadius: 12,
+              borderWidth: 1.5,
+              focusedBorderWidth: 2,
+              textColor: Colors.black87,
+              labelColor: Colors.black,
+              hintColor: Colors.grey.shade500,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+              hintText: "e.g., 2025",
+              inputType: TextInputType.number,
+              prefixIcon: const Icon(Icons.calendar_today_outlined, size: 20),
+            ),
+            if (onRemove != null) ...[
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    onPressed: onRemove,
+                    icon: const Icon(Icons.delete_outline, size: 18),
+                    label: const Text("Remove"),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.redAccent,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _modernCard(String title, Widget child) {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -890,7 +1424,7 @@ class _ProfilePageState extends State<ProfilePage>
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -930,7 +1464,6 @@ class _ProfilePageState extends State<ProfilePage>
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-
     if (loading) {
       return Scaffold(
         backgroundColor: Colors.transparent,
@@ -939,7 +1472,7 @@ class _ProfilePageState extends State<ProfilePage>
             // Full-background image
             Positioned.fill(
               child: Image.asset(
-                "assets/images/background.jpg",
+                themeProvider.backgroundImage,
                 fit: BoxFit.cover,
               ),
             ),
@@ -957,7 +1490,7 @@ class _ProfilePageState extends State<ProfilePage>
                     "Loading Profile...",
                     style: GoogleFonts.inter(
                       fontSize: 16,
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withValues(alpha: 0.9),
                     ),
                   ),
                 ],
@@ -998,10 +1531,11 @@ class _ProfilePageState extends State<ProfilePage>
                   padding:
                       const EdgeInsets.symmetric(vertical: 30, horizontal: 20),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05), // almost invisible
+                    color: Colors.white
+                        .withValues(alpha: 0.05), // almost invisible
                     border: Border(
-                        right:
-                            BorderSide(color: Colors.white.withOpacity(0.1))),
+                        right: BorderSide(
+                            color: Colors.white.withValues(alpha: 0.1))),
                   ),
                   child: Column(
                     children: [
@@ -1016,7 +1550,7 @@ class _ProfilePageState extends State<ProfilePage>
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   border: Border.all(
-                                    color: Colors.white.withOpacity(0.3),
+                                    color: Colors.white.withValues(alpha: 0.3),
                                     width: 2,
                                   ),
                                 ),
@@ -1028,10 +1562,12 @@ class _ProfilePageState extends State<ProfilePage>
                                     errorBuilder:
                                         (context, error, stackTrace) =>
                                             Container(
-                                      color: Colors.white.withOpacity(0.1),
+                                      color:
+                                          Colors.white.withValues(alpha: 0.1),
                                       child: Icon(
                                         Icons.person,
-                                        color: Colors.white.withOpacity(0.3),
+                                        color:
+                                            Colors.white.withValues(alpha: 0.3),
                                         size: 40,
                                       ),
                                     ),
@@ -1047,7 +1583,8 @@ class _ProfilePageState extends State<ProfilePage>
                                     width: 32,
                                     height: 32,
                                     decoration: BoxDecoration(
-                                      color: Colors.redAccent.withOpacity(0.8),
+                                      color: Colors.redAccent
+                                          .withValues(alpha: 0.8),
                                       shape: BoxShape.circle,
                                       border: Border.all(
                                         color: Colors.white,
@@ -1093,7 +1630,7 @@ class _ProfilePageState extends State<ProfilePage>
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 6),
                               decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.15),
+                                color: Colors.green.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: Row(
@@ -1152,14 +1689,13 @@ class _ProfilePageState extends State<ProfilePage>
       margin: const EdgeInsets.only(bottom: 8),
       child: Material(
         color: isSelected
-            ? Colors.redAccent.withOpacity(0.2)
-            : Colors.white.withOpacity(0.05), // subtle transparent bg
+            ? Colors.redAccent.withValues(alpha: 0.2)
+            : Colors.white.withValues(alpha: 0.05), // subtle transparent bg
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: () {
             setState(() {
               selectedSidebar = title;
-              if (title == "Profile") showProfileSummary = true;
             });
           },
           borderRadius: BorderRadius.circular(12),
@@ -1167,7 +1703,7 @@ class _ProfilePageState extends State<ProfilePage>
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               border: isSelected
-                  ? Border.all(color: Colors.redAccent.withOpacity(0.3))
+                  ? Border.all(color: Colors.redAccent.withValues(alpha: 0.3))
                   : null,
               borderRadius: BorderRadius.circular(12),
             ),
@@ -1212,9 +1748,7 @@ class _ProfilePageState extends State<ProfilePage>
   Widget _buildSelectedTab() {
     switch (selectedSidebar) {
       case "Profile":
-        return showProfileSummary
-            ? _buildProfileSummary()
-            : _buildProfileForm();
+        return _buildProfileForm();
       case "Settings":
         return _buildSettingsTab();
       case "2FA":
@@ -1222,7 +1756,7 @@ class _ProfilePageState extends State<ProfilePage>
       case "Reset Password":
         return _buildResetPasswordTab();
       default:
-        return _buildProfileSummary();
+        return _buildProfileForm();
     }
   }
 
@@ -1244,7 +1778,7 @@ class _ProfilePageState extends State<ProfilePage>
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                       ),
                     ],
@@ -1285,8 +1819,8 @@ class _ProfilePageState extends State<ProfilePage>
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
                         color: _mfaEnabled
-                            ? Colors.green.withOpacity(0.1)
-                            : Colors.orange.withOpacity(0.1),
+                            ? Colors.green.withValues(alpha: 0.1)
+                            : Colors.orange.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(
@@ -1564,7 +2098,7 @@ class _ProfilePageState extends State<ProfilePage>
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.redAccent.withOpacity(0.1),
+                    color: Colors.redAccent.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: Colors.redAccent, size: 20),
@@ -1612,7 +2146,7 @@ class _ProfilePageState extends State<ProfilePage>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(icon, color: color, size: 18),
@@ -1699,18 +2233,8 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   // Profile Summary
+  // ignore: unused_element
   Widget _buildProfileSummary() {
-    Future<void> _launchUrl(String url) async {
-      final uri = Uri.tryParse(url) ?? Uri();
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Could not launch URL")),
-        );
-      }
-    }
-
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1727,7 +2251,7 @@ class _ProfilePageState extends State<ProfilePage>
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                       ),
                     ],
@@ -1787,7 +2311,8 @@ class _ProfilePageState extends State<ProfilePage>
                 _infoRow("Full Name", fullNameController.text),
                 _infoRow("Email", emailController.text),
                 _infoRow("Phone", phoneController.text),
-                _infoRow("Location", locationController.text),
+                if (locationController.text.isNotEmpty)
+                  _infoRow("Address", locationController.text),
                 _infoRow("Nationality", nationalityController.text),
                 _infoRow("Title", titleController.text),
                 if (bioController.text.isNotEmpty) ...[
@@ -1827,7 +2352,7 @@ class _ProfilePageState extends State<ProfilePage>
                   _infoRow("Institution", institutionController.text),
                 if (graduationYearController.text.isNotEmpty)
                   _infoRow("Graduation Year", graduationYearController.text),
-                if (skillsController.text.isNotEmpty) ...[
+                if (_skillList.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   Divider(color: Colors.grey.shade100),
                   const SizedBox(height: 16),
@@ -1843,18 +2368,94 @@ class _ProfilePageState extends State<ProfilePage>
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: skillsController.text.split(',').map((skill) {
+                    children: _skillList.map((skill) {
                       final trimmedSkill = skill.trim();
                       if (trimmedSkill.isEmpty) return const SizedBox.shrink();
                       return Container(
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.redAccent.withOpacity(0.1),
+                          color: Colors.redAccent.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Text(
                           trimmedSkill,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                if (_certifications.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Divider(color: Colors.grey.shade100),
+                  const SizedBox(height: 16),
+                  Text(
+                    "Certifications",
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _certifications.map((c) {
+                      final t = c.trim();
+                      if (t.isEmpty) return const SizedBox.shrink();
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          t,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                if (_languages.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Divider(color: Colors.grey.shade100),
+                  const SizedBox(height: 16),
+                  Text(
+                    "Languages",
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _languages.map((lang) {
+                      final t = lang.trim();
+                      if (t.isEmpty) return const SizedBox.shrink();
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          t,
                           style: GoogleFonts.inter(
                             fontSize: 12,
                             color: Colors.redAccent,
@@ -2013,7 +2614,7 @@ class _ProfilePageState extends State<ProfilePage>
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: Colors.redAccent.withValues(alpha: 0.1),
                   blurRadius: 20,
                   spreadRadius: 2,
                   offset: const Offset(0, 4),
@@ -2030,12 +2631,11 @@ class _ProfilePageState extends State<ProfilePage>
                 Row(
                   children: [
                     IconButton(
-                      onPressed: () =>
-                          setState(() => showProfileSummary = true),
+                      onPressed: () => Navigator.of(context).pop(),
                       icon: Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.redAccent.withOpacity(0.1),
+                          color: Colors.redAccent.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(Icons.arrow_back_rounded,
@@ -2079,7 +2679,7 @@ class _ProfilePageState extends State<ProfilePage>
                         elevation: 0,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 24, vertical: 14),
-                        shadowColor: Colors.redAccent.withOpacity(0.3),
+                        shadowColor: Colors.redAccent.withValues(alpha: 0.3),
                       ),
                       icon: Icon(Icons.save_rounded, size: 18),
                       label: Text(
@@ -2098,123 +2698,180 @@ class _ProfilePageState extends State<ProfilePage>
             ),
           ),
 
-          // Profile Picture Section
-          _modernCard(
-            "Profile Picture",
-            Column(
-              children: [
-                GestureDetector(
-                  onTap: _pickProfileImage,
-                  child: Stack(
-                    children: [
-                      Container(
-                        width: 140,
-                        height: 140,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.redAccent.withOpacity(0.1),
-                              Colors.redAccent.withOpacity(0.3),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          border: Border.all(
-                            color: Colors.redAccent.withOpacity(0.3),
-                            width: 3,
-                          ),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(70),
-                          child: Image(
-                            image: _getProfileImageProvider(),
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                Container(
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.person,
-                                color: Colors.grey.shade400,
-                                size: 50,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        bottom: 8,
-                        right: 8,
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Colors.redAccent,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.redAccent.withOpacity(0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 3,
-                            ),
-                          ),
-                          child: const Icon(
-                            Icons.camera_alt_rounded,
-                            color: Colors.white,
-                            size: 18,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  "Tap the camera icon to update your profile photo",
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w400,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
-          ),
-
-          // Personal Information
+          // Personal Information — side-by-side layout to reduce scrolling
           _modernCard(
             "Personal Information",
             Column(
               children: [
-                // Title dropdown
-                _buildStyledDropdown(
-                  label: "Title",
-                  value: _selectedTitle?.toLowerCase(),
-                  options: titleOptions,
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedTitle = newValue == '' ? null : newValue;
-                      titleController.text = titleOptions.firstWhere(
-                        (opt) => opt['value'] == newValue,
-                        orElse: () => {'label': '', 'value': ''},
-                      )['label']!;
-                    });
-                  },
+                // Row 1: Title & Full Name
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _buildStyledDropdown(
+                        label: "Title",
+                        value: _selectedTitle?.toLowerCase(),
+                        options: titleOptions,
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            _selectedTitle = newValue == '' ? null : newValue;
+                            titleController.text = titleOptions.firstWhere(
+                              (opt) => opt['value'] == newValue,
+                              orElse: () => {'label': '', 'value': ''},
+                            )['label']!;
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: CustomTextField(
+                        label: "Full Name",
+                        controller: fullNameController,
+                        backgroundColor: Colors.transparent,
+                        borderColor: Colors.grey.shade300,
+                        focusedBorderColor: Colors.redAccent,
+                        borderRadius: 12,
+                        borderWidth: 1.5,
+                        focusedBorderWidth: 2,
+                        textColor: Colors.black87,
+                        labelColor: Colors.black,
+                        hintColor: Colors.grey.shade500,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
+                        prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 20),
-
+                // Row 2: Email & Phone
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: CustomTextField(
+                        label: "Email",
+                        controller: emailController,
+                        backgroundColor: Colors.transparent,
+                        borderColor: Colors.grey.shade300,
+                        focusedBorderColor: Colors.redAccent,
+                        borderRadius: 12,
+                        borderWidth: 1.5,
+                        focusedBorderWidth: 2,
+                        textColor: Colors.black87,
+                        labelColor: Colors.black,
+                        hintColor: Colors.grey.shade500,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
+                        prefixIcon: Icon(Icons.email_outlined, size: 20),
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: CustomTextField(
+                        label: "Phone",
+                        controller: phoneController,
+                        backgroundColor: Colors.transparent,
+                        borderColor: Colors.grey.shade300,
+                        focusedBorderColor: Colors.redAccent,
+                        borderRadius: 12,
+                        borderWidth: 1.5,
+                        focusedBorderWidth: 2,
+                        textColor: Colors.black87,
+                        labelColor: Colors.black,
+                        hintColor: Colors.grey.shade500,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
+                        prefixIcon: Icon(Icons.phone_outlined, size: 20),
+                        inputType: TextInputType.phone,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                // Row 3: Gender & Date of Birth
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _buildStyledDropdown(
+                        label: "Gender",
+                        value: _selectedGender?.toLowerCase(),
+                        options: genderOptions,
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            _selectedGender = newValue == '' ? null : newValue;
+                            genderController.text = genderOptions.firstWhere(
+                              (opt) => opt['value'] == newValue,
+                              orElse: () => {'label': '', 'value': ''},
+                            )['label']!;
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: _buildDatePickerField(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                // Row 4: Nationality & ID Number
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _buildStyledDropdown(
+                        label: "Nationality",
+                        value: _selectedNationality?.toLowerCase(),
+                        options: nationalityOptions,
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            _selectedNationality = newValue == '' ? null : newValue;
+                            nationalityController.text =
+                                nationalityOptions.firstWhere(
+                              (opt) => opt['value'] == newValue,
+                              orElse: () => {'label': '', 'value': ''},
+                            )['label']!;
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 20),
+                    Expanded(
+                      child: CustomTextField(
+                        label: "ID Number",
+                        controller: idNumberController,
+                        backgroundColor: Colors.transparent,
+                        borderColor: Colors.grey.shade300,
+                        focusedBorderColor: Colors.redAccent,
+                        borderRadius: 12,
+                        borderWidth: 1.5,
+                        focusedBorderWidth: 2,
+                        textColor: Colors.black87,
+                        labelColor: Colors.black,
+                        hintColor: Colors.grey.shade500,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
+                        prefixIcon: Icon(Icons.badge_outlined, size: 20),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                // Row 5: Location (full width) or Location & spacer
                 CustomTextField(
-                  label: "Full Name",
-                  controller: fullNameController,
+                  label: "Location",
+                  controller: locationController,
                   backgroundColor: Colors.transparent,
                   borderColor: Colors.grey.shade300,
                   focusedBorderColor: Colors.redAccent,
@@ -2222,116 +2879,17 @@ class _ProfilePageState extends State<ProfilePage>
                   borderWidth: 1.5,
                   focusedBorderWidth: 2,
                   textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
+                  labelColor: Colors.black,
                   hintColor: Colors.grey.shade500,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 16,
                   ),
-                  prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
+                  prefixIcon: Icon(Icons.location_on_outlined, size: 20),
+                  hintText: "City, Country",
                 ),
                 const SizedBox(height: 20),
-
-                CustomTextField(
-                  label: "Email",
-                  controller: emailController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  prefixIcon: Icon(Icons.email_outlined, size: 20),
-                ),
-                const SizedBox(height: 20),
-
-                CustomTextField(
-                  label: "Phone",
-                  controller: phoneController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  prefixIcon: Icon(Icons.phone_outlined, size: 20),
-                  inputType: TextInputType.phone,
-                ),
-                const SizedBox(height: 20),
-
-                // Gender dropdown
-                _buildStyledDropdown(
-                  label: "Gender",
-                  value: _selectedGender?.toLowerCase(),
-                  options: genderOptions,
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedGender = newValue == '' ? null : newValue;
-                      genderController.text = genderOptions.firstWhere(
-                        (opt) => opt['value'] == newValue,
-                        orElse: () => {'label': '', 'value': ''},
-                      )['label']!;
-                    });
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                // Date of Birth
-                _buildDatePickerField(),
-                const SizedBox(height: 20),
-
-                // Nationality dropdown
-                _buildStyledDropdown(
-                  label: "Nationality",
-                  value: _selectedNationality?.toLowerCase(),
-                  options: nationalityOptions,
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedNationality = newValue == '' ? null : newValue;
-                      nationalityController.text =
-                          nationalityOptions.firstWhere(
-                        (opt) => opt['value'] == newValue,
-                        orElse: () => {'label': '', 'value': ''},
-                      )['label']!;
-                    });
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                CustomTextField(
-                  label: "ID Number",
-                  controller: idNumberController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  prefixIcon: Icon(Icons.badge_outlined, size: 20),
-                ),
-                const SizedBox(height: 20),
-
+                // Bio: full width (multiline)
                 CustomTextField(
                   label: "Bio",
                   controller: bioController,
@@ -2343,7 +2901,7 @@ class _ProfilePageState extends State<ProfilePage>
                   borderWidth: 1.5,
                   focusedBorderWidth: 2,
                   textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
+                  labelColor: Colors.black,
                   hintColor: Colors.grey.shade500,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -2352,173 +2910,211 @@ class _ProfilePageState extends State<ProfilePage>
                   hintText: "Tell us about yourself...",
                   prefixIcon: Icon(Icons.description_outlined, size: 20),
                 ),
-                const SizedBox(height: 20),
-
-                CustomTextField(
-                  label: "Location",
-                  controller: locationController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
-                  prefixIcon: Icon(Icons.location_on_outlined, size: 20),
-                  hintText: "City, Country",
-                ),
               ],
             ),
           ),
 
-          // Education Section
+          // Education Section — horizontal scroll to show all enrollment data side-by-side
           _modernCard(
             "Education",
             Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ..._educationControllers.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final controller = entry.value;
-                  return Container(
-                    margin: EdgeInsets.only(
-                      bottom:
-                          index == _educationControllers.length - 1 ? 0 : 20,
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: CustomTextField(
-                            label: index == 0
-                                ? "Education"
-                                : "Additional Education",
-                            controller: controller,
-                            maxLines: 2,
-                            backgroundColor: Colors.transparent,
-                            borderColor: Colors.grey.shade300,
-                            focusedBorderColor: Colors.redAccent,
-                            borderRadius: 12,
-                            borderWidth: 1.5,
-                            focusedBorderWidth: 2,
-                            textColor: Colors.black87,
-                            labelColor: Colors.grey.shade700,
-                            hintColor: Colors.grey.shade500,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 16,
-                            ),
-                            hintText:
-                                "e.g., BSc Computer Science at University (2020)",
-                            prefixIcon: Icon(
-                              Icons.school_outlined,
-                              size: 20,
-                              color: index == 0
-                                  ? Colors.redAccent
-                                  : Colors.grey.shade600,
-                            ),
+                Text(
+                  "Swipe or scroll horizontally to view all qualifications.",
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: _kEducationCardHeight + 8,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    clipBehavior: Clip.none,
+                    padding: const EdgeInsets.only(bottom: 8),
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(right: 12),
+                        child: SizedBox(
+                          width: 320,
+                          height: _kEducationCardHeight,
+                          child: _buildEducationCard(
+                            institutionController: institutionController,
+                            degreeController: degreeController,
+                            graduationYearController: graduationYearController,
+                            onRemove: null,
                           ),
                         ),
-                        if (_educationControllers.length > 1)
-                          Container(
-                            margin: const EdgeInsets.only(left: 12),
-                            child: IconButton(
-                              onPressed: () {
+                      ),
+                      ...List.generate(_educationExtraRows.length, (index) {
+                        final row = _educationExtraRows[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: SizedBox(
+                            width: 320,
+                            height: _kEducationCardHeight,
+                            child: _buildEducationCard(
+                              institutionController: row['institution']!,
+                              degreeController: row['degree']!,
+                              graduationYearController: row['year']!,
+                              onRemove: () {
                                 setState(() {
-                                  _educationControllers.removeAt(index);
+                                  row['institution']?.dispose();
+                                  row['degree']?.dispose();
+                                  row['year']?.dispose();
+                                  _educationExtraRows.removeAt(index);
                                 });
                               },
-                              icon: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: Colors.redAccent.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Icon(
-                                  Icons.remove_rounded,
-                                  color: Colors.redAccent,
-                                  size: 18,
-                                ),
-                              ),
                             ),
                           ),
-                      ],
-                    ),
-                  );
-                }).toList(),
-
-                // Add more education button
-                Container(
-                  margin: const EdgeInsets.only(top: 10),
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _educationControllers.add(TextEditingController());
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor: Colors.redAccent,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: Colors.redAccent.withOpacity(0.3),
-                          width: 1.5,
+                        );
+                      }),
+                      // Add-another card — same height for alignment
+                      Padding(
+                        padding: const EdgeInsets.only(left: 4),
+                        child: SizedBox(
+                          width: 200,
+                          height: _kEducationCardHeight,
+                          child: OutlinedButton(
+                            onPressed: () {
+                              setState(() {
+                                _educationExtraRows.add({
+                                  'institution': TextEditingController(),
+                                  'degree': TextEditingController(),
+                                  'year': TextEditingController(),
+                                });
+                              });
+                            },
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.redAccent,
+                              side: const BorderSide(color: Colors.redAccent),
+                              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.add_circle_outline_rounded, size: 40, color: Colors.redAccent),
+                                const SizedBox(height: 12),
+                                Text(
+                                  "Add another",
+                                  style: GoogleFonts.inter(
+                                    color: Colors.redAccent,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                Text(
+                                  "education",
+                                  style: GoogleFonts.inter(
+                                    color: Colors.redAccent,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                    icon: Icon(
-                      Icons.add_circle_outline_rounded,
-                      color: Colors.redAccent,
-                      size: 20,
-                    ),
-                    label: Text(
-                      "Add Another Education",
-                      style: GoogleFonts.inter(
-                        color: Colors.redAccent,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                      ),
-                    ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
 
-          // Skills Section
+          // Skills Section — chip-based, enterprise-style
           _modernCard(
             "Skills",
             Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CustomTextField(
-                  label: "Skills (comma separated)",
-                  controller: skillsController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
+                Text(
+                  "Add and manage your skills. References appear under Work Experience.",
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
                   ),
-                  hintText: "e.g., Python, Flutter, React, Project Management",
-                  prefixIcon: Icon(Icons.code_outlined, size: 20),
-                  maxLines: 3,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _skillList.map((skill) {
+                    final s = skill.trim();
+                    if (s.isEmpty) return const SizedBox.shrink();
+                    return Chip(
+                      label: Text(
+                        s,
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.redAccent,
+                        ),
+                      ),
+                      deleteIcon: const Icon(Icons.close, size: 18, color: Colors.redAccent),
+                      onDeleted: () {
+                        setState(() {
+                          _skillList.remove(skill);
+                        });
+                      },
+                      backgroundColor: Colors.redAccent.withValues(alpha: 0.08),
+                      side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.4)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _addSkillController,
+                        decoration: InputDecoration(
+                          hintText: "Add a skill (press Enter or comma)",
+                          hintStyle: GoogleFonts.inter(color: Colors.grey.shade500, fontSize: 14),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.grey.shade300),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          prefixIcon: Icon(Icons.add_circle_outline, size: 20, color: Colors.grey.shade600),
+                        ),
+                        style: GoogleFonts.inter(fontSize: 14, color: Colors.black87),
+                        onSubmitted: (value) {
+                          _addSkillFromInput();
+                        },
+                        onChanged: (value) {
+                          if (value.contains(',')) {
+                            _addSkillFromInput();
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    IconButton.filled(
+                      onPressed: _addSkillFromInput,
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.redAccent.withValues(alpha: 0.12),
+                        foregroundColor: Colors.redAccent,
+                      ),
+                      icon: const Icon(Icons.add_rounded, size: 24),
+                      tooltip: "Add skill",
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -2539,7 +3135,7 @@ class _ProfilePageState extends State<ProfilePage>
                   borderWidth: 1.5,
                   focusedBorderWidth: 2,
                   textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
+                  labelColor: Colors.black,
                   hintColor: Colors.grey.shade500,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -2562,7 +3158,7 @@ class _ProfilePageState extends State<ProfilePage>
                         borderWidth: 1.5,
                         focusedBorderWidth: 2,
                         textColor: Colors.black87,
-                        labelColor: Colors.grey.shade700,
+                        labelColor: Colors.black,
                         hintColor: Colors.grey.shade500,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -2583,7 +3179,7 @@ class _ProfilePageState extends State<ProfilePage>
                         borderWidth: 1.5,
                         focusedBorderWidth: 2,
                         textColor: Colors.black87,
-                        labelColor: Colors.grey.shade700,
+                        labelColor: Colors.black,
                         hintColor: Colors.grey.shade500,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -2621,7 +3217,7 @@ class _ProfilePageState extends State<ProfilePage>
                             borderWidth: 1.5,
                             focusedBorderWidth: 2,
                             textColor: Colors.black87,
-                            labelColor: Colors.grey.shade700,
+                            labelColor: Colors.black,
                             hintColor: Colors.grey.shade500,
                             contentPadding: const EdgeInsets.symmetric(
                               horizontal: 16,
@@ -2650,7 +3246,8 @@ class _ProfilePageState extends State<ProfilePage>
                               icon: Container(
                                 padding: const EdgeInsets.all(8),
                                 decoration: BoxDecoration(
-                                  color: Colors.redAccent.withOpacity(0.1),
+                                  color:
+                                      Colors.redAccent.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Icon(
@@ -2686,7 +3283,7 @@ class _ProfilePageState extends State<ProfilePage>
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                         side: BorderSide(
-                          color: Colors.redAccent.withOpacity(0.3),
+                          color: Colors.redAccent.withValues(alpha: 0.3),
                           width: 1.5,
                         ),
                       ),
@@ -2706,6 +3303,76 @@ class _ProfilePageState extends State<ProfilePage>
                     ),
                   ),
                 ),
+                if (_referenceEntries.isNotEmpty) ...[
+                  const SizedBox(height: 28),
+                  Divider(color: Colors.grey.shade200),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Icon(Icons.people_outline_rounded, size: 20, color: Colors.grey.shade700),
+                      const SizedBox(width: 8),
+                      Text(
+                        "References",
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    "Reference contact details (moved here from skills).",
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._referenceEntries.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final ref = entry.value;
+                    return Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade200),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.person_outline_rounded, size: 18, color: Colors.grey.shade600),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              ref,
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                color: Colors.black87,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.close, size: 18, color: Colors.grey.shade600),
+                            onPressed: () {
+                              setState(() {
+                                _referenceEntries.removeAt(i);
+                              });
+                            },
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                            tooltip: "Remove reference",
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
               ],
             ),
           ),
@@ -2725,7 +3392,7 @@ class _ProfilePageState extends State<ProfilePage>
                   borderWidth: 1.5,
                   focusedBorderWidth: 2,
                   textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
+                  labelColor: Colors.black,
                   hintColor: Colors.grey.shade500,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -2745,7 +3412,7 @@ class _ProfilePageState extends State<ProfilePage>
                   borderWidth: 1.5,
                   focusedBorderWidth: 2,
                   textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
+                  labelColor: Colors.black,
                   hintColor: Colors.grey.shade500,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -2765,7 +3432,7 @@ class _ProfilePageState extends State<ProfilePage>
                   borderWidth: 1.5,
                   focusedBorderWidth: 2,
                   textColor: Colors.black87,
-                  labelColor: Colors.grey.shade700,
+                  labelColor: Colors.black,
                   hintColor: Colors.grey.shade500,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16,
@@ -2796,7 +3463,7 @@ class _ProfilePageState extends State<ProfilePage>
                       borderRadius: BorderRadius.circular(14),
                     ),
                     elevation: 0,
-                    shadowColor: Colors.redAccent.withOpacity(0.4),
+                    shadowColor: Colors.redAccent.withValues(alpha: 0.4),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -2816,7 +3483,7 @@ class _ProfilePageState extends State<ProfilePage>
                 ),
                 const SizedBox(height: 16),
                 TextButton(
-                  onPressed: () => setState(() => showProfileSummary = true),
+                  onPressed: () => Navigator.of(context).pop(),
                   child: Text(
                     "Cancel",
                     style: GoogleFonts.inter(
@@ -2848,12 +3515,13 @@ class _ProfilePageState extends State<ProfilePage>
           label,
           style: GoogleFonts.inter(
             fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey.shade700,
+            fontWeight: FontWeight.w600,
+            color: Colors.black,
           ),
         ),
         const SizedBox(height: 8),
         Container(
+          constraints: const BoxConstraints(minHeight: 52),
           decoration: BoxDecoration(
             color: Colors.transparent,
             borderRadius: BorderRadius.circular(12),
@@ -2862,6 +3530,7 @@ class _ProfilePageState extends State<ProfilePage>
               width: 1.5,
             ),
           ),
+          alignment: Alignment.centerLeft,
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: value,
@@ -2930,8 +3599,8 @@ class _ProfilePageState extends State<ProfilePage>
           "Date of Birth",
           style: GoogleFonts.inter(
             fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey.shade700,
+            fontWeight: FontWeight.w600,
+            color: Colors.black,
           ),
         ),
         const SizedBox(height: 8),
@@ -3113,7 +3782,7 @@ class _ProfilePageState extends State<ProfilePage>
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.redAccent.withOpacity(0.1),
+              color: Colors.redAccent.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: Colors.redAccent, size: 20),
@@ -3145,7 +3814,12 @@ class _ProfilePageState extends State<ProfilePage>
           Switch.adaptive(
             value: value,
             onChanged: onChanged,
-            activeColor: Colors.redAccent,
+            activeTrackColor: Colors.redAccent.withValues(alpha: 0.3),
+            thumbColor: WidgetStateProperty.resolveWith((states) {
+              return states.contains(WidgetState.selected)
+                  ? Colors.redAccent
+                  : Colors.grey;
+            }),
           ),
         ],
       ),

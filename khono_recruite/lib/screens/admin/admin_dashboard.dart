@@ -1,41 +1,39 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
-import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-import '../auth/login_screen.dart';
-
 import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 import 'candidate_management_screen.dart';
 import 'cv_reviews_screen.dart';
 import 'hm_team_collaboration_page.dart';
 import 'candidate_list_screen.dart';
 import 'interviews_list_screen.dart';
-import 'notifications_screen.dart';
+import '../notifications/notifications_screen.dart';
 import 'job_management.dart';
+import 'test_pack_management_screen.dart';
 import 'user_management_screen.dart';
 import '../../providers/theme_provider.dart';
 import 'analytics_dashboard.dart';
 import 'offer_list_screen.dart';
 
-class AdminDAshboard extends StatefulWidget {
+class AdminDashboard extends StatefulWidget {
   final String token;
-  const AdminDAshboard({super.key, required this.token});
+  const AdminDashboard({super.key, required this.token});
 
   @override
-  _AdminDAshboardState createState() => _AdminDAshboardState();
+  _AdminDashboardState createState() => _AdminDashboardState();
 }
 
-class _AdminDAshboardState extends State<AdminDAshboard>
+class _AdminDashboardState extends State<AdminDashboard>
     with SingleTickerProviderStateMixin {
   String currentScreen = "dashboard";
   bool loadingStats = true;
@@ -93,12 +91,22 @@ class _AdminDAshboardState extends State<AdminDAshboard>
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
   String _profileImageUrl = "";
-  final ImagePicker _picker = ImagePicker();
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  final String apiBase = ApiEndpoints.candidateBase;
+
+  String? _userName;
+
+  /// Use role-based name when stored name is null, empty, or a placeholder (e.g. "Deployed Admin").
+  String _effectiveWelcomeName(String? name) {
+    if (name == null || name.trim().isEmpty) return 'Admin';
+    if (name.toLowerCase().contains('deployed')) return 'Admin';
+    return name.trim();
+  }
 
   @override
   void initState() {
     super.initState();
+    _userName = AuthService.getCachedDisplayName();
+    _bootstrapAuthFromToken();
     fetchStats();
     fetchPowerBIStatus();
     fetchAudits(page: 1);
@@ -115,6 +123,22 @@ class _AdminDAshboardState extends State<AdminDAshboard>
     _sidebarWidthAnimation = Tween<double>(begin: 260, end: 72).animate(
       CurvedAnimation(parent: _sidebarAnimController, curve: Curves.easeInOut),
     );
+  }
+
+  Future<void> _bootstrapAuthFromToken() async {
+    if (widget.token.isEmpty) return;
+    try {
+      await AuthService.saveToken(widget.token);
+      final userProfile = await AuthService.getUserProfile(widget.token);
+      final user = userProfile['user'] ?? userProfile;
+      if (user is Map<String, dynamic>) {
+        await AuthService.saveUserInfo(user);
+      }
+      if (mounted)
+        setState(() => _userName = AuthService.getCachedDisplayName());
+    } catch (_) {
+      // Best-effort: avoid blocking dashboard load
+    }
   }
 
   @override
@@ -145,15 +169,6 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       }
     } catch (e) {
       debugPrint("Error fetching profile image: $e");
-    }
-  }
-
-  Future<void> _pickProfileImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      if (kIsWeb) _profileImageBytes = await pickedFile.readAsBytes();
-      setState(() => _profileImage = pickedFile);
-      await uploadProfileImage();
     }
   }
 
@@ -207,13 +222,13 @@ class _AdminDAshboardState extends State<AdminDAshboard>
 
   // ---------- Dashboard Stats & PowerBI ----------
   Future<void> fetchStats() async {
-    setState(() => loadingStats = true);
+    if (mounted) setState(() => loadingStats = true);
     try {
       final counts = await admin.getDashboardCounts();
       final token = await AuthService.getAccessToken();
 
       final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/recent-activities"),
+        Uri.parse(ApiEndpoints.getRecentActivities),
         headers: {"Authorization": "Bearer $token"},
       );
 
@@ -223,47 +238,51 @@ class _AdminDAshboardState extends State<AdminDAshboard>
         activities = List<String>.from(data["recent_activities"] ?? []);
       }
 
-      setState(() {
-        jobsCount = counts["jobs"] ?? 0;
-        candidatesCount = counts["candidates"] ?? 0;
-        interviewsCount = counts["interviews"] ?? 0;
-        cvReviewsCount = counts["cv_reviews"] ?? 0;
-        auditsCount = counts["audits"] ?? 0;
-        recentActivities = activities;
-        loadingStats = false;
-      });
+      if (mounted) {
+        setState(() {
+          jobsCount = counts["jobs"] ?? 0;
+          candidatesCount = counts["candidates"] ?? 0;
+          interviewsCount = counts["interviews"] ?? 0;
+          cvReviewsCount = counts["cv_reviews"] ?? 0;
+          auditsCount = counts["audits"] ?? 0;
+          recentActivities = activities;
+          loadingStats = false;
+        });
+      }
     } catch (e) {
-      setState(() => loadingStats = false);
+      if (mounted) setState(() => loadingStats = false);
       debugPrint("Error fetching dashboard stats: $e");
     }
   }
 
   Future<void> fetchPowerBIStatus() async {
-    setState(() => checkingPowerBI = true);
+    if (mounted) setState(() => checkingPowerBI = true);
     try {
       final token = await AuthService.getAccessToken();
       final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/powerbi/status"),
+        Uri.parse(ApiEndpoints.getPowerBIStatus),
         headers: {"Authorization": "Bearer $token"},
       );
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
-        setState(() {
-          powerBIConnected = data["connected"] ?? false;
-        });
+        if (mounted) {
+          setState(() {
+            powerBIConnected = data["connected"] ?? false;
+          });
+        }
       } else {
-        setState(() => powerBIConnected = false);
+        if (mounted) setState(() => powerBIConnected = false);
       }
     } catch (e) {
-      setState(() => powerBIConnected = false);
+      if (mounted) setState(() => powerBIConnected = false);
     } finally {
-      setState(() => checkingPowerBI = false);
+      if (mounted) setState(() => checkingPowerBI = false);
     }
   }
 
   Future<void> fetchAudits({int page = 1}) async {
-    setState(() => loadingAudits = true);
+    if (mounted) setState(() => loadingAudits = true);
     try {
       final token = await AuthService.getAccessToken();
       final queryParams = {
@@ -278,55 +297,59 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               "${auditEndDate!.year}-${auditEndDate!.month.toString().padLeft(2, '0')}-${auditEndDate!.day.toString().padLeft(2, '0')}",
         if (auditSearchQuery != null) "q": auditSearchQuery!,
       };
-      final uri = Uri.http("127.0.0.1:5000", "/api/admin/audits", queryParams);
+      final uri = Uri.parse("${ApiEndpoints.adminBase}/audits")
+          .replace(queryParameters: queryParams);
       final res =
           await http.get(uri, headers: {"Authorization": "Bearer $token"});
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
-        setState(() {
-          audits = List<Map<String, dynamic>>.from(data["results"]);
-          auditPage = data["page"];
-          auditPerPage = data["per_page"];
-          auditTrendData = audits
-              .map((e) => DateTime.parse(e["timestamp"]))
-              .fold<Map<String, int>>({}, (map, dt) {
-                final day =
-                    "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
-                map[day] = (map[day] ?? 0) + 1;
-                return map;
-              })
-              .entries
-              .map((e) => _ChartData(e.key, e.value))
-              .toList();
-          loadingAudits = false;
-        });
+        if (mounted) {
+          setState(() {
+            audits = List<Map<String, dynamic>>.from(data["results"]);
+            auditPage = data["page"];
+            auditPerPage = data["per_page"];
+            auditTrendData = audits
+                .map((e) => DateTime.parse(e["timestamp"]))
+                .fold<Map<String, int>>({}, (map, dt) {
+                  final day =
+                      "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
+                  map[day] = (map[day] ?? 0) + 1;
+                  return map;
+                })
+                .entries
+                .map((e) => _ChartData(e.key, e.value))
+                .toList();
+            loadingAudits = false;
+          });
+        }
       } else {
-        setState(() => loadingAudits = false);
+        if (mounted) setState(() => loadingAudits = false);
       }
     } catch (e) {
-      setState(() => loadingAudits = false);
+      if (mounted) setState(() => loadingAudits = false);
     }
   }
 
   void _showLogoutConfirmation(BuildContext context) {
+    final navigatorContext = context;
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text("Logout", style: TextStyle(fontFamily: 'Poppins')),
           content: const Text("Are you sure you want to logout?",
               style: TextStyle(fontFamily: 'Poppins')),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child:
                   const Text("Cancel", style: TextStyle(fontFamily: 'Poppins')),
             ),
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop();
-                _performLogout(context);
+                Navigator.of(dialogContext).pop();
+                _performLogout(navigatorContext);
               },
               child: const Text("Logout",
                   style: TextStyle(color: Colors.red, fontFamily: 'Poppins')),
@@ -338,19 +361,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
   }
 
   void _performLogout(BuildContext context) async {
-    Navigator.of(context).pop();
+    // Do not pop: confirmation dialog already closed by onPressed. Popping again would remove the last route.
     await AuthService.logout();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (Route<dynamic> route) => false,
-        );
-      }
-    });
+    if (!mounted) return;
+    context.go('/login');
   }
-
-  bool _isLoggingOut = false;
 
   // ---------- UI Build ----------
   @override
@@ -379,7 +394,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                     height: double.infinity,
                     decoration: BoxDecoration(
                       color: themeProvider.isDarkMode
-                          ? const Color.fromARGB(171, 20, 19, 30)
+                          ? const Color(0xFF1F2840)
                           : const Color.fromARGB(156, 255, 255, 255),
                       border: Border(
                         right:
@@ -388,7 +403,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                       boxShadow: [
                         BoxShadow(
                           color: const Color.fromARGB(255, 20, 19, 30)
-                              .withOpacity(0.02),
+                              .withValues(alpha: 0.02),
                           blurRadius: 8,
                           offset: const Offset(2, 0),
                         ),
@@ -409,7 +424,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                                     alignment: Alignment.centerLeft,
                                     child: sidebarCollapsed
                                         ? Image.asset(
-                                            'assets/images/icon.png',
+                                            'assets/images/logo2.png',
                                             height: 40,
                                             fit: BoxFit.contain,
                                           )
@@ -436,29 +451,45 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                             ),
                           ),
                         ),
-                        const Divider(height: 1, color: Colors.grey),
                         Expanded(
                           child: ListView(
                             padding: EdgeInsets.zero,
                             children: [
                               _sidebarEntry(
-                                  Icons.home_outlined, 'Home', 'dashboard'),
-                              _sidebarEntry(Icons.work_outline, 'Jobs', 'jobs'),
-                              _sidebarEntry(Icons.people_alt_outlined,
-                                  'Shortlisted', 'candidates'),
+                                  'assets/images/Home_Remote_Work_Red_Badge_White.png',
+                                  'Home',
+                                  'dashboard'),
                               _sidebarEntry(
-                                  Icons.event_note, 'Interviews', 'interviews'),
-                              _sidebarEntry(Icons.assignment_outlined,
-                                  'CV Reviews', 'cv_reviews'),
-                              _sidebarEntry(Icons.history, 'Audits', 'audits'),
+                                  'assets/images/Approval_Red_Badge_White.png',
+                                  'Jobs',
+                                  'jobs'),
                               _sidebarEntry(
-                                  Icons.security, 'Role Access', 'roles'),
-                              _sidebarEntry(Icons.people_outline, 'Candidates',
-                                  'all_candidates'),
+                                  'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
+                                  'Test Packs',
+                                  'test_packs'),
+                              _sidebarEntry(
+                                  'assets/images/Meeting_Red_Badge_White.png',
+                                  'Shortlisted',
+                                  'candidates'),
+                              _sidebarEntry(
+                                  'assets/images/red_Management_Red_Badge_White.png',
+                                  'Interviews',
+                                  'interviews'),
+                              _sidebarEntry(
+                                  'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
+                                  'CV Reviews',
+                                  'cv_reviews'),
+                              _sidebarEntry('assets/images/deadline.png',
+                                  'Audits', 'audits'),
+                              _sidebarEntry(
+                                  'assets/images/Warning_Error_Red_Badge_White.png',
+                                  'Role Access',
+                                  'roles'),
+                              _sidebarEntry('assets/images/candidates.png',
+                                  'Candidates', 'all_candidates'),
                             ],
                           ),
                         ),
-                        const Divider(height: 1, color: Colors.grey),
                         Padding(
                           padding: const EdgeInsets.symmetric(
                               vertical: 12.0, horizontal: 8),
@@ -552,8 +583,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                     Container(
                       height: 72,
                       color: themeProvider.isDarkMode
-                          ? const Color(0xFF14131E).withOpacity(0.8)
-                          : Colors.white.withOpacity(0.8),
+                          ? const Color(0xFF14131E).withValues(alpha: 0.8)
+                          : Colors.white.withValues(alpha: 0.8),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
@@ -565,18 +596,18 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                                 decoration: BoxDecoration(
                                   color: (themeProvider.isDarkMode
                                       ? const Color(0xFF14131E)
-                                      : Colors.white.withOpacity(0.8)),
+                                      : Colors.white.withValues(alpha: 0.8)),
                                   borderRadius: BorderRadius.circular(40),
                                   border: Border.all(
                                     color: themeProvider.isDarkMode
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.black.withOpacity(0.05),
+                                        ? Colors.white.withValues(alpha: 0.1)
+                                        : Colors.black.withValues(alpha: 0.05),
                                   ),
                                   boxShadow: [
                                     BoxShadow(
                                       color: themeProvider.isDarkMode
-                                          ? Colors.black.withOpacity(0.3)
-                                          : Colors.grey.withOpacity(0.2),
+                                          ? Colors.black.withValues(alpha: 0.3)
+                                          : Colors.grey.withValues(alpha: 0.2),
                                       blurRadius: 10,
                                       offset: const Offset(0, 4),
                                     ),
@@ -613,7 +644,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                                     fontFamily: 'Poppins',
                                     color: themeProvider.isDarkMode
                                         ? Colors.white
-                                        : Colors.black.withOpacity(0.8),
+                                        : Colors.black.withValues(alpha: 0.8),
                                     fontSize: 14,
                                   ),
                                 ),
@@ -621,160 +652,169 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                             ),
                             const SizedBox(width: 16),
 
-                            Row(
-                              children: [
-                                // ---------- Theme Toggle Switch ----------
-                                Row(
+                            Flexible(
+                              child: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(
-                                      themeProvider.isDarkMode
-                                          ? Icons.dark_mode
-                                          : Icons.light_mode,
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.amber
-                                          : Colors.grey.shade700,
-                                      size: 20,
+                                    // ---------- Theme Toggle Switch ----------
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          themeProvider.isDarkMode
+                                              ? Icons.dark_mode
+                                              : Icons.light_mode,
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.amber
+                                              : Colors.grey.shade700,
+                                          size: 20,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Switch(
+                                          value: themeProvider.isDarkMode,
+                                          onChanged: (value) {
+                                            themeProvider.toggleTheme();
+                                          },
+                                          activeThumbColor: Colors.redAccent,
+                                          inactiveTrackColor:
+                                              Colors.grey.shade400,
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(width: 12),
+
+                                    // ---------- Analytics Icon ----------
+                                    IconButton(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                              builder: (context) =>
+                                                  AnalyticsDashboard()),
+                                        );
+                                      },
+                                      icon: Image.asset(
+                                        // Changed from Icon to Image.asset
+                                        'assets/icons/data-analytics.png',
+                                        width: 24,
+                                        height: 24,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                      tooltip: "Analytics Dashboard",
                                     ),
                                     const SizedBox(width: 8),
-                                    Switch(
-                                      value: themeProvider.isDarkMode,
-                                      onChanged: (value) {
-                                        themeProvider.toggleTheme();
+
+                                    // ---------- Power BI Status Icon ----------
+                                    Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: powerBIConnected
+                                            ? Colors.green
+                                            : Colors.red,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: powerBIConnected
+                                                ? Colors.green.withOpacity(0.6)
+                                                : Colors.red.withOpacity(0.6),
+                                            blurRadius: 12,
+                                            spreadRadius: 2,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Center(
+                                        child: checkingPowerBI
+                                            ? const SizedBox(
+                                                width: 16,
+                                                height: 16,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  color: Colors.white,
+                                                  strokeWidth: 2,
+                                                ),
+                                              )
+                                            : const Icon(Icons.bar_chart,
+                                                color: Colors.white, size: 20),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+
+                                    // ---------- Team Collaboration Icon ----------
+                                    IconButton(
+                                      onPressed: () => setState(() =>
+                                          currentScreen = "team_collaboration"),
+                                      icon: Image.asset(
+                                        // Changed from Icon to Image.asset
+                                        'assets/icons/teamC.png',
+                                        width: 34,
+                                        height: 34,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                      tooltip: "Team Collaboration",
+                                    ),
+                                    const SizedBox(width: 8),
+
+                                    TextButton.icon(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                              builder: (context) =>
+                                                  AdminOfferListScreen()),
+                                        );
                                       },
-                                      activeThumbColor: Colors.redAccent,
-                                      inactiveTrackColor: Colors.grey.shade400,
+                                      icon: Image.asset(
+                                        'assets/icons/add.png',
+                                        width: 30,
+                                        height: 30,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                      label: Text(
+                                        "Create",
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.white
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+
+                                    IconButton(
+                                      onPressed: () => setState(() =>
+                                          currentScreen = "notifications"),
+                                      icon: Image.asset(
+                                        // Changed from Icon to Image.asset
+                                        'assets/icons/notification.png',
+                                        width: 45,
+                                        height: 45,
+                                        color: const Color.fromARGB(
+                                            255, 193, 13, 0),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    GestureDetector(
+                                      onTap: () {
+                                        context.push(
+                                            '/profile?token=${widget.token}');
+                                      },
+                                      child: CircleAvatar(
+                                        radius: 18,
+                                        backgroundColor: Colors.grey.shade200,
+                                        backgroundImage:
+                                            _getProfileImageProvider(),
+                                        child: null,
+                                      ),
                                     ),
                                   ],
                                 ),
-                                const SizedBox(width: 12),
-
-                                // ---------- Analytics Icon ----------
-                                IconButton(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) =>
-                                              AnalyticsDashboard()),
-                                    );
-                                  },
-                                  icon: Image.asset(
-                                    // Changed from Icon to Image.asset
-                                    'assets/icons/data-analytics.png',
-                                    width: 24,
-                                    height: 24,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                  tooltip: "Analytics Dashboard",
-                                ),
-                                const SizedBox(width: 8),
-
-                                // ---------- Power BI Status Icon ----------
-                                Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: powerBIConnected
-                                        ? Colors.green
-                                        : Colors.red,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: powerBIConnected
-                                            ? Colors.green.withOpacity(0.6)
-                                            : Colors.red.withOpacity(0.6),
-                                        blurRadius: 12,
-                                        spreadRadius: 2,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Center(
-                                    child: checkingPowerBI
-                                        ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Icon(Icons.bar_chart,
-                                            color: Colors.white, size: 20),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-
-                                // ---------- Team Collaboration Icon ----------
-                                IconButton(
-                                  onPressed: () => setState(() =>
-                                      currentScreen = "team_collaboration"),
-                                  icon: Image.asset(
-                                    // Changed from Icon to Image.asset
-                                    'assets/icons/teamC.png',
-                                    width: 34,
-                                    height: 34,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                  tooltip: "Team Collaboration",
-                                ),
-                                const SizedBox(width: 8),
-
-                                TextButton.icon(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) =>
-                                              AdminOfferListScreen()),
-                                    );
-                                  },
-                                  icon: Image.asset(
-                                    'assets/icons/add.png',
-                                    width: 30,
-                                    height: 30,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                  label: Text(
-                                    "Create",
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-
-                                IconButton(
-                                  onPressed: () => setState(
-                                      () => currentScreen = "notifications"),
-                                  icon: Image.asset(
-                                    // Changed from Icon to Image.asset
-                                    'assets/icons/notification.png',
-                                    width: 45,
-                                    height: 45,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                GestureDetector(
-                                  onTap: () {
-                                    context
-                                        .push('/profile?token=${widget.token}');
-                                  },
-                                  child: CircleAvatar(
-                                    radius: 18,
-                                    backgroundColor: Colors.grey.shade200,
-                                    backgroundImage: _getProfileImageProvider(),
-                                    child: null,
-                                  ),
-                                ),
-                              ],
+                              ),
                             ),
                           ],
                         ),
@@ -790,9 +830,9 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.redAccent,
-        child: const Icon(Icons.refresh),
         onPressed: fetchStats,
         tooltip: "Refresh stats",
+        child: const Icon(Icons.refresh),
       ),
     );
   }
@@ -808,24 +848,33 @@ class _AdminDAshboardState extends State<AdminDAshboard>
     });
   }
 
-  Widget _sidebarEntry(IconData icon, String label, String screenKey) {
+  Widget _sidebarEntry(dynamic icon, String label, String screenKey) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final selected = currentScreen == screenKey;
     return InkWell(
       onTap: () => setState(() => currentScreen = screenKey),
       child: Container(
-        color: selected
-            ? const Color.fromRGBO(151, 18, 8, 1).withOpacity(0.06)
-            : Colors.transparent,
+        color: selected ? const Color(0xFFC10D00) : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
           children: [
-            Icon(icon,
-                color: selected
-                    ? const Color.fromRGBO(151, 18, 8, 1)
-                    : themeProvider.isDarkMode
-                        ? Colors.grey.shade400
-                        : Colors.grey.shade800),
+            icon is IconData
+                ? Icon(icon,
+                    color: selected
+                        ? const Color(0xFFC10D00)
+                        : themeProvider.isDarkMode
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade800)
+                : Image.asset(icon as String, width: 32, height: 32,
+                    errorBuilder: (context, error, stackTrace) {
+                    return Icon(Icons.error,
+                        color: selected
+                            ? const Color(0xFFC10D00)
+                            : themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade800,
+                        size: 32);
+                  }),
             const SizedBox(width: 12),
             if (!sidebarCollapsed)
               Expanded(
@@ -834,9 +883,9 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     color: selected
-                        ? Colors.redAccent
+                        ? Colors.white
                         : themeProvider.isDarkMode
-                            ? Colors.grey.shade400
+                            ? Colors.white
                             : Colors.grey.shade800,
                     fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                   ),
@@ -859,6 +908,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
             });
           },
         );
+      case "test_packs":
+        return const TestPackManagementScreen();
       case "candidates":
         if (selectedJobId == null) {
           return const Center(
@@ -926,7 +977,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: Colors.redAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: Row(
@@ -961,7 +1012,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                     fillColor: (themeProvider.isDarkMode
                             ? const Color(0xFF14131E)
                             : Colors.white)
-                        .withOpacity(0.9),
+                        .withValues(alpha: 0.9),
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 10),
                     border: OutlineInputBorder(
@@ -982,7 +1033,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                   color: (themeProvider.isDarkMode
                           ? const Color(0xFF14131E)
                           : Colors.white)
-                      .withOpacity(0.9),
+                      .withValues(alpha: 0.9),
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: DropdownButtonHideUnderline(
@@ -1016,11 +1067,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               color: (themeProvider.isDarkMode
                       ? const Color(0xFF14131E)
                       : Colors.white)
-                  .withOpacity(0.9),
+                  .withValues(alpha: 0.9),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: Colors.redAccent.withValues(alpha: 0.1),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
@@ -1131,11 +1182,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               color: (themeProvider.isDarkMode
                       ? const Color(0xFF14131E)
                       : Colors.white)
-                  .withOpacity(0.9),
+                  .withValues(alpha: 0.9),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
+                  color: Colors.grey.withValues(alpha: 0.1),
                   blurRadius: 15,
                   offset: const Offset(0, 8),
                 ),
@@ -1176,7 +1227,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
 
                       return ListTile(
                         leading: CircleAvatar(
-                          backgroundColor: color.withOpacity(0.15),
+                          backgroundColor: color.withValues(alpha: 0.15),
                           child: Icon(icon, color: color),
                         ),
                         title: Text(
@@ -1195,7 +1246,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                           padding: const EdgeInsets.symmetric(
                               horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: color.withOpacity(0.1),
+                            color: color.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(
@@ -1228,31 +1279,31 @@ class _AdminDAshboardState extends State<AdminDAshboard>
         "title": "Jobs",
         "count": jobsCount,
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/jobs.png" // or .svg if using SVG
+        "icon": "assets/images/Approval_Red_Badge_White.png"
       },
       {
         "title": "Candidates",
         "count": candidatesCount,
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/candidates.png"
+        "icon": "assets/images/candidates.png"
       },
       {
         "title": "Interviews",
         "count": interviewsCount,
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/interview.png"
+        "icon": "assets/images/red_Management_Red_Badge_White.png"
       },
       {
         "title": "CV Reviews",
         "count": cvReviewsCount,
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/review.png"
+        "icon": "assets/images/Goal_Target_White_Badge_Red_Badge_White.png"
       },
       {
         "title": "Audits",
         "count": auditsCount,
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/audit.png"
+        "icon": "assets/images/deadline.png"
       },
     ];
     final departmentData = [
@@ -1292,7 +1343,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 8),
-            Text("Welcome Back, Admin",
+            Text("Welcome Back, ${_effectiveWelcomeName(_userName)}!",
                 style: TextStyle(
                     fontFamily: 'Poppins',
                     fontSize: 28,
@@ -1320,11 +1371,12 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                       color: (themeProvider.isDarkMode
                               ? const Color(0xFF14131E)
                               : Colors.white)
-                          .withOpacity(0.9),
+                          .withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: (item["color"] as Color).withOpacity(0.1),
+                          color:
+                              (item["color"] as Color).withValues(alpha: 0.1),
                           blurRadius: 15,
                           offset: const Offset(0, 6),
                         ),
@@ -1377,11 +1429,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1406,7 +1458,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: Colors.redAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1459,7 +1511,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                   width: 60,
                   height: 60,
                   decoration: BoxDecoration(
-                    color: Colors.redAccent.withOpacity(0.1),
+                    color: Colors.redAccent.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                     border: Border.all(color: Colors.redAccent, width: 2),
                   ),
@@ -1485,11 +1537,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1514,8 +1566,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color:
-                      const Color.fromARGB(255, 153, 26, 26).withOpacity(0.1),
+                  color: const Color.fromARGB(255, 153, 26, 26)
+                      .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1584,11 +1636,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1613,8 +1665,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color:
-                      const Color.fromARGB(255, 153, 26, 26).withOpacity(0.1),
+                  color: const Color.fromARGB(255, 153, 26, 26)
+                      .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1679,11 +1731,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Colors.black.withValues(alpha: 0.08),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1708,8 +1760,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color:
-                      const Color.fromARGB(255, 153, 26, 26).withOpacity(0.1),
+                  color: const Color.fromARGB(255, 153, 26, 26)
+                      .withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -1787,11 +1839,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.blueGrey.withOpacity(0.1),
+            color: Colors.blueGrey.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1801,8 +1853,8 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.blue.shade900.withOpacity(0.3),
-                  Colors.purple.shade900.withOpacity(0.3),
+                  Colors.blue.shade900.withValues(alpha: 0.3),
+                  Colors.purple.shade900.withValues(alpha: 0.3),
                 ],
               )
             : LinearGradient(
@@ -1826,7 +1878,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: const Color.fromARGB(255, 153, 26, 26)
-                          .withOpacity(0.1),
+                          .withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.calendar_month,
@@ -1848,7 +1900,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.blueAccent.withOpacity(0.1),
+                  color: Colors.blueAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: StreamBuilder(
@@ -1875,11 +1927,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               color: (themeProvider.isDarkMode
                       ? const Color(0xFF14131E)
                       : Colors.white)
-                  .withOpacity(0.9),
+                  .withValues(alpha: 0.9),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -1920,96 +1972,6 @@ class _AdminDAshboardState extends State<AdminDAshboard>
     );
   }
 
-  Widget _calendarStat(String label, String value, Color color) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(
-            Icons.circle_rounded,
-            color: color,
-            size: 6,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: color,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontFamily: 'Poppins',
-            fontSize: 9,
-            color: Colors.grey.shade600,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _calendarLegend(Color color, String text) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          text,
-          style: const TextStyle(
-              fontSize: 11, fontWeight: FontWeight.w500, fontFamily: 'Poppins'),
-        ),
-      ],
-    );
-  }
-
-  List<Appointment> _getAppointments() {
-    final now = DateTime.now();
-    return [
-      Appointment(
-        startTime: now.add(const Duration(days: 1, hours: 10)),
-        endTime: now.add(const Duration(days: 1, hours: 11)),
-        subject: 'Technical Interview',
-        color: Colors.blueAccent,
-      ),
-      Appointment(
-        startTime: now.add(const Duration(days: 2, hours: 14)),
-        endTime: now.add(const Duration(days: 2, hours: 15)),
-        subject: 'HR Meeting',
-        color: Colors.green,
-      ),
-      Appointment(
-        startTime: now.add(const Duration(days: 3, hours: 9)),
-        endTime: now.add(const Duration(days: 3, hours: 10)),
-        subject: 'CV Review Deadline',
-        color: Colors.orange,
-      ),
-      Appointment(
-        startTime: now.add(const Duration(days: 5, hours: 11)),
-        endTime: now.add(const Duration(days: 5, hours: 12)),
-        subject: 'Candidate Screening',
-        color: Colors.purple,
-      ),
-    ];
-  }
-
   Widget activitiesCard() {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
@@ -2018,11 +1980,11 @@ class _AdminDAshboardState extends State<AdminDAshboard>
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withValues(alpha: 0.1),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -2036,7 +1998,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               Container(
                 padding: const EdgeInsets.all(6),
                 decoration: BoxDecoration(
-                  color: Colors.redAccent.withOpacity(0.1),
+                  color: Colors.redAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.timeline,
@@ -2069,7 +2031,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                     color: (themeProvider.isDarkMode
                             ? const Color(0xFF14131E)
                             : Colors.grey.shade50)
-                        .withOpacity(0.9),
+                        .withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: Colors.grey.shade200),
                   ),
@@ -2141,7 +2103,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
+                      color: Colors.black.withValues(alpha: 0.08),
                       blurRadius: 6,
                       offset: const Offset(0, 3),
                     ),
@@ -2157,7 +2119,7 @@ class _AdminDAshboardState extends State<AdminDAshboard>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -2242,10 +2204,4 @@ class _ChartData {
   final String label;
   final int value;
   _ChartData(this.label, this.value);
-}
-
-class _MeetingDataSource extends CalendarDataSource {
-  _MeetingDataSource(List<Appointment> source) {
-    appointments = source;
-  }
 }

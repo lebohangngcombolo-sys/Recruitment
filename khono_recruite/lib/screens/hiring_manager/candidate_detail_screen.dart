@@ -1,10 +1,8 @@
-import 'dart:html' as html; // For web download
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
+import 'package:url_launcher/url_launcher.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
@@ -12,6 +10,7 @@ import '../../services/admin_service.dart';
 import '../../widgets/custom_button.dart';
 import 'interview_schedule_page.dart';
 import 'package:http/http.dart' as http;
+import '../../utils/api_endpoints.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 
@@ -40,6 +39,34 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
   String? errorMessage;
   String currentScreen = "candidates";
 
+  static const List<String> _classificationOptions = [
+    'applied',
+    'screening',
+    'assessment',
+    'interview',
+    'offer',
+    'hired',
+    'rejected',
+  ];
+
+  String _normalizeClassificationStatus(String raw) {
+    final v = raw.trim().toLowerCase();
+    switch (v) {
+      case 'in_progress':
+      case 'in-progress':
+      case 'in progress':
+        return 'screening';
+      case 'assessment_submitted':
+      case 'assessment-submitted':
+      case 'assessment submitted':
+        return 'assessment';
+      default:
+        break;
+    }
+    if (_classificationOptions.contains(v)) return v;
+    return 'applied';
+  }
+
   late final AnimationController _hoverController;
   late final Animation<double> _hoverAnimation;
 
@@ -63,6 +90,65 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
   void dispose() {
     _hoverController.dispose();
     super.dispose();
+  }
+
+  Future<void> _updateApplicationStatus(
+      int applicationId, String newStatus) async {
+    try {
+      final success =
+          await admin.updateApplicationStatus(applicationId, newStatus);
+      if (success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Status updated successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+        // Refresh data to reflect change
+        await fetchAllData();
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to update status'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating status: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Color _statusColor(String status) {
+    switch (status) {
+      case 'applied':
+        return Colors.blue;
+      case 'screening':
+        return Colors.orange;
+      case 'assessment':
+        return Colors.purple;
+      case 'interview':
+        return Colors.teal;
+      case 'offer':
+        return Colors.amber;
+      case 'hired':
+        return Colors.green;
+      case 'rejected':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
   }
 
   Future<void> fetchAllData() async {
@@ -95,7 +181,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
           await admin.getCandidateInterviews(widget.candidateId);
       interviews = List<Map<String, dynamic>>.from(interviewData);
     } catch (e) {
-      debugPrint("Error fetching candidate details: $e");
+      print("Error fetching candidate details: $e");
       errorMessage = "Failed to load data: $e";
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -119,7 +205,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
 
       final response = await http.get(
         Uri.parse(
-            'http://127.0.0.1:5000/api/admin/applications/$applicationId/download-cv'),
+            '${ApiEndpoints.adminBase}/applications/$applicationId/download-cv'),
         headers: {
           'Authorization': 'Bearer $jwtToken',
           'Content-Type': 'application/json',
@@ -146,9 +232,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
       }
 
       if (kIsWeb) {
-        final anchor = html.AnchorElement(href: cvUrl)
-          ..setAttribute("download", "cv_$fullName.pdf")
-          ..click();
+        final uri = Uri.parse(cvUrl);
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Download started")),
@@ -194,7 +279,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
               onPressed: () => Navigator.pop(context),
             ),
             title: Text(candidateData?['full_name'] ?? "Candidate Details"),
-            backgroundColor: Colors.black87.withOpacity(0.8),
+            backgroundColor: Colors.black87.withValues(alpha: 0.8),
             elevation: 0,
           ),
           body: loading
@@ -225,13 +310,69 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
             const SizedBox(height: 6),
             _dashboardInfo("Email", candidateData!['email'], themeProvider),
             _dashboardInfo("Phone", candidateData!['phone'], themeProvider),
-            _dashboardInfo("Status", candidateData!['status'], themeProvider,
-                bold: true,
-                color: candidateData!['status'] == "hired"
-                    ? Colors.green
-                    : themeProvider.isDarkMode
-                        ? Colors.white
-                        : Colors.black87),
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Row(
+                children: [
+                  Text(
+                    "Status: ",
+                    style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: themeProvider.isDarkMode
+                          ? Colors.white70
+                          : Colors.black54,
+                    ),
+                  ),
+                  Expanded(
+                    child: DropdownButton<String>(
+                      value: _normalizeClassificationStatus(
+                        (candidateData!['status'] ?? '').toString(),
+                      ),
+                      isDense: true,
+                      borderRadius: BorderRadius.circular(6),
+                      dropdownColor: themeProvider.isDarkMode
+                          ? const Color(0xFF14131E)
+                          : Colors.white,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: _statusColor(candidateData!['status']
+                                ?.toString()
+                                .toLowerCase() ??
+                            'applied'),
+                      ),
+                      items: _classificationOptions
+                          .map((s) => DropdownMenuItem<String>(
+                                value: s,
+                                child: Text(
+                                  s[0].toUpperCase() + s.substring(1),
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: _statusColor(s),
+                                  ),
+                                ),
+                              ))
+                          .toList(),
+                      onChanged: (newStatus) async {
+                        if (newStatus != null &&
+                            newStatus !=
+                                candidateData!['status']
+                                    ?.toString()
+                                    .toLowerCase()) {
+                          await _updateApplicationStatus(
+                              widget.applicationId, newStatus);
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -392,7 +533,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
             color: (themeProvider.isDarkMode
                     ? const Color(0xFF14131E)
                     : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
                 color: themeProvider.isDarkMode ? Colors.white24 : Colors.white,
@@ -488,8 +629,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
   Widget buildSidebar(ThemeProvider themeProvider) {
     return Drawer(
       backgroundColor:
-          (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-              .withOpacity(0.9),
+          (themeProvider.isDarkMode ? const Color(0xFF1F2840) : Colors.white)
+              .withValues(alpha: 0.9),
       child: SafeArea(
         child: ListView(
           padding: EdgeInsets.zero,
