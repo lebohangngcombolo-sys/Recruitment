@@ -7,6 +7,7 @@ from app.extensions import db
 from app.models import Candidate, User
 from app.services.audit2 import AuditService
 from app.services.ai_cv_parser import AIParser
+from app.services.cv_to_candidate_mapper import map_extraction_to_candidate
 
 
 class EnrollmentService:
@@ -133,7 +134,7 @@ class EnrollmentService:
             candidate = EnrollmentService._get_or_create_candidate(user.id)
 
             # ------------------------------------
-            # AI CV parsing (optional, safe)
+            # AI CV parsing (optional, safe): map to Candidate schema so data is stored in right places
             # ------------------------------------
             if cv_file:
                 try:
@@ -141,13 +142,10 @@ class EnrollmentService:
                 except Exception:
                     ai_data = {}
 
-                ai_data = {
-                    k: v for k, v in ai_data.items()
-                    if k in EnrollmentService.AI_ALLOWED_FIELDS
-                }
-
-                # Manual input takes precedence
-                payload = {**ai_data, **payload}
+                # Map extraction keys to Candidate fields (position->title, experience->work_experience, etc.)
+                candidate_mapped = map_extraction_to_candidate(ai_data, work_experience_structured=None)
+                # Manual input takes precedence over AI
+                payload = {**candidate_mapped, **payload}
 
             saved_fields = set()
 
@@ -187,6 +185,23 @@ class EnrollmentService:
                 return {"error": "No valid enrollment data provided"}, 400
 
             # ------------------------------------
+            # Sync display name to User.profile so /api/auth/me and users table stay consistent
+            # (CV upload and manual enrollment both save here; users.profile will have full_name)
+            # ------------------------------------
+            full_name = getattr(candidate, "full_name", None) or payload.get("full_name")
+            if full_name:
+                name_str = (full_name if isinstance(full_name, str) else str(full_name)).strip()
+                if name_str:
+                    existing = dict(user.profile) if user.profile else {}
+                    parts = name_str.split(None, 1)
+                    user.profile = {
+                        **existing,
+                        "full_name": name_str,
+                        "first_name": parts[0] if parts else "",
+                        "last_name": parts[1] if len(parts) > 1 else "",
+                    }
+
+            # ------------------------------------
             # Enrollment state
             # ------------------------------------
             if not user.enrollment_completed:
@@ -204,6 +219,7 @@ class EnrollmentService:
                 AuditService.log(
                     user_id=user.id,
                     action="candidate_enrollment_completed",
+                    actor_label="candidate_id",
                     metadata={
                         "candidate_id": candidate.id,
                         "fields": sorted(saved_fields),
