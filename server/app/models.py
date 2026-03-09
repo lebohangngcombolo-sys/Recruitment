@@ -337,6 +337,7 @@ class Candidate(db.Model):
     dob = db.Column(db.Date)
     address = db.Column(db.String(250))
     gender = db.Column(db.String(50), nullable=True)
+    ethnicity = db.Column(db.String(50), nullable=True)
     bio = db.Column(db.Text, nullable=True)
     title = db.Column(db.String(100), nullable=True)
     location = db.Column(db.String(150), nullable=True)
@@ -613,6 +614,8 @@ class CVAnalysis(db.Model):
     __tablename__ = "cv_analyses"
     id = db.Column(db.Integer, primary_key=True)
     candidate_id = db.Column(db.Integer, db.ForeignKey('candidates.id'), nullable=False)
+    application_id = db.Column(db.Integer, db.ForeignKey('applications.id'), nullable=True)
+    requisition_id = db.Column(db.Integer, db.ForeignKey('requisitions.id'), nullable=True)
     job_description = db.Column(db.Text)
     cv_text = db.Column(db.Text)
     result = db.Column(JSON, default={})
@@ -620,8 +623,11 @@ class CVAnalysis(db.Model):
     started_at = db.Column(db.DateTime, nullable=True)
     finished_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     candidate = db.relationship('Candidate', back_populates='analyses')
+    application = db.relationship('Application', backref='cv_analyses')
+    requisition = db.relationship('Requisition', backref='cv_analyses')
 
 
 # ------------------- NOTIFICATION -------------------

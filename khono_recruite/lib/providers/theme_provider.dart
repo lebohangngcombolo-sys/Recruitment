@@ -32,6 +32,31 @@ class ThemeProvider extends ChangeNotifier {
   String get backgroundImage =>
       _isDarkMode ? 'assets/images/dark.png' : 'assets/images/final.jpg';
 
+  // Consistent text colors across the app
+  Color get headerTextColor => _isDarkMode ? Colors.white : Colors.black87;
+  Color get bodyTextColor => _isDarkMode ? Colors.white70 : Colors.black54;
+  Color get subtitleTextColor =>
+      _isDarkMode ? Colors.white60 : Colors.grey.shade600;
+  Color get accentTextColor => _isDarkMode ? Colors.white : Colors.black87;
+
+  // Consistent text styles
+  TextStyle get headerTextStyle => TextStyle(
+        color: headerTextColor,
+        fontSize: 22,
+        fontWeight: FontWeight.bold,
+      );
+
+  TextStyle get subHeaderTextStyle => TextStyle(
+        color: headerTextColor,
+        fontSize: 18,
+        fontWeight: FontWeight.w600,
+      );
+
+  TextStyle get bodyTextStyle => TextStyle(
+        color: bodyTextColor,
+        fontSize: 14,
+      );
+
   // Light Theme
   final ThemeData lightTheme = ThemeData(
     useMaterial3: true,

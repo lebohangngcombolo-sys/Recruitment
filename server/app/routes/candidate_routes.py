@@ -325,6 +325,8 @@ def upload_resume(application_id):
 
         cv_analysis = CVAnalysis(
             candidate_id=candidate.id,
+            application_id=application.id,
+            requisition_id=job.id,
             job_description=JobService.build_job_spec_for_cv(job),
             cv_text=resume_text or "",
             result={

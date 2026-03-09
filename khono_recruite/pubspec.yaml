@@ -38,7 +38,7 @@ dependencies:
   vector_math: ^2.1.4
   file_picker: ^10.3.3
   qr_flutter: ^4.1.0
-  webview_flutter: ^4.10.0
+  webview_flutter: ^4.13.1
   webview_flutter_web: ^0.2.3
   firebase_ai: ^3.6.0
   pdf: ^3.10.7

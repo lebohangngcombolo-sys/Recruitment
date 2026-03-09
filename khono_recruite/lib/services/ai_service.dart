@@ -7,9 +7,69 @@ import 'package:firebase_ai/firebase_ai.dart';
 
 class AIService {
   static GenerativeModel? _generativeModel;
+  static String? _openRouterApiKey;
 
-  static void initialize(GenerativeModel? model) {
+  static void initialize(GenerativeModel? model, {String? openRouterApiKey}) {
     _generativeModel = model;
+    _openRouterApiKey = openRouterApiKey;
+  }
+
+  // OpenRouter integration
+  static Future<Map<String, dynamic>> _tryOpenRouter(
+      String jobTitle, String model) async {
+    if (_openRouterApiKey == null || _openRouterApiKey!.isEmpty) {
+      throw Exception("OpenRouter API key not configured");
+    }
+
+    try {
+      final prompt =
+          '''Generate comprehensive job details for a "$jobTitle" position. Return a JSON object with:
+{
+  "description": "Detailed job description",
+  "responsibilities": ["List of key responsibilities"],
+  "qualifications": ["List of required qualifications"],
+  "required_skills": ["List of technical and soft skills"],
+  "category": "Job category (e.g., Engineering, Marketing, Sales)",
+  "min_experience": "Minimum years of experience (number)",
+  "company_details": "Brief company overview"
+}''';
+
+      final response = await http.post(
+        Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
+        headers: {
+          'Authorization': 'Bearer $_openRouterApiKey',
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://yourapp.com',
+          'X-Title': 'Recruitment AI Assistant',
+        },
+        body: jsonEncode({
+          'model':
+              model, // e.g., 'anthropic/claude-3-haiku', 'openai/gpt-4o-mini'
+          'messages': [
+            {
+              'role': 'user',
+              'content': prompt,
+            }
+          ],
+          'response_format': {'type': 'json_object'},
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final content = data['choices']?[0]?['message']?['content'];
+        if (content != null) {
+          final jobDetails = jsonDecode(content);
+          if (jobDetails is Map<String, dynamic>) {
+            return jobDetails;
+          }
+        }
+      }
+      throw Exception('Invalid response from OpenRouter');
+    } catch (e) {
+      if (kDebugMode) debugPrint("OpenRouter failed: $e");
+      rethrow;
+    }
   }
 
   static Future<Map<String, dynamic>> generateJobDetails(
@@ -37,10 +97,29 @@ class AIService {
                 details is Map<String, dynamic> ? details : <String, dynamic>{},
                 jobTitle);
           }
+        } else if (response.statusCode == 404) {
+          if (kDebugMode) debugPrint("Backend AI endpoint not found (404)");
+        } else if (response.statusCode >= 500) {
+          if (kDebugMode)
+            debugPrint("Backend AI server error: ${response.statusCode}");
         }
       }
     } catch (e) {
       if (kDebugMode) debugPrint("Backend generateJobDetails failed: $e");
+      // Check if it's a connection error (backend not running)
+      if (e.toString().contains('Connection refused') ||
+          e.toString().contains('Network is unreachable') ||
+          e.toString().contains('Connection timed out')) {
+        if (kDebugMode)
+          debugPrint("Backend server is not running - using fallback");
+      }
+    }
+
+    // Fallback to OpenRouter if configured
+    try {
+      return await _tryOpenRouter(jobTitle, 'anthropic/claude-3-haiku');
+    } catch (e) {
+      if (kDebugMode) debugPrint("OpenRouter failed: $e");
     }
 
     // Fallback to Gemini if configured (Firebase)
@@ -50,6 +129,8 @@ class AIService {
       if (kDebugMode) debugPrint("Gemini failed: $e");
     }
 
+    // Final fallback - return structured default data
+    if (kDebugMode) debugPrint("Using default fallback for job details");
     return _getFallbackJobDetails(jobTitle);
   }
 
@@ -279,6 +360,69 @@ class AIService {
     return baseSkills;
   }
 
+  // OpenRouter integration for assessment questions
+  static Future<List<Map<String, dynamic>>> _tryOpenRouterQuestions(
+    String jobTitle,
+    String difficulty,
+    int questionCount,
+  ) async {
+    if (_openRouterApiKey == null || _openRouterApiKey!.isEmpty) {
+      throw Exception("OpenRouter API key not configured");
+    }
+
+    try {
+      final prompt =
+          '''Generate $questionCount assessment questions for a "$jobTitle" position at $difficulty difficulty level. Return a JSON object with:
+{
+  "questions": [
+    {
+      "question": "Question text",
+      "type": "multiple_choice|short_answer|essay",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct_answer": "Correct answer or index",
+      "points": 10,
+      "category": "technical|behavioral|situational"
+    }
+  ]
+}''';
+
+      final response = await http.post(
+        Uri.parse('https://openrouter.ai/api/v1/chat/completions'),
+        headers: {
+          'Authorization': 'Bearer $_openRouterApiKey',
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://yourapp.com',
+          'X-Title': 'Recruitment AI Assistant',
+        },
+        body: jsonEncode({
+          'model': 'anthropic/claude-3-haiku',
+          'messages': [
+            {
+              'role': 'user',
+              'content': prompt,
+            }
+          ],
+          'response_format': {'type': 'json_object'},
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final content = data['choices']?[0]?['message']?['content'];
+        if (content != null) {
+          final questionsData = jsonDecode(content);
+          if (questionsData['questions'] is List) {
+            return List<Map<String, dynamic>>.from(questionsData['questions']);
+          }
+        }
+      }
+      throw Exception('Invalid response from OpenRouter');
+    } catch (e) {
+      if (kDebugMode) debugPrint("OpenRouter questions failed: $e");
+      rethrow;
+    }
+  }
+
   static Future<List<Map<String, dynamic>>> generateAssessmentQuestions({
     required String jobTitle,
     required String difficulty,
@@ -298,28 +442,21 @@ class AIService {
             'Authorization': 'Bearer $token',
           },
           body: jsonEncode({
-            'job_title': jobTitle,
+            'job_title': jobTitle.trim(),
             'difficulty': difficulty,
             'question_count': questionCount,
           }),
         );
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
-          final questions = data['questions'];
-          if (questions is List) {
-            return List<Map<String, dynamic>>.from(questions.map(
-                (e) => e is Map<String, dynamic> ? e : <String, dynamic>{}));
+          if (data['questions'] is List) {
+            return List<Map<String, dynamic>>.from(data['questions']);
           }
-        }
-        if (response.statusCode == 502 || response.statusCode == 503) {
-          String msg = 'AI is temporarily unavailable. Try again later.';
-          try {
-            final data = jsonDecode(response.body);
-            if (data is Map && data['error'] != null) {
-              msg = data['error'].toString();
-            }
-          } catch (_) {}
-          throw Exception(msg);
+        } else if (response.statusCode == 404) {
+          if (kDebugMode) debugPrint("Backend AI endpoint not found (404)");
+        } else if (response.statusCode >= 500) {
+          if (kDebugMode)
+            debugPrint("Backend AI server error: ${response.statusCode}");
         }
       }
     } catch (e) {
@@ -329,6 +466,13 @@ class AIService {
           e.toString().contains('Try again later')) {
         rethrow;
       }
+    }
+
+    // Fallback to OpenRouter if configured
+    try {
+      return await _tryOpenRouterQuestions(jobTitle, difficulty, questionCount);
+    } catch (e) {
+      if (kDebugMode) debugPrint("OpenRouter questions failed: $e");
     }
 
     // Fallback to Gemini if configured

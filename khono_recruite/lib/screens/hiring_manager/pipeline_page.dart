@@ -521,6 +521,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             },
             itemBuilder: (context) => [
               const PopupMenuItem(value: 'all', child: Text('All Candidates')),
+              const PopupMenuItem(value: 'applied', child: Text('Applied')),
               const PopupMenuItem(value: 'screening', child: Text('Screening')),
               const PopupMenuItem(value: 'interview', child: Text('Interview')),
               const PopupMenuItem(
@@ -2387,6 +2388,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   // Helper methods
   Color _getStatusColor(String status) {
     switch (status) {
+      case 'applied':
+        return Colors.cyan;
       case 'screening':
         return Colors.blue;
       case 'assessment':

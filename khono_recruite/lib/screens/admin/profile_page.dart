@@ -112,14 +112,16 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Future<void> _enableMfa() async {
-    setState(() => _mfaLoading = true);
+    if (mounted) setState(() => _mfaLoading = true);
     try {
       final result = await AuthService.enableMfa();
       if (result.containsKey('qr_code')) {
-        setState(() {
-          _mfaSecret = result['secret'];
-          _mfaQrCode = result['qr_code'];
-        });
+        if (mounted) {
+          setState(() {
+            _mfaSecret = result['secret'];
+            _mfaQrCode = result['qr_code'];
+          });
+        }
         _showMfaSetupDialog();
       }
     } catch (e) {
@@ -127,20 +129,22 @@ class _ProfilePageState extends State<ProfilePage>
         SnackBar(content: Text("Failed to enable MFA: $e")),
       );
     } finally {
-      setState(() => _mfaLoading = false);
+      if (mounted) setState(() => _mfaLoading = false);
     }
   }
 
   Future<void> _verifyMfaSetup(String token) async {
-    setState(() => _mfaLoading = true);
+    if (mounted) setState(() => _mfaLoading = true);
     try {
       final result = await AuthService.verifyMfaSetup(token);
       if (result.containsKey('backup_codes')) {
-        setState(() {
-          _mfaEnabled = true;
-          _backupCodes = List<String>.from(result['backup_codes']);
-          _backupCodesRemaining = _backupCodes.length;
-        });
+        if (mounted) {
+          setState(() {
+            _mfaEnabled = true;
+            _backupCodes = List<String>.from(result['backup_codes']);
+            _backupCodesRemaining = _backupCodes.length;
+          });
+        }
         Navigator.pop(context); // Close setup dialog
         _showBackupCodesDialog();
         ScaffoldMessenger.of(context).showSnackBar(
@@ -152,22 +156,24 @@ class _ProfilePageState extends State<ProfilePage>
         SnackBar(content: Text("MFA setup failed: $e")),
       );
     } finally {
-      setState(() => _mfaLoading = false);
+      if (mounted) setState(() => _mfaLoading = false);
     }
   }
 
   Future<void> _disableMfa(String password) async {
-    setState(() => _mfaLoading = true);
+    if (mounted) setState(() => _mfaLoading = true);
     try {
       final result = await AuthService.disableMfa(password);
       if (result.containsKey('message')) {
-        setState(() {
-          _mfaEnabled = false;
-          _mfaSecret = null;
-          _mfaQrCode = null;
-          _backupCodes = [];
-          _backupCodesRemaining = 0;
-        });
+        if (mounted) {
+          setState(() {
+            _mfaEnabled = false;
+            _mfaSecret = null;
+            _mfaQrCode = null;
+            _backupCodes = [];
+            _backupCodesRemaining = 0;
+          });
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("MFA disabled successfully")),
         );
@@ -177,7 +183,7 @@ class _ProfilePageState extends State<ProfilePage>
         SnackBar(content: Text("Failed to disable MFA: $e")),
       );
     } finally {
-      setState(() => _mfaLoading = false);
+      if (mounted) setState(() => _mfaLoading = false);
     }
   }
 
@@ -199,7 +205,7 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Future<void> _regenerateBackupCodes() async {
-    setState(() => _mfaLoading = true);
+    if (mounted) setState(() => _mfaLoading = true);
     try {
       final result = await AuthService.regenerateBackupCodes();
       if (result.containsKey('backup_codes')) {
@@ -217,7 +223,7 @@ class _ProfilePageState extends State<ProfilePage>
         SnackBar(content: Text("Failed to regenerate backup codes: $e")),
       );
     } finally {
-      setState(() => _mfaLoading = false);
+      if (mounted) setState(() => _mfaLoading = false);
     }
   }
 
@@ -639,11 +645,13 @@ class _ProfilePageState extends State<ProfilePage>
       final respJson = json.decode(respStr);
 
       if (response.statusCode == 200 && respJson['success'] == true) {
-        setState(() {
-          _profileImageUrl = respJson['data']['profile_picture'];
-          _profileImage = null;
-          _profileImageBytes = null;
-        });
+        if (mounted) {
+          setState(() {
+            _profileImageUrl = respJson['data']['profile_picture'];
+            _profileImage = null;
+            _profileImageBytes = null;
+          });
+        }
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Profile picture updated")));
       } else {
@@ -701,7 +709,7 @@ class _ProfilePageState extends State<ProfilePage>
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("Profile updated successfully")));
-          setState(() => showProfileSummary = true);
+          if (mounted) setState(() => showProfileSummary = true);
         }
       } else {
         final res = await http.put(
@@ -721,7 +729,7 @@ class _ProfilePageState extends State<ProfilePage>
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("Profile updated successfully")));
-          setState(() => showProfileSummary = true);
+          if (mounted) setState(() => showProfileSummary = true);
         }
       }
     } catch (e) {
@@ -1585,7 +1593,9 @@ class _ProfilePageState extends State<ProfilePage>
                     Icon(Icons.edit, color: Colors.redAccent, size: 16),
                     const SizedBox(width: 6),
                     GestureDetector(
-                      onTap: () => setState(() => showProfileSummary = false),
+                      onTap: () {
+                        if (mounted) setState(() => showProfileSummary = false);
+                      },
                       child: Text(
                         "Edit Profile",
                         style: GoogleFonts.inter(
@@ -1763,7 +1773,9 @@ class _ProfilePageState extends State<ProfilePage>
           Row(
             children: [
               IconButton(
-                onPressed: () => setState(() => showProfileSummary = true),
+                onPressed: () {
+                  if (mounted) setState(() => showProfileSummary = true);
+                },
                 icon: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(

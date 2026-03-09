@@ -222,7 +222,7 @@ class _AdminDashboardState extends State<AdminDashboard>
 
   // ---------- Dashboard Stats & PowerBI ----------
   Future<void> fetchStats() async {
-    setState(() => loadingStats = true);
+    if (mounted) setState(() => loadingStats = true);
     try {
       final counts = await admin.getDashboardCounts();
       final token = await AuthService.getAccessToken();
@@ -238,23 +238,25 @@ class _AdminDashboardState extends State<AdminDashboard>
         activities = List<String>.from(data["recent_activities"] ?? []);
       }
 
-      setState(() {
-        jobsCount = counts["jobs"] ?? 0;
-        candidatesCount = counts["candidates"] ?? 0;
-        interviewsCount = counts["interviews"] ?? 0;
-        cvReviewsCount = counts["cv_reviews"] ?? 0;
-        auditsCount = counts["audits"] ?? 0;
-        recentActivities = activities;
-        loadingStats = false;
-      });
+      if (mounted) {
+        setState(() {
+          jobsCount = counts["jobs"] ?? 0;
+          candidatesCount = counts["candidates"] ?? 0;
+          interviewsCount = counts["interviews"] ?? 0;
+          cvReviewsCount = counts["cv_reviews"] ?? 0;
+          auditsCount = counts["audits"] ?? 0;
+          recentActivities = activities;
+          loadingStats = false;
+        });
+      }
     } catch (e) {
-      setState(() => loadingStats = false);
+      if (mounted) setState(() => loadingStats = false);
       debugPrint("Error fetching dashboard stats: $e");
     }
   }
 
   Future<void> fetchPowerBIStatus() async {
-    setState(() => checkingPowerBI = true);
+    if (mounted) setState(() => checkingPowerBI = true);
     try {
       final token = await AuthService.getAccessToken();
       final res = await http.get(
@@ -264,21 +266,23 @@ class _AdminDashboardState extends State<AdminDashboard>
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
-        setState(() {
-          powerBIConnected = data["connected"] ?? false;
-        });
+        if (mounted) {
+          setState(() {
+            powerBIConnected = data["connected"] ?? false;
+          });
+        }
       } else {
-        setState(() => powerBIConnected = false);
+        if (mounted) setState(() => powerBIConnected = false);
       }
     } catch (e) {
-      setState(() => powerBIConnected = false);
+      if (mounted) setState(() => powerBIConnected = false);
     } finally {
-      setState(() => checkingPowerBI = false);
+      if (mounted) setState(() => checkingPowerBI = false);
     }
   }
 
   Future<void> fetchAudits({int page = 1}) async {
-    setState(() => loadingAudits = true);
+    if (mounted) setState(() => loadingAudits = true);
     try {
       final token = await AuthService.getAccessToken();
       final queryParams = {
@@ -300,28 +304,30 @@ class _AdminDashboardState extends State<AdminDashboard>
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
-        setState(() {
-          audits = List<Map<String, dynamic>>.from(data["results"]);
-          auditPage = data["page"];
-          auditPerPage = data["per_page"];
-          auditTrendData = audits
-              .map((e) => DateTime.parse(e["timestamp"]))
-              .fold<Map<String, int>>({}, (map, dt) {
-                final day =
-                    "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
-                map[day] = (map[day] ?? 0) + 1;
-                return map;
-              })
-              .entries
-              .map((e) => _ChartData(e.key, e.value))
-              .toList();
-          loadingAudits = false;
-        });
+        if (mounted) {
+          setState(() {
+            audits = List<Map<String, dynamic>>.from(data["results"]);
+            auditPage = data["page"];
+            auditPerPage = data["per_page"];
+            auditTrendData = audits
+                .map((e) => DateTime.parse(e["timestamp"]))
+                .fold<Map<String, int>>({}, (map, dt) {
+                  final day =
+                      "${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}";
+                  map[day] = (map[day] ?? 0) + 1;
+                  return map;
+                })
+                .entries
+                .map((e) => _ChartData(e.key, e.value))
+                .toList();
+            loadingAudits = false;
+          });
+        }
       } else {
-        setState(() => loadingAudits = false);
+        if (mounted) setState(() => loadingAudits = false);
       }
     } catch (e) {
-      setState(() => loadingAudits = false);
+      if (mounted) setState(() => loadingAudits = false);
     }
   }
 

@@ -300,7 +300,7 @@ class JobFilterSchema(Schema):
     """Schema for job filtering query parameters"""
 
     page = fields.Int(load_default=1, validate=Range(min=1))
-    per_page = fields.Int(load_default=20, validate=Range(min=1, max=100))
+    per_page = fields.Int(load_default=20, validate=Range(min=1, max=500))
     category = fields.Str(allow_none=True)
     status = fields.Str(
         load_default="active",

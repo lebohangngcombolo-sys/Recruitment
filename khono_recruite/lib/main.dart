@@ -56,7 +56,9 @@ void main() async {
     assert(true, 'Firebase init failed (e.g. invalid-api-key): $e');
     // Continue without Firebase so the app UI still loads
   }
-  AIService.initialize(generativeModel);
+  AIService.initialize(generativeModel,
+      openRouterApiKey:
+          const String.fromEnvironment('OPENROUTER_API_KEY', defaultValue: ''));
 
   // ⚡ Fix Flutter Web initial route handling
   setUrlStrategy(PathUrlStrategy());
@@ -76,7 +78,6 @@ void main() async {
   );
 }
 
-// Γ£à Persistent router
 // Γ£à Persistent router
 final GoRouter _router = GoRouter(
   initialLocation: '/',
@@ -216,7 +217,6 @@ final GoRouter _router = GoRouter(
         return AdminOfferListScreen(token: token.isNotEmpty ? token : null);
       },
     ),
-    // Γ£à Add this new route
     // Γ£à Add this new route
     GoRoute(
       path: '/hr-dashboard',

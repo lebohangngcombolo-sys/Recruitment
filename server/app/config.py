@@ -20,6 +20,12 @@ def _database_uri():
     url = (url or "").strip()
     if not url:
         return 'postgresql://user:password@localhost:5432/recruitment_db'
+
+    # Render (and some guides) provide DATABASE_URL starting with `postgres://...`
+    # SQLAlchemy expects `postgresql://...`.
+    if url.startswith('postgres://'):
+        url = 'postgresql://' + url[len('postgres://'):]
+
     # Render and other cloud Postgres often require SSL for external connections
     if 'sslmode=' not in url and ('render.com' in url or 'localhost' not in url.split('@')[-1].split('/')[0]):
         separator = '?' if '?' not in url else '&'

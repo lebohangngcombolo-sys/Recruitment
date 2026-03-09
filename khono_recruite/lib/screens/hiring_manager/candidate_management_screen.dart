@@ -25,8 +25,33 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
   String _statusFilter = 'all';
   String? _jobFilter;
 
+  String _normalizeClassificationStatus(String raw) {
+    final v = raw.trim().toLowerCase();
+    switch (v) {
+      case 'assessment_submitted':
+      case 'assessment-submitted':
+      case 'assessment submitted':
+        return 'assessment';
+      default:
+        break;
+    }
+    if (_classificationOptions.contains(v)) return v;
+    return 'applied';
+  }
+
   static const List<String> _statusOptions = [
     'all',
+    'applied',
+    'screening',
+    'assessment',
+    'interview',
+    'offer',
+    'hired',
+    'rejected',
+  ];
+
+  static const List<String> _classificationOptions = [
+    'applied',
     'screening',
     'assessment',
     'interview',
@@ -52,14 +77,11 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     var list = candidates;
     final query = _searchController.text.trim().toLowerCase();
     if (query.isNotEmpty) {
-      final words = query
-          .split(RegExp(r'\s+'))
-          .where((s) => s.isNotEmpty)
-          .toList();
+      final words =
+          query.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
       list = list.where((c) {
-        final name = (c['full_name'] ?? c['name'] ?? '')
-            .toString()
-            .toLowerCase();
+        final name =
+            (c['full_name'] ?? c['name'] ?? '').toString().toLowerCase();
         final email = (c['email'] ?? '').toString().toLowerCase();
         final job = (c['job_title'] ?? '').toString().toLowerCase();
         final s = '$name $email $job';
@@ -98,18 +120,31 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     });
 
     try {
-      List<dynamic> rawApplications;
+      final List<dynamic> rawApplications = [];
       if (widget.jobId <= 0) {
-        rawApplications = await admin.getApplicationsForMyJobs(
-          page: 1,
-          perPage: 500,
-        );
+        var page = 1;
+        while (true) {
+          final batch = await admin.getApplicationsForMyJobs(
+            page: page,
+            perPage: 200,
+            scope: 'all',
+          );
+          rawApplications.addAll(batch);
+          if (batch.length < 200) break;
+          page++;
+        }
       } else {
-        rawApplications = await admin.getJobApplications(
-          widget.jobId,
-          page: 1,
-          perPage: 100,
-        );
+        var page = 1;
+        while (true) {
+          final batch = await admin.getJobApplications(
+            widget.jobId,
+            page: page,
+            perPage: 200,
+          );
+          rawApplications.addAll(batch);
+          if (batch.length < 200) break;
+          page++;
+        }
       }
 
       final fetched = (rawApplications).map<Map<String, dynamic>>((
@@ -122,8 +157,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
         return {
           'application_id': map['application_id'] ?? map['id'],
           'candidate_id': candidateData['id'] ?? map['candidate_id'],
-          'full_name':
-              candidateData['full_name'] ??
+          'full_name': candidateData['full_name'] ??
               candidateData['name'] ??
               map['full_name'],
           'email': candidateData['email'],
@@ -131,11 +165,11 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
           'status': map['status'],
           'cv_score': map['cv_score'] ?? map['overall_score'] ?? 0,
           'assessment_score': map['assessment_score'] ?? 0,
-          'overall_score':
-              map['overall_score'] ??
+          'overall_score': map['overall_score'] ??
               (map['scoring_breakdown']?['overall'] ?? 0),
           'job_title': map['job_title'],
           'job_id': map['job_id'],
+          'cv_url': map['cv_url'] ?? candidateData['cv_url'],
           'cv_parser_result': map['cv_parser_result'] ?? {},
           'candidate': candidateData,
         };
@@ -152,8 +186,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
         candidates = fetched;
         statusMessage = fetched.isEmpty
             ? (widget.jobId <= 0
-                  ? "No candidates have applied to your jobs yet."
-                  : "No candidates have applied to this job yet.")
+                ? "No candidates have applied to your jobs yet."
+                : "No candidates have applied to this job yet.")
             : null;
       });
     } catch (e) {
@@ -196,6 +230,72 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     }
   }
 
+  Future<void> _updateApplicationStatus(
+      int applicationId, String newStatus) async {
+    try {
+      final success =
+          await admin.updateApplicationStatus(applicationId, newStatus);
+      if (success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Status updated successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+        // Optimistically update local state
+        setState(() {
+          final idx = candidates
+              .indexWhere((c) => c['application_id'] == applicationId);
+          if (idx != -1) {
+            candidates[idx]['status'] = newStatus;
+          }
+        });
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to update status'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error updating status: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Helper to get status color for dropdown items
+  Color _statusColor(String status, bool isDark) {
+    switch (status) {
+      case 'applied':
+        return Colors.blue;
+      case 'screening':
+        return Colors.orange;
+      case 'assessment':
+        return Colors.purple;
+      case 'interview':
+        return Colors.teal;
+      case 'offer':
+        return Colors.amber;
+      case 'hired':
+        return Colors.green;
+      case 'rejected':
+        return Colors.red;
+      default:
+        return isDark ? Colors.white : Colors.black87;
+    }
+  }
+
   // Helper method to safely get initials
   String getInitials(String? fullName) {
     if (fullName == null || fullName.isEmpty) return "?";
@@ -209,9 +309,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
   Widget _buildCandidatesTable(ThemeProvider themeProvider) {
     final list = _filteredCandidates();
     final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
-    final borderColor = themeProvider.isDarkMode
-        ? Colors.grey.shade800
-        : Colors.grey.shade300;
+    final borderColor =
+        themeProvider.isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -284,7 +383,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 48),
+                const SizedBox(width: 120),
               ],
             ),
           ),
@@ -293,12 +392,10 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
               itemCount: list.length,
               itemBuilder: (_, index) {
                 final c = list[index];
-                final status = (c['status'] ?? '—').toString();
-                final statusColor = status == 'hired'
-                    ? Colors.green
-                    : status == 'rejected'
-                    ? Colors.red
-                    : Colors.orange;
+                final status = _normalizeClassificationStatus(
+                    (c['status'] ?? '').toString());
+                final statusColor =
+                    _statusColor(status, themeProvider.isDarkMode);
                 return InkWell(
                   onTap: () => openCandidateDetails(c),
                   child: Container(
@@ -349,30 +446,92 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                         ),
                         Expanded(
                           flex: 1,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 4,
+                          child: DropdownButton<String>(
+                            value: status,
+                            isDense: true,
+                            borderRadius: BorderRadius.circular(6),
+                            dropdownColor: themeProvider.isDarkMode
+                                ? const Color(0xFF14131E)
+                                : Colors.white,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: statusColor,
                             ),
-                            decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              status,
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: statusColor,
-                              ),
-                            ),
+                            items: _classificationOptions
+                                .map((s) => DropdownMenuItem<String>(
+                                      value: s,
+                                      child: Text(
+                                        s[0].toUpperCase() + s.substring(1),
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: _statusColor(
+                                              s, themeProvider.isDarkMode),
+                                        ),
+                                      ),
+                                    ))
+                                .toList(),
+                            onChanged: (newStatus) async {
+                              if (newStatus != null && newStatus != status) {
+                                final applicationId =
+                                    c['application_id'] as int?;
+                                if (applicationId != null) {
+                                  await _updateApplicationStatus(
+                                      applicationId, newStatus);
+                                }
+                              }
+                            },
                           ),
                         ),
-                        const Icon(
-                          Icons.arrow_forward_ios,
-                          size: 14,
-                          color: Colors.grey,
+                        SizedBox(width: 8),
+                        // CV Action Buttons
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (c['cv_url'] != null &&
+                                c['cv_url'].toString().isNotEmpty) ...[
+                              IconButton(
+                                icon: Icon(
+                                  Icons.visibility_outlined,
+                                  size: 18,
+                                  color: textColor,
+                                ),
+                                onPressed: () =>
+                                    _previewCV(c['cv_url'].toString()),
+                                tooltip: 'Preview CV',
+                                padding: EdgeInsets.zero,
+                                constraints: BoxConstraints(
+                                  minWidth: 32,
+                                  minHeight: 32,
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.download_outlined,
+                                  size: 18,
+                                  color: textColor,
+                                ),
+                                onPressed: () =>
+                                    _downloadCV(c['cv_url'].toString()),
+                                tooltip: 'Download CV',
+                                padding: EdgeInsets.zero,
+                                constraints: BoxConstraints(
+                                  minWidth: 32,
+                                  minHeight: 32,
+                                ),
+                              ),
+                            ] else ...[
+                              SizedBox(width: 32),
+                            ],
+                            const Icon(
+                              Icons.arrow_forward_ios,
+                              size: 14,
+                              color: Colors.grey,
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -415,23 +574,17 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                       horizontal: 20,
                       vertical: 16,
                     ),
-                    color:
-                        (themeProvider.isDarkMode
-                                ? const Color(0xFF14131E)
-                                : Colors.white)
-                            .withValues(alpha: 0.9),
+                    color: (themeProvider.isDarkMode
+                            ? const Color(0xFF14131E)
+                            : Colors.white)
+                        .withValues(alpha: 0.9),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
                           widget.jobId <= 0 ? "All Candidates" : "Candidates",
-                          style: TextStyle(
+                          style: themeProvider.headerTextStyle.copyWith(
                             fontFamily: 'Poppins',
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
                           ),
                         ),
                         CustomButton(
@@ -531,7 +684,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                         s == 'all'
                                             ? 'All'
                                             : s[0].toUpperCase() +
-                                                  s.substring(1),
+                                                s.substring(1),
                                         style: TextStyle(
                                           fontFamily: 'Poppins',
                                           color: themeProvider.isDarkMode
@@ -610,35 +763,35 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                             ),
                           )
                         : statusMessage != null
-                        ? Center(
-                            child: Text(
-                              statusMessage!,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                color: themeProvider.isDarkMode
-                                    ? Colors.grey.shade300
-                                    : Colors.black54,
-                                fontSize: 16,
-                              ),
-                            ),
-                          )
-                        : _filteredCandidates().isEmpty
-                        ? Center(
-                            child: Text(
-                              candidates.isEmpty
-                                  ? "No candidates found"
-                                  : "No candidates match your search or filter",
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                color: themeProvider.isDarkMode
-                                    ? Colors.grey.shade400
-                                    : Colors.black54,
-                                fontSize: 16,
-                              ),
-                            ),
-                          )
-                        : _buildCandidatesTable(themeProvider),
+                            ? Center(
+                                child: Text(
+                                  statusMessage!,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade300
+                                        : Colors.black54,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              )
+                            : _filteredCandidates().isEmpty
+                                ? Center(
+                                    child: Text(
+                                      candidates.isEmpty
+                                          ? "No candidates found"
+                                          : "No candidates match your search or filter",
+                                      style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        color: themeProvider.isDarkMode
+                                            ? Colors.grey.shade400
+                                            : Colors.black54,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  )
+                                : _buildCandidatesTable(themeProvider),
                   ),
                 ],
               ),

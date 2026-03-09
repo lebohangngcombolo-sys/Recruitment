@@ -16,12 +16,8 @@ import 'hiring_manager_profile_screen.dart';
 import 'hiring_manager_settings_screen.dart';
 import 'pipeline_page.dart';
 import 'package:http/http.dart' as http;
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../utils/api_endpoints.dart';
@@ -147,11 +143,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   ];
 
   // ---------- Profile image state ----------
-  XFile? _profileImage;
-  Uint8List? _profileImageBytes;
   String _profileImageUrl = "";
   String get apiBase => AppConfig.apiBase + "/api/candidate";
-  final ImagePicker _picker = ImagePicker();
 
   // Calendar appointments (interviews + meetings)
   List<Appointment> _calendarAppointments = [];
@@ -196,6 +189,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         status: candidateStatusFilter,
       );
 
+      if (!mounted) return;
+
       setState(() {
         if (refresh || candidatePage == 1) {
           candidates = List<Map<String, dynamic>>.from(data['candidates']);
@@ -206,9 +201,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         loadingCandidates = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         loadingCandidates = false;
       });
+      if (!mounted) return;
       _showErrorSnackBar('Failed to fetch candidates: $e');
     }
   }
@@ -251,6 +248,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           candidate['name'];
 
       if (name is String && name.trim().isNotEmpty) {
+        if (!mounted) return;
         setState(() {
           userName = name.trim();
         });
@@ -262,6 +260,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
   Future<void> _loadCalendarData() async {
     if (_calendarLoading) return;
+    if (!mounted) return;
     setState(() => _calendarLoading = true);
     final start = DateTime(focusedDay.year, focusedDay.month, 1);
     final end = DateTime(focusedDay.year, focusedDay.month + 1, 0);
@@ -361,6 +360,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   // ---------- Profile Image Methods ----------
+  void _pickProfileImage() {
+    if (!mounted) return;
+    context.push('/profile?token=${widget.token}');
+  }
+
+  ImageProvider<Object> _getProfileImageProvider() {
+    if (_profileImageUrl.trim().isNotEmpty) {
+      return NetworkImage(_profileImageUrl.trim());
+    }
+    return const AssetImage('assets/icons/profile.png');
+  }
+
   Future<void> fetchProfileImage() async {
     try {
       final profileRes = await http.get(
@@ -372,10 +383,14 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       );
 
       if (profileRes.statusCode == 200) {
-        final data = json.decode(profileRes.body)['data'];
-        final candidate = data['candidate'] ?? {};
+        final decoded = json.decode(profileRes.body);
+        final data = (decoded is Map ? decoded['data'] : null) ?? {};
+        final candidate = (data is Map ? data['candidate'] : null) ?? {};
+        if (!mounted) return;
         setState(() {
-          _profileImageUrl = candidate['profile_picture'] ?? "";
+          _profileImageUrl =
+              (candidate is Map ? (candidate['profile_picture'] ?? '') : '')
+                  .toString();
         });
       }
     } catch (e) {
@@ -383,86 +398,20 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     }
   }
 
-  Future<void> _pickProfileImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      if (kIsWeb) {
-        _profileImageBytes = await pickedFile.readAsBytes();
-      }
-      setState(() => _profileImage = pickedFile);
-      await uploadProfileImage();
-    }
-  }
-
-  Future<void> uploadProfileImage() async {
-    if (_profileImage == null) return;
-    try {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse("$apiBase/upload_profile_picture"),
-      );
-      request.headers['Authorization'] = 'Bearer ${widget.token}';
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'image',
-          kIsWeb
-              ? _profileImageBytes!
-              : File(_profileImage!.path).readAsBytesSync(),
-          filename: _profileImage!.name,
-        ),
-      );
-
-      var response = await request.send();
-      final respStr = await response.stream.bytesToString();
-      final respJson = json.decode(respStr);
-
-      if (response.statusCode == 200 && respJson['success'] == true) {
-        setState(() {
-          _profileImageUrl = respJson['data']['profile_picture'];
-          _profileImage = null;
-          _profileImageBytes = null;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Profile picture updated")));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Upload failed: ${response.statusCode}")));
-      }
-    } catch (e) {
-      debugPrint("Profile image upload error: $e");
-    }
-  }
-
-  ImageProvider<Object> _getProfileImageProvider() {
-    if (_profileImage != null) {
-      if (kIsWeb) return MemoryImage(_profileImageBytes!);
-      return FileImage(File(_profileImage!.path));
-    }
-    if (_profileImageUrl.isNotEmpty) return NetworkImage(_profileImageUrl);
-    return const AssetImage("assets/images/profile_placeholder.png");
-  }
-
   // ---------- Dashboard Stats ----------
   Future<void> fetchStats() async {
+    if (!mounted) return;
     setState(() => loadingStats = true);
     try {
       final data = await admin.getDashboardCounts();
-      final role = await AuthService.getRole();
 
-      List<String> activities = [];
-      if (role == "admin") {
-        final token = await AuthService.getAccessToken();
-        final res = await http.get(
-          Uri.parse(AppConfig.apiBase + "/api/admin/audits/recent"),
-          headers: {"Authorization": "Bearer $token"},
-        );
-        if (res.statusCode == 200) {
-          final audits = json.decode(res.body) as List;
-          activities =
-              audits.map((a) => a['action']?.toString() ?? '').take(5).toList();
-        }
+      final List<String> activities = [];
+      if (audits.isNotEmpty) {
+        activities
+            .addAll(audits.map((a) => a['action']?.toString() ?? '').take(5));
       }
 
+      if (!mounted) return;
       setState(() {
         jobsCount = data['jobs'] ?? 0;
         candidatesCount = data['candidates'] ?? 0;
@@ -470,7 +419,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         cvReviewsCount = data['cv_reviews'] ?? 0;
         auditsCount = data['audits'] ?? 0;
 
-        // Enhanced metrics
         activeJobs = data['active_jobs'] ?? 0;
         candidatesWithCV = data['candidates_with_cv'] ?? 0;
         candidatesWithAssessments = data['candidates_with_assessments'] ?? 0;
@@ -479,28 +427,29 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         upcomingInterviews = data['upcoming_interviews'] ?? 0;
         offeredApplications = data['offered_applications'] ?? 0;
         acceptedOffers = data['accepted_offers'] ?? 0;
-        newApplicationsWeek = data['recent_activity']['new_applications'] ?? 0;
-        newInterviewsWeek = data['recent_activity']['new_interviews'] ?? 0;
+        newApplicationsWeek =
+            (data['recent_activity']?['new_applications'] ?? 0) as int;
+        newInterviewsWeek =
+            (data['recent_activity']?['new_interviews'] ?? 0) as int;
 
         applicationStatusBreakdown = data['application_status_breakdown'] ?? {};
-
-        // Enhanced candidate demographics
         candidateDemographics = data['candidate_demographics'] ?? {};
         recentCandidates =
             List<Map<String, dynamic>>.from(data['recent_candidates'] ?? []);
-
         recentActivities = activities;
+
         loadingStats = false;
       });
     } catch (e) {
-      setState(() {
-        loadingStats = false;
-      });
+      if (!mounted) return;
+      setState(() => loadingStats = false);
+      if (!mounted) return;
       _showErrorSnackBar('Failed to fetch dashboard stats: $e');
     }
   }
 
   Future<void> fetchChartData() async {
+    if (!mounted) return;
     setState(() => loadingChartData = true);
     try {
       final token = await AuthService.getAccessToken();
@@ -546,8 +495,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       // Fetch gender diversity data if available
       try {
         final genderRes = await http.get(
-          Uri.parse(
-              ApiEndpoints.getGenderDistribution),
+          Uri.parse(ApiEndpoints.getGenderDistribution),
           headers: headers,
         );
         if (genderRes.statusCode == 200) {
@@ -561,8 +509,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         } else {
           // Fallback to conversion rate if gender endpoint not available
           final conversionRes = await http.get(
-            Uri.parse(
-                ApiEndpoints.getApplicationToInterviewConversion),
+            Uri.parse(ApiEndpoints.getApplicationToInterviewConversion),
             headers: headers,
           );
           if (conversionRes.statusCode == 200) {
@@ -576,8 +523,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       } catch (e) {
         // Use fallback data
         final conversionRes = await http.get(
-          Uri.parse(
-              ApiEndpoints.getApplicationToInterviewConversion),
+          Uri.parse(ApiEndpoints.getApplicationToInterviewConversion),
           headers: headers,
         );
         if (conversionRes.statusCode == 200) {
@@ -592,19 +538,33 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       // Fetch ethnicity diversity data if available
       try {
         final ethnicityRes = await http.get(
-          Uri.parse(
-              ApiEndpoints.getEthnicityDistribution),
+          Uri.parse(ApiEndpoints.getEthnicityDistribution),
           headers: headers,
         );
         if (ethnicityRes.statusCode == 200) {
-          final data = json.decode(ethnicityRes.body) as List;
-          ethnicityData = data
+          final decoded = json.decode(ethnicityRes.body);
+          List<dynamic> rows = [];
+          if (decoded is Map && decoded['ethnicity_distribution'] is List) {
+            rows =
+                List<dynamic>.from(decoded['ethnicity_distribution'] as List);
+          } else if (decoded is List) {
+            rows = decoded;
+          }
+          ethnicityData = rows
               .map((item) => _ChartData(
-                    item['ethnicity'] ?? 'Unknown',
-                    item['count'] ?? 0,
+                    (item is Map ? (item['ethnicity'] ?? 'Unknown') : 'Unknown')
+                        .toString(),
+                    item is Map && item['count'] is num
+                        ? (item['count'] as num).toInt()
+                        : 0,
                   ))
               .toList();
         } else {
+          if (ethnicityRes.statusCode == 404 && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('No ethnicity analytics available')),
+            );
+          }
           // Fallback to dropoff data
           final dropoffRes = await http.get(
             Uri.parse(ApiEndpoints.getStageDropoff),
@@ -655,8 +615,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       try {
         // Skills frequency data (API returns Map<String, int>: skill name -> count)
         final skillsRes = await http.get(
-          Uri.parse(
-              ApiEndpoints.getSkillsFrequency),
+          Uri.parse(ApiEndpoints.getSkillsFrequency),
           headers: headers,
         );
         if (skillsRes.statusCode == 200) {
@@ -688,8 +647,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       try {
         // Experience distribution (API returns Map: years/key -> count)
         final experienceRes = await http.get(
-          Uri.parse(
-              ApiEndpoints.getExperienceDistribution),
+          Uri.parse(ApiEndpoints.getExperienceDistribution),
           headers: headers,
         );
         if (experienceRes.statusCode == 200) {
@@ -745,8 +703,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       try {
         // Assessment pass rates
         final assessmentRes = await http.get(
-          Uri.parse(
-              ApiEndpoints.getAssessmentPassRate),
+          Uri.parse(ApiEndpoints.getAssessmentPassRate),
           headers: headers,
         );
         if (assessmentRes.statusCode == 200) {
@@ -764,15 +721,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     } catch (e) {
       debugPrint("Error fetching chart data: $e");
     } finally {
+      if (!mounted) return;
       setState(() => loadingChartData = false);
     }
   }
 
   Future<void> fetchAudits({int page = 1}) async {
+    if (!mounted) return;
     setState(() => loadingAudits = true);
     try {
       final role = await AuthService.getRole();
       if (role != "admin") {
+        if (!mounted) return;
         setState(() => loadingAudits = false);
         return;
       }
@@ -797,6 +757,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
+        if (!mounted) return;
         setState(() {
           audits = List<Map<String, dynamic>>.from(data["results"]);
           auditPage = data["page"];
@@ -815,9 +776,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           loadingAudits = false;
         });
       } else {
+        if (!mounted) return;
         setState(() => loadingAudits = false);
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => loadingAudits = false);
     }
   }
@@ -947,34 +910,36 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                             children: [
                               _sidebarEntry(
                                   'assets/images/Home_Remote_Work_Red_Badge_White.png',
-                                  'Home', 'dashboard'),
+                                  'Home',
+                                  'dashboard'),
                               _sidebarEntry(
-                                  Icons.person_outline,
-                                  'Profile', 'profile'),
+                                  Icons.person_outline, 'Profile', 'profile'),
                               _sidebarEntry(
                                   'assets/images/Approval_Red_Badge_White.png',
-                                  'Jobs', 'jobs'),
-                              _sidebarEntry(
-                                  'assets/images/candidates.png',
+                                  'Jobs',
+                                  'jobs'),
+                              _sidebarEntry('assets/images/candidates.png',
                                   'Candidates', 'candidates'),
                               _sidebarEntry(
                                   'assets/images/red_Management_Red_Badge_White.png',
-                                  'Interviews', 'interviews'),
+                                  'Interviews',
+                                  'interviews'),
                               _sidebarEntry(
                                   'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
-                                  'CV Reviews', 'cv_reviews'),
-                              _sidebarEntry(
-                                  'assets/icons/data-analytics.png',
+                                  'CV Reviews',
+                                  'cv_reviews'),
+                              _sidebarEntry('assets/icons/data-analytics.png',
                                   'Analytics', 'analytics'),
-                              _sidebarEntry(
-                                  'assets/icons/teamC.png',
+                              _sidebarEntry('assets/icons/teamC.png',
                                   'Team Collaboration', 'team_collaboration'),
                               _sidebarEntry(
                                   'assets/images/Notification_Red_White.png',
-                                  'Notifications', 'notifications'),
+                                  'Notifications',
+                                  'notifications'),
                               _sidebarEntry(
                                   'assets/images/innovation_brainstorm_red_badge_white.png',
-                                  'Settings', 'settings'),
+                                  'Settings',
+                                  'settings'),
                             ],
                           ),
                         ),
@@ -1311,12 +1276,15 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                               ? Colors.grey.shade700
                               : Colors.grey.shade600,
                     ),
-                    child: Icon(icon, size: 20, color: selected ? const Color(0xFFC10D00) : Colors.white),
+                    child: Icon(icon,
+                        size: 20,
+                        color:
+                            selected ? const Color(0xFFC10D00) : Colors.white),
                   )
                 : Image.asset(icon as String, width: 32, height: 32,
                     errorBuilder: (context, error, stackTrace) {
-                      return Icon(Icons.error, color: iconColor, size: 32);
-                    }),
+                    return Icon(Icons.error, color: iconColor, size: 32);
+                  }),
             const SizedBox(width: 12),
             if (!sidebarCollapsed)
               Expanded(
