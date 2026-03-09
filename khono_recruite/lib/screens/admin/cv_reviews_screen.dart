@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../../services/admin_service.dart';
 import '../../providers/theme_provider.dart';
+import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 
 class CVReviewsScreen extends StatefulWidget {
   const CVReviewsScreen({super.key});
@@ -28,11 +31,28 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   Future<void> fetchCVReviews() async {
     setState(() => loading = true);
     try {
-      final data = await admin.listCVReviews();
+      final List<Map<String, dynamic>> all = [];
+      var page = 1;
+      while (true) {
+        final batch = await admin.listCVReviews(
+          page: page,
+          perPage: 200,
+          scope: 'all',
+        );
+        all.addAll(batch);
+        if (batch.length < 200) break;
+        page++;
+      }
       if (!mounted) return;
       setState(() {
-        cvReviews = List<Map<String, dynamic>>.from(data);
-        filteredReviews = List.from(cvReviews);
+        cvReviews = List<Map<String, dynamic>>.from(all);
+        // Apply initial filter to only show entries with valid Cloudinary cv_url
+        filteredReviews = cvReviews.where((review) {
+          final url = review['cv_url'] as String?;
+          return url != null &&
+              url.trim().isNotEmpty &&
+              url.contains('cloudinary.com');
+        }).toList();
       });
     } catch (e) {
       debugPrint("Error fetching CV reviews: $e");
@@ -54,13 +74,95 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
     return 'Needs Review';
   }
 
+  Future<void> _previewCV(Map<String, dynamic> review) async {
+    try {
+      final applicationId = review['application_id'] as int?;
+      if (applicationId == null) {
+        throw Exception('Missing application ID');
+      }
+
+      // Use admin proxy endpoint for in-app preview
+      final token = await AuthService.getAccessToken();
+      final cvUrl =
+          '${ApiEndpoints.adminBase}/applications/$applicationId/cv-preview';
+
+      // Show modal dialog with WebView
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return Dialog(
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.9,
+              height: MediaQuery.of(context).size.height * 0.8,
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border(
+                          bottom: BorderSide(color: Colors.grey.shade300)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'CV Preview - ${review['full_name'] ?? 'Unknown'}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: WebViewWidget(
+                      controller: WebViewController()
+                        ..loadRequest(
+                          Uri.parse(cvUrl),
+                          headers: {
+                            'Authorization': 'Bearer $token',
+                          },
+                        ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error previewing CV: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   void applyFilter(String? filter) {
     setState(() {
       selectedFilter = filter;
+      var base = cvReviews;
+      // Only show entries with a valid Cloudinary cv_url
+      base = base.where((review) {
+        final url = review['cv_url'] as String?;
+        return url != null &&
+            url.trim().isNotEmpty &&
+            url.contains('cloudinary.com');
+      }).toList();
       if (filter == null) {
-        filteredReviews = List.from(cvReviews);
+        filteredReviews = List.from(base);
       } else {
-        filteredReviews = cvReviews.where((review) {
+        filteredReviews = base.where((review) {
           final score = (review['cv_score'] ?? 0).toDouble();
           final label = getScoreLabel(score);
           return label == filter;
@@ -706,6 +808,37 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                       ],
                                                     ),
                                                   ),
+                                                const SizedBox(height: 12),
+
+                                                // Preview CV button
+                                                Align(
+                                                  alignment:
+                                                      Alignment.bottomRight,
+                                                  child: ElevatedButton.icon(
+                                                    onPressed: () =>
+                                                        _previewCV(review),
+                                                    icon: const Icon(
+                                                        Icons.remove_red_eye,
+                                                        size: 16),
+                                                    label: const Text(
+                                                        'Preview CV'),
+                                                    style: ElevatedButton
+                                                        .styleFrom(
+                                                      backgroundColor:
+                                                          Colors.redAccent,
+                                                      foregroundColor:
+                                                          Colors.white,
+                                                      minimumSize:
+                                                          const Size(100, 36),
+                                                      textStyle:
+                                                          GoogleFonts.inter(
+                                                              fontSize: 12,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600),
+                                                    ),
+                                                  ),
+                                                ),
                                               ],
                                             ),
                                           ),

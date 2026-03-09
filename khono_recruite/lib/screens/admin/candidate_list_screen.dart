@@ -35,20 +35,26 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        setState(() {
-          candidates = data['candidates'];
-          loading = false;
-        });
+        if (mounted) {
+          setState(() {
+            candidates = data['candidates'];
+            loading = false;
+          });
+        }
       } else {
-        setState(() => loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to load candidates')),
-        );
+        if (mounted) {
+          setState(() => loading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to load candidates')),
+          );
+        }
       }
     } catch (e) {
-      setState(() => loading = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        setState(() => loading = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 
@@ -471,13 +477,19 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                                     themeProvider:
                                                         themeProvider,
                                                   ),
-                                                  if (c['applications_summary'] != null && (c['applications_summary'] as List).isNotEmpty) ...[
+                                                  if (c['applications_summary'] !=
+                                                          null &&
+                                                      (c['applications_summary']
+                                                              as List)
+                                                          .isNotEmpty) ...[
                                                     const SizedBox(height: 8),
                                                     _buildInfoRow(
                                                       icon: Icons.work,
                                                       label: "Jobs applied",
-                                                      value: "${(c['applications_summary'] as List).length} job(s): ${(c['applications_summary'] as List).map((a) => a is Map ? (a['job_title'] ?? '') : '').where((s) => s.isNotEmpty).take(3).join(', ')}${(c['applications_summary'] as List).length > 3 ? '...' : ''}",
-                                                      themeProvider: themeProvider,
+                                                      value:
+                                                          "${(c['applications_summary'] as List).length} job(s): ${(c['applications_summary'] as List).map((a) => a is Map ? (a['job_title'] ?? '') : '').where((s) => s.isNotEmpty).take(3).join(', ')}${(c['applications_summary'] as List).length > 3 ? '...' : ''}",
+                                                      themeProvider:
+                                                          themeProvider,
                                                     ),
                                                   ],
                                                   const SizedBox(height: 16),
@@ -523,22 +535,43 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                                               ),
                                                             ),
                                                             onPressed: () {
-                                                              final summary = c['applications_summary'] as List?;
-                                                              final firstAppId = summary != null && summary.isNotEmpty && summary.first is Map
-                                                                  ? (summary.first as Map)['application_id']
+                                                              final summary =
+                                                                  c['applications_summary']
+                                                                      as List?;
+                                                              final firstAppId = summary !=
+                                                                          null &&
+                                                                      summary
+                                                                          .isNotEmpty &&
+                                                                      summary.first
+                                                                          is Map
+                                                                  ? (summary.first
+                                                                          as Map)[
+                                                                      'application_id']
                                                                   : null;
-                                                              if (firstAppId != null) {
-                                                                Navigator.of(context).push(
+                                                              if (firstAppId !=
+                                                                  null) {
+                                                                Navigator.of(
+                                                                        context)
+                                                                    .push(
                                                                   MaterialPageRoute(
-                                                                    builder: (_) => CandidateDetailScreen(
-                                                                      candidateId: c['id'] as int,
-                                                                      applicationId: firstAppId as int,
+                                                                    builder: (_) =>
+                                                                        CandidateDetailScreen(
+                                                                      candidateId:
+                                                                          c['id']
+                                                                              as int,
+                                                                      applicationId:
+                                                                          firstAppId
+                                                                              as int,
                                                                     ),
                                                                   ),
                                                                 );
                                                               } else {
-                                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                                  const SnackBar(content: Text('No applications yet')),
+                                                                ScaffoldMessenger.of(
+                                                                        context)
+                                                                    .showSnackBar(
+                                                                  const SnackBar(
+                                                                      content: Text(
+                                                                          'No applications yet')),
                                                                 );
                                                               }
                                                             },

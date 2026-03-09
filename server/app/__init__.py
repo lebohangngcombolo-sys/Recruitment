@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request, jsonify
 from .extensions import db, jwt, mail, cloudinary_client, mongo_client, migrate, cors, bcrypt, oauth, limiter, socketio
 from .models import *
 from .routes import auth, admin_routes, candidate_routes, ai_routes, mfa_routes, sso_routes, analytics_routes, chat_routes, offer_routes, public_routes, test_pack_routes
@@ -54,18 +54,21 @@ def create_app():
         ping_timeout=60,
         ping_interval=25
     )
-    # In production, restrict CORS to FRONTEND_URL when set; otherwise allow all (e.g. local dev)
+    # In production, restrict CORS to FRONTEND_URL when set; in local dev allow all origins (Flutter web uses random localhost ports).
     _cors_origins = ["*"]
     if app.config.get("FLASK_ENV") == "production":
         _frontend = (app.config.get("FRONTEND_URL") or "").strip().rstrip("/")
         if _frontend:
             _cors_origins = [_frontend]
+        else:
+            _cors_origins = ["*"]
     cors.init_app(
         app,
         origins=_cors_origins,
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"],
         supports_credentials=False,  # Required when using origins="*"; auth uses header not cookies
+        automatic_options=True  # Ensure automatic OPTIONS handling
     )
 
     # Ensure CORS headers on every response (including 4xx/5xx and errors). When Render free tier

@@ -44,6 +44,11 @@ def analyze_cv_task(self, cv_analysis_id: int, application_id: int):
             # Mark started
             cv.status = "processing"
             cv.started_at = datetime.utcnow()
+            # Ensure linkage to application and requisition if missing
+            if cv.application_id is None:
+                cv.application_id = application_id
+            if cv.requisition_id is None:
+                cv.requisition_id = appn.requisition_id
             db.session.add(cv)
             db.session.commit()
             resume_text = cv.cv_text or ""

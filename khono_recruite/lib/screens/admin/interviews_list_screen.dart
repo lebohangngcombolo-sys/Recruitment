@@ -86,28 +86,34 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
   }
 
   Future<void> fetchInterviews() async {
-    setState(() => loading = true);
+    if (mounted) setState(() => loading = true);
     try {
       final response = await AuthService.authorizedGet(
         "${ApiEndpoints.adminBase}/interviews/all",
       );
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
-        setState(() {
-          interviews = decoded['interviews'] ?? [];
-          loading = false;
-        });
+        if (mounted) {
+          setState(() {
+            interviews = decoded['interviews'] ?? [];
+            loading = false;
+          });
+        }
       } else {
-        setState(() => loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to load interviews')),
-        );
+        if (mounted) {
+          setState(() => loading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to load interviews')),
+          );
+        }
       }
     } catch (e) {
-      setState(() => loading = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        setState(() => loading = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 

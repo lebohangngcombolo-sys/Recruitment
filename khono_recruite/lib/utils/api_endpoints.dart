@@ -3,10 +3,8 @@ class ApiEndpoints {
   static const authBase = "http://127.0.0.1:5000/api/auth";
   static const candidateBase = "http://127.0.0.1:5000/api/candidate";
   static const adminBase = "http://127.0.0.1:5000/api/admin";
-  static const chatbotBase = "http://127.0.0.1:5000/api/chatbot";
-  static const hmBase = "http://127.0.0.1:5000/api/admin";
-  static const chatBase = "http://127.0.0.1:5000/api/chat";
   static const analyticsBase = "http://127.0.0.1:5000/api/analytics";
+  static const chatBase = "http://127.0.0.1:5000/api/chat";
   static const aiBase = "http://127.0.0.1:5000/api/ai";
   static const generateJobDetails = "$aiBase/generate_job_details";
   static const generateQuestions = "$aiBase/generate_questions";
@@ -32,7 +30,7 @@ class ApiEndpoints {
   static const adminEnroll = "$authBase/admin-enroll";
   static const firebaseLogin = "$authBase/firebase-login";
   static const updateAuthProfile = "$authBase/profile";
-  static const uploadAuthProfilePicture = "$authBase/profile/picture";
+  static const uploadAuthProfilePicture = "$authBase/upload_profile_picture";
 
   // ------------------- OAuth (UPDATED FOR SUPABASE) -------------------
   static const googleOAuth = "$authBase/google";
@@ -95,8 +93,10 @@ class ApiEndpoints {
   static const getJobsWithStats = "$adminBase/jobs/with-stats";
 
   // ------------------- Analytics / Demographics -------------------
-  static const getGenderDistribution = "$adminBase/analytics/gender-distribution";
-  static const getEthnicityDistribution = "$adminBase/analytics/ethnicity-distribution";
+  static const getGenderDistribution =
+      "$adminBase/analytics/gender-distribution";
+  static const getEthnicityDistribution =
+      "$adminBase/analytics/ethnicity-distribution";
 
   // ------------------- CVs -------------------
   static const allCVs = "$adminBase/cvs";
@@ -341,10 +341,6 @@ class ApiEndpoints {
   static String getInterviewCalendarStatus(int interviewId) =>
       "$adminBase/interviews/$interviewId/calendar/status";
 
-  // ------------------- AI Chatbot -------------------
-  static const parseCV = "$chatbotBase/parse_cv";
-  static const askBot = "$chatbotBase/ask";
-
   // ==================== CHAT FEATURE ENDPOINTS ====================
 
   // Thread Management
@@ -440,31 +436,24 @@ class ApiEndpoints {
 
   // Analytics blueprint routes
   static const getApplicationsPerRequisition =
-      "$analyticsBase/analytics/applications-per-requisition";
+      "$analyticsBase/applications-per-requisition";
   static const getApplicationToInterviewConversion =
-      "$analyticsBase/analytics/conversion/application-to-interview";
+      "$analyticsBase/conversion/application-to-interview";
   static const getInterviewToOfferConversion =
-      "$analyticsBase/analytics/conversion/interview-to-offer";
-  static const getStageDropoff = "$analyticsBase/analytics/dropoff";
-  static const getTimePerStage = "$analyticsBase/analytics/time-per-stage";
-  static const getMonthlyApplications =
-      "$analyticsBase/analytics/applications/monthly";
-  static const getCVScreeningDrop =
-      "$analyticsBase/analytics/cv-screening-drop";
-  static const getAssessmentPassRate =
-      "$analyticsBase/analytics/assessments/pass-rate";
-  static const getInterviewScheduling =
-      "$analyticsBase/analytics/interviews/scheduled";
-  static const getOffersByCategory =
-      "$analyticsBase/analytics/offers-by-category";
-  static const getAvgCVScore =
-      "$analyticsBase/analytics/candidate/avg-cv-score";
+      "$analyticsBase/conversion/interview-to-offer";
+  static const getStageDropoff = "$analyticsBase/dropoff";
+  static const getTimePerStage = "$analyticsBase/time-per-stage";
+  static const getMonthlyApplications = "$analyticsBase/applications/monthly";
+  static const getCVScreeningDrop = "$analyticsBase/cv-screening-drop";
+  static const getAssessmentPassRate = "$analyticsBase/assessments/pass-rate";
+  static const getInterviewScheduling = "$analyticsBase/interviews/scheduled";
+  static const getOffersByCategory = "$analyticsBase/offers-by-category";
+  static const getAvgCVScore = "$analyticsBase/candidate/avg-cv-score";
   static const getAvgAssessmentScore =
-      "$analyticsBase/analytics/candidate/avg-assessment-score";
-  static const getSkillsFrequency =
-      "$analyticsBase/analytics/candidate/skills-frequency";
+      "$analyticsBase/candidate/avg-assessment-score";
+  static const getSkillsFrequency = "$analyticsBase/candidate/skills-frequency";
   static const getExperienceDistribution =
-      "$analyticsBase/analytics/candidate/experience-distribution";
+      "$analyticsBase/candidate/experience-distribution";
 
   // ==================== CANDIDATE ENDPOINTS ====================
   static const getCandidateProfile = "$candidateBase/profile";

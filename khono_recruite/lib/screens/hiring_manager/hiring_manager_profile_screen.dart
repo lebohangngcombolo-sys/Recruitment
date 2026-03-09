@@ -16,6 +16,7 @@ import '../../utils/api_endpoints.dart';
 
 class HiringManagerProfileScreen extends StatefulWidget {
   final String token;
+
   /// When set (e.g. when embedded in dashboard), back button calls this instead of popping.
   final VoidCallback? onBack;
 
@@ -30,7 +31,8 @@ class HiringManagerProfileScreen extends StatefulWidget {
       _HiringManagerProfileScreenState();
 }
 
-class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen> {
+class _HiringManagerProfileScreenState
+    extends State<HiringManagerProfileScreen> {
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _surnameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -76,62 +78,60 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
   bool _loading = true;
   bool _saving = false;
   bool _dataLoaded = false;
-  Timer? _debounceTimer;
+
+  bool _isEditing = false;
+  bool _dirty = false;
 
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
   final ImagePicker _picker = ImagePicker();
+
+  void _markDirty() {
+    if (!_dataLoaded) return;
+    if (mounted) setState(() => _dirty = true);
+  }
 
   bool _validateFields() {
     final phone = _phoneController.text.trim();
     final email = _emailController.text.trim();
     bool isValid = true;
 
-    setState(() {
-      if (phone.isNotEmpty && phone.length != 10) {
-        _phoneError =
-            'Please enter a valid 10-digit phone number\nExample: 0123456789';
-        isValid = false;
-      } else {
-        _phoneError = null;
-      }
+    if (mounted) {
+      setState(() {
+        if (phone.isNotEmpty && phone.length != 10) {
+          _phoneError =
+              'Please enter a valid 10-digit phone number\nExample: 0123456789';
+          isValid = false;
+        } else {
+          _phoneError = null;
+        }
 
-      if (email.isNotEmpty && !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-          .hasMatch(email)) {
-        _emailError = 'Please enter a valid email address';
-        isValid = false;
-      } else {
-        _emailError = null;
-      }
-
-      if (_firstNameController.text.trim().isEmpty ||
-          _surnameController.text.trim().isEmpty ||
-          _emailController.text.trim().isEmpty) {
-        isValid = false;
-      }
-    });
+        if (email.isNotEmpty &&
+            !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+          _emailError = 'Please enter a valid email address';
+          isValid = false;
+        } else {
+          _emailError = null;
+        }
+      });
+    }
+    if (_firstNameController.text.trim().isEmpty ||
+        _surnameController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty) {
+      isValid = false;
+    }
 
     return isValid;
-  }
-
-  void _scheduleAutoSave() {
-    if (!_dataLoaded) return;
-    _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(seconds: 3), () {
-      if (!mounted) return;
-      if (_validateFields()) _saveProfile();
-      _debounceTimer = null;
-    });
   }
 
   @override
   void initState() {
     super.initState();
-    _firstNameController.addListener(_scheduleAutoSave);
-    _surnameController.addListener(_scheduleAutoSave);
-    _phoneController.addListener(_scheduleAutoSave);
-    _preferredNameController.addListener(_scheduleAutoSave);
-    _managerController.addListener(_scheduleAutoSave);
+    _firstNameController.addListener(_markDirty);
+    _surnameController.addListener(_markDirty);
+    _emailController.addListener(_markDirty);
+    _phoneController.addListener(_markDirty);
+    _preferredNameController.addListener(_markDirty);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadUserData();
     });
@@ -139,12 +139,11 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
 
   @override
   void dispose() {
-    _debounceTimer?.cancel();
-    _firstNameController.removeListener(_scheduleAutoSave);
-    _surnameController.removeListener(_scheduleAutoSave);
-    _phoneController.removeListener(_scheduleAutoSave);
-    _preferredNameController.removeListener(_scheduleAutoSave);
-    _managerController.removeListener(_scheduleAutoSave);
+    _firstNameController.removeListener(_markDirty);
+    _surnameController.removeListener(_markDirty);
+    _emailController.removeListener(_markDirty);
+    _phoneController.removeListener(_markDirty);
+    _preferredNameController.removeListener(_markDirty);
     _firstNameController.dispose();
     _surnameController.dispose();
     _emailController.dispose();
@@ -157,7 +156,7 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
   }
 
   Future<void> _loadUserData() async {
-    setState(() => _loading = true);
+    if (mounted) setState(() => _loading = true);
     try {
       final data = await AuthService.getUserProfile(widget.token);
       final user = data['user'] as Map<String, dynamic>?;
@@ -165,8 +164,14 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
 
       final profile = Map<String, dynamic>.from(user['profile'] ?? {});
       final email = (user['email'] ?? '').toString();
-      final firstName = (profile['first_name'] ?? profile['full_name']?.toString().split(' ').first ?? '').toString();
-      final lastName = (profile['last_name'] ?? profile['full_name']?.toString().split(' ').skip(1).join(' ') ?? '').toString();
+      final firstName = (profile['first_name'] ??
+              profile['full_name']?.toString().split(' ').first ??
+              '')
+          .toString();
+      final lastName = (profile['last_name'] ??
+              profile['full_name']?.toString().split(' ').skip(1).join(' ') ??
+              '')
+          .toString();
       final phone = (profile['phone'] ?? '').toString();
       final deptRaw = (profile['department'] ?? '').toString().trim();
       final desigRaw = (profile['designation'] ?? '').toString().trim();
@@ -206,6 +211,9 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
         _selectedDepartment = matchedDept;
         _selectedDesignation = matchedDesig;
         _profileImageUrl = profileImageUrl.isNotEmpty ? profileImageUrl : null;
+
+        _isEditing = false;
+        _dirty = false;
       });
     } catch (e) {
       debugPrint('Error loading hiring manager profile: $e');
@@ -227,11 +235,12 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
   Future<void> _saveProfile() async {
     if (_saving || !_validateFields()) return;
 
-    setState(() => _saving = true);
+    if (mounted) setState(() => _saving = true);
     try {
       final profileData = {
         'first_name': _firstNameController.text.trim(),
         'last_name': _surnameController.text.trim(),
+        'email': _emailController.text.trim(),
         'phone': _phoneController.text.trim(),
         'department': _selectedDepartment ?? '',
         'designation': _selectedDesignation ?? '',
@@ -249,9 +258,20 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
         body: json.encode({'profile': profileData}),
       );
 
-      if (response.statusCode != 200) {
+      if (response.statusCode == 200) {
+        if (mounted) {
+          setState(() {
+            _isEditing = false;
+            _dirty = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile updated successfully')),
+          );
+        }
+      } else {
         final body = json.decode(response.body);
-        final msg = body['error'] ?? body['message'] ?? 'Failed to save profile';
+        final msg =
+            body['error'] ?? body['message'] ?? 'Failed to save profile';
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(msg.toString())),
@@ -274,7 +294,7 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
     final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       if (kIsWeb) _profileImageBytes = await pickedFile.readAsBytes();
-      setState(() => _profileImage = pickedFile);
+      if (mounted) setState(() => _profileImage = pickedFile);
       await _uploadProfileImage();
     }
   }
@@ -304,11 +324,13 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
 
       if (response.statusCode == 200 && respJson['success'] == true) {
         final url = respJson['data']?['profile_picture']?.toString() ?? '';
-        setState(() {
-          _profileImageUrl = url.isNotEmpty ? url : null;
-          _profileImage = null;
-          _profileImageBytes = null;
-        });
+        if (mounted) {
+          setState(() {
+            _profileImageUrl = url.isNotEmpty ? url : null;
+            _profileImage = null;
+            _profileImageBytes = null;
+          });
+        }
       } else {
         final msg = respJson['message'] ?? 'Upload failed';
         if (mounted) {
@@ -370,180 +392,239 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
         ),
         child: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.only(top: 16, left: 16, right: 16, bottom: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+            padding:
+                const EdgeInsets.only(top: 16, left: 16, right: 16, bottom: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.black.withValues(alpha: 0.4)
-                            : Colors.black.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: const Color(0xFFC10D00).withValues(alpha: 0.3),
+                    if (!_isEditing)
+                      ElevatedButton(
+                        onPressed: _saving
+                            ? null
+                            : () {
+                                setState(() {
+                                  _isEditing = true;
+                                  _dirty = false;
+                                });
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFC10D00),
+                        ),
+                        child: const Text(
+                          'Edit',
+                          style: TextStyle(fontFamily: 'Poppins'),
+                        ),
+                      )
+                    else
+                      ElevatedButton(
+                        onPressed: (_saving || !_dirty) ? null : _saveProfile,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFC10D00),
+                        ),
+                        child: _saving
+                            ? const SizedBox(
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                'Save',
+                                style: TextStyle(fontFamily: 'Poppins'),
+                              ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.black.withValues(alpha: 0.4)
+                        : Colors.black.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFFC10D00).withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          GestureDetector(
+                            onTap: _pickProfileImage,
+                            child: CircleAvatar(
+                              radius: 40,
+                              backgroundColor: (_profileImage != null ||
+                                      (_profileImageUrl != null &&
+                                          _profileImageUrl!.isNotEmpty))
+                                  ? Colors.grey.shade700
+                                  : const Color(0xFFC10D00),
+                              backgroundImage: (_profileImage != null ||
+                                      (_profileImageUrl != null &&
+                                          _profileImageUrl!.isNotEmpty))
+                                  ? _getProfileImageProvider()
+                                  : null,
+                              child: (_profileImage == null &&
+                                      (_profileImageUrl == null ||
+                                          _profileImageUrl!.isEmpty))
+                                  ? const Icon(
+                                      Icons.person,
+                                      size: 44,
+                                      color: Colors.white,
+                                    )
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Tap to upload',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.8),
+                              fontSize: 12,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Hiring Manager',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                            Text(
+                              _emailController.text.isEmpty
+                                  ? 'Loading...'
+                                  : _emailController.text,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 16,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      child: Row(
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.black.withValues(alpha: 0.4)
+                        : Colors.black.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFFC10D00).withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              GestureDetector(
-                                onTap: _pickProfileImage,
-                                child: CircleAvatar(
-                                  radius: 40,
-                                  backgroundColor: (_profileImage != null ||
-                                          (_profileImageUrl != null &&
-                                              _profileImageUrl!.isNotEmpty))
-                                      ? Colors.grey.shade700
-                                      : const Color(0xFFC10D00),
-                                  backgroundImage: (_profileImage != null ||
-                                          (_profileImageUrl != null &&
-                                              _profileImageUrl!.isNotEmpty))
-                                      ? _getProfileImageProvider()
-                                      : null,
-                                  child: (_profileImage == null &&
-                                          (_profileImageUrl == null ||
-                                              _profileImageUrl!.isEmpty))
-                                      ? const Icon(
-                                          Icons.person,
-                                          size: 44,
-                                          color: Colors.white,
-                                        )
-                                      : null,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildEditableField(
+                                  'First Name',
+                                  _firstNameController,
+                                  readOnly: !_isEditing,
                                 ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Tap to upload',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.8),
-                                  fontSize: 12,
-                                  fontFamily: 'Poppins',
+                                const SizedBox(height: 16),
+                                _buildEditableField(
+                                  'Surname',
+                                  _surnameController,
+                                  readOnly: !_isEditing,
                                 ),
-                              ),
-                            ],
+                                const SizedBox(height: 16),
+                                _buildEditableField(
+                                  'Email Address',
+                                  _emailController,
+                                  errorText: _emailError,
+                                  readOnly: !_isEditing,
+                                ),
+                                const SizedBox(height: 16),
+                                _buildEditableField(
+                                  'Phone Number',
+                                  _phoneController,
+                                  errorText: _phoneError,
+                                  readOnly: !_isEditing,
+                                ),
+                              ],
+                            ),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
-                                  'Hiring Manager',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    fontFamily: 'Poppins',
-                                  ),
+                                _buildDropdownField(
+                                  'Department',
+                                  _selectedDepartment,
+                                  _departments,
+                                  (String? newValue) {
+                                    if (!_isEditing) return;
+                                    setState(() {
+                                      _selectedDepartment = newValue;
+                                      _dirty = true;
+                                    });
+                                  },
                                 ),
-                                Text(
-                                  _emailController.text.isEmpty
-                                      ? 'Loading...'
-                                      : _emailController.text,
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 16,
-                                    fontFamily: 'Poppins',
-                                  ),
+                                const SizedBox(height: 16),
+                                _buildDropdownField(
+                                  'Designation',
+                                  _selectedDesignation,
+                                  _designations,
+                                  (String? newValue) {
+                                    if (!_isEditing) return;
+                                    setState(() {
+                                      _selectedDesignation = newValue;
+                                      _dirty = true;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                _buildEditableField(
+                                  'Preferred Name',
+                                  _preferredNameController,
+                                  readOnly: !_isEditing,
+                                ),
+                                const SizedBox(height: 16),
+                                _buildEditableField(
+                                  'Manager',
+                                  _managerController,
+                                  readOnly: true,
                                 ),
                               ],
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.black.withValues(alpha: 0.4)
-                            : Colors.black.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: const Color(0xFFC10D00).withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _buildEditableField(
-                                        'First Name', _firstNameController),
-                                    const SizedBox(height: 16),
-                                    _buildEditableField(
-                                        'Surname', _surnameController),
-                                    const SizedBox(height: 16),
-                                    _buildEditableField(
-                                      'Email Address',
-                                      _emailController,
-                                      errorText: _emailError,
-                                      readOnly: true,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    _buildEditableField(
-                                      'Phone Number',
-                                      _phoneController,
-                                      errorText: _phoneError,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _buildDropdownField(
-                                      'Department',
-                                      _selectedDepartment,
-                                      _departments,
-                                      (String? newValue) {
-                                        setState(() =>
-                                            _selectedDepartment = newValue);
-                                        _scheduleAutoSave();
-                                      },
-                                    ),
-                                    const SizedBox(height: 16),
-                                    _buildDropdownField(
-                                      'Designation',
-                                      _selectedDesignation,
-                                      _designations,
-                                      (String? newValue) {
-                                        setState(() =>
-                                            _selectedDesignation = newValue);
-                                        _scheduleAutoSave();
-                                      },
-                                    ),
-                                    const SizedBox(height: 16),
-                                    _buildEditableField(
-                                        'Preferred Name', _preferredNameController),
-                                    const SizedBox(height: 16),
-                                    _buildEditableField(
-                                      'Manager',
-                                      _managerController,
-                                      readOnly: true,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+              ],
+            ),
           ),
         ),
       ),
@@ -657,7 +738,7 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
                 .map((String item) =>
                     DropdownMenuItem<String>(value: item, child: Text(item)))
                 .toList(),
-            onChanged: onChanged,
+            onChanged: _isEditing ? onChanged : null,
           ),
         ),
       ],

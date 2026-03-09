@@ -24,6 +24,7 @@ from app.services.ai_cv_parser import AIParser
 from marshmallow import ValidationError
 from werkzeug.utils import secure_filename
 import os
+import re
 import cloudinary.uploader
 
 
@@ -743,6 +744,24 @@ def init_auth_routes(app):
             if not data or not isinstance(data.get("profile"), dict):
                 return jsonify({"error": "Body must include 'profile' object"}), 400
             new_profile = data["profile"]
+
+            # Optional: update email in users.email (source of truth for login)
+            # If provided, validate and ensure uniqueness.
+            if "email" in new_profile:
+                email_raw = (new_profile.get("email") or "").strip().lower()
+                if not email_raw:
+                    return jsonify({"error": "Email cannot be empty"}), 400
+                if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email_raw):
+                    return jsonify({"error": "Invalid email format"}), 400
+                if email_raw != (user.email or "").strip().lower():
+                    existing_user = User.query.filter(
+                        db.func.lower(User.email) == email_raw,
+                        User.id != user.id,
+                    ).first()
+                    if existing_user:
+                        return jsonify({"error": "Email is already in use"}), 409
+                    user.email = email_raw
+
             existing = dict(user.profile or {})
             allowed = {
                 "full_name", "first_name", "last_name", "phone", "profile_picture",
@@ -753,7 +772,11 @@ def init_auth_routes(app):
                     existing[key] = new_profile[key]
             user.profile = existing
             db.session.commit()
-            return jsonify({"message": "Profile updated", "profile": user.profile}), 200
+            return jsonify({
+                "message": "Profile updated",
+                "user": user.to_dict(),
+                "profile": user.profile,
+            }), 200
         except Exception as e:
             current_app.logger.error(f"Update profile error: {str(e)}", exc_info=True)
             return jsonify({"error": "Internal server error"}), 500

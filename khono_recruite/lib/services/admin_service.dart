@@ -180,11 +180,13 @@ class AdminService {
   Future<List<dynamic>> getApplicationsForMyJobs({
     int page = 1,
     int perPage = 100,
+    String? scope,
   }) async {
     final uri = Uri.parse(ApiEndpoints.getApplicationsForMyJobs).replace(
       queryParameters: {
         'page': page.toString(),
         'per_page': perPage.toString(),
+        if (scope != null && scope.trim().isNotEmpty) 'scope': scope.trim(),
       },
     );
     final res = await _getWithAuthRetry(uri);
@@ -427,10 +429,12 @@ class AdminService {
   }
 
   /// All applications for a candidate with job details (title, company, employment_type).
-  Future<List<Map<String, dynamic>>> getCandidateApplications(int candidateId) async {
+  Future<List<Map<String, dynamic>>> getCandidateApplications(
+      int candidateId) async {
     final token = await AuthService.getAccessToken();
     final res = await http.get(
-      Uri.parse(ApiEndpoints.getCandidateApplicationsByCandidateId(candidateId)),
+      Uri.parse(
+          ApiEndpoints.getCandidateApplicationsByCandidateId(candidateId)),
       headers: {...headers, 'Authorization': 'Bearer $token'},
     );
     if (res.statusCode == 200) {
@@ -476,6 +480,16 @@ class AdminService {
     }
 
     throw Exception('Failed to fetch applications: ${res.body}');
+  }
+
+  Future<bool> updateApplicationStatus(int applicationId, String status) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.patch(
+      Uri.parse('${ApiEndpoints.adminBase}/applications/$applicationId/status'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: jsonEncode({'status': status}),
+    );
+    return res.statusCode == 200;
   }
 
   // ---------- INTERVIEWS ----------
@@ -601,30 +615,65 @@ class AdminService {
   }
 
   // ---------- CV REVIEWS ----------
-  Future<List<Map<String, dynamic>>> listCVReviews() async {
+  Future<List<Map<String, dynamic>>> listCVReviews(
+      {int page = 1, int perPage = 100, String? search, String? scope}) async {
     final token = await AuthService.getAccessToken();
-    final res = await http.get(
-      Uri.parse('${ApiEndpoints.adminBase}/cv-reviews'),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'per_page': perPage.toString(),
+    };
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
+    if (scope != null && scope.trim().isNotEmpty) {
+      queryParams['scope'] = scope.trim();
+    }
+    final uri = Uri.parse('${ApiEndpoints.adminBase}/cv-reviews')
+        .replace(queryParameters: queryParams);
+    final res = await http
+        .get(uri, headers: {...headers, 'Authorization': 'Bearer $token'});
 
     if (res.statusCode == 200) {
-      return List<Map<String, dynamic>>.from(json.decode(res.body));
+      final data = json.decode(res.body);
+      // New shape: { reviews: [...], pagination: {...} }
+      if (data is Map && data.containsKey('reviews')) {
+        return List<Map<String, dynamic>>.from(data['reviews']);
+      }
+      // Fallback: legacy list shape
+      return List<Map<String, dynamic>>.from(data);
     }
     throw Exception('Failed to fetch CV reviews: ${res.body}');
   }
 
-  Future<List<Map<String, dynamic>>> listAllCVs() async {
+  Future<List<Map<String, dynamic>>> listAllCVs(
+      {int page = 1, int perPage = 20, String? search}) async {
     final token = await AuthService.getAccessToken();
-    final res = await http.get(
-      Uri.parse(ApiEndpoints.allCVs),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'per_page': perPage.toString(),
+    };
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
+    final uri =
+        Uri.parse(ApiEndpoints.allCVs).replace(queryParameters: queryParams);
+    final res = await http
+        .get(uri, headers: {...headers, 'Authorization': 'Bearer $token'});
 
     if (res.statusCode == 200) {
-      return List<Map<String, dynamic>>.from(json.decode(res.body));
+      final data = json.decode(res.body);
+      if (data is Map && data.containsKey('cvs')) {
+        return List<Map<String, dynamic>>.from(data['cvs']);
+      }
+      return List<Map<String, dynamic>>.from(data);
     }
-    throw Exception('Failed to fetch all CVs: ${res.body}');
+    String message = 'Failed to fetch all CVs';
+    try {
+      final decoded = json.decode(res.body);
+      if (decoded is Map) {
+        message =
+            (decoded['error'] ?? decoded['message'] ?? message).toString();
+      } else {
+        message = decoded.toString();
+      }
+    } catch (_) {}
+    throw Exception('$message (status ${res.statusCode})');
   }
 
 // ---------- ASSESSMENTS ----------

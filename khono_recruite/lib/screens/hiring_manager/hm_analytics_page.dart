@@ -9,7 +9,8 @@ import '../../services/analytics_service.dart';
 import '../../services/auth_service.dart';
 import 'package:intl/intl.dart';
 import '../../utils/app_config.dart';
-import 'analytics_export_stub.dart' if (dart.library.html) 'analytics_export_web.dart' as analytics_export;
+import 'analytics_export_stub.dart'
+    if (dart.library.html) 'analytics_export_web.dart' as analytics_export;
 
 class HMAnalyticsPage extends StatefulWidget {
   const HMAnalyticsPage({super.key});
@@ -39,9 +40,11 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   // Same design system as CV review screen (light/dark)
   static const Color _kPrimary = Color(0xFFC10D00);
   static const Color _kDarkSurface = Color(0xFF2C3E50);
-  static const double _kCardAndHeaderOpacity = 0.7; // dark mode
-  static const double _kCardOpacityLight = 0.98; // light mode: thick, minimal see-through
-  static const double _kTranslucentOpacity = 0.9;
+  static const double _kCardAndHeaderOpacity =
+      1.0; // dark mode: fully opaque for crisp text
+  static const double _kCardOpacityLight =
+      1.0; // light mode: fully opaque for crisp text
+  static const double _kTranslucentOpacity = 0.95; // slightly more opaque
   static const double _kCardRadius = 16;
 
   // Pro-level chart design system
@@ -150,7 +153,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       decoration: BoxDecoration(
-        color: (isDark ? Colors.white : _kPrimary).withValues(alpha: isDark ? 0.03 : 0.04),
+        color: (isDark ? Colors.white : _kPrimary)
+            .withValues(alpha: isDark ? 0.03 : 0.04),
         borderRadius: BorderRadius.circular(_kChartWellRadius),
         border: Border.all(
           color: _textSecondary(context).withValues(alpha: 0.08),
@@ -229,7 +233,14 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
     _loadAllAnalytics();
   }
 
+  @override
+  void dispose() {
+    super.dispose();
+  }
+
   Future<void> _loadAllAnalytics() async {
+    if (!mounted) return;
+
     setState(() {
       _isLoading = true;
       _error = null;
@@ -258,9 +269,11 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
       _error = e.toString();
       debugPrint('Analytics load error: $e\n$st');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -270,7 +283,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
       children: [
         Positioned.fill(
           child: DefaultTextStyle(
-            style: GoogleFonts.poppins(fontSize: 14, color: _textPrimary(context)),
+            style:
+                GoogleFonts.poppins(fontSize: 14, color: _textPrimary(context)),
             child: SingleChildScrollView(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -314,10 +328,12 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
             margin: const EdgeInsets.symmetric(horizontal: 32),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
             decoration: BoxDecoration(
-              color: isDark ? _kDarkSurface.withValues(alpha: 0.98) : Colors.white,
+              color:
+                  isDark ? _kDarkSurface.withValues(alpha: 0.98) : Colors.white,
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
-                BoxShadow(color: Colors.black26, blurRadius: 16, spreadRadius: 2),
+                BoxShadow(
+                    color: Colors.black26, blurRadius: 16, spreadRadius: 2),
               ],
             ),
             child: Column(
@@ -353,46 +369,52 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   }
 
   Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Analytics & Insights',
             style: GoogleFonts.poppins(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
                 color: _textPrimary(context))),
-        Row(children: [
-          ElevatedButton.icon(
-            onPressed: _isExporting ? null : () => _export(),
-            icon: _isExporting
-                ? SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Icon(Icons.download),
-            label: Text(_isExporting ? 'Exporting...' : 'Export', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: _kPrimary,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
-          ),
-          const SizedBox(width: 8),
-          ElevatedButton.icon(
-            onPressed: _loadAllAnalytics,
-            icon: const Icon(Icons.refresh),
-            label: Text('Refresh', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
-            style: ElevatedButton.styleFrom(
-                backgroundColor: _kPrimary,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
-          ),
-        ]),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            ElevatedButton.icon(
+              onPressed: _isExporting ? null : () => _export(),
+              icon: _isExporting
+                  ? SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Icon(Icons.download),
+              label: Text(_isExporting ? 'Exporting...' : 'Export',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: _kPrimary,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              onPressed: _loadAllAnalytics,
+              icon: const Icon(Icons.refresh),
+              label: Text('Refresh',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: _kPrimary,
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -415,11 +437,10 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
             .map((range) => DropdownMenuItem(
                 value: range,
                 child: Text(range,
-                    style: GoogleFonts.poppins(
-                        color: _textPrimary(context)))))
+                    style: GoogleFonts.poppins(color: _textPrimary(context)))))
             .toList(),
         onChanged: (value) {
-          setState(() => _selectedTimeRange = value!);
+          if (mounted) setState(() => _selectedTimeRange = value!);
           _loadAllAnalytics();
         },
       ),
@@ -428,15 +449,14 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
 
   Widget _buildLoadingState() {
     return Center(
-        child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-          const CircularProgressIndicator(
-              valueColor: const AlwaysStoppedAnimation<Color>(_kPrimary)),
-          const SizedBox(height: 16),
-          Text('Loading analytics...',
-              style: GoogleFonts.poppins(color: _textSecondary(context), fontSize: 16)),
-        ]));
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+      const CircularProgressIndicator(
+          valueColor: const AlwaysStoppedAnimation<Color>(_kPrimary)),
+      const SizedBox(height: 16),
+      Text('Loading analytics...',
+          style: GoogleFonts.poppins(
+              color: _textSecondary(context), fontSize: 16)),
+    ]));
   }
 
   Widget _buildError() {
@@ -447,7 +467,8 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
       const SizedBox(height: 12),
       ElevatedButton(
           onPressed: _loadAllAnalytics,
-          child: Text('Retry', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)))
+          child: Text('Retry',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w600)))
     ]));
   }
 
@@ -467,9 +488,12 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
           final width = constraints.maxWidth.clamp(200.0, double.infinity);
           final cross = width > 900 ? 3 : (width > 600 ? 2 : 1);
           final cellWidth = (width - (cross - 1) * crossAxisSpacing) / cross;
-          final cellHeight = (cellWidth / childAspectRatio).clamp(120.0, double.infinity);
+          final cellHeight =
+              (cellWidth / childAspectRatio).clamp(120.0, double.infinity);
           final rowCount = (childCount / cross).ceil();
-          final gridHeight = (rowCount * cellHeight + (rowCount - 1) * mainAxisSpacing).clamp(minGridHeight, double.infinity);
+          final gridHeight =
+              (rowCount * cellHeight + (rowCount - 1) * mainAxisSpacing)
+                  .clamp(minGridHeight, double.infinity);
 
           return SizedBox(
             height: gridHeight,
@@ -939,7 +963,9 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
 
   Widget _buildReportCard(String title) {
     return _buildThemedCard(ListTile(
-      title: Text(title, style: GoogleFonts.poppins(color: _textPrimary(context), fontWeight: FontWeight.w600)),
+      title: Text(title,
+          style: GoogleFonts.poppins(
+              color: _textPrimary(context), fontWeight: FontWeight.w600)),
       trailing: const Icon(Icons.arrow_forward, color: _kPrimary),
       onTap: () => _viewDetailedReport(title),
     ));
@@ -950,12 +976,18 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
     Uint8List headerBytes;
     Uint8List footerBytes;
     try {
-      headerBytes = (await rootBundle.load('assets/images/logo2.png')).buffer.asUint8List();
-      footerBytes = (await rootBundle.load('assets/images/logo.png')).buffer.asUint8List();
+      headerBytes = (await rootBundle.load('assets/images/logo2.png'))
+          .buffer
+          .asUint8List();
+      footerBytes = (await rootBundle.load('assets/images/logo.png'))
+          .buffer
+          .asUint8List();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not load logo images: $e', style: GoogleFonts.poppins())),
+          SnackBar(
+              content: Text('Could not load logo images: $e',
+                  style: GoogleFonts.poppins())),
         );
       }
       return null;
@@ -967,16 +999,25 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
     // Load Poppins for PDF theme (use copy of ByteData; Font.ttf consumes the stream)
     pw.ThemeData pdfTheme;
     try {
-      final poppinsRegular = await rootBundle.load('assets/fonts/Poppins-Regular.ttf');
-      final poppinsBold = await rootBundle.load('assets/fonts/Poppins-Bold.ttf');
+      final poppinsRegular =
+          await rootBundle.load('assets/fonts/Poppins-Regular.ttf');
+      final poppinsBold =
+          await rootBundle.load('assets/fonts/Poppins-Bold.ttf');
       pdfTheme = pw.ThemeData.withFont(
-        base: pw.Font.ttf(Uint8List.fromList(poppinsRegular.buffer.asUint8List()).buffer.asByteData()),
-        bold: pw.Font.ttf(Uint8List.fromList(poppinsBold.buffer.asUint8List()).buffer.asByteData()),
+        base: pw.Font.ttf(
+            Uint8List.fromList(poppinsRegular.buffer.asUint8List())
+                .buffer
+                .asByteData()),
+        bold: pw.Font.ttf(Uint8List.fromList(poppinsBold.buffer.asUint8List())
+            .buffer
+            .asByteData()),
       );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not load Poppins font: $e', style: GoogleFonts.poppins())),
+          SnackBar(
+              content: Text('Could not load Poppins font: $e',
+                  style: GoogleFonts.poppins())),
         );
       }
       return null;
@@ -990,9 +1031,12 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
       final userData = await AuthService.getCurrentUser();
       if (userData['unauthorized'] != true && userData['error'] == null) {
         final user = userData['user'] ?? userData;
-        final profile = user['profile'] is Map ? user['profile'] as Map<String, dynamic> : null;
+        final profile = user['profile'] is Map
+            ? user['profile'] as Map<String, dynamic>
+            : null;
         final nameFromProfile = profile?['full_name'] ?? profile?['name'];
-        if (nameFromProfile != null && nameFromProfile.toString().trim().isNotEmpty) {
+        if (nameFromProfile != null &&
+            nameFromProfile.toString().trim().isNotEmpty) {
           hmName = nameFromProfile.toString().trim();
         } else if (profile != null) {
           final first = profile['first_name']?.toString() ?? '';
@@ -1002,12 +1046,19 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         }
         hmEmail = (user['email'] ?? profile?['email'] ?? hmEmail).toString();
         final roleRaw = (user['role'] ?? hmRole).toString();
-        hmRole = roleRaw.replaceFirst('_', ' ').split(' ').map((s) => s.isEmpty ? s : '${s[0].toUpperCase()}${s.length > 1 ? s.substring(1).toLowerCase() : ''}').join(' ');
+        hmRole = roleRaw
+            .replaceFirst('_', ' ')
+            .split(' ')
+            .map((s) => s.isEmpty
+                ? s
+                : '${s[0].toUpperCase()}${s.length > 1 ? s.substring(1).toLowerCase() : ''}')
+            .join(' ');
       }
     } catch (_) {}
 
     if (mounted) onProgress?.call('Building PDF document...');
-    final generatedOn = DateFormat('EEEE, d MMMM yyyy · HH:mm').format(DateTime.now());
+    final generatedOn =
+        DateFormat('EEEE, d MMMM yyyy · HH:mm').format(DateTime.now());
 
     final doc = pw.Document(theme: pdfTheme);
     doc.addPage(
@@ -1034,60 +1085,123 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         ),
         build: (pw.Context context) {
           final sections = <pw.Widget>[
-            pw.Header(level: 0, text: 'Analytics & Insights Report', textStyle: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.Header(
+                level: 0,
+                text: 'Analytics & Insights Report',
+                textStyle:
+                    pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 6),
-            pw.Paragraph(text: 'Report generated for: $hmName ($hmEmail) · Role: $hmRole', style: const pw.TextStyle(fontSize: 10)),
-            pw.Paragraph(text: 'Generated on: $generatedOn', style: const pw.TextStyle(fontSize: 10)),
+            pw.Paragraph(
+                text:
+                    'Report generated for: $hmName ($hmEmail) · Role: $hmRole',
+                style: const pw.TextStyle(fontSize: 10)),
+            pw.Paragraph(
+                text: 'Generated on: $generatedOn',
+                style: const pw.TextStyle(fontSize: 10)),
             pw.SizedBox(height: 12),
           ];
           if (_monthlyApps.isNotEmpty) {
             sections.addAll([
-              pw.Header(level: 1, text: 'Monthly Applications', textStyle: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-              pw.Table.fromTextArray(context: context, data: [
-                ['Month', 'Applications'],
-                ..._monthlyApps.map((r) => [(r['month'] ?? '').toString(), (r['applications'] ?? 0).toString()]),
-              ], headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold), cellStyle: const pw.TextStyle(fontSize: 10)),
+              pw.Header(
+                  level: 1,
+                  text: 'Monthly Applications',
+                  textStyle: pw.TextStyle(
+                      fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              pw.Table.fromTextArray(
+                  context: context,
+                  data: [
+                    ['Month', 'Applications'],
+                    ..._monthlyApps.map((r) => [
+                          (r['month'] ?? '').toString(),
+                          (r['applications'] ?? 0).toString()
+                        ]),
+                  ],
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  cellStyle: const pw.TextStyle(fontSize: 10)),
               pw.SizedBox(height: 12),
             ]);
           }
           if (_offersByCategory.isNotEmpty) {
             sections.addAll([
-              pw.Header(level: 1, text: 'Offers by Category', textStyle: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-              pw.Table.fromTextArray(context: context, data: [
-                ['Category', 'Offers'],
-                ..._offersByCategory.map((r) => [(r['category'] ?? '').toString(), (r['offers'] ?? 0).toString()]),
-              ], headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold), cellStyle: const pw.TextStyle(fontSize: 10)),
+              pw.Header(
+                  level: 1,
+                  text: 'Offers by Category',
+                  textStyle: pw.TextStyle(
+                      fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              pw.Table.fromTextArray(
+                  context: context,
+                  data: [
+                    ['Category', 'Offers'],
+                    ..._offersByCategory.map((r) => [
+                          (r['category'] ?? '').toString(),
+                          (r['offers'] ?? 0).toString()
+                        ]),
+                  ],
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  cellStyle: const pw.TextStyle(fontSize: 10)),
               pw.SizedBox(height: 12),
             ]);
           }
           if (_appsPerReq.isNotEmpty) {
             sections.addAll([
-              pw.Header(level: 1, text: 'Applications per Requisition', textStyle: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-              pw.Table.fromTextArray(context: context, data: [
-                ['Requisition', 'Applications'],
-                ..._appsPerReq.map((r) => [(r['title'] ?? '').toString(), (r['applications'] ?? 0).toString()]),
-              ], headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold), cellStyle: const pw.TextStyle(fontSize: 10)),
+              pw.Header(
+                  level: 1,
+                  text: 'Applications per Requisition',
+                  textStyle: pw.TextStyle(
+                      fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              pw.Table.fromTextArray(
+                  context: context,
+                  data: [
+                    ['Requisition', 'Applications'],
+                    ..._appsPerReq.map((r) => [
+                          (r['title'] ?? '').toString(),
+                          (r['applications'] ?? 0).toString()
+                        ]),
+                  ],
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  cellStyle: const pw.TextStyle(fontSize: 10)),
               pw.SizedBox(height: 12),
             ]);
           }
           if (_assessmentTrend.isNotEmpty) {
             sections.addAll([
-              pw.Header(level: 1, text: 'Assessment Pass Rate Trend', textStyle: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-              pw.Table.fromTextArray(context: context, data: [
-                ['Month', 'Pass Rate %'],
-                ..._assessmentTrend.map((r) => [(r['month'] ?? '').toString(), (r['pass_rate_percent'] ?? 0).toString()]),
-              ], headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold), cellStyle: const pw.TextStyle(fontSize: 10)),
+              pw.Header(
+                  level: 1,
+                  text: 'Assessment Pass Rate Trend',
+                  textStyle: pw.TextStyle(
+                      fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              pw.Table.fromTextArray(
+                  context: context,
+                  data: [
+                    ['Month', 'Pass Rate %'],
+                    ..._assessmentTrend.map((r) => [
+                          (r['month'] ?? '').toString(),
+                          (r['pass_rate_percent'] ?? 0).toString()
+                        ]),
+                  ],
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  cellStyle: const pw.TextStyle(fontSize: 10)),
               pw.SizedBox(height: 12),
             ]);
           }
           if (_skillsFreq.isNotEmpty) {
-            final sorted = _skillsFreq.entries.toList()..sort((a, b) => (b.value as num).compareTo(a.value as num));
+            final sorted = _skillsFreq.entries.toList()
+              ..sort((a, b) => (b.value as num).compareTo(a.value as num));
             sections.addAll([
-              pw.Header(level: 1, text: 'Skills Frequency', textStyle: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-              pw.Table.fromTextArray(context: context, data: [
-                ['Skill', 'Count'],
-                ...sorted.map((e) => [e.key.toString(), e.value.toString()]),
-              ], headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold), cellStyle: const pw.TextStyle(fontSize: 10)),
+              pw.Header(
+                  level: 1,
+                  text: 'Skills Frequency',
+                  textStyle: pw.TextStyle(
+                      fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              pw.Table.fromTextArray(
+                  context: context,
+                  data: [
+                    ['Skill', 'Count'],
+                    ...sorted
+                        .map((e) => [e.key.toString(), e.value.toString()]),
+                  ],
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  cellStyle: const pw.TextStyle(fontSize: 10)),
               pw.SizedBox(height: 12),
             ]);
           }
@@ -1095,15 +1209,26 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
             final sorted = _expDist.entries.toList()
               ..sort((a, b) => a.key.toString().compareTo(b.key.toString()));
             sections.addAll([
-              pw.Header(level: 1, text: 'Experience Distribution', textStyle: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-              pw.Table.fromTextArray(context: context, data: [
-                ['Years', 'Count'],
-                ...sorted.map((e) => [e.key.toString(), e.value.toString()]),
-              ], headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold), cellStyle: const pw.TextStyle(fontSize: 10)),
+              pw.Header(
+                  level: 1,
+                  text: 'Experience Distribution',
+                  textStyle: pw.TextStyle(
+                      fontSize: 14, fontWeight: pw.FontWeight.bold)),
+              pw.Table.fromTextArray(
+                  context: context,
+                  data: [
+                    ['Years', 'Count'],
+                    ...sorted
+                        .map((e) => [e.key.toString(), e.value.toString()]),
+                  ],
+                  headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+                  cellStyle: const pw.TextStyle(fontSize: 10)),
             ]);
           }
           if (sections.length <= 5) {
-            sections.add(pw.Paragraph(text: 'No analytics data to display. Refresh the page and try again.'));
+            sections.add(pw.Paragraph(
+                text:
+                    'No analytics data to display. Refresh the page and try again.'));
           }
           return sections;
         },
@@ -1113,10 +1238,16 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
   }
 
   Future<void> _export() async {
-    if (_monthlyApps.isEmpty && _offersByCategory.isEmpty && _skillsFreq.isEmpty &&
-        _expDist.isEmpty && _appsPerReq.isEmpty && _assessmentTrend.isEmpty) {
+    if (_monthlyApps.isEmpty &&
+        _offersByCategory.isEmpty &&
+        _skillsFreq.isEmpty &&
+        _expDist.isEmpty &&
+        _appsPerReq.isEmpty &&
+        _assessmentTrend.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('No data to export. Refresh analytics first.', style: GoogleFonts.poppins())),
+        SnackBar(
+            content: Text('No data to export. Refresh analytics first.',
+                style: GoogleFonts.poppins())),
       );
       return;
     }
@@ -1132,10 +1263,15 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
         },
       );
       if (bytes == null || !mounted) {
-        if (mounted) setState(() { _isExporting = false; _exportStatusMessage = null; });
+        if (mounted)
+          setState(() {
+            _isExporting = false;
+            _exportStatusMessage = null;
+          });
         return;
       }
-      final filename = 'analytics_export_${DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first}.pdf';
+      final filename =
+          'analytics_export_${DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first}.pdf';
       analytics_export.downloadAnalyticsPdf(context, bytes, filename);
       if (!mounted) return;
       setState(() {
@@ -1152,11 +1288,16 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
           _exportStatusMessage = null;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: $e', style: GoogleFonts.poppins())),
+          SnackBar(
+              content: Text('Export failed: $e', style: GoogleFonts.poppins())),
         );
       }
     } finally {
-      if (mounted && _isExporting) setState(() { _isExporting = false; _exportStatusMessage = null; });
+      if (mounted && _isExporting)
+        setState(() {
+          _isExporting = false;
+          _exportStatusMessage = null;
+        });
     }
   }
 
@@ -1164,14 +1305,17 @@ class _HMAnalyticsPageState extends State<HMAnalyticsPage> {
     showDialog(
         context: context,
         builder: (context) => AlertDialog(
-              title: Text('$title Report', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              title: Text('$title Report',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
               content: Text(
                   'Detailed report view - implement navigation to full report page.',
                   style: GoogleFonts.poppins()),
               actions: [
                 TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: Text('Close', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)))
+                    child: Text('Close',
+                        style:
+                            GoogleFonts.poppins(fontWeight: FontWeight.w600)))
               ],
             ));
   }

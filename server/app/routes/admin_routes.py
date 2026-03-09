@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.extensions import db
 from app.models import User, Requisition, Candidate, Application, AssessmentResult, Interview, Notification, AuditLog, Conversation, SharedNote, Meeting, CVAnalysis, InterviewFeedback, Offer, OfferStatus
@@ -8,6 +8,7 @@ from app.services.email_service import EmailService
 from app.services.audit2 import AuditService
 from flask_cors import cross_origin
 from sqlalchemy import func, and_, or_
+import time
 import bleach
 from marshmallow import ValidationError
 from app.services.job_service import JobService
@@ -612,12 +613,14 @@ def get_applications_for_my_jobs():
         if not current_user:
             return jsonify({"error": "User not found"}), 404
 
+        scope = (request.args.get("scope") or "").strip().lower() or "my_jobs"
+
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 100, type=int)
         per_page = min(per_page, 200)
 
         query = Application.query.join(Requisition, Application.requisition_id == Requisition.id)
-        if current_user.role == "hiring_manager":
+        if current_user.role == "hiring_manager" and scope != "all":
             query = query.filter(Requisition.created_by == current_user_id)
 
         query = query.order_by(Application.created_at.desc())
@@ -983,28 +986,80 @@ def list_cv_reviews():
     if request.method == "OPTIONS":
         return '', 200
 
-    applications = Application.query.all()
+    # Pagination support
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 100))
+    per_page = min(per_page, 200)
+    search = request.args.get('search', '').strip()
+
+    scope = (request.args.get('scope') or '').strip().lower() or 'my_jobs'
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id)
+    if not current_user:
+        return jsonify({"error": "User not found"}), 404
+
+    # Build query with joins to avoid N+1
+    query = Application.query.join(Candidate, Application.candidate_id == Candidate.id)
+    query = query.outerjoin(CVAnalysis, CVAnalysis.application_id == Application.id)
+
+    # Hiring manager can be limited to their own jobs unless scope=all
+    if current_user.role == 'hiring_manager' and scope != 'all':
+        query = query.join(Requisition, Application.requisition_id == Requisition.id)
+        query = query.filter(Requisition.created_by == current_user_id)
+
+    # Apply search filter (by candidate name)
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(Candidate.full_name.ilike(search_term))
+
+    # Order by latest first
+    query = query.order_by(Application.created_at.desc())
+
+    # Paginate
+    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    applications = pagination.items
+
     reviews = []
 
     for app in applications:
-        candidate = None
-        cv_url = None
-        cv_parser = app.cv_parser_result or {}
+        candidate = app.candidate
+        cv_analysis = None
+        
+        # Find the CV analysis for this application (prefer by application_id)
+        for analysis in app.cv_analyses:
+            cv_analysis = analysis
+            break
+        
+        # Fallback to candidate-level analysis if no application-specific analysis
+        if not cv_analysis and candidate:
+            cv_analysis = CVAnalysis.query.filter_by(candidate_id=candidate.id).first()
 
-        if app.candidate_id:
-            candidate = Candidate.query.get(app.candidate_id)
-            cv_url = candidate.cv_url if candidate else None
+        # Build cv_analysis object for response
+        cv_analysis_data = None
+        if cv_analysis:
+            result = cv_analysis.result or {}
+            cv_analysis_data = {
+                "id": cv_analysis.id,
+                "status": cv_analysis.status,
+                "started_at": cv_analysis.started_at.isoformat() if cv_analysis.started_at else None,
+                "finished_at": cv_analysis.finished_at.isoformat() if cv_analysis.finished_at else None,
+                "created_at": cv_analysis.created_at.isoformat() if cv_analysis.created_at else None,
+                "updated_at": cv_analysis.updated_at.isoformat() if cv_analysis.updated_at else None,
+                "summary": result.get("summary"),
+                "strengths": result.get("strengths"),
+                "weaknesses": result.get("weaknesses"),
+                "extracted_skills": result.get("extracted_skills"),
+                "match_score": result.get("match_score"),
+                "raw_score": result.get("raw_score"),
+                "recommendation": result.get("recommendation"),
+            }
 
         reviews.append({
             "application_id": app.id,
             "status": app.status,
             "resume_url": app.resume_url,
             "cv_score": app.cv_score,
-            "cv_parser_result": {
-                "skills": cv_parser.get("skills", []),
-                "education": cv_parser.get("education", []),
-                "work_experience": cv_parser.get("work_experience", []),
-            },
+            "cv_parser_result": app.cv_parser_result or {},
             "application_recommendation": app.recommendation,
             "assessment_score": app.assessment_score,
             "overall_score": app.overall_score,
@@ -1012,11 +1067,85 @@ def list_cv_reviews():
             "candidate_id": candidate.id if candidate else None,
             "full_name": candidate.full_name if candidate else None,
             "gender": candidate.gender if candidate else None,
-            "cv_url": cv_url,
+            "cv_url": candidate.cv_url if candidate else None,
+            "cv_analysis": cv_analysis_data,
         })
 
-    return jsonify(reviews), 200
+    return jsonify({
+        "reviews": reviews,
+        "pagination": {
+            "page": page,
+            "per_page": per_page,
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "has_next": pagination.has_next,
+            "has_prev": pagination.has_prev,
+        }
+    }), 200
 
+
+
+# ----------------- CV PREVIEW -----------------
+@admin_bp.route("/applications/<int:application_id>/cv-preview", methods=["GET"])
+@role_required(["admin", "hiring_manager", "hr"])
+def cv_preview(application_id):
+    """Proxy endpoint to stream CV PDF for admin-side preview with proper authentication."""
+    try:
+        application = Application.query.get_or_404(application_id)
+        
+        # Use application.resume_url primarily, fallback to candidate.cv_url
+        cv_url = application.resume_url or (application.candidate.cv_url if application.candidate else None)
+        if not cv_url:
+            return jsonify({"error": "CV not found"}), 404
+            
+        # If it's a Cloudinary URL, generate signed URL for secure access
+        if "cloudinary" in cv_url.lower():
+            try:
+                import cloudinary.utils
+                # Extract public_id from Cloudinary URL
+                # Example: https://res.cloudinary.com/.../raw/upload/v1234567890/filename.pdf
+                parts = cv_url.split('/')
+                if 'upload' in parts:
+                    upload_idx = parts.index('upload')
+                    public_id_parts = parts[upload_idx + 2:]  # Skip version and folder
+                    public_id = '/'.join(public_id_parts)
+                    # Remove file extension for raw resource
+                    if '.' in public_id:
+                        public_id = public_id.rsplit('.', 1)[0]
+                    
+                    signed_url, _ = cloudinary.utils.cloudinary_url(
+                        public_id, 
+                        resource_type="raw", 
+                        sign_url=True,
+                        expires_at=int(time.time()) + 3600  # 1 hour expiry
+                    )
+                    cv_url = signed_url
+            except Exception as e:
+                current_app.logger.warning(f"Failed to generate signed Cloudinary URL: {e}")
+        
+        # Stream the PDF content
+        headers = {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": "inline; filename=cv_preview.pdf",
+            "Cache-Control": "no-cache"
+        }
+        
+        import requests
+        r = requests.get(cv_url, stream=True, timeout=30)
+        r.raise_for_status()
+        
+        return Response(
+            r.iter_content(chunk_size=8192), 
+            status=r.status_code, 
+            headers=headers
+        )
+        
+    except requests.RequestException as e:
+        current_app.logger.error(f"CV preview request failed: {e}")
+        return jsonify({"error": "Failed to fetch CV"}), 500
+    except Exception as e:
+        current_app.logger.error(f"CV preview error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
 
 
 # ----------------- USERS MANAGEMENT -----------------
@@ -4096,7 +4225,7 @@ def get_pipeline_stats():
         ).count()
         
         # Applications by pipeline stage (using Application.status)
-        stages = ['screening', 'assessment', 'interview', 'offer', 'hired', 'rejected']
+        stages = ['applied', 'screening', 'assessment', 'interview', 'offer', 'hired', 'rejected']
         apps_by_stage = {}
         
         for stage in stages:
@@ -4258,7 +4387,7 @@ def get_jobs_with_stats():
             
             # Count by status
             status_counts = {}
-            statuses = ['screening', 'assessment', 'interview', 'offer', 'hired', 'rejected']
+            statuses = ['applied', 'screening', 'assessment', 'interview', 'offer', 'hired', 'rejected']
             
             for status in statuses:
                 count = Application.query.filter_by(
@@ -4665,7 +4794,7 @@ def update_application_status(application_id):
             return jsonify({"error": "Status is required"}), 400
         
         # Validate status transition
-        valid_statuses = ['screening', 'assessment', 'interview', 'offer', 'hired', 'rejected']
+        valid_statuses = ['applied', 'screening', 'assessment', 'interview', 'offer', 'hired', 'rejected']
         if new_status not in valid_statuses:
             return jsonify({
                 "error": f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
@@ -4828,3 +4957,162 @@ def search_all():
     except Exception as e:
         current_app.logger.error(f"Search error: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
+
+
+# ----------------- CV MANAGEMENT ROUTES -----------------
+@admin_bp.route('/cvs', methods=['GET'])
+@role_required(["admin", "hiring_manager"])
+def get_cvs():
+    """Get all CVs with pagination and filtering"""
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 20))
+        search = request.args.get('search', '').strip()
+        
+        # Build query
+        query = CVAnalysis.query
+        
+        # Apply search filter
+        if search:
+            search_term = f"%{search}%"
+            query = query.join(Candidate).filter(
+                or_(
+                    Candidate.first_name.ilike(search_term),
+                    Candidate.last_name.ilike(search_term),
+                    Candidate.full_name.ilike(search_term),
+                    CVAnalysis.cv_text.ilike(search_term)
+                )
+            )
+        
+        # Order by latest first
+        query = query.order_by(CVAnalysis.created_at.desc())
+        
+        # Paginate
+        pagination = query.paginate(
+            page=page, 
+            per_page=per_page, 
+            error_out=False
+        )
+        
+        cvs = []
+        for cv in pagination.items:
+            try:
+                candidate = cv.candidate
+                # Extract data from CV result JSON or use candidate data
+                cv_result = cv.result or {}
+                _updated_at = getattr(cv, 'updated_at', None)
+
+                # Get cv_url from candidate
+                cv_url = candidate.cv_url if candidate else None
+
+                # Get cv_score: prefer from Application (most recent), fallback to Candidate
+                cv_score = 0.0
+                if candidate:
+                    # Try to get the most recent application with a cv_score
+                    latest_app = (Application.query.filter_by(candidate_id=candidate.id)
+                                  .order_by(Application.created_at.desc())
+                                  .first())
+                    if latest_app and latest_app.cv_score is not None:
+                        cv_score = float(latest_app.cv_score)
+                    else:
+                        cv_score = float(candidate.cv_score or 0.0)
+
+                cvs.append({
+                    'id': cv.id,
+                    'candidate_id': cv.candidate_id,
+                    'candidate_name': candidate.full_name if candidate else 'Unknown',
+                    'candidate_email': candidate.user.email if candidate and candidate.user else None,
+                    'gender': candidate.gender if candidate else None,
+                    'cv_url': cv_url,
+                    'cv_score': cv_score,
+                    'skills': cv_result.get('skills', []) or (candidate.skills if candidate else []),
+                    'experience_summary': cv_result.get('experience_summary', ''),
+                    'education_summary': cv_result.get('education_summary', ''),
+                    'analysis_status': cv.status,
+                    'created_at': cv.created_at.isoformat() if cv.created_at else None,
+                    'updated_at': _updated_at.isoformat() if _updated_at else None
+                })
+            except Exception:
+                current_app.logger.exception("Error serializing CVAnalysis id=%s", getattr(cv, 'id', None))
+                continue
+        
+        return jsonify({
+            'cvs': cvs,
+            'pagination': {
+                'page': page,
+                'per_page': per_page,
+                'total': pagination.total,
+                'pages': pagination.pages,
+                'has_next': pagination.has_next,
+                'has_prev': pagination.has_prev
+            }
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching CVs: {e}", exc_info=True)
+        return jsonify({"error": "Failed to fetch CV data"}), 500
+
+
+@admin_bp.route("/analytics/ethnicity-distribution", methods=["GET"])
+@role_required(["admin", "hiring_manager"])
+def get_ethnicity_distribution():
+    """Get ethnicity distribution of candidates for diversity analytics."""
+    try:
+        from sqlalchemy import func
+
+        rows = (
+            db.session.query(Candidate.ethnicity, func.count(Candidate.id))
+            .filter(Candidate.ethnicity.isnot(None), Candidate.ethnicity != "")
+            .group_by(Candidate.ethnicity)
+            .all()
+        )
+
+        distribution = [
+            {"ethnicity": (eth or "Unknown"), "count": int(count or 0)}
+            for eth, count in rows
+        ]
+
+        return jsonify({
+            "ethnicity_distribution": distribution,
+            "total_candidates": sum(item["count"] for item in distribution)
+        }), 200
+    except Exception:
+        current_app.logger.exception("Error fetching ethnicity distribution")
+        return jsonify({"error": "Failed to fetch ethnicity distribution data"}), 500
+
+@admin_bp.route("/analytics/gender-distribution", methods=["GET"])
+@jwt_required()
+def get_gender_distribution():
+    """Get gender distribution of candidates for diversity analytics."""
+    try:
+        # Check if user has permission
+        user_id = int(get_jwt_identity())
+        user = User.query.get(user_id)
+        if not user or user.role not in ['admin', 'hiring_manager']:
+            return jsonify({"error": "Unauthorized"}), 403
+        
+        # Query gender distribution
+        from sqlalchemy import func
+        result = db.session.query(
+            Candidate.gender,
+            func.count(Candidate.id).label('count')
+        ).filter(
+            Candidate.gender.isnot(None),
+            Candidate.gender != ''
+        ).group_by(Candidate.gender).all()
+        
+        distribution = []
+        for gender, count in result:
+            distribution.append({
+                'gender': gender or 'Unknown',
+                'count': count
+            })
+        
+        return jsonify({
+            'gender_distribution': distribution,
+            'total_candidates': sum(item['count'] for item in distribution)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching gender distribution: {e}", exc_info=True)
+        return jsonify({"error": "Failed to fetch gender distribution data"}), 500
