@@ -41,6 +41,7 @@ dependencies:
   webview_flutter: ^4.10.0
   webview_flutter_web: ^0.2.3
   firebase_ai: ^3.6.0
+  pdf: ^3.10.7
 
 dev_dependencies:
   flutter_test:
@@ -52,6 +53,7 @@ flutter:
   assets:
     - assets/icons/
     - assets/images/
+    - assets/fonts/
 
   fonts:
     - family: Poppins
