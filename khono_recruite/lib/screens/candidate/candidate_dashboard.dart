@@ -46,7 +46,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   final Color primaryColor = Color(0xFF991A1A);
   final Color strokeColor = Color(0xFFC10D00);
   final Color fillColor = Color(0xFFf2f2f2).withValues(alpha: 0.2);
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
   final GlobalKey _jobsSectionKey = GlobalKey();
 
   List<Map<String, dynamic>> notifications = [];
@@ -398,7 +397,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     if (widget.token.isEmpty) return;
     try {
       final response = await http.get(
-        Uri.parse('$apiBase/notifications'),
+        Uri.parse('${ApiEndpoints.candidateBase}/notifications'),
         headers: {'Authorization': 'Bearer ${widget.token}'},
       );
 
@@ -598,7 +597,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         final base64Image = base64Encode(bytes);
 
         final response = await http.post(
-          Uri.parse('$apiBase/analyze-cv'),
+          Uri.parse('${ApiEndpoints.candidateBase}/analyze-cv'),
           headers: {
             'Authorization': 'Bearer ${widget.token}',
             'Content-Type': 'application/json',
@@ -1399,7 +1398,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     _safeSetState(() => _continuingApplication = true);
     try {
       final res = await http.post(
-        Uri.parse('$apiBase/apply/$jobId'),
+        Uri.parse('${ApiEndpoints.candidateBase}/apply/$jobId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${widget.token}',

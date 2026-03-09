@@ -1,20 +1,34 @@
 class ApiEndpoints {
   // ------------------- Base URLs -------------------
-  static const authBase = "http://127.0.0.1:5000/api/auth";
-  static const candidateBase = "http://127.0.0.1:5000/api/candidate";
-  static const adminBase = "http://127.0.0.1:5000/api/admin";
-  static const analyticsBase = "http://127.0.0.1:5000/api/analytics";
-  static const chatBase = "http://127.0.0.1:5000/api/chat";
-  static const aiBase = "http://127.0.0.1:5000/api/ai";
+  static const apiBase = String.fromEnvironment(
+    'API_BASE',
+    defaultValue: 'http://127.0.0.1:5000',
+  );
+
+  static const publicApiBase = String.fromEnvironment(
+    'PUBLIC_API_BASE',
+    defaultValue: apiBase,
+  );
+
+  static const authBase = "$apiBase/api/auth";
+  static const candidateBase = "$apiBase/api/candidate";
+  static const adminBase = "$apiBase/api/admin";
+  static const analyticsBase = "$apiBase/api/analytics";
+  static const chatBase = "$apiBase/api/chat";
+  static const aiBase = "$apiBase/api/ai";
   static const generateJobDetails = "$aiBase/generate_job_details";
   static const generateQuestions = "$aiBase/generate_questions";
 
   // NEW: Offer management base URL (matches your Flask blueprint)
-  static const offerBase = "http://127.0.0.1:5000/api/offer";
+  static const offerBase = "$apiBase/api/offer";
 
   // WebSocket URL (for real-time chat)
-  static const webSocketUrl =
-      "ws://127.0.0.1:5000"; // Use wss:// for production with SSL
+  static String get webSocketUrl {
+    final wsBase = apiBase
+        .replaceFirst('https://', 'wss://')
+        .replaceFirst('http://', 'ws://');
+    return wsBase;
+  } // Use wss:// for production with SSL
 
   // ------------------- Auth -------------------
   static const register = "$authBase/register";
@@ -55,7 +69,7 @@ class ApiEndpoints {
   static const String parserCV = "$authBase/cv/parse"; // POST Multipart
 
   // ------------------- Public (no auth) -------------------
-  static const publicBase = "http://127.0.0.1:5000/api/public";
+  static const publicBase = "$publicApiBase/api/public";
   static const getPublicJobs = "$publicBase/jobs";
 
   // ------------------- Candidate -------------------
