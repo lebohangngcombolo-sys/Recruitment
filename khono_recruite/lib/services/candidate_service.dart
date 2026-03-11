@@ -324,4 +324,34 @@ class CandidateService {
     }
     return {'interviews': [], 'scheduled_count': 0};
   }
+
+  /// Candidate accepts an interview invite. Returns success message or throws.
+  static Future<void> acceptInterview(String token, int interviewId) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.acceptInterviewInvite(interviewId)),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    if (response.statusCode >= 200 && response.statusCode < 300) return;
+    final body = _safeJsonDecode(response.body);
+    final msg = body is Map ? (body['message'] ?? body['error'] ?? response.body) : response.body;
+    throw Exception(msg.toString());
+  }
+
+  /// Candidate declines an interview invite. Returns success message or throws.
+  static Future<void> declineInterview(String token, int interviewId) async {
+    final response = await http.post(
+      Uri.parse(ApiEndpoints.declineInterviewInvite(interviewId)),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+    if (response.statusCode >= 200 && response.statusCode < 300) return;
+    final body = _safeJsonDecode(response.body);
+    final msg = body is Map ? (body['message'] ?? body['error'] ?? response.body) : response.body;
+    throw Exception(msg.toString());
+  }
 }

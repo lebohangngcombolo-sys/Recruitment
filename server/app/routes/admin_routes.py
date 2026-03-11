@@ -1751,33 +1751,37 @@ def manage_interviews():
                 if slot:
                     slot.interview_id = interview.id
 
-            # Auto-update application: "Final Interview Scheduled" (status + interview_status)
-            application = Application.query.get(application_id)
+            # Update application so interview state is reflected for the candidate.
+            application = interview.application
             if application:
-                if application.status not in ('hired', 'rejected'):
-                    application.status = 'interview'
-                application.interview_status = 'scheduled'
+                if application.status not in ("hired", "rejected"):
+                    application.status = "interview"
+                application.interview_status = "scheduled"
                 application.last_interview_date = scheduled_time
 
             # Fetch candidate and hiring manager details
             candidate_profile = Candidate.query.get(candidate_id)
+            job_title = interview.application.requisition.title if interview.application and interview.application.requisition else None
+            # Short, clear in-app message so the notification is never blank; details are on the Interview tab.
+            candidate_notif_message = "You have an alert. Check your Interview tab for details."
             # Create in-app notification for candidate (user_id must be User.id, not Candidate.id)
             if candidate_profile and getattr(candidate_profile, 'user_id', None):
                 notif = Notification(
                     user_id=candidate_profile.user_id,
-                    message=f"Your {interview_type} interview has been scheduled for {scheduled_time.strftime('%Y-%m-%d %H:%M:%S')}."
+                    message=candidate_notif_message,
+                    type="interview",
+                    interview_id=interview.id,
                 )
                 db.session.add(notif)
             hiring_manager = User.query.get(hiring_manager_id)
             candidate_name = candidate_profile.full_name if candidate_profile else "Candidate"
-            job_title = None
-            if interview.application and interview.application.requisition:
+            if not job_title and interview.application and interview.application.requisition:
                 job_title = interview.application.requisition.title
 
             # Notify hiring manager so it shows in their calendar/notifications
             notif_hm = Notification(
                 user_id=hiring_manager_id,
-                message=f"Interview scheduled: {candidate_name} for {job_title or 'position'} on {scheduled_time.strftime('%Y-%m-%d at %H:%M')}.",
+                message=f"Interview scheduled: {candidate_name} for {job_title or 'position'} on {scheduled_time.strftime('%d %b %Y')} at {scheduled_time.strftime('%H:%M')}.",
                 type="interview",
                 interview_id=interview.id
             )
@@ -2057,8 +2061,8 @@ def reschedule_interview(interview_id):
             notif = Notification(
                 user_id=candidate_user.id,
                 message=f"Your interview has been rescheduled from "
-                        f"{old_time.strftime('%Y-%m-%d %H:%M:%S')} to "
-                        f"{new_time.strftime('%Y-%m-%d %H:%M:%S')}."
+                        f"{old_time.strftime('%d %b %Y')} at {old_time.strftime('%H:%M')} to "
+                        f"{new_time.strftime('%d %b %Y')} at {new_time.strftime('%H:%M')}."
             )
             db.session.add(notif)
             db.session.commit()
@@ -2160,7 +2164,7 @@ def cancel_interview(interview_id):
         # Add notification
         notif = Notification(
             user_id=candidate.user_id,
-            message=f"Your interview scheduled for {interview_details['scheduled_time'].strftime('%Y-%m-%d %H:%M:%S')} has been cancelled."
+            message=f"Your interview scheduled for {interview_details['scheduled_time'].strftime('%d %b %Y')} at {interview_details['scheduled_time'].strftime('%H:%M')} has been cancelled."
         )
         db.session.add(notif)
         db.session.commit()
@@ -4126,7 +4130,7 @@ def create_meeting():
         # In-app notification for organizer
         notif_organizer = Notification(
             user_id=user_id,
-            message=f"Meeting '{title}' scheduled for {start_time.strftime('%Y-%m-%d at %H:%M')}.",
+            message=f"Meeting '{title}' scheduled for {start_time.strftime('%d %b %Y')} at {start_time.strftime('%H:%M')}.",
             type="meeting"
         )
         db.session.add(notif_organizer)
@@ -4137,7 +4141,7 @@ def create_meeting():
             if participant_user and participant_user.id != user_id:
                 notif_participant = Notification(
                     user_id=participant_user.id,
-                    message=f"You're invited to meeting '{title}' on {start_time.strftime('%Y-%m-%d at %H:%M')}.",
+                    message=f"You're invited to meeting '{title}' on {start_time.strftime('%d %b %Y')} at {start_time.strftime('%H:%M')}.",
                     type="meeting"
                 )
                 db.session.add(notif_participant)
@@ -4248,7 +4252,7 @@ def update_meeting(meeting_id):
             # Notify organizer and participants about the time change
             notif_organizer = Notification(
                 user_id=meeting.organizer_id,
-                message=f"Meeting '{meeting.title}' rescheduled to {new_start_time.strftime('%Y-%m-%d at %H:%M')}.",
+                message=f"Meeting '{meeting.title}' rescheduled to {new_start_time.strftime('%d %b %Y')} at {new_start_time.strftime('%H:%M')}.",
                 type="meeting"
             )
             db.session.add(notif_organizer)
@@ -4258,7 +4262,7 @@ def update_meeting(meeting_id):
                 if participant_user and participant_user.id != meeting.organizer_id:
                     notif_p = Notification(
                         user_id=participant_user.id,
-                        message=f"Meeting '{meeting.title}' rescheduled to {new_start_time.strftime('%Y-%m-%d at %H:%M')}.",
+                        message=f"Meeting '{meeting.title}' rescheduled to {new_start_time.strftime('%d %b %Y')} at {new_start_time.strftime('%H:%M')}.",
                         type="meeting"
                     )
                     db.session.add(notif_p)

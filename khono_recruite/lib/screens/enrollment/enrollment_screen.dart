@@ -2692,11 +2692,11 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         return;
       }
       setState(() {
-        nameController.text = response['full_name'] ?? '';
-        phoneController.text = response['phone'] ?? '';
-        addressController.text = response['address'] ?? '';
-        dobController.text = response['dob'] ?? '';
-        linkedinController.text = response['linkedin'] ?? '';
+        nameController.text = response['full_name']?.toString() ?? '';
+        phoneController.text = response['phone']?.toString() ?? '';
+        addressController.text = response['address']?.toString() ?? '';
+        dobController.text = response['dob']?.toString() ?? '';
+        linkedinController.text = response['linkedin']?.toString() ?? '';
         educationController.text = (response['education'] is List)
             ? (response['education'] as List).join('\n')
             : (response['education']?.toString() ?? '');
@@ -2711,6 +2711,14 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             : (response['languages']?.toString() ?? '');
         experienceController.text = response['experience']?.toString() ?? '';
         positionController.text = response['position']?.toString() ?? '';
+        // Populate previous companies from CV parser so Work Experience review is not empty.
+        final prev = response['previous_companies'];
+        if (prev is List) {
+          previousCompaniesController.text =
+              prev.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).join(', ');
+        } else if (prev != null) {
+          previousCompaniesController.text = prev.toString();
+        }
         _processingStage = stages.length - 1;
         _processingComplete = true;
         loading = false;
