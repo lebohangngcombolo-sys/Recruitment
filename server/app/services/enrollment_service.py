@@ -8,6 +8,7 @@ from app.models import Candidate, User
 from app.services.audit2 import AuditService
 from app.services.ai_cv_parser import AIParser
 from app.services.cv_to_candidate_mapper import map_extraction_to_candidate
+from app.services.ai_service import AIService
 
 
 class EnrollmentService:
@@ -142,8 +143,26 @@ class EnrollmentService:
                 except Exception:
                     ai_data = {}
 
+                # Use AI to structure raw experience into multiple work_experience entries
+                work_structured = None
+                try:
+                    raw_exp = (ai_data.get("experience") or "") if isinstance(ai_data.get("experience"), str) else ""
+                    if raw_exp and len(raw_exp.strip()) > 20:
+                        ai = AIService()
+                        work_structured = ai.structure_cv_experience(
+                            raw_exp,
+                            position_hint=ai_data.get("position") or "",
+                            companies_hint=ai_data.get("previous_companies")
+                            if isinstance(ai_data.get("previous_companies"), list)
+                            else None,
+                        )
+                except Exception:
+                    work_structured = None
+
                 # Map extraction keys to Candidate fields (position->title, experience->work_experience, etc.)
-                candidate_mapped = map_extraction_to_candidate(ai_data, work_experience_structured=None)
+                candidate_mapped = map_extraction_to_candidate(
+                    ai_data, work_experience_structured=work_structured
+                )
                 # Manual input takes precedence over AI
                 payload = {**candidate_mapped, **payload}
 
