@@ -100,7 +100,8 @@ class _OfferAnalyticsScreenState extends State<OfferAnalyticsScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                      color: color.withOpacity(0.2), shape: BoxShape.circle),
+                      color: color.withValues(alpha: 0.2),
+                      shape: BoxShape.circle),
                   child: Icon(icon, color: color, size: 20),
                 ),
                 const Spacer(),
@@ -326,7 +327,7 @@ class _OfferAnalyticsScreenState extends State<OfferAnalyticsScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                  color: color.withOpacity(0.2), shape: BoxShape.circle),
+                  color: color.withValues(alpha: 0.2), shape: BoxShape.circle),
               child: Icon(Icons.timelapse, color: color, size: 20)),
           const SizedBox(width: 16),
           Expanded(

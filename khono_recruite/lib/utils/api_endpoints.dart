@@ -7,6 +7,9 @@ class ApiEndpoints {
   static const hmBase = "http://127.0.0.1:5000/api/admin";
   static const chatBase = "http://127.0.0.1:5000/api/chat";
   static const analyticsBase = "http://127.0.0.1:5000/api/analytics";
+  static const aiBase = "http://127.0.0.1:5000/api/ai";
+  static const generateJobDetails = "$aiBase/generate_job_details";
+  static const generateQuestions = "$aiBase/generate_questions";
 
   // NEW: Offer management base URL (matches your Flask blueprint)
   static const offerBase = "http://127.0.0.1:5000/api/offer";
@@ -18,14 +21,18 @@ class ApiEndpoints {
   // ------------------- Auth -------------------
   static const register = "$authBase/register";
   static const verify = "$authBase/verify";
+  static const resendVerification = "$authBase/resend-verification";
   static const login = "$authBase/login";
   static const logout = "$authBase/logout";
   static const forgotPassword = "$authBase/forgot-password";
   static const resetPassword = "$authBase/reset-password";
   static const changePassword = "$authBase/change-password";
   static const currentUser = "$authBase/me";
+  static const refresh = "$authBase/refresh";
   static const adminEnroll = "$authBase/admin-enroll";
   static const firebaseLogin = "$authBase/firebase-login";
+  static const updateAuthProfile = "$authBase/profile";
+  static const uploadAuthProfilePicture = "$authBase/profile/picture";
 
   // ------------------- OAuth (UPDATED FOR SUPABASE) -------------------
   static const googleOAuth = "$authBase/google";
@@ -49,6 +56,10 @@ class ApiEndpoints {
       "$authBase/mfa/regenerate-backup-codes"; // POST - Regenerate backup codes
   static const String parserCV = "$authBase/cv/parse"; // POST Multipart
 
+  // ------------------- Public (no auth) -------------------
+  static const publicBase = "http://127.0.0.1:5000/api/public";
+  static const getPublicJobs = "$publicBase/jobs";
+
   // ------------------- Candidate -------------------
   static const enrollment = "$candidateBase/enrollment";
   static const applyJob = "$candidateBase/apply";
@@ -59,6 +70,14 @@ class ApiEndpoints {
   static const saveDraft = "$candidateBase/apply/save_draft";
   static const getDrafts = "$candidateBase/applications/drafts";
   static const submitDraft = "$candidateBase/applications/submit_draft";
+  /// GET – Candidate's interviews (same as getInterviews in service)
+  static const getCandidateInterviewsList = "$candidateBase/interviews";
+  /// POST – Candidate accepts an interview invite
+  static String acceptInterviewInvite(int interviewId) =>
+      "$candidateBase/interviews/$interviewId/accept";
+  /// POST – Candidate declines an interview invite
+  static String declineInterviewInvite(int interviewId) =>
+      "$candidateBase/interviews/$interviewId/decline";
 
   // ==================== RECRUITMENT PIPELINE ENDPOINTS ====================
 
@@ -82,6 +101,27 @@ class ApiEndpoints {
 
   // ------------------- Jobs with Statistics -------------------
   static const getJobsWithStats = "$adminBase/jobs/with-stats";
+
+  // ------------------- Analytics / Demographics -------------------
+  static const getGenderDistribution = "$adminBase/analytics/gender-distribution";
+  static const getEthnicityDistribution = "$adminBase/analytics/ethnicity-distribution";
+
+  // ------------------- CVs -------------------
+  static const allCVs = "$adminBase/cvs";
+
+  // ------------------- Interviews (calendar) -------------------
+  static const getInterviewsForCalendar = "$adminBase/interviews/calendar";
+
+  // ------------------- Test packs -------------------
+  static const getTestPacks = "$adminBase/test-packs";
+  static String getTestPackById(int id) => "$adminBase/test-packs/$id";
+  static const createTestPack = "$adminBase/test-packs";
+  static String updateTestPack(int id) => "$adminBase/test-packs/$id";
+  static String deleteTestPack(int id) => "$adminBase/test-packs/$id";
+
+  // ------------------- Notifications -------------------
+  static String markNotificationRead(int notificationId) =>
+      "$adminBase/notifications/$notificationId/read";
 
   // ------------------- Interviews by Timeframe -------------------
   static String getInterviewsByTimeframe(String timeframe) =>
@@ -116,6 +156,8 @@ class ApiEndpoints {
   static String getJobStats = "$adminBase/jobs/stats";
   static const viewCandidates = "$adminBase/candidates";
   static String getApplicationById(int id) => "$adminBase/applications/$id";
+  static String getCandidateApplicationsByCandidateId(int candidateId) =>
+      "$adminBase/candidates/$candidateId/applications";
   static String shortlistCandidates(int jobId) =>
       "$adminBase/jobs/$jobId/shortlist";
   static const scheduleInterview = "$adminBase/interviews";

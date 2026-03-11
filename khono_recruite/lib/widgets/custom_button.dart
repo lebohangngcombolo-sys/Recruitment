@@ -47,7 +47,7 @@ class CustomButton extends StatelessWidget {
         backgroundColor: outlined
             ? Colors.transparent
             : isDisabled
-                ? buttonColor.withOpacity(0.5)
+                ? buttonColor.withValues(alpha: 0.5)
                 : buttonColor,
         foregroundColor: finalTextColor,
         shape: RoundedRectangleBorder(
@@ -55,7 +55,7 @@ class CustomButton extends StatelessWidget {
           side: outlined
               ? BorderSide(
                   color: isDisabled
-                      ? buttonColor.withOpacity(0.5)
+                      ? buttonColor.withValues(alpha: 0.5)
                       : borderColor ?? buttonColor,
                   width: 2,
                 )
@@ -68,7 +68,7 @@ class CustomButton extends StatelessWidget {
             ),
         elevation: elevation ?? (outlined ? 0 : 4),
         shadowColor:
-            outlined ? Colors.transparent : buttonColor.withOpacity(0.3),
+            outlined ? Colors.transparent : buttonColor.withValues(alpha: 0.3),
         textStyle: TextStyle(
           fontSize: small ? 14 : 16,
           fontWeight: small ? FontWeight.w500 : FontWeight.w600,

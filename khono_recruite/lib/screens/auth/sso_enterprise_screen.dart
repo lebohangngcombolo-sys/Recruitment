@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../utils/app_config.dart';
 
 class SsoEnterpriseScreen extends StatelessWidget {
   const SsoEnterpriseScreen({super.key});
@@ -11,7 +12,7 @@ class SsoEnterpriseScreen extends StatelessWidget {
       'Okta': 'https://your-domain.okta.com',
       'Google Workspace': 'https://accounts.google.com',
       // Link to your backend SSO route
-      'Other SAML': 'http://127.0.0.1:5000/api/auth/sso',
+      'Other SAML': localhostToEnv('http://127.0.0.1:5000/api/auth/sso'),
     };
 
     final url = urls[provider];
@@ -51,12 +52,14 @@ class SsoEnterpriseScreen extends StatelessWidget {
                         style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
-                            fontWeight: FontWeight.bold)),
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Poppins')),
                     const SizedBox(height: 4),
                     Text(subtitle,
                         style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
-                            fontSize: 12)),
+                            color: Colors.white.withValues(alpha: 0.7),
+                            fontSize: 12,
+                            fontFamily: 'Poppins')),
                   ],
                 ),
               ),
@@ -94,12 +97,16 @@ class SsoEnterpriseScreen extends StatelessWidget {
                     style: TextStyle(
                         color: Colors.white,
                         fontSize: 28,
-                        fontWeight: FontWeight.bold),
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Poppins'),
                   ),
                   const SizedBox(height: 8),
                   const Text(
                     "Select your identity provider",
-                    style: TextStyle(color: Colors.white70, fontSize: 16),
+                    style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 16,
+                        fontFamily: 'Poppins'),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),

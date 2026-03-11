@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
+import '../../utils/api_endpoints.dart';
 
 class AssessmentResultsPage extends StatefulWidget {
   final int? applicationId;
@@ -20,16 +21,16 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
   List<dynamic> applications = [];
   late String token;
 
-  // White / Red Theme
-  final Color _primaryDark = Colors.white; // Background
-  final Color _cardDark = Colors.white; // Card background
-  final Color _accentRed = Color(0xFFE53935); // Main red
-  final Color _accentPurple = Color(0xFFD32F2F); // Dark red
-  final Color _accentBlue = Color(0xFFEF5350); // Light red
+  // Enrollment-style Theme
+  final Color _primaryDark = Colors.transparent; // Background
+  final Color _cardDark = Colors.black.withOpacity(0.55); // Card background
+  final Color _accentRed = const Color(0xFFC10D00); // Main red
+  final Color _accentBlue = const Color(0xFFC10D00); // Light red
   final Color _accentGreen = Color(0xFF43A047); // Success
-  final Color _textPrimary = Colors.black; // Main text
-  final Color _textSecondary = Colors.redAccent; // Secondary text
-  final Color _surfaceOverlay = Colors.red.withOpacity(0.1); // subtle overlay
+  final Color _textPrimary = Colors.white; // Main text
+  final Color _textSecondary = Colors.grey.shade300; // Secondary text
+  final Color _surfaceOverlay =
+      Colors.white.withOpacity(0.08); // subtle overlay
 
   @override
   void initState() {
@@ -42,7 +43,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
     setState(() => loading = true);
     try {
       final res = await http.get(
-        Uri.parse('http://127.0.0.1:5000/api/candidate/applications'),
+        Uri.parse(ApiEndpoints.getApplications),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token'
@@ -77,7 +78,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
         border: Border.all(color: _surfaceOverlay),
         boxShadow: [
           BoxShadow(
-            color: Colors.red.withOpacity(0.1),
+            color: Colors.red.withValues(alpha: 0.1),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -133,7 +134,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
                   pointColorMapper: (_ChartData data, _) =>
                       data.label == 'Score'
                           ? color
-                          : _textSecondary.withOpacity(0.1),
+                          : _textSecondary.withValues(alpha: 0.1),
                   radius: '100%',
                   innerRadius: '75%',
                   dataLabelSettings: const DataLabelSettings(isVisible: false),
@@ -158,7 +159,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
         border: Border.all(color: _surfaceOverlay),
         boxShadow: [
           BoxShadow(
-            color: Colors.red.withOpacity(0.1),
+            color: Colors.red.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -196,14 +197,14 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            color.withOpacity(0.15),
-                            color.withOpacity(0.08),
+                            color.withValues(alpha: 0.15),
+                            color.withValues(alpha: 0.08),
                           ],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: color.withOpacity(0.3)),
+                        border: Border.all(color: color.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -240,12 +241,12 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                statusColor.withOpacity(0.1),
-                statusColor.withOpacity(0.05),
+                statusColor.withValues(alpha: 0.1),
+                statusColor.withValues(alpha: 0.05),
               ],
             ),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: statusColor.withOpacity(0.2)),
+            border: Border.all(color: statusColor.withValues(alpha: 0.2)),
           ),
           child: Text(
             status,
@@ -263,16 +264,19 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
             gradient: LinearGradient(
               colors: passFail == "Pass"
                   ? [
-                      _accentGreen.withOpacity(0.1),
-                      _accentGreen.withOpacity(0.05)
+                      _accentGreen.withValues(alpha: 0.1),
+                      _accentGreen.withValues(alpha: 0.05)
                     ]
-                  : [_accentRed.withOpacity(0.1), _accentRed.withOpacity(0.05)],
+                  : [
+                      _accentRed.withValues(alpha: 0.1),
+                      _accentRed.withValues(alpha: 0.05)
+                    ],
             ),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
               color: passFail == "Pass"
-                  ? _accentGreen.withOpacity(0.2)
-                  : _accentRed.withOpacity(0.2),
+                  ? _accentGreen.withValues(alpha: 0.2)
+                  : _accentRed.withValues(alpha: 0.2),
             ),
           ),
           child: Row(
@@ -298,14 +302,36 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
     );
   }
 
-  Widget applicationCard(dynamic app) {
+  String _formatViolation(dynamic violation) {
+    if (violation is Map) {
+      final type = violation['type'] ?? 'rule';
+      final field = violation['field'] ?? 'field';
+      final operator = violation['operator'] ?? '==';
+      final value = violation['value'] ?? '';
+      return "$type: $field $operator $value";
+    }
+    return violation?.toString() ?? '';
+  }
+
+  Widget applicationCard(BuildContext context, dynamic app) {
     final assessmentScore = (app['assessment_score'] ?? 0).toDouble();
     final status = app['status'] ?? "Applied";
+    final scoreReady = app['score_ready'] == true;
+    final cvAnalysisStatus = (app['cv_analysis_status'] ?? '').toString();
     final passFail = assessmentScore >= 60 ? "Pass" : "Fail";
     final missingSkills =
         List<String>.from(app['cv_parser_result']?['missing_skills'] ?? []);
     final suggestions =
         List<String>.from(app['cv_parser_result']?['suggestions'] ?? []);
+    final breakdown = app['scoring_breakdown'] ?? {};
+    final cvFromApp = (app['cv_score'] ?? 0).toDouble();
+    final cvFromBreakdown = (breakdown['cv'] ?? cvFromApp).toDouble();
+    final cvDisplay =
+        cvFromBreakdown == 0 && cvFromApp > 0 ? cvFromApp : cvFromBreakdown;
+    final cvDisplayText =
+        cvDisplay % 1 == 0 ? cvDisplay.toInt().toString() : cvDisplay.toString();
+    final violations =
+        List<dynamic>.from(app['knockout_rule_violations'] ?? []);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
@@ -315,7 +341,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
         border: Border.all(color: _surfaceOverlay),
         boxShadow: [
           BoxShadow(
-            color: Colors.red.withOpacity(0.1),
+            color: Colors.red.withValues(alpha: 0.1),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -402,13 +428,13 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
                         horizontal: 16, vertical: 12),
                     decoration: BoxDecoration(
                       color: assessmentScore >= 60
-                          ? _accentGreen.withOpacity(0.1)
-                          : _accentRed.withOpacity(0.1),
+                          ? _accentGreen.withValues(alpha: 0.1)
+                          : _accentRed.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: assessmentScore >= 60
-                            ? _accentGreen.withOpacity(0.2)
-                            : _accentRed.withOpacity(0.2),
+                            ? _accentGreen.withValues(alpha: 0.2)
+                            : _accentRed.withValues(alpha: 0.2),
                       ),
                     ),
                     child: Row(
@@ -443,6 +469,162 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
 
             const SizedBox(height: 24),
 
+            if (!scoreReady) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: _accentRed.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _accentRed.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.hourglass_top, color: _accentRed, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        cvAnalysisStatus == 'not_started'
+                            ? "Final score will appear after you upload your CV and analysis completes."
+                            : "Final weighted score will appear once CV analysis completes.",
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: _textPrimary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+            if (scoreReady) ...[
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: _accentGreen.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _accentGreen.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle, color: _accentGreen, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        "CV scoring is complete—visit your CV results page to review the analysis.",
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          color: _textPrimary,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        final safeToken = Uri.encodeComponent(token);
+                        context.go('/jobs-applied?token=$safeToken');
+                      },
+                      style: TextButton.styleFrom(
+                        foregroundColor: _accentGreen,
+                      ),
+                      child: const Text("View CV Results"),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            if (breakdown.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: _cardDark,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _surfaceOverlay),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.analytics_outlined,
+                            color: _accentRed, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Scoring Breakdown",
+                          style: GoogleFonts.inter(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: _textPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      "CV: $cvDisplayText | "
+                      "Assessment: ${breakdown['assessment'] ?? 0} | "
+                      "Interview: ${breakdown['interview'] ?? 0} | "
+                      "References: ${breakdown['references'] ?? 0}",
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: _textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Total Weighted Score: ${breakdown['overall'] ?? 0}",
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: _accentRed,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            if (violations.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _accentRed.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _accentRed.withOpacity(0.2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.block, color: _accentRed, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Disqualified by Knockout Rules",
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: _accentRed,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ...violations.map((v) => Text(
+                          "- ${_formatViolation(v)}",
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: _accentRed,
+                          ),
+                        )),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
             // Skills & Suggestions
             if (missingSkills.isNotEmpty || suggestions.isNotEmpty) ...[
               if (missingSkills.isNotEmpty) ...[
@@ -469,9 +651,9 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: _accentRed.withOpacity(0.1),
+                color: _accentRed.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: _accentRed.withOpacity(0.2)),
+                border: Border.all(color: _accentRed.withValues(alpha: 0.2)),
               ),
               child: Row(
                 children: [
@@ -496,220 +678,234 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
     );
   }
 
+  Widget _buildBackground(Widget child) {
+    return Container(
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _primaryDark,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              decoration: BoxDecoration(
-                color: _cardDark,
-                border: Border(
-                  bottom: BorderSide(color: _surfaceOverlay, width: 1),
+      body: _buildBackground(
+        SafeArea(
+          child: Column(
+            children: [
+              // Header
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                decoration: BoxDecoration(
+                  color: _cardDark,
+                  border: Border(
+                    bottom: BorderSide(color: _surfaceOverlay, width: 1),
+                  ),
                 ),
-              ),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Container(
-                      padding: const EdgeInsets.all(8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: _surfaceOverlay,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.arrow_back,
+                            size: 24, color: Colors.white),
+                      ),
+                      onPressed: () {
+                        if (Navigator.canPop(context)) {
+                          Navigator.pop(context);
+                        } else {
+                          context.go('/candidate-dashboard');
+                        }
+                      },
+                      tooltip: 'Back',
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      "Assessment Results",
+                      style: GoogleFonts.poppins(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: _textPrimary,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: _surfaceOverlay,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new_rounded,
-                          size: 18),
-                    ),
-                    onPressed: () {
-                      context.go(
-                          '/candidate-dashboard'); // Replace with your dashboard route name
-                    },
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    "Assessment Results",
-                    style: GoogleFonts.poppins(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: _textPrimary,
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: _surfaceOverlay,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      "${applications.length} Results",
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: _textSecondary,
-                        fontWeight: FontWeight.w500,
+                      child: Text(
+                        "${applications.length} Results",
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: _textSecondary,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(height: 12),
 
-            // Content
-            Expanded(
-              child: loading
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          SizedBox(
-                            width: 60,
-                            height: 60,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 3,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(_accentRed),
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-                          Text(
-                            "Loading Assessment Results...",
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              color: _textPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            "Please wait while we fetch your results",
-                            style: GoogleFonts.inter(
-                              color: _textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : applications.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(24),
-                                decoration: BoxDecoration(
-                                  color: _cardDark,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: _surfaceOverlay),
-                                ),
-                                child: Icon(
-                                  Icons.assessment_outlined,
-                                  size: 60,
-                                  color: _textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              Text(
-                                "No Assessment Results",
-                                style: GoogleFonts.inter(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
-                                  color: _textPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                "Your assessment results will appear here\nonce you complete your assessments",
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.inter(
-                                  color: _textSecondary,
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              ElevatedButton(
-                                onPressed: _fetchResults,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _accentRed,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 32, vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: Text(
-                                  "Refresh",
-                                  style: GoogleFonts.inter(
-                                    color: _textPrimary,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : ListView(
-                          padding: const EdgeInsets.all(24),
+              // Content
+              Expanded(
+                child: loading
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // Welcome Card
-                            Container(
-                              padding: const EdgeInsets.all(24),
-                              margin: const EdgeInsets.only(bottom: 24),
-                              decoration: BoxDecoration(
-                                color: _cardDark,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: _surfaceOverlay),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: _accentRed.withOpacity(0.2),
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                        ),
-                                        child: Icon(Icons.insights_rounded,
-                                            color: _accentRed, size: 24),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          "Performance Overview",
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: _textPrimary,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    "Track your assessment performance and identify areas for improvement to enhance your skills.",
-                                    style: GoogleFonts.inter(
-                                      fontSize: 14,
-                                      color: _textSecondary,
-                                    ),
-                                  ),
-                                ],
+                            SizedBox(
+                              width: 60,
+                              height: 60,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(_accentRed),
                               ),
                             ),
-
-                            // Applications List
-                            ...applications
-                                .map((app) => applicationCard(app))
-                                .toList(),
+                            const SizedBox(height: 20),
+                            Text(
+                              "Loading Assessment Results...",
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                color: _textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              "Please wait while we fetch your results",
+                              style: GoogleFonts.inter(
+                                color: _textSecondary,
+                              ),
+                            ),
                           ],
                         ),
-            ),
-          ],
+                      )
+                    : applications.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: _cardDark,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: _surfaceOverlay),
+                                  ),
+                                  child: Icon(
+                                    Icons.assessment_outlined,
+                                    size: 60,
+                                    color: _textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                Text(
+                                  "No Assessment Results",
+                                  style: GoogleFonts.inter(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w600,
+                                    color: _textPrimary,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  "Your assessment results will appear here\nonce you complete your assessments",
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.inter(
+                                    color: _textSecondary,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                ElevatedButton(
+                                  onPressed: _fetchResults,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _accentRed,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 32, vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    "Refresh",
+                                    style: GoogleFonts.inter(
+                                      color: _textPrimary,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView(
+                            padding: const EdgeInsets.all(24),
+                            children: [
+                              // Welcome Card
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                margin: const EdgeInsets.only(bottom: 24),
+                                decoration: BoxDecoration(
+                                  color: _cardDark,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: _surfaceOverlay),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: _accentRed.withOpacity(0.2),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          child: Icon(Icons.insights_rounded,
+                                              color: _accentRed, size: 24),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Text(
+                                            "Performance Overview",
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: _textPrimary,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      "Track your assessment performance and identify areas for improvement to enhance your skills.",
+                                      style: GoogleFonts.inter(
+                                        fontSize: 14,
+                                        color: _textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              // Applications List
+                              ...applications
+                                  .map((app) => applicationCard(context, app))
+                                  .toList(),
+                            ],
+                          ),
+              ),
+            ],
+          ),
         ),
       ),
     );

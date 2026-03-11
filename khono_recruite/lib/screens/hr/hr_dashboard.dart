@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:percent_indicator/percent_indicator.dart'; // Add this package
+import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:percent_indicator/percent_indicator.dart';
 import '../hr/offer_detail_screen.dart';
 import '../hr/offer_analytics_screen.dart';
 import '../../services/offer_service.dart';
+import '../../services/auth_service.dart';
 import '../../models/offer.dart';
 import 'approval_queue_screen.dart';
-import 'pipeline_page.dart';
+import '../hiring_manager/pipeline_page.dart';
 
 class HRDashboard extends StatefulWidget {
   final String token;
@@ -22,6 +24,7 @@ class _HRDashboardState extends State<HRDashboard> {
   List<Offer> _pendingOffers = [];
   List<Offer> _sentOffers = [];
   bool _isLoading = true;
+  String? _userName;
 
   final List<String> _pages = [
     'Dashboard',
@@ -44,6 +47,7 @@ class _HRDashboardState extends State<HRDashboard> {
   @override
   void initState() {
     super.initState();
+    _userName = AuthService.getCachedDisplayName();
     _loadDashboardData();
   }
 
@@ -69,7 +73,7 @@ class _HRDashboardState extends State<HRDashboard> {
         _isLoading = false;
       });
     } catch (e) {
-      print('Error loading dashboard data: $e');
+      if (kDebugMode) debugPrint('Error loading dashboard data: $e');
       setState(() {
         _isLoading = false;
       });
@@ -303,8 +307,8 @@ class _HRDashboardState extends State<HRDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Welcome back, HR Manager!',
+            Text(
+              'Welcome back, ${_userName ?? 'HR Manager'}!',
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -587,7 +591,7 @@ class _HRDashboardState extends State<HRDashboard> {
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: offer.statusColor.withOpacity(0.2),
+          color: offer.statusColor.withValues(alpha: 0.2),
           shape: BoxShape.circle,
         ),
         child: Icon(

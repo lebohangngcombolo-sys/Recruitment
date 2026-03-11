@@ -1,13 +1,35 @@
-# app/services/ai_cv_parser.py
+﻿# app/services/ai_cv_parser.py
 import logging
 import re
 from typing import Dict, Any
-from .cv_parser_service import HybridResumeAnalyzer
 import pdfplumber
 import docx
 
+from app.services.advanced_ocr_service import AdvancedOCRService
+from app.services.cv_pattern_matcher import CVPatternMatcher
+
 logger = logging.getLogger(__name__)
-analyzer = HybridResumeAnalyzer()  # Singleton instance
+
+_analyzer = None
+
+def _get_analyzer():
+    """Lazy-load HybridResumeAnalyzer so app starts without loading spaCy/SentenceTransformer."""
+    global _analyzer
+    if _analyzer is None:
+        from .cv_parser_service import HybridResumeAnalyzer
+        _analyzer = HybridResumeAnalyzer()
+    return _analyzer
+
+
+class _AnalyzerProxy:
+    """Lazy proxy that loads the analyzer on first use."""
+
+    def __getattr__(self, name):
+        return getattr(_get_analyzer(), name)
+
+
+# Public singleton proxy used by Celery tasks
+analyzer = _AnalyzerProxy()
 
 class AIParser:
 
@@ -26,7 +48,7 @@ class AIParser:
 
             # Step 1: Try AI parsing
             try:
-                parsed_data = analyzer.analyse(resume_content=cv_text, job_id=job_id)
+                parsed_data = _get_analyzer().analyse(resume_content=cv_text, job_id=job_id)
             except Exception as e:
                 logger.warning(f"AI parsing failed: {e}")
                 parsed_data = {}
@@ -40,7 +62,7 @@ class AIParser:
 
             # Ensure all expected keys exist
             keys = [
-                "full_name", "email", "phone", "dob", "linkedin", "github",
+                "full_name", "email", "phone", "address", "dob", "linkedin", "github",
                 "portfolio", "education", "skills", "certifications",
                 "languages", "experience", "position", "previous_companies",
                 "bio", "match_score", "missing_skills", "suggestions"
@@ -53,68 +75,81 @@ class AIParser:
 
         except Exception as e:
             logger.exception("AI CV parsing failed: %s", e)
-            return {"cv_text": cv_file.filename, "error": str(e)}
+            fn = getattr(cv_file, "filename", str(cv_file))
+            return {"cv_text": fn, "error": str(e)}
 
     @staticmethod
     def offline_extract(cv_text: str) -> Dict[str, Any]:
         """
         Basic regex-based extraction to ensure minimal auto-fill.
         """
-        # Extract email
-        email_match = re.search(r'[\w\.-]+@[\w\.-]+', cv_text)
-        email = email_match.group(0) if email_match else ""
+        try:
+            matcher = CVPatternMatcher()
+            extracted = matcher.extract_all(cv_text)
+        except Exception:
+            extracted = {}
 
-        # Extract phone (simple international/local formats)
-        phone_match = re.search(r'\+?\d[\d\s\-\(\)]{7,}', cv_text)
-        phone = phone_match.group(0) if phone_match else ""
+        # Maintain backward-compatible keys
+        extracted.setdefault("dob", "")
+        extracted.setdefault("previous_companies", [])
+        extracted.setdefault("bio", "")
+        extracted.setdefault("match_score", 0)
+        extracted.setdefault("missing_skills", [])
+        extracted.setdefault("suggestions", [])
+        extracted.setdefault("certifications", [])
+        extracted.setdefault("languages", [])
+        extracted.setdefault("education", [])
+        extracted.setdefault("skills", [])
+        extracted.setdefault("experience", "")
+        extracted.setdefault("position", "")
+        extracted.setdefault("address", "")
+        extracted.setdefault("linkedin", "")
+        extracted.setdefault("github", "")
+        extracted.setdefault("portfolio", "")
+        extracted.setdefault("email", "")
+        extracted.setdefault("phone", "")
+        extracted.setdefault("full_name", "")
 
-        # Extract name (very basic heuristic: first 2 capitalized words in CV)
-        name_match = re.search(r'([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)', cv_text)
-        full_name = name_match.group(0) if name_match else ""
-
-        # Extract skills (simple keyword matching)
-        skill_keywords = ["Python", "Java", "Flutter", "Dart", "React", "SQL", "Node", "AWS"]
-        skills = [skill for skill in skill_keywords if re.search(rf'\b{skill}\b', cv_text, re.I)]
-
-        # Extract education (look for common degree keywords)
-        education_keywords = ["BSc", "MSc", "Bachelor", "Master", "PhD", "Diploma"]
-        education = [edu for edu in education_keywords if re.search(rf'\b{edu}\b', cv_text, re.I)]
-
-        return {
-            "full_name": full_name,
-            "email": email,
-            "phone": phone,
-            "dob": "",  # Could implement date regex if needed
-            "linkedin": "",
-            "github": "",
-            "portfolio": "",
-            "education": education,
-            "skills": skills,
-            "certifications": [],
-            "languages": [],
-            "experience": "",
-            "position": "",
-            "previous_companies": [],
-            "bio": "",
-            "match_score": 0,
-            "missing_skills": [],
-            "suggestions": []
-        }
+        return extracted
 
     @staticmethod
     def read_cv_file(cv_file) -> str:
-        import os, tempfile
-        temp_path = os.path.join(tempfile.gettempdir(), cv_file.filename)
-        cv_file.save(temp_path)
-        text = ""
-        if cv_file.filename.lower().endswith(".pdf"):
-            with pdfplumber.open(temp_path) as pdf:
-                text = "\n".join(page.extract_text() or "" for page in pdf.pages)
-        elif cv_file.filename.lower().endswith(".docx"):
-            doc = docx.Document(temp_path)
-            text = "\n".join(p.text for p in doc.paragraphs)
-        else:
-            # fallback for TXT
-            with open(temp_path, "r", encoding="utf-8", errors="ignore") as f:
-                text = f.read()
-        return text
+        import os
+        import tempfile
+
+        filename = (getattr(cv_file, "filename", None) or "cv").strip()
+        _, ext = os.path.splitext(filename)
+        ext = (ext or "").lower().lstrip(".")
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}" if ext else "") as tmp:
+            temp_path = tmp.name
+        try:
+            cv_file.save(temp_path)
+
+            # First try hybrid OCR/text extraction.
+            try:
+                svc = AdvancedOCRService()
+                result = svc.extract_text_with_metadata(temp_path, ext)
+                text = (result.get("text") or "")
+                if text.strip():
+                    return text
+            except Exception:
+                pass
+
+            # Fallback to legacy parsing.
+            text = ""
+            if filename.lower().endswith(".pdf"):
+                with pdfplumber.open(temp_path) as pdf:
+                    text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+            elif filename.lower().endswith(".docx"):
+                doc = docx.Document(temp_path)
+                text = "\n".join(p.text for p in doc.paragraphs)
+            else:
+                with open(temp_path, "r", encoding="utf-8", errors="ignore") as f:
+                    text = f.read()
+            return text
+        finally:
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass

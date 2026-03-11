@@ -2,6 +2,8 @@ import 'package:provider/provider.dart';
 import 'package:flutter/material.dart' hide SearchBar, FilterChip; // hide both
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
+import '../../widgets/knockout_rules_builder.dart';
+import '../../widgets/weighting_configuration_widget.dart';
 import '../../widgets/search_bar.dart'; // your custom SearchBar
 import '../../widgets/filter_chip.dart'; // your custom FilterChip
 import '../../services/admin_service.dart';
@@ -279,6 +281,143 @@ class _JobManagementState extends State<JobManagement> {
     );
   }
 
+  void _showJobApplicationsDialog(Map<String, dynamic> job, ThemeProvider themeProvider) async {
+    final jobId = job['id'] as int?;
+    if (jobId == null) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final applications = await admin.getJobApplications(jobId);
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(
+            'Applicants',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+            ),
+          ),
+          content: SizedBox(
+            width: 500,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${job['title'] ?? 'Job'}${(job['company'] != null && (job['company'] as String).isNotEmpty) ? ' at ${job['company']}' : ''}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (applications.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      'No applications yet',
+                      style: TextStyle(
+                        color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                      ),
+                    ),
+                  )
+                else
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 400),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: applications.length,
+                      itemBuilder: (_, i) {
+                        final app = applications[i] is Map ? applications[i] as Map<String, dynamic> : <String, dynamic>{};
+                        final cand = app['candidate'] is Map ? app['candidate'] as Map<String, dynamic> : <String, dynamic>{};
+                        final name = cand['full_name'] ?? 'Unknown';
+                        final email = cand['email'] ?? '';
+                        final phone = cand['phone'] ?? '';
+                        final status = app['status'] ?? '';
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: themeProvider.isDarkMode
+                                  ? Colors.white.withValues(alpha: 0.05)
+                                  : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  name,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                    color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                                  ),
+                                ),
+                                if (email.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      email,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                if (phone.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: Text(
+                                      phone,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                if (status.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 6),
+                                    child: Chip(
+                                      label: Text(status, style: const TextStyle(fontSize: 11)),
+                                      backgroundColor: Colors.teal.withValues(alpha: 0.2),
+                                      side: BorderSide(color: Colors.teal, width: 0.5),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load applicants: $e')),
+      );
+    }
+  }
+
   void _showBasicJobDetails(Map<String, dynamic> job) {
     showDialog(
       context: context,
@@ -341,10 +480,12 @@ class _JobManagementState extends State<JobManagement> {
           Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 4),
           ...items
-              .map((item) => Padding(
-                    padding: const EdgeInsets.only(left: 8, bottom: 2),
-                    child: Text("• $item"),
-                  ))
+              .map(
+                (item) => Padding(
+                  padding: const EdgeInsets.only(left: 8, bottom: 2),
+                  child: Text("• $item"),
+                ),
+              )
               .toList(),
         ],
       ),
@@ -578,17 +719,38 @@ class _JobManagementState extends State<JobManagement> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Expanded(
-                    child: Text(
-                      job['title'] ?? 'Untitled Job',
-                      style: TextStyle(
-                        color: themeProvider.isDarkMode
-                            ? Colors.white
-                            : Colors.black87,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 18,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          job['title'] ?? 'Untitled Job',
+                          style: TextStyle(
+                            color: themeProvider.isDarkMode
+                                ? Colors.white
+                                : Colors.black87,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 18,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (job['company'] != null && (job['company'] as String).isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Text(
+                              job['company'] as String,
+                              style: TextStyle(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.grey.shade400
+                                    : Colors.black54,
+                                fontSize: 14,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                   Container(
@@ -615,13 +777,37 @@ class _JobManagementState extends State<JobManagement> {
                   ),
                 ],
               ),
+              if (job['created_by_user'] != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    "Created by: ${job['created_by_user']['name'] ?? job['created_by_user']['email'] ?? 'Unknown'}",
+                    style: TextStyle(
+                      color: themeProvider.isDarkMode
+                          ? Colors.grey.shade400
+                          : Colors.black54,
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               const SizedBox(height: 8),
 
-              // Job info chips
+              // Job info chips (company + employment type like candidate-facing listing)
               Wrap(
                 spacing: 8,
                 runSpacing: 4,
                 children: [
+                  if (job['employment_type'] != null && (job['employment_type'] as String).isNotEmpty)
+                    Chip(
+                      label: Text(
+                        (job['employment_type'] as String).replaceAll('_', ' '),
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                      backgroundColor: Colors.redAccent.withOpacity(0.1),
+                      side: BorderSide(color: Colors.redAccent, width: 0.5),
+                    ),
                   if (job['category'] != null && job['category'].isNotEmpty)
                     Chip(
                       label: Text(job['category']),
@@ -704,6 +890,12 @@ class _JobManagementState extends State<JobManagement> {
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      IconButton(
+                        icon: const Icon(Icons.people, size: 20),
+                        color: Colors.teal,
+                        tooltip: "View Applicants",
+                        onPressed: () => _showJobApplicationsDialog(job, themeProvider),
+                      ),
                       IconButton(
                         icon: const Icon(Icons.visibility, size: 20),
                         color: Colors.blue,
@@ -1166,11 +1358,26 @@ class _JobFormDialogState extends State<JobFormDialog>
   String jobSummary = "";
   TextEditingController responsibilitiesController = TextEditingController();
   TextEditingController qualificationsController = TextEditingController();
+  String companyName = "";
+  String jobLocation = "";
   String companyDetails = "";
   String category = "";
   final skillsController = TextEditingController();
   final minExpController = TextEditingController();
+  final salaryMinController = TextEditingController();
+  final salaryMaxController = TextEditingController();
+  String salaryCurrency = "ZAR";
+  String salaryPeriod = "monthly";
   List<Map<String, dynamic>> questions = [];
+  Map<String, int> weightings = {
+    "cv": 60,
+    "assessment": 40,
+    "interview": 0,
+    "references": 0,
+  };
+  List<Map<String, dynamic>> knockoutRules = [];
+  String employmentType = "full_time";
+  String? weightingsError;
   late TabController _tabController;
   final AdminService admin = AdminService();
 
@@ -1186,17 +1393,48 @@ class _JobFormDialogState extends State<JobFormDialog>
         (widget.job?['responsibilities'] ?? []).join(", ");
     qualificationsController.text =
         (widget.job?['qualifications'] ?? []).join(", ");
+    companyName = widget.job?['company'] ?? '';
+    jobLocation = widget.job?['location'] ?? '';
     companyDetails = widget.job?['company_details'] ?? '';
+    salaryCurrency = widget.job?['salary_currency'] ?? 'ZAR';
+    salaryMinController.text = (widget.job?['salary_min'] ?? '').toString();
+    salaryMaxController.text = (widget.job?['salary_max'] ?? '').toString();
+    salaryPeriod = widget.job?['salary_period'] ?? 'monthly';
     category = widget.job?['category'] ?? '';
+    employmentType = widget.job?['employment_type'] ?? 'full_time';
+
+    final jobWeightings = widget.job?['weightings'];
+    if (jobWeightings is Map) {
+      weightings = {
+        "cv": (jobWeightings["cv"] ?? 60).toInt(),
+        "assessment": (jobWeightings["assessment"] ?? 40).toInt(),
+        "interview": (jobWeightings["interview"] ?? 0).toInt(),
+        "references": (jobWeightings["references"] ?? 0).toInt(),
+      };
+    }
+
+    knockoutRules = _normalizeKnockoutRules(widget.job?['knockout_rules']);
 
     if (widget.job != null &&
         widget.job!['assessment_pack'] != null &&
         widget.job!['assessment_pack']['questions'] != null) {
-      questions = List<Map<String, dynamic>>.from(
-          widget.job!['assessment_pack']['questions']);
+      questions =
+          _normalizeQuestions(widget.job!['assessment_pack']['questions']);
     }
 
     _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    responsibilitiesController.dispose();
+    qualificationsController.dispose();
+    skillsController.dispose();
+    minExpController.dispose();
+    salaryMinController.dispose();
+    salaryMaxController.dispose();
+    _tabController.dispose();
+    super.dispose();
   }
 
   void addQuestion() {
@@ -1210,8 +1448,81 @@ class _JobFormDialogState extends State<JobFormDialog>
     });
   }
 
+  List<Map<String, dynamic>> _normalizeKnockoutRules(dynamic raw) {
+    if (raw is! List) return [];
+    return raw.map<Map<String, dynamic>>((rule) {
+      if (rule is Map<String, dynamic>) {
+        return Map<String, dynamic>.from(rule);
+      }
+      return {
+        "type": "skills",
+        "field": "skills",
+        "operator": "==",
+        "value": rule.toString(),
+      };
+    }).toList();
+  }
+
+  List<Map<String, dynamic>> _normalizeQuestions(dynamic raw) {
+    if (raw is! List) return [];
+    return raw.map<Map<String, dynamic>>((item) {
+      final Map<String, dynamic> question =
+          item is Map<String, dynamic> ? Map<String, dynamic>.from(item) : {};
+      final rawOptions = question["options"];
+      final List<dynamic> options =
+          rawOptions is List ? List.from(rawOptions) : [];
+      while (options.length < 4) {
+        options.add("");
+      }
+      final normalizedOptions = options.take(4).map((opt) {
+        return opt == null ? "" : opt.toString();
+      }).toList();
+
+      final rawAnswer = question["answer"] ?? question["correct_answer"];
+      int answer = 0;
+      if (rawAnswer is num) {
+        answer = rawAnswer.toInt();
+      } else if (rawAnswer is String) {
+        answer = int.tryParse(rawAnswer) ?? 0;
+      }
+      if (answer < 0 || answer > 3) answer = 0;
+
+      final rawWeight = question["weight"];
+      double weight = 1;
+      if (rawWeight is num) {
+        weight = rawWeight.toDouble();
+      } else if (rawWeight is String) {
+        weight = double.tryParse(rawWeight) ?? 1;
+      }
+      if (weight <= 0) weight = 1;
+
+      return {
+        "question": question["question"]?.toString() ?? "",
+        "options": normalizedOptions,
+        "answer": answer,
+        "weight": weight,
+      };
+    }).toList();
+  }
+
   Future<void> saveJob() async {
-    if (!_formKey.currentState!.validate()) return;
+    final formState = _formKey.currentState;
+    if (formState == null || !formState.validate()) return;
+
+    final totalWeight = weightings.values.fold<int>(0, (sum, v) => sum + v);
+    if (totalWeight != 100) {
+      setState(() {
+        weightingsError = "Weightings must total 100%";
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Weightings must total 100%")),
+      );
+      return;
+    } else {
+      setState(() {
+        weightingsError = null;
+      });
+    }
 
     final skills = skillsController.text
         .split(",")
@@ -1231,19 +1542,28 @@ class _JobFormDialogState extends State<JobFormDialog>
         .where((e) => e.isNotEmpty)
         .toList();
 
+    final normalizedQuestions = _normalizeQuestions(questions);
     final jobData = {
       'title': title,
       'description': description,
+      'company': companyName,
+      'location': jobLocation,
       'job_summary': jobSummary,
+      'employment_type': employmentType,
       'responsibilities': responsibilities,
       'qualifications': qualifications,
       'company_details': companyDetails,
+      'salary_min': double.tryParse(salaryMinController.text),
+      'salary_max': double.tryParse(salaryMaxController.text),
+      'salary_currency': salaryCurrency,
+      'salary_period': salaryPeriod,
       'category': category,
       'required_skills': skills,
       'min_experience': double.tryParse(minExpController.text) ?? 0,
-      'weightings': {'cv': 60, 'assessment': 40},
+      'weightings': weightings,
+      'knockout_rules': knockoutRules,
       'assessment_pack': {
-        'questions': questions.map((q) {
+        'questions': normalizedQuestions.map((q) {
           return {
             "question": q["question"],
             "options": q["options"],
@@ -1362,6 +1682,71 @@ class _JobFormDialogState extends State<JobFormDialog>
                             ),
                             const SizedBox(height: 16),
                             CustomTextField(
+                              label: "Company",
+                              initialValue: companyName,
+                              hintText: "Company name",
+                              onChanged: (v) => companyName = v,
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Location",
+                              initialValue: jobLocation,
+                              hintText: "City, Country or Remote",
+                              onChanged: (v) => jobLocation = v,
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: CustomTextField(
+                                    label: "Salary Min",
+                                    controller: salaryMinController,
+                                    inputType: TextInputType.number,
+                                    hintText: "e.g. 30000",
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: CustomTextField(
+                                    label: "Salary Max",
+                                    controller: salaryMaxController,
+                                    inputType: TextInputType.number,
+                                    hintText: "e.g. 45000",
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
+                              label: "Salary Currency",
+                              initialValue: salaryCurrency,
+                              hintText: "ZAR, USD, EUR",
+                              onChanged: (v) =>
+                                  salaryCurrency = v.isEmpty ? "ZAR" : v,
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              value: salaryPeriod,
+                              decoration: const InputDecoration(
+                                labelText: "Salary Period",
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: "monthly",
+                                  child: Text("Per Month"),
+                                ),
+                                DropdownMenuItem(
+                                  value: "yearly",
+                                  child: Text("Per Year"),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setState(() => salaryPeriod = value);
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            CustomTextField(
                               label: "Company Details",
                               initialValue: companyDetails,
                               hintText: "About the company",
@@ -1386,6 +1771,72 @@ class _JobFormDialogState extends State<JobFormDialog>
                               label: "Minimum Experience (years)",
                               controller: minExpController,
                               inputType: TextInputType.number,
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              initialValue: employmentType,
+                              decoration: const InputDecoration(
+                                labelText: "Employment Type",
+                              ),
+                              items: const [
+                                DropdownMenuItem(
+                                  value: "full_time",
+                                  child: Text("Full Time"),
+                                ),
+                                DropdownMenuItem(
+                                  value: "part_time",
+                                  child: Text("Part Time"),
+                                ),
+                                DropdownMenuItem(
+                                  value: "contract",
+                                  child: Text("Contract"),
+                                ),
+                                DropdownMenuItem(
+                                  value: "internship",
+                                  child: Text("Internship"),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                if (value == null) return;
+                                setState(() {
+                                  employmentType = value;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 24),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                "Evaluation Weightings",
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            WeightingConfigurationWidget(
+                              weightings: weightings,
+                              errorText: weightingsError,
+                              onChanged: (updated) {
+                                setState(() {
+                                  weightings = updated;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 24),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                "Knockout Rules",
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            KnockoutRulesBuilder(
+                              rules: knockoutRules,
+                              onChanged: (updated) {
+                                setState(() {
+                                  knockoutRules = updated;
+                                });
+                              },
                             ),
                           ],
                         ),
