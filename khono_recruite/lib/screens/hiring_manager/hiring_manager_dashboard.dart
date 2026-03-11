@@ -878,6 +878,42 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     }
   }
 
+  void _handleNotificationTap(Map<String, dynamic> notification) {
+    final type = (notification['type']?.toString() ?? '').toLowerCase();
+    setState(() {
+      if (type == 'new_application' || type == 'new_candidate') {
+        currentScreen = 'candidates';
+      } else if (type == 'interview' ||
+          type == 'feedback_reminder' ||
+          type == 'feedback_received' ||
+          type == 'reminder' ||
+          type == 'reminder_urgent' ||
+          type == 'warning') {
+        currentScreen = 'interviews';
+      } else if (type == 'status_update') {
+        currentScreen = 'pipeline';
+      } else {
+        currentScreen = 'notifications';
+      }
+    });
+  }
+
+  String _notificationSectionLabel(Map<String, dynamic> notification) {
+    final type = (notification['type']?.toString() ?? '').toLowerCase();
+    if (type == 'new_application') return 'Applications';
+    if (type == 'new_candidate') return 'Candidates';
+    if (type == 'interview' ||
+        type == 'feedback_reminder' ||
+        type == 'feedback_received' ||
+        type == 'reminder' ||
+        type == 'reminder_urgent' ||
+        type == 'warning') {
+      return 'Interviews';
+    }
+    if (type == 'status_update') return 'Pipeline';
+    return 'General';
+  }
+
   void _showLogoutConfirmation(BuildContext context) {
     final navigatorContext = context;
     showDialog(
@@ -1581,7 +1617,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       case "meetings":
         return const HMMeetingsPage();
       case "notifications":
-        return NotificationsScreen();
+        return NotificationsScreen(onNotificationTap: _handleNotificationTap);
       case "settings":
         return HiringManagerSettingsScreen(
           token: widget.token,
@@ -2794,10 +2830,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
   // ---------------- Notifications: status changes & upcoming interviews ----------------
   Widget _buildNotificationsFocusCard(ThemeProvider themeProvider) {
-    final statusChangeNotifs = dashboardNotifications
-        .where((n) => (n['type']?.toString() ?? '') == 'status_update')
-        .take(5)
+    final notificationPreview = dashboardNotifications
+        .where((n) => n['is_read'] != true)
         .toList();
+    final recentNotifications =
+        (notificationPreview.isNotEmpty ? notificationPreview : dashboardNotifications)
+            .take(5)
+            .toList();
     final upcomingFromCalendar = _calendarAppointments
         .where((a) => a.startTime.isAfter(DateTime.now()))
         .toList()
@@ -2877,7 +2916,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 )),
           const SizedBox(height: 10),
           Text(
-            "Status changes",
+            "Recent updates",
             style: TextStyle(
               fontFamily: 'Poppins',
               fontSize: 12,
@@ -2886,9 +2925,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             ),
           ),
           const SizedBox(height: 4),
-          if (statusChangeNotifs.isEmpty)
+          if (recentNotifications.isEmpty)
             Text(
-              "No recent status updates.",
+              "No recent notifications.",
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 11,
@@ -2896,17 +2935,34 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             )
           else
-            ...statusChangeNotifs.take(3).map((n) => Padding(
+            ...recentNotifications.take(3).map((n) => Padding(
                   padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    n['message']?.toString() ?? 'Notification',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 11,
-                      color: themeProvider.isDarkMode ? Colors.white70 : Colors.black87,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _notificationSectionLabel(n),
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: const Color.fromARGB(255, 193, 13, 0),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        n['message']?.toString() ?? 'Notification',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 11,
+                          color: themeProvider.isDarkMode
+                              ? Colors.white70
+                              : Colors.black87,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 )),
         ],

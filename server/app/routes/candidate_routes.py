@@ -620,6 +620,23 @@ def book_interview_slot(application_id):
             interview_id=interview.id,
         )
         db.session.add(notif)
+        candidate_name = candidate.full_name or (
+            candidate.user.email if candidate.user else "Candidate"
+        )
+        job_title = (
+            application.requisition.title
+            if application.requisition and application.requisition.title
+            else "position"
+        )
+        db.session.add(Notification(
+            user_id=slot.hiring_manager_id,
+            message=(
+                f"{candidate_name} booked an interview for {job_title} on "
+                f"{slot.start_time.strftime('%d %b %Y')} at {slot.start_time.strftime('%H:%M')}."
+            ),
+            type="interview",
+            interview_id=interview.id,
+        ))
         db.session.commit()
 
         try:
