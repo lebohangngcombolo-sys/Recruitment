@@ -74,6 +74,14 @@ class ApiEndpoints {
   static const saveDraft = "$candidateBase/apply/save_draft";
   static const getDrafts = "$candidateBase/applications/drafts";
   static const submitDraft = "$candidateBase/applications/submit_draft";
+  /// GET – Candidate's interviews (same as getInterviews in service)
+  static const getCandidateInterviewsList = "$candidateBase/interviews";
+  /// POST – Candidate accepts an interview invite
+  static String acceptInterviewInvite(int interviewId) =>
+      "$candidateBase/interviews/$interviewId/accept";
+  /// POST – Candidate declines an interview invite
+  static String declineInterviewInvite(int interviewId) =>
+      "$candidateBase/interviews/$interviewId/decline";
 
   // ==================== RECRUITMENT PIPELINE ENDPOINTS ====================
 

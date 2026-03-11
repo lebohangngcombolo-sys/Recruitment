@@ -18,7 +18,6 @@ import 'assessments_results_screen.dart';
 import '../../screens/candidate/user_profile_page.dart';
 import 'saved_application_screen.dart';
 import '../../services/auth_service.dart';
-import '../../utils/api_endpoints.dart';
 
 class CandidateDashboard extends StatefulWidget {
   final String token;
@@ -250,9 +249,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       final results = await Future.wait([
         CandidateService.getApplications(widget.token),
         CandidateService.getDrafts(widget.token),
+        CandidateService.getInterviews(widget.token),
       ]);
       if (mounted) {
-        final apps = List<dynamic>.from(results[0]);
+        final apps = List<dynamic>.from(results[0] as Iterable<dynamic>);
         final submittedOrCompletedList =
             apps.where(_isSubmittedOrCompletedApplication).toList();
         final submittedOrCompletedMaps = submittedOrCompletedList
@@ -277,36 +277,21 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         final firstInProgress =
             inProgressMaps.isNotEmpty ? inProgressMaps.first : null;
         _CandidateDashboardState._cachedInProgressApps = inProgressMaps;
-
-        // Fetch scheduled interviews count
-        int interviewsCount = 0;
-        try {
-          final candidateData = await AuthService.getCurrentUser();
-          if (candidateData['id'] != null) {
-            final candidateId = candidateData['id'];
-            final interviewsResponse = await http.get(
-              Uri.parse('${ApiEndpoints.getCandidateInterviews(candidateId)}'),
-              headers: {'Authorization': 'Bearer ${widget.token}'},
-            );
-
-            if (interviewsResponse.statusCode == 200) {
-              final interviewsData = jsonDecode(interviewsResponse.body);
-              final interviews = interviewsData['interviews'] as List? ?? [];
-              interviewsCount = interviews.length;
-            }
-          }
-        } catch (e) {
-          interviewsCount = 0;
-        }
-
+        final interviewData = results[2] is Map<String, dynamic>
+            ? results[2] as Map<String, dynamic>
+            : <String, dynamic>{};
+        final scheduledCount = interviewData['scheduled_count'] is int
+            ? interviewData['scheduled_count'] as int
+            : (int.tryParse(interviewData['scheduled_count']?.toString() ?? '') ??
+                0);
         _safeSetState(() {
           _applicationsCount = submittedOrCompletedMaps.length;
-          _savedCount = results[1].length;
+          _savedCount = (results[1] as List).length;
           _inProgressApplication = firstInProgress;
           _inProgressApplications = inProgressMaps;
           _completedApplications = completedMaps;
           _appliedOnlyApplications = appliedOnlyMaps;
-          _interviewsScheduledCount = interviewsCount;
+          _interviewsScheduledCount = scheduledCount;
           _dashboardCountsLoaded = true;
         });
         _saveCachedInProgressApplications(inProgressMaps);
@@ -444,10 +429,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
         alignment: Alignment.topRight,
-        insetPadding: EdgeInsets.only(top: 72, right: 12, left: 24, bottom: 24),
+        insetPadding:
+            EdgeInsets.only(top: 72, right: 12, left: 24, bottom: 24),
         child: ConstrainedBox(
-          constraints:
-              BoxConstraints(maxWidth: panelWidth, maxHeight: maxPanelHeight),
+          constraints: BoxConstraints(
+            maxWidth: panelWidth,
+            maxHeight: maxPanelHeight,
+          ),
           child: Container(
             padding: EdgeInsets.zero,
             decoration: BoxDecoration(
@@ -509,7 +497,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                             textAlign: TextAlign.center,
                             style: GoogleFonts.poppins(
                               fontSize: 13,
-                              color: Colors.grey.shade600,
+                              color: Colors.black87,
                             ),
                           ),
                         )
@@ -519,6 +507,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                           itemCount: notifications.length,
                           itemBuilder: (context, index) {
                             final notification = notifications[index];
+                            final messageText =
+                                _getNotificationMessage(notification);
+                            final dateText = _formatDate(
+                              notification['created_at']?.toString(),
+                            );
                             return ListTile(
                               dense: true,
                               contentPadding: EdgeInsets.symmetric(
@@ -529,18 +522,21 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                                 size: 22,
                               ),
                               title: Text(
-                                notification['message'] ?? 'New notification',
-                                style: GoogleFonts.poppins(fontSize: 14),
-                                maxLines: 2,
+                                messageText,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: Colors.black87,
+                                ),
+                                maxLines: 3,
                                 overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Padding(
                                 padding: EdgeInsets.only(top: 2),
                                 child: Text(
-                                  _formatDate(notification['created_at']),
+                                  dateText,
                                   style: GoogleFonts.poppins(
                                     fontSize: 11,
-                                    color: Colors.grey,
+                                    color: Colors.black54,
                                   ),
                                 ),
                               ),
@@ -556,7 +552,25 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     );
   }
 
-  String _formatDate(String dateString) {
+  /// Build a clear, never-blank message. For interview-related alerts, direct user to the Interview screen.
+  String _getNotificationMessage(Map<String, dynamic> notification) {
+    final type = (notification['type']?.toString() ?? '').toLowerCase();
+    if (type == 'interview') {
+      return 'You have an alert. Check your Interview tab for details.';
+    }
+    final message = notification['message']?.toString().trim();
+    if (message != null && message.isNotEmpty) return message;
+    final title = notification['title']?.toString().trim();
+    if (title != null && title.isNotEmpty) return title;
+    final body = notification['body']?.toString().trim();
+    if (body != null && body.isNotEmpty) return body;
+    final content = notification['content']?.toString().trim();
+    if (content != null && content.isNotEmpty) return content;
+    return 'You have an alert. Check your Interview tab for details.';
+  }
+
+  String _formatDate(String? dateString) {
+    if (dateString == null || dateString.isEmpty) return '';
     try {
       final date = DateTime.parse(dateString);
       final now = DateTime.now();
@@ -1353,7 +1367,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               ),
               onTap: () {
                 context.push(
-                    '/jobs-applied?token=${Uri.encodeComponent(widget.token)}');
+                    '/my-interviews?token=${Uri.encodeComponent(widget.token)}');
               },
             ),
           ),

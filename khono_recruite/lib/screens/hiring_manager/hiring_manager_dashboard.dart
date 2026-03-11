@@ -117,6 +117,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   bool sidebarCollapsed = false;
+  bool candidateMenuExpanded = false;
   late final AnimationController _sidebarAnimController;
   late final Animation<double> _sidebarWidthAnimation;
 
@@ -1009,9 +1010,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                               _sidebarEntry(
                                   'assets/images/Approval_Red_Badge_White.png',
                                   'Jobs', 'jobs'),
-                              _sidebarEntry(
-                                  'assets/images/candidates.png',
-                                  'Candidates', 'candidates'),
+                              _candidateSidebarGroup(),
                               _sidebarEntry(
                                   'assets/images/red_Management_Red_Badge_White.png',
                                   'Interviews', 'interviews'),
@@ -1019,23 +1018,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                   'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
                                   'CV Reviews', 'cv_reviews'),
                               _sidebarEntry(
-                                  Icons.account_tree,
-                                  'Pipeline', 'pipeline'),
-                              _sidebarEntry(
-                                  Icons.request_quote,
-                                  'Offers', 'offers'),
-                              _sidebarEntry(
-                                  Icons.pending_actions,
-                                  'Review queue', 'review_queue'),
-                              _sidebarEntry(
                                   'assets/icons/data-analytics.png',
                                   'Analytics', 'analytics'),
                               _sidebarEntry(
                                   'assets/icons/teamC.png',
                                   'Team Collaboration', 'team_collaboration'),
-                              _sidebarEntry(
-                                  Icons.video_call,
-                                  'Meetings', 'meetings'),
                               _sidebarEntry(
                                   'assets/images/Notification_Red_White.png',
                                   'Notifications', 'notifications'),
@@ -1353,6 +1340,178 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     });
   }
 
+  bool _isCandidateMenuScreen(String screenKey) {
+    return screenKey == 'candidates' ||
+        screenKey == 'pipeline' ||
+        screenKey == 'offers' ||
+        screenKey == 'review_queue' ||
+        screenKey == 'meetings';
+  }
+
+  Widget _buildSidebarIcon(
+    dynamic icon,
+    bool selected,
+    Color iconColor,
+    ThemeProvider themeProvider,
+  ) {
+    if (icon is IconData) {
+      return Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: selected
+              ? Colors.white
+              : themeProvider.isDarkMode
+                  ? Colors.grey.shade700
+                  : Colors.grey.shade600,
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+          color: selected ? const Color(0xFFC10D00) : Colors.white,
+        ),
+      );
+    }
+
+    return Image.asset(
+      icon as String,
+      width: 32,
+      height: 32,
+      errorBuilder: (context, error, stackTrace) {
+        return Icon(Icons.error, color: iconColor, size: 32);
+      },
+    );
+  }
+
+  Widget _candidateSidebarGroup() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final selected = _isCandidateMenuScreen(currentScreen);
+    final iconColor = selected
+        ? const Color.fromRGBO(151, 18, 8, 1)
+        : themeProvider.isDarkMode
+            ? Colors.grey.shade400
+            : Colors.grey.shade800;
+
+    return Column(
+      children: [
+        Container(
+          color: selected ? const Color(0xFFC10D00) : Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () => setState(() => currentScreen = 'candidates'),
+                  child: Row(
+                    children: [
+                      _buildSidebarIcon(
+                        'assets/images/candidates.png',
+                        selected,
+                        iconColor,
+                        themeProvider,
+                      ),
+                      const SizedBox(width: 12),
+                      if (!sidebarCollapsed)
+                        Expanded(
+                          child: Text(
+                            'Candidates',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: selected
+                                  ? Colors.white
+                                  : themeProvider.isDarkMode
+                                      ? Colors.grey.shade400
+                                      : Colors.grey.shade800,
+                              fontWeight: selected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              if (!sidebarCollapsed)
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      candidateMenuExpanded = !candidateMenuExpanded;
+                    });
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      candidateMenuExpanded
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      color: selected ? Colors.white : iconColor,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (!sidebarCollapsed && candidateMenuExpanded) ...[
+          _sidebarChildEntry(Icons.account_tree, 'Pipeline', 'pipeline'),
+          _sidebarChildEntry(Icons.request_quote, 'Offers', 'offers'),
+          _sidebarChildEntry(
+            Icons.pending_actions,
+            'Review queue',
+            'review_queue',
+          ),
+          _sidebarChildEntry(Icons.video_call, 'Meetings', 'meetings'),
+        ],
+      ],
+    );
+  }
+
+  Widget _sidebarChildEntry(dynamic icon, String label, String screenKey) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final selected = currentScreen == screenKey;
+    final iconColor = selected
+        ? const Color.fromRGBO(151, 18, 8, 1)
+        : themeProvider.isDarkMode
+            ? Colors.grey.shade400
+            : Colors.grey.shade800;
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          candidateMenuExpanded = true;
+          currentScreen = screenKey;
+        });
+      },
+      child: Container(
+        color: selected
+            ? const Color(0xFFC10D00).withValues(alpha: 0.12)
+            : Colors.transparent,
+        padding: const EdgeInsets.fromLTRB(28, 10, 12, 10),
+        child: Row(
+          children: [
+            Icon(icon as IconData, size: 18, color: iconColor),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: selected
+                      ? const Color(0xFFC10D00)
+                      : themeProvider.isDarkMode
+                          ? Colors.grey.shade400
+                          : Colors.grey.shade800,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _sidebarEntry(dynamic icon, String label, String screenKey,
       {VoidCallback? onTapOverride}) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -1369,24 +1528,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
           children: [
-            icon is IconData
-                ? Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: selected
-                          ? Colors.white
-                          : themeProvider.isDarkMode
-                              ? Colors.grey.shade700
-                              : Colors.grey.shade600,
-                    ),
-                    child: Icon(icon, size: 20, color: selected ? const Color(0xFFC10D00) : Colors.white),
-                  )
-                : Image.asset(icon as String, width: 32, height: 32,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Icon(Icons.error, color: iconColor, size: 32);
-                    }),
+            _buildSidebarIcon(icon, selected, iconColor, themeProvider),
             const SizedBox(width: 12),
             if (!sidebarCollapsed)
               Expanded(
