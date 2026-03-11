@@ -2057,14 +2057,37 @@ def reschedule_interview(interview_id):
 
         # Create candidate notification (user_id must be User.id, not Candidate.id)
         candidate_user = interview.candidate.user if interview.candidate else None
+        job_title = (
+            interview.application.requisition.title
+            if interview.application and interview.application.requisition
+            else "position"
+        )
+        candidate_name = (
+            interview.candidate.full_name
+            if interview.candidate and interview.candidate.full_name
+            else "Candidate"
+        )
         if candidate_user and getattr(candidate_user, 'id', None):
             notif = Notification(
                 user_id=candidate_user.id,
                 message=f"Your interview has been rescheduled from "
                         f"{old_time.strftime('%d %b %Y')} at {old_time.strftime('%H:%M')} to "
-                        f"{new_time.strftime('%d %b %Y')} at {new_time.strftime('%H:%M')}."
+                        f"{new_time.strftime('%d %b %Y')} at {new_time.strftime('%H:%M')}.",
+                type="interview",
+                interview_id=interview.id,
             )
             db.session.add(notif)
+        if interview.hiring_manager_id:
+            db.session.add(Notification(
+                user_id=interview.hiring_manager_id,
+                message=(
+                    f"Interview with {candidate_name} for {job_title} was rescheduled to "
+                    f"{new_time.strftime('%d %b %Y')} at {new_time.strftime('%H:%M')}."
+                ),
+                type="interview",
+                interview_id=interview.id,
+            ))
+        if candidate_user and getattr(candidate_user, 'id', None) or interview.hiring_manager_id:
             db.session.commit()
 
         # Send reschedule email to candidate (always when we have an email)
@@ -2157,6 +2180,14 @@ def cancel_interview(interview_id):
         # Fetch the linked user (for email)
         user = User.query.get(candidate.user_id)
 
+        hiring_manager_id = interview.hiring_manager_id
+        job_title = (
+            interview.application.requisition.title
+            if interview.application and interview.application.requisition
+            else "position"
+        )
+        candidate_name = candidate.full_name or (user.email if user else "Candidate")
+
         # Delete the interview
         db.session.delete(interview)
         db.session.commit()
@@ -2164,9 +2195,20 @@ def cancel_interview(interview_id):
         # Add notification
         notif = Notification(
             user_id=candidate.user_id,
-            message=f"Your interview scheduled for {interview_details['scheduled_time'].strftime('%d %b %Y')} at {interview_details['scheduled_time'].strftime('%H:%M')} has been cancelled."
+            message=f"Your interview scheduled for {interview_details['scheduled_time'].strftime('%d %b %Y')} at {interview_details['scheduled_time'].strftime('%H:%M')} has been cancelled.",
+            type="interview",
         )
         db.session.add(notif)
+        if hiring_manager_id:
+            db.session.add(Notification(
+                user_id=hiring_manager_id,
+                message=(
+                    f"Interview with {candidate_name} for {job_title} on "
+                    f"{interview_details['scheduled_time'].strftime('%d %b %Y')} at "
+                    f"{interview_details['scheduled_time'].strftime('%H:%M')} was cancelled."
+                ),
+                type="interview",
+            ))
         db.session.commit()
 
         # Send cancellation email
@@ -5233,6 +5275,25 @@ def update_application_status(application_id):
         old_status = application.status
         application.status = new_status
         application.updated_at = datetime.utcnow()
+        candidate_name = (
+            application.candidate.full_name
+            if application.candidate and application.candidate.full_name
+            else (
+                application.candidate.user.email
+                if application.candidate and application.candidate.user
+                else "Candidate"
+            )
+        )
+        job_title = (
+            application.requisition.title
+            if application.requisition and application.requisition.title
+            else "the position"
+        )
+        hiring_manager_user_id = (
+            application.requisition.created_by
+            if application.requisition and application.requisition.created_by
+            else None
+        )
         
         # If moving to interview stage, ensure there's an interview scheduled
         if new_status == 'interview' and old_status != 'interview':
@@ -5250,10 +5311,19 @@ def update_application_status(application_id):
                 if candidate_user_id is not None:
                     notification = Notification(
                         user_id=candidate_user_id,
-                        message=f"Your application for {application.requisition.title if application.requisition else 'the position'} has moved to interview stage.",
+                        message=f"Your application for {job_title} has moved to interview stage.",
                         type="status_update"
                     )
                     db.session.add(notification)
+        if hiring_manager_user_id:
+            db.session.add(Notification(
+                user_id=hiring_manager_user_id,
+                message=(
+                    f"{candidate_name}'s application for {job_title} moved from "
+                    f"{old_status or 'new'} to {new_status}."
+                ),
+                type="status_update",
+            ))
         
         # If moving to hired stage, update vacancy count
         if new_status == 'hired' and old_status != 'hired':

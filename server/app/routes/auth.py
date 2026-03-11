@@ -8,7 +8,7 @@ from flask_jwt_extended import (
     get_jwt_identity
 )
 from app.extensions import db, oauth, limiter, validator
-from app.models import User, VerificationCode, OAuthConnection, Candidate
+from app.models import User, VerificationCode, OAuthConnection, Candidate, Notification
 from app.services.auth_service import AuthService
 from app.services.email_service import EmailService
 from app.services.audit2 import AuditService
@@ -66,6 +66,35 @@ OAUTH_PROVIDERS = {
 def init_auth_routes(app):
 
     enrollment_schema = EnrollmentSchema()
+
+    def _notify_all_hiring_managers_new_candidate(user, fallback_email=None):
+        """Best-effort in-app alert for all hiring managers when a candidate user is created."""
+        try:
+            if not user or getattr(user, "role", None) != "candidate":
+                return
+            display_name = (
+                (getattr(user, "profile", None) or {}).get("full_name")
+                or getattr(user, "email", None)
+                or fallback_email
+                or "A new candidate"
+            )
+            hiring_managers = User.query.filter_by(role="hiring_manager").all()
+            if not hiring_managers:
+                return
+            for hiring_manager in hiring_managers:
+                db.session.add(Notification(
+                    user_id=hiring_manager.id,
+                    message=f"A new candidate account was created: {display_name}.",
+                    type="new_candidate",
+                ))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.warning(
+                "Failed to notify hiring managers about new candidate %s: %s",
+                getattr(user, "id", None),
+                e,
+            )
     # ------------------- Initialize OAuth -------------------
     if not hasattr(app, "oauth_initialized"):
         oauth.init_app(app)
@@ -128,6 +157,7 @@ def init_auth_routes(app):
             user = User.query.filter(db.func.lower(User.email) == email.lower()).first()
         
             # If user doesn't exist, create them automatically
+            created_new_candidate = False
             if not user:
                 random_password = secrets.token_urlsafe(16)
                 user = AuthService.create_user(
@@ -139,7 +169,10 @@ def init_auth_routes(app):
                 )
                 user.is_verified = True
                 db.session.commit()
+                created_new_candidate = role == "candidate"
                 current_app.logger.info(f"Auto-created user via SSO: {email}")
+                if created_new_candidate:
+                    _notify_all_hiring_managers_new_candidate(user, fallback_email=email)
         
             try:
                 user.last_login_at = datetime.utcnow()
@@ -270,6 +303,7 @@ def init_auth_routes(app):
             last_name = provider_config["userinfo"]["last_name"](user_info)
 
             # User lookup / creation
+            created_new_candidate = False
             user = User.query.filter(db.func.lower(User.email) == email).first()
             if not user:
                 random_password = secrets.token_urlsafe(16)
@@ -281,6 +315,7 @@ def init_auth_routes(app):
                     role="candidate"
                 )
                 user.is_verified = True
+                created_new_candidate = True
 
             # OAuth connection
             oauth_conn = OAuthConnection.query.filter_by(user_id=user.id, provider=provider).first()
@@ -294,6 +329,8 @@ def init_auth_routes(app):
                 db.session.add(oauth_conn)
             user.last_login_at = datetime.utcnow()
             db.session.commit()
+            if created_new_candidate:
+                _notify_all_hiring_managers_new_candidate(user, fallback_email=email)
 
             # Tokens
             additional_claims = {"role": user.role}
@@ -377,6 +414,7 @@ def init_auth_routes(app):
 
             email_sent = EmailService.send_verification_email_sync(email, code)
             AuditService.log(user_id=user.id, action="register")
+            _notify_all_hiring_managers_new_candidate(user, fallback_email=email)
 
             payload = {
                 'message': 'User registered successfully. Please check your email for verification code.'
