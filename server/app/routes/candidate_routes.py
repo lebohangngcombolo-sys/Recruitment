@@ -51,6 +51,40 @@ def _cv_analysis_state_for_application(application):
         return "completed"
     return "processing"
 
+
+def _next_scheduled_interview_for_application(application):
+    """Return the next upcoming (or most recent) scheduled interview for this application for candidate display."""
+    if not application or not getattr(application, "interviews", None):
+        return None
+    now = datetime.utcnow()
+    upcoming = [
+        i for i in application.interviews
+        if i.scheduled_time and i.scheduled_time >= now
+        and (i.status or "scheduled") in ("scheduled", "confirmed")
+    ]
+    if upcoming:
+        i = min(upcoming, key=lambda x: x.scheduled_time)
+        return {
+            "id": i.id,
+            "scheduled_time": i.scheduled_time.isoformat(),
+            "interview_type": i.interview_type,
+            "meeting_link": i.meeting_link,
+            "status": i.status or "scheduled",
+        }
+    # Fallback: most recent scheduled interview (for "Interview" tab display)
+    recent = [i for i in application.interviews if i.scheduled_time]
+    if not recent:
+        return None
+    i = max(recent, key=lambda x: x.scheduled_time)
+    return {
+        "id": i.id,
+        "scheduled_time": i.scheduled_time.isoformat(),
+        "interview_type": i.interview_type,
+        "meeting_link": i.meeting_link,
+        "status": i.status or "scheduled",
+    }
+
+
 # ----------------- APPLY FOR JOB -----------------
 @candidate_bp.route("/apply/<int:job_id>", methods=["POST"])
 @role_required(["candidate"])
@@ -493,6 +527,7 @@ def get_applications():
                 "interview_status": app.interview_status,
                 "interview_feedback_score": app.interview_feedback_score,
                 "assessment_result": assessment_result.to_dict() if assessment_result else None,
+                "scheduled_interview": _next_scheduled_interview_for_application(app),
             })
             
         # Audit log
