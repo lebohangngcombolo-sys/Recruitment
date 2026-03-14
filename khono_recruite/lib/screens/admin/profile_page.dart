@@ -14,6 +14,8 @@ import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
 import '../../utils/api_endpoints.dart';
 import '../../utils/app_version.dart';
+import '../../widgets/state_widgets.dart';
+import '../../widgets/themed_dialog.dart';
 
 // ------------------- API Base URL -------------------
 final String candidateBase = ApiEndpoints.candidateBase;
@@ -234,8 +236,8 @@ class _ProfilePageState extends State<ProfilePage>
       context: context,
       barrierDismissible: false,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text("Setup Two-Factor Authentication"),
+        builder: (context, setDialogState) => ThemedDialog(
+          title: "Setup Two-Factor Authentication",
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -327,14 +329,9 @@ class _ProfilePageState extends State<ProfilePage>
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.security, color: Colors.orange),
-            SizedBox(width: 8),
-            Text("Backup Codes"),
-          ],
-        ),
+      builder: (context) => ThemedDialog(
+        title: "Backup Codes",
+        icon: Icon(Icons.security, color: Colors.orange),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -398,8 +395,8 @@ class _ProfilePageState extends State<ProfilePage>
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Disable Two-Factor Authentication"),
+      builder: (context) => ThemedDialog(
+        title: "Disable Two-Factor Authentication",
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -833,25 +830,8 @@ class _ProfilePageState extends State<ProfilePage>
         backgroundColor: themeProvider.isDarkMode
             ? const Color(0xFF14131E)
             : Colors.grey.shade50,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.redAccent),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                "Loading Profile...",
-                style: GoogleFonts.inter(
-                  fontSize: 16,
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade600,
-                ),
-              ),
-            ],
-          ),
+        body: const ThemedLoadingState(
+          message: "Loading Profile...",
         ),
       );
     }
@@ -1248,8 +1228,8 @@ class _ProfilePageState extends State<ProfilePage>
                         onTap: () {
                           showDialog(
                             context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Text("Regenerate Backup Codes"),
+                            builder: (context) => ThemedDialog(
+                              title: "Regenerate Backup Codes",
                               content: const Text(
                                 "This will invalidate all your existing backup codes. Are you sure?",
                               ),

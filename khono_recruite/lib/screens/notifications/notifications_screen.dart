@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../services/notification_service.dart';
 import '../../providers/theme_provider.dart';
+import '../../widgets/state_widgets.dart';
+import '../../widgets/themed_surface_card.dart';
 
 /// Shared notifications screen for Admin and Hiring Manager.
 /// Notifications live in a separate file; API is via [NotificationService].
@@ -125,48 +127,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             iconTheme: Theme.of(context).iconTheme,
           ),
           body: _loading
-              ? Center(
-                  child: CircularProgressIndicator(
-                    color: themeProvider.isDarkMode
-                        ? Colors.redAccent
-                        : Colors.blue,
-                  ),
+              ? const ThemedLoadingState(
+                  message: "Loading notifications...",
                 )
               : _errorMessage != null
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24.0),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              _errorMessage!,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: themeProvider.isDarkMode
-                                    ? Colors.white
-                                    : Colors.black,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            TextButton(
-                              onPressed: _fetch,
-                              child: const Text('Retry'),
-                            ),
-                          ],
-                        ),
-                      ),
+                  ? ThemedErrorState(
+                      title: "Error",
+                      subtitle: _errorMessage!,
+                      onRetry: _fetch,
                     )
                   : _notifications.isEmpty
-                      ? Center(
-                          child: Text(
-                            'No notifications',
-                            style: TextStyle(
-                              color: themeProvider.isDarkMode
-                                  ? Colors.grey.shade400
-                                  : Colors.grey.shade600,
-                            ),
-                          ),
+                      ? const ThemedEmptyState(
+                          title: "No notifications",
+                          icon: Icons.notifications_off_outlined,
                         )
                       : RefreshIndicator(
                           onRefresh: _fetch,
@@ -194,34 +167,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                     ),
                                   );
                                 },
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: () => _onTapNotification(n),
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: Container(
-                                      margin: const EdgeInsets.symmetric(
-                                          vertical: 8),
-                                      padding: const EdgeInsets.all(16),
-                                      decoration: BoxDecoration(
-                                        color: (themeProvider.isDarkMode
-                                                ? const Color(0xFF14131E)
-                                                : Colors.grey[100]!)
-                                            .withOpacity(0.9),
-                                        borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.grey.shade800
-                                                : Colors.grey[300]!),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color:
-                                                Colors.black.withOpacity(0.05),
-                                            blurRadius: 6,
-                                            offset: const Offset(0, 3),
-                                          ),
-                                        ],
-                                      ),
+                                child: ThemedSurfaceCard(
+                                  margin:
+                                      const EdgeInsets.symmetric(vertical: 8),
+                                  padding: const EdgeInsets.all(16),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () => _onTapNotification(n),
+                                      borderRadius: BorderRadius.circular(16),
                                       child: Row(
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,

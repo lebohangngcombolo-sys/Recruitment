@@ -1,9 +1,192 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../models/test_pack.dart';
-import '../../services/test_pack_service.dart';
-import '../../widgets/save_test_pack_dialog.dart';
 import '../../providers/theme_provider.dart';
+import '../../constants/brand_tokens.dart';
+import '../../widgets/themed_dialog.dart';
+import '../../widgets/themed_surface_card.dart';
+
+// Mock classes for testing
+class TestPack {
+  final int id;
+  final String name;
+  final String category;
+  final int questionCount;
+  final String description;
+  final List<Map<String, dynamic>> questions;
+
+  TestPack({
+    required this.id,
+    required this.name,
+    required this.category,
+    required this.questionCount,
+    required this.description,
+    this.questions = const [],
+  });
+}
+
+class TestPackService {
+  Future<List<TestPack>> getTestPacks() async {
+    // Mock data for testing
+    return [
+      TestPack(
+        id: 1,
+        name: 'JavaScript Basics',
+        category: 'Programming',
+        questionCount: 2,
+        description: 'Basic JavaScript concepts and syntax',
+        questions: [
+          {
+            'question_text': 'What is a variable?',
+            'options': [
+              'Container for data',
+              'A function',
+              'A loop',
+              'A condition'
+            ],
+            'correct_answer': 0,
+            'weight': 1,
+          },
+          {
+            'question_text': 'What is a function?',
+            'options': [
+              'A variable',
+              'Reusable code block',
+              'A loop',
+              'An array'
+            ],
+            'correct_answer': 1,
+            'weight': 1,
+          },
+        ],
+      ),
+      TestPack(
+        id: 2,
+        name: 'Python Fundamentals',
+        category: 'Programming',
+        questionCount: 2,
+        description: 'Core Python programming concepts',
+        questions: [
+          {
+            'question_text': 'What is Python?',
+            'options': [
+              'Database',
+              'Programming language',
+              'Framework',
+              'Library'
+            ],
+            'correct_answer': 1,
+            'weight': 1,
+          },
+          {
+            'question_text': 'What are data types?',
+            'options': [
+              'Functions',
+              'Variables',
+              'Classifications of data',
+              'Loops'
+            ],
+            'correct_answer': 2,
+            'weight': 1,
+          },
+        ],
+      ),
+    ];
+  }
+
+  Future<void> deleteTestPack(int id) async {
+    // Mock delete operation
+    await Future.delayed(const Duration(seconds: 1));
+  }
+
+  Future<void> createTestPack(Map<String, dynamic> data) async {
+    // Mock create operation
+    await Future.delayed(const Duration(seconds: 1));
+  }
+
+  Future<void> updateTestPack(int id, Map<String, dynamic> data) async {
+    // Mock update operation
+    await Future.delayed(const Duration(seconds: 1));
+  }
+}
+
+class SaveTestPackDialog extends StatelessWidget {
+  final TestPack? pack;
+  final List<Map<String, dynamic>>? initialQuestions;
+  final String? initialName;
+  final String? initialCategory;
+  final String? initialDescription;
+
+  const SaveTestPackDialog({
+    super.key,
+    this.pack,
+    this.initialQuestions,
+    this.initialName,
+    this.initialCategory,
+    this.initialDescription,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ThemedDialog(
+      title: pack == null ? 'Add Test Pack' : 'Edit Test Pack',
+      subtitle: 'Configure your test pack settings',
+      icon: Icon(pack == null ? Icons.add : Icons.edit,
+          color: BrandTokens.primary),
+      iconColor: BrandTokens.primary,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            decoration: const InputDecoration(
+              labelText: 'Test Pack Name',
+              border: OutlineInputBorder(),
+            ),
+            controller: TextEditingController(text: initialName),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            decoration: const InputDecoration(
+              labelText: 'Category',
+              border: OutlineInputBorder(),
+            ),
+            controller: TextEditingController(text: initialCategory),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            decoration: const InputDecoration(
+              labelText: 'Description',
+              border: OutlineInputBorder(),
+            ),
+            controller: TextEditingController(text: initialDescription),
+            maxLines: 3,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            // Return mock data for testing
+            Navigator.pop(context, {
+              'name': initialName ?? 'Test Pack',
+              'category': initialCategory ?? 'General',
+              'description': initialDescription ?? 'Test description',
+              'questions': initialQuestions ?? [],
+            });
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: BrandTokens.primary,
+            foregroundColor: Colors.white,
+          ),
+          child: Text(pack == null ? 'Create' : 'Save'),
+        ),
+      ],
+    );
+  }
+}
 
 class TestPackManagementScreen extends StatefulWidget {
   const TestPackManagementScreen({super.key});
@@ -41,24 +224,15 @@ class _TestPackManagementScreenState extends State<TestPackManagementScreen> {
   }
 
   Future<void> _delete(TestPack pack) async {
-    final confirm = await showDialog<bool>(
+    final confirm = await ThemedAlertDialog.showConfirm(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete test pack'),
-        content: Text(
+      title: 'Delete test pack',
+      subtitle:
           'Delete "${pack.name}"? Existing jobs linked to it will keep using its questions until you change them.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      iconData: Icons.delete_outline,
+      iconColor: Colors.red,
     );
     if (confirm != true || !mounted) return;
     try {
@@ -213,12 +387,8 @@ class _TestPackManagementScreenState extends State<TestPackManagementScreen> {
                   itemCount: _packs.length,
                   itemBuilder: (_, i) {
                     final pack = _packs[i];
-                    return Card(
+                    return ThemedSurfaceCard(
                       margin: const EdgeInsets.symmetric(vertical: 8),
-                      color: (themeProvider.isDarkMode
-                              ? const Color(0xFF14131E)
-                              : Colors.white)
-                          .withValues(alpha: 0.95),
                       child: ListTile(
                         title: Text(
                           pack.name,

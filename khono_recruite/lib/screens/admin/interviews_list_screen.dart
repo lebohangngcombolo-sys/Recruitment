@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
-import '../../utils/api_endpoints.dart';
 import '../../providers/theme_provider.dart';
-import '../../services/admin_service.dart'; // Add this import
+import '../../utils/api_endpoints.dart';
+import '../../widgets/filter_chip.dart' as custom_filter;
 
 class InterviewListScreen extends StatefulWidget {
   const InterviewListScreen({super.key});
@@ -995,40 +996,15 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
   Widget _buildFilterChip(
       String label, String value, ThemeProvider themeProvider) {
     final isSelected = _selectedFilter == value;
-    return FilterChip(
-      label: Text(
-        label,
-        style: GoogleFonts.inter(
-          color: isSelected
-              ? Colors.white
-              : themeProvider.isDarkMode
-                  ? Colors.grey.shade400
-                  : Colors.grey.shade600,
-          fontSize: 12,
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-        ),
-      ),
+    return custom_filter.FilterChip(
+      label: label,
       selected: isSelected,
-      backgroundColor: themeProvider.isDarkMode
-          ? Colors.grey.shade800.withValues(alpha: 0.5)
-          : Colors.grey.shade200,
-      selectedColor: const Color.fromRGBO(151, 18, 8, 1),
-      checkmarkColor: Colors.white,
       onSelected: (selected) {
         setState(() {
           _selectedFilter = value;
         });
+        fetchInterviews();
       },
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: isSelected
-              ? const Color.fromRGBO(151, 18, 8, 1)
-              : themeProvider.isDarkMode
-                  ? Colors.grey.shade700
-                  : Colors.grey.shade300,
-        ),
-      ),
     );
   }
 
