@@ -18,6 +18,7 @@ import 'assessments_results_screen.dart';
 import '../../screens/candidate/user_profile_page.dart';
 import 'saved_application_screen.dart';
 import '../../services/auth_service.dart';
+import '../../services/unified_api_service.dart';
 import '../../utils/api_endpoints.dart';
 
 class CandidateDashboard extends StatefulWidget {
@@ -159,9 +160,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   Future<void> _fetchJobs() async {
     _safeSetState(() => _loadingJobs = true);
     try {
-      final list = await CandidateService.getAvailableJobs(widget.token)
-          .timeout(_jobsFetchTimeout,
-              onTimeout: () => <Map<String, dynamic>>[]);
+      final list = await UnifiedApiService.getJobs().timeout(_jobsFetchTimeout,
+          onTimeout: () => <Map<String, dynamic>>[]);
       if (mounted)
         _safeSetState(() {
           _jobs = list;
@@ -395,37 +395,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   Future<void> _fetchNotifications() async {
-    if (widget.token.isEmpty) return;
     try {
-      final response = await http.get(
-        Uri.parse('$apiBase/notifications'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
-      );
-
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is List) {
-          _safeSetState(() {
-            notifications = decoded
-                .whereType<Map>()
-                .map((e) => Map<String, dynamic>.from(e))
-                .toList();
-          });
-        } else if (decoded is Map<String, dynamic>) {
-          final ok = decoded['success'];
-          final isSuccess = ok == true || ok == 'true';
-          final list = decoded['notifications'];
-          if (isSuccess && list is List) {
-            _safeSetState(() {
-              notifications = list
-                  .whereType<Map>()
-                  .map((e) => Map<String, dynamic>.from(e))
-                  .toList();
-            });
-          }
-        }
+      final notificationList = await UnifiedApiService.getNotifications();
+      if (mounted) {
+        _safeSetState(() {
+          notifications = notificationList;
+        });
       }
-      // 401: ignore (token expired or not logged in); avoid spamming console
     } catch (e) {
       if (kIsWeb && e.toString().contains('Failed to fetch')) {
         // Likely CORS or server unreachable; avoid noisy log

@@ -774,6 +774,11 @@ def get_my_interviews():
 @role_required(["candidate", "admin", "hiring_manager"])
 def update_profile():
     try:
+        from app.services.profile_validation_service import (
+            ProfileValidator, ProfileSyncService, ProfileAuditService,
+            ProfileCompletionCalculator, PIIMasker
+        )
+        
         candidate = get_current_candidate()
 
         # Auto-create candidate if missing but user exists
@@ -791,10 +796,30 @@ def update_profile():
         user = candidate.user
         data = request.get_json() or {}
 
-        for key, value in data.items():
+        # Validate profile data
+        validation_errors = ProfileValidator.validate_profile_data(data)
+        if validation_errors:
+            return jsonify({
+                "success": False, 
+                "message": "Validation failed",
+                "errors": validation_errors
+            }), 400
+
+        # Sanitize profile data
+        sanitized_data = ProfileValidator.sanitize_profile_data(data)
+        
+        # Track updated fields for audit
+        updated_fields = []
+
+        for key, value in sanitized_data.items():
             # Prevent email from being updated
             if key == "email":
                 continue
+
+            # Check if field is actually being updated
+            current_value = getattr(candidate, key, None)
+            if current_value != value:
+                updated_fields.append(key)
 
             # Handle date fields
             if key == "dob":
@@ -847,7 +872,34 @@ def update_profile():
                 "last_name": parts[1] if len(parts) > 1 else "",
             }
 
+        # Calculate profile completion
+        candidate_dict = candidate.to_dict()
+        completion_data = ProfileCompletionCalculator.calculate_completion(candidate_dict)
+        
+        # Add completion data to user profile
+        user.profile = {
+            **(user.profile or {}),
+            "completion_percentage": completion_data['overall_percentage'],
+            "completion_last_updated": datetime.utcnow().isoformat()
+        }
+
         db.session.commit()
+
+        # Log profile update with audit service
+        if updated_fields:
+            ProfileAuditService.log_profile_update(user.id, updated_fields, db.session)
+            
+            # Log with PII masking for security
+            current_app.logger.info(
+                f"Profile updated for user {user.id}",
+                extra={
+                    "user_id": user.id,
+                    "email": PIIMasker.mask_email(user.email),
+                    "updated_fields": updated_fields,
+                    "field_count": len(updated_fields),
+                    "completion_percentage": completion_data['overall_percentage']
+                }
+            )
 
         return jsonify({
             "success": True,
@@ -855,6 +907,7 @@ def update_profile():
             "data": {
                 "user": user.to_dict(),
                 "candidate": candidate.to_dict(),
+                "completion": completion_data
             },
         }), 200
 
@@ -908,6 +961,10 @@ def upload_document():
 @role_required(["candidate", "admin", "hiring_manager"])
 def upload_profile_picture():
     try:
+        from app.services.profile_validation_service import (
+            ProfileFileValidator, ProfileAuditService
+        )
+        
         # ---- Get or create Candidate ----
         candidate = get_current_candidate()
         if not candidate:
@@ -926,22 +983,27 @@ def upload_profile_picture():
             return jsonify({"success": False, "message": "No image uploaded"}), 400
 
         file = request.files["image"]
-        filename = secure_filename(file.filename or "")
-        if not filename:
-            return jsonify({"success": False, "message": "Invalid filename"}), 400
+        filename = file.filename or ""
+        
+        # Validate file using the new validation service
+        is_valid, validation_message = ProfileFileValidator.validate_image_file(file)
+        if not is_valid:
+            return jsonify({"success": False, "message": validation_message}), 400
 
-        allowed_images = {"png", "jpg", "jpeg", "webp"}
-        ext = filename.rsplit('.', 1)[-1].lower()
-        if ext not in allowed_images:
-            return jsonify({"success": False, "message": "Invalid image type"}), 400
-
+        # Sanitize filename
+        sanitized_filename = ProfileFileValidator.sanitize_filename(filename)
+        
         # ---- Upload to Cloudinary ----
         result = cloudinary.uploader.upload(
             file,
             folder="profile_pics/",
             format="jpg",  # convert everything to jpg
             resource_type="image",
-            public_id=f"candidate_{candidate.id}"
+            public_id=f"candidate_{candidate.id}",
+            transformation=[
+                {"width": 400, "height": 400, "crop": "limit"},
+                {"quality": "auto:good"}
+            ]
         )
         url = result.get("secure_url")
         if not url:
@@ -949,18 +1011,205 @@ def upload_profile_picture():
 
         # ---- Save to candidate profile ----
         candidate.profile_picture = url
+        
+        # Update user profile avatar URL for consistency
+        user = candidate.user
+        if user:
+            existing_profile = user.profile or {}
+            user.profile = {
+                **existing_profile,
+                "avatar_url": url,
+                "avatar_updated_at": datetime.utcnow().isoformat()
+            }
+        
         db.session.commit()
+
+        # Log file upload with audit service
+        file_size = getattr(file, 'content_length', 0) or len(file.read() if hasattr(file, 'read') else 0)
+        ProfileAuditService.log_file_upload(user.id, "profile_picture", file_size, db.session)
+
+        # Generate thumbnail URL
+        thumbnail_url = url.replace('/upload/', '/upload/w_150,h_150,c_fill/')
 
         return jsonify({
             "success": True,
             "message": "Profile picture updated successfully",
-            "data": {"profile_picture": url},
+            "data": {
+                "profile_picture": url,
+                "thumbnail_url": thumbnail_url,
+                "file_size_bytes": file_size,
+                "file_size_mb": round(file_size / (1024 * 1024), 2)
+            },
         }), 200
 
     except Exception as e:
         current_app.logger.error(f"Upload profile picture error: {e}", exc_info=True)
         db.session.rollback()
         return jsonify({"success": False, "message": "Internal server error"}), 500
+
+# ----------------- PROFILE COMPLETION ANALYTICS -----------------
+@candidate_bp.route("/profile/completion", methods=["GET"])
+@role_required(["candidate", "admin", "hiring_manager"])
+def get_profile_completion():
+    """Get detailed profile completion analytics"""
+    try:
+        from app.services.profile_validation_service import ProfileCompletionCalculator
+        
+        candidate = get_current_candidate()
+        if not candidate:
+            return jsonify({"success": False, "message": "Candidate profile not found"}), 404
+        
+        # Calculate completion data
+        candidate_dict = candidate.to_dict()
+        completion_data = ProfileCompletionCalculator.calculate_completion(candidate_dict)
+        
+        # Add additional analytics
+        user = candidate.user
+        if user:
+            completion_data['user'] = {
+                'email': user.email,
+                'enrollment_completed': user.enrollment_completed,
+                'created_at': user.created_at.isoformat() if user.created_at else None,
+                'last_login': user.last_login_at.isoformat() if user.last_login_at else None
+            }
+        
+        # Add application statistics
+        completion_data['applications'] = {
+            'total_applications': len(candidate.applications),
+            'active_applications': len([app for app in candidate.applications if app.status in ['applied', 'under_review']]),
+            'completed_applications': len([app for app in candidate.applications if app.status in ['accepted', 'rejected']]),
+        }
+        
+        return jsonify({
+            "success": True,
+            "data": completion_data
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Get profile completion error: {e}", exc_info=True)
+        return jsonify({"success": False, "message": "Internal server error"}), 500
+
+# ----------------- PROFILE MONITORING DASHBOARD -----------------
+@candidate_bp.route("/profile/monitoring", methods=["GET"])
+@role_required(["admin"])
+def get_profile_monitoring():
+    """Get comprehensive profile monitoring data (admin only)"""
+    try:
+        from app.services.profile_monitoring_service import ProfileAnalyticsService, ProfileAlertService
+        
+        # Initialize analytics service
+        analytics_service = ProfileAnalyticsService(db.session)
+        
+        # Get comprehensive metrics
+        metrics = analytics_service.get_profile_metrics(days=30)
+        
+        # Get field completion breakdown
+        field_breakdown = analytics_service.get_field_completion_breakdown()
+        
+        # Get activity timeline
+        activity_timeline = analytics_service.get_activity_timeline(days=7)
+        
+        # Get validation error analysis
+        error_analysis = analytics_service.get_validation_error_analysis()
+        
+        # Get performance report
+        performance_report = analytics_service.get_performance_report()
+        
+        # Check for alerts
+        alert_service = ProfileAlertService(analytics_service)
+        alerts = alert_service.check_alerts()
+        
+        # Send notifications for critical alerts
+        for alert in alerts:
+            if alert['severity'] == 'critical':
+                alert_service.send_alert_notification(alert)
+        
+        monitoring_data = {
+            "metrics": {
+                "total_profiles": metrics.total_profiles,
+                "complete_profiles": metrics.complete_profiles,
+                "incomplete_profiles": metrics.incomplete_profiles,
+                "avg_completion_percentage": round(metrics.avg_completion_percentage, 1),
+                "profile_updates_today": metrics.profile_updates_today,
+                "file_uploads_today": metrics.file_uploads_today,
+                "validation_errors_today": metrics.validation_errors_today,
+                "avg_update_time_ms": round(metrics.avg_update_time_ms, 2),
+                "cache_hit_rate": round(metrics.cache_hit_rate, 1),
+                "active_users_today": metrics.active_users_today
+            },
+            "field_completion": field_breakdown,
+            "activity_timeline": activity_timeline,
+            "error_analysis": error_analysis,
+            "performance_report": performance_report,
+            "alerts": alerts,
+            "system_health": {
+                "status": performance_report.get('system_health', {}).get('status', 'unknown'),
+                "last_updated": datetime.utcnow().isoformat()
+            }
+        }
+        
+        return jsonify({
+            "success": True,
+            "data": monitoring_data
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Get profile monitoring error: {e}", exc_info=True)
+        return jsonify({"success": False, "message": "Internal server error"}), 500
+
+@candidate_bp.route("/profile/health", methods=["GET"])
+@role_required(["admin"])
+def get_profile_health():
+    """Get profile system health check (admin only)"""
+    try:
+        from app.services.profile_monitoring_service import ProfileAnalyticsService, ProfileAlertService
+        
+        analytics_service = ProfileAnalyticsService(db.session)
+        alert_service = ProfileAlertService(analytics_service)
+        
+        # Get basic health metrics
+        metrics = analytics_service.get_profile_metrics(days=1)
+        performance_report = analytics_service.get_performance_report()
+        
+        # Check system health
+        system_health = performance_report.get('system_health', {})
+        
+        # Get critical alerts
+        alerts = alert_service.check_alerts()
+        critical_alerts = [alert for alert in alerts if alert['severity'] == 'critical']
+        
+        health_data = {
+            "status": "healthy" if not critical_alerts and system_health.get('status') == 'healthy' else "degraded",
+            "timestamp": datetime.utcnow().isoformat(),
+            "metrics": {
+                "avg_response_time_ms": round(metrics.avg_update_time_ms, 2),
+                "cache_hit_rate": round(metrics.cache_hit_rate, 1),
+                "active_users": metrics.active_users_today,
+                "error_rate": round((metrics.validation_errors_today / max(metrics.profile_updates_today, 1)) * 100, 2)
+            },
+            "alerts": {
+                "critical": len(critical_alerts),
+                "warnings": len([alert for alert in alerts if alert['severity'] == 'warning']),
+                "info": len([alert for alert in alerts if alert['severity'] == 'info'])
+            },
+            "services": {
+                "database": "healthy",  # Would check actual DB connection
+                "cache": "healthy",     # Would check actual cache connection
+                "storage": "healthy"    # Would check actual storage service
+            },
+            "issues": system_health.get('issues', [])
+        }
+        
+        status_code = 200 if health_data["status"] == "healthy" else 503
+        return jsonify(health_data), status_code
+        
+    except Exception as e:
+        current_app.logger.error(f"Get profile health error: {e}", exc_info=True)
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }), 503
 
 # ----------------- UPDATE GENERAL SETTINGS -----------------
 @candidate_bp.route("/settings", methods=["PUT"])

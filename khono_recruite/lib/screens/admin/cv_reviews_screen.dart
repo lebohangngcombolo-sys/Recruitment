@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:percent_indicator/percent_indicator.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../../services/admin_service.dart';
-import '../../providers/theme_provider.dart';
 import '../../services/auth_service.dart';
+import '../../providers/theme_provider.dart';
+import '../../constants/brand_tokens.dart';
 import '../../utils/api_endpoints.dart';
+import '../../widgets/themed_surface_card.dart';
+import '../../widgets/filter_chip.dart';
+import '../../widgets/themed_dialog.dart';
+import '../../widgets/state_widgets.dart';
 
 class CVReviewsScreen extends StatefulWidget {
   const CVReviewsScreen({super.key});
@@ -15,44 +21,70 @@ class CVReviewsScreen extends StatefulWidget {
   State<CVReviewsScreen> createState() => _CVReviewsScreenState();
 }
 
-class _CVReviewsScreenState extends State<CVReviewsScreen> {
+class _CVReviewsScreenState extends State<CVReviewsScreen>
+    with AutomaticKeepAliveClientMixin {
   final AdminService admin = AdminService();
   List<Map<String, dynamic>> cvReviews = [];
   List<Map<String, dynamic>> filteredReviews = [];
   bool loading = true;
+  bool hasMore = true;
+  int currentPage = 1;
+  int totalPages = 1;
+  final int pageSize = 20;
+  final ScrollController _scrollController = ScrollController();
   String? selectedFilter;
+  Timer? _searchDebounce;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     fetchCVReviews();
   }
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      if (!loading && hasMore) {
+        fetchCVReviews();
+      }
+    }
+  }
+
   Future<void> fetchCVReviews() async {
+    if (!hasMore) return;
+
     setState(() => loading = true);
     try {
-      final List<Map<String, dynamic>> all = [];
-      var page = 1;
-      while (true) {
-        final batch = await admin.listCVReviews(
-          page: page,
-          perPage: 200,
-          scope: 'all',
-        );
-        all.addAll(batch);
-        if (batch.length < 200) break;
-        page++;
-      }
-      if (!mounted) return;
+      final batch = await admin.listCVReviews(
+        page: currentPage,
+        perPage: pageSize,
+        scope: 'all',
+      );
+
       setState(() {
-        cvReviews = List<Map<String, dynamic>>.from(all);
-        // Apply initial filter to only show entries with valid Cloudinary cv_url
-        filteredReviews = cvReviews.where((review) {
+        cvReviews.addAll(batch);
+        // Apply filter to only show entries with valid Cloudinary cv_url
+        final newFiltered = batch.where((review) {
           final url = review['cv_url'] as String?;
           return url != null &&
               url.trim().isNotEmpty &&
               url.contains('cloudinary.com');
         }).toList();
+
+        filteredReviews.addAll(newFiltered);
+        hasMore = batch.length == pageSize;
+        currentPage++;
       });
     } catch (e) {
       debugPrint("Error fetching CV reviews: $e");
@@ -65,7 +97,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   Color getScoreColor(double score) {
     if (score >= 70) return Colors.green;
     if (score >= 50) return Colors.orange;
-    return Colors.redAccent;
+    return BrandTokens.primary;
   }
 
   String getScoreLabel(double score) {
@@ -90,49 +122,43 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
       showDialog(
         context: context,
         builder: (BuildContext context) {
-          return Dialog(
-            child: Container(
-              width: MediaQuery.of(context).size.width * 0.9,
-              height: MediaQuery.of(context).size.height * 0.8,
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      border: Border(
-                          bottom: BorderSide(color: Colors.grey.shade300)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'CV Preview - ${review['full_name'] ?? 'Unknown'}',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        IconButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(Icons.close),
-                        ),
-                      ],
-                    ),
+          return ThemedDialog(
+            title: 'CV Preview - ${review['full_name'] ?? 'Unknown'}',
+            subtitle: 'Review the candidate\'s CV document',
+            icon: Icon(Icons.description_outlined, color: BrandTokens.primary),
+            iconColor: BrandTokens.primary,
+            showCloseButton: true,
+            content: Container(
+              width: MediaQuery.of(context).size.width * 0.8,
+              height: MediaQuery.of(context).size.height * 0.6,
+              child: WebViewWidget(
+                controller: WebViewController()
+                  ..loadRequest(
+                    Uri.parse(cvUrl),
+                    headers: {
+                      'Authorization': 'Bearer $token',
+                    },
                   ),
-                  Expanded(
-                    child: WebViewWidget(
-                      controller: WebViewController()
-                        ..loadRequest(
-                          Uri.parse(cvUrl),
-                          headers: {
-                            'Authorization': 'Bearer $token',
-                          },
-                        ),
-                    ),
-                  ),
-                ],
               ),
             ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFC10D00),
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(
+                  'Close',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
           );
         },
       );
@@ -173,6 +199,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
     final screenWidth = MediaQuery.of(context).size.width;
     final crossAxisCount = screenWidth > 1000
@@ -211,26 +238,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                     themeProvider.isDarkMode ? Colors.white : Colors.black87),
           ),
           body: loading
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const CircularProgressIndicator(
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.redAccent),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        "Loading CV Reviews...",
-                        style: GoogleFonts.inter(
-                          color: themeProvider.isDarkMode
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade600,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
+              ? const ThemedLoadingState(
+                  message: "Loading CV Reviews...",
                 )
               : Padding(
                   padding: const EdgeInsets.all(20),
@@ -295,13 +304,14 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                   Container(
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: Colors.redAccent
+                                      color: BrandTokens.primary
                                           .withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(12),
+                                      borderRadius: BorderRadius.circular(
+                                          BrandTokens.cardRadius),
                                     ),
                                     child: Icon(
                                       Icons.assignment_outlined,
-                                      color: Colors.redAccent,
+                                      color: BrandTokens.primary,
                                       size: 28,
                                     ),
                                   ),
@@ -333,78 +343,19 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                   ),
                                   const Spacer(),
 
-                                  // Filter Dropdown Button
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.redAccent
-                                          .withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: DropdownButtonHideUnderline(
-                                      child: DropdownButton<String>(
-                                        value: selectedFilter,
-                                        icon: Icon(
-                                          Icons.filter_list,
-                                          color: Colors.redAccent,
-                                          size: 20,
-                                        ),
-                                        elevation: 16,
-                                        style: GoogleFonts.inter(
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
-                                          fontSize: 12,
-                                        ),
-                                        dropdownColor: themeProvider.isDarkMode
-                                            ? const Color(0xFF14131E)
-                                            : Colors.white,
-                                        borderRadius: BorderRadius.circular(12),
-                                        hint: Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8),
-                                          child: Text(
-                                            "Filter by",
-                                            style: GoogleFonts.inter(
-                                              color: Colors.redAccent,
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 12,
-                                            ),
-                                          ),
-                                        ),
-                                        onChanged: (String? newValue) {
-                                          applyFilter(newValue);
-                                        },
-                                        items: <String>[
-                                          'All',
-                                          'Excellent',
-                                          'Good',
-                                          'Needs Review'
-                                        ].map<DropdownMenuItem<String>>(
-                                            (String value) {
-                                          return DropdownMenuItem<String>(
-                                            value:
-                                                value == 'All' ? null : value,
-                                            child: Padding(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 8),
-                                              child: Text(
-                                                value,
-                                                style: GoogleFonts.inter(
-                                                  fontSize: 12,
-                                                  color:
-                                                      themeProvider.isDarkMode
-                                                          ? Colors.white
-                                                          : Colors.black87,
-                                                ),
-                                              ),
-                                            ),
-                                          );
-                                        }).toList(),
-                                      ),
-                                    ),
+                                  // Filter Chips
+                                  FilterChipGroup(
+                                    options: [
+                                      'All',
+                                      'Excellent',
+                                      'Good',
+                                      'Needs Review'
+                                    ],
+                                    selectedValue: selectedFilter ?? 'All',
+                                    onSelected: (value) {
+                                      applyFilter(
+                                          value == 'All' ? null : value);
+                                    },
                                   ),
                                 ],
                               ),
@@ -436,22 +387,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                   final workExp =
                                       cvParser['work_experience'] ?? [];
 
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      color: (themeProvider.isDarkMode
-                                              ? const Color(0xFF14131E)
-                                              : Colors.white)
-                                          .withValues(alpha: 0.9),
-                                      borderRadius: BorderRadius.circular(20),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black
-                                              .withValues(alpha: 0.1),
-                                          blurRadius: 15,
-                                          offset: const Offset(0, 6),
-                                        ),
-                                      ],
-                                    ),
+                                  return ThemedSurfaceCard(
+                                    padding: EdgeInsets.zero,
                                     child: Column(
                                       children: [
                                         // Header with score
@@ -669,7 +606,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                                           fontSize:
                                                                               10,
                                                                           color:
-                                                                              Colors.redAccent,
+                                                                              BrandTokens.primary,
                                                                           fontWeight:
                                                                               FontWeight.w500,
                                                                         ),
@@ -825,7 +762,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                     style: ElevatedButton
                                                         .styleFrom(
                                                       backgroundColor:
-                                                          Colors.redAccent,
+                                                          BrandTokens.primary,
                                                       foregroundColor:
                                                           Colors.white,
                                                       minimumSize:

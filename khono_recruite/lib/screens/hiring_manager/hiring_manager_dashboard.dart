@@ -11,7 +11,7 @@ import 'job_management.dart';
 import '../admin/interviews_list_screen.dart';
 import 'offer_list_screen.dart';
 import 'hm_analytics_page.dart';
-import 'hm_team_collaboration_page.dart';
+import '../admin/hm_team_collaboration_page.dart';
 import 'hiring_manager_profile_screen.dart';
 import 'hiring_manager_settings_screen.dart';
 import 'pipeline_page.dart';
@@ -1327,7 +1327,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       case "analytics":
         return HMAnalyticsPage();
       case "team_collaboration":
-        return HMTeamCollaborationPage();
+        return const HMTeamCollaborationPage();
       case "notifications":
         return NotificationsScreen();
       case "settings":

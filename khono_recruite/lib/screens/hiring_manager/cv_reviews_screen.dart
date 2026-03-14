@@ -6,6 +6,7 @@ import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
 import '../../providers/theme_provider.dart';
 import '../../utils/api_endpoints.dart';
+import '../../constants/brand_tokens.dart';
 
 class CVReviewsScreen extends StatefulWidget {
   const CVReviewsScreen({super.key});
@@ -125,10 +126,10 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: _kPrimary.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(_kBadgeRadius),
+                  color: BrandTokens.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(BrandTokens.badgeRadius),
                   border: Border.all(
-                    color: _kPrimary.withValues(alpha: 0.35),
+                    color: BrandTokens.primary.withValues(alpha: 0.35),
                     width: 1,
                   ),
                 ),
@@ -170,8 +171,9 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color:
-                        themeProvider.isDarkMode ? _kDarkSurface : Colors.white,
+                    color: themeProvider.isDarkMode
+                        ? BrandTokens.darkSurface
+                        : Colors.white,
                     border: Border(
                       bottom: BorderSide(color: Colors.grey.shade300),
                     ),
@@ -201,11 +203,13 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 10, vertical: 6),
                                   decoration: BoxDecoration(
-                                    color: _kPrimary.withValues(alpha: 0.12),
-                                    borderRadius:
-                                        BorderRadius.circular(_kBadgeRadius),
+                                    color: BrandTokens.primary
+                                        .withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(
+                                        BrandTokens.badgeRadius),
                                     border: Border.all(
-                                      color: _kPrimary.withValues(alpha: 0.35),
+                                      color: BrandTokens.primary
+                                          .withValues(alpha: 0.35),
                                       width: 1,
                                     ),
                                   ),
@@ -226,12 +230,13 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 10, vertical: 6),
                                     decoration: BoxDecoration(
-                                      color: _kPrimary.withValues(alpha: 0.12),
-                                      borderRadius:
-                                          BorderRadius.circular(_kBadgeRadius),
+                                      color: BrandTokens.primary
+                                          .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(
+                                          BrandTokens.badgeRadius),
                                       border: Border.all(
-                                        color:
-                                            _kPrimary.withValues(alpha: 0.35),
+                                        color: BrandTokens.primary
+                                            .withValues(alpha: 0.35),
                                         width: 1,
                                       ),
                                     ),
@@ -252,12 +257,13 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 10, vertical: 6),
                                     decoration: BoxDecoration(
-                                      color: _kPrimary.withValues(alpha: 0.12),
-                                      borderRadius:
-                                          BorderRadius.circular(_kBadgeRadius),
+                                      color: BrandTokens.primary
+                                          .withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(
+                                          BrandTokens.badgeRadius),
                                       border: Border.all(
-                                        color:
-                                            _kPrimary.withValues(alpha: 0.35),
+                                        color: BrandTokens.primary
+                                            .withValues(alpha: 0.35),
                                         width: 1,
                                       ),
                                     ),
@@ -412,7 +418,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   Color getScoreColor(double score) {
     if (score >= 70) return Colors.green;
     if (score >= 50) return Colors.orange;
-    return _kPrimary;
+    return BrandTokens.primary;
   }
 
   String getScoreLabel(double score) {
@@ -426,11 +432,11 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   static const double _kCardOpacityLight =
       0.98; // light mode: thick, minimal see-through (match analytics)
 
-  // Design system
-  static const Color _kPrimary = Color(0xFFC10D00);
-  static const Color _kDarkSurface = Color(0xFF2C3E50);
-  static const double _kCardRadius = 16;
-  static const double _kBadgeRadius = 20;
+  // Design system - now using shared BrandTokens
+  // static const Color BrandTokens.primary = Color(0xFFC10D00); // Use BrandTokens.primary
+  // static const Color BrandTokens.darkSurface = Color(0xFF2C3E50); // Use BrandTokens.darkSurface
+  // static const double BrandTokens.cardRadius = 16; // Use BrandTokens.cardRadius
+  // static const double BrandTokens.badgeRadius = 20; // Use BrandTokens.badgeRadius
   static const double _kSearchRadius = 25;
   static const double _kInputRadius = 4;
   static const double _kMainPadding = 16;
@@ -534,7 +540,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(_kPrimary),
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(BrandTokens.primary),
                       ),
                       const SizedBox(height: _kMainPadding),
                       Text(
@@ -595,12 +602,12 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                 padding: const EdgeInsets.all(_kMainPadding),
                                 decoration: BoxDecoration(
                                   color: themeProvider.isDarkMode
-                                      ? _kDarkSurface.withValues(
+                                      ? BrandTokens.darkSurface.withValues(
                                           alpha: _kCardAndHeaderOpacity)
                                       : Colors.white.withValues(
                                           alpha: _kCardAndHeaderOpacity),
-                                  borderRadius:
-                                      BorderRadius.circular(_kCardRadius),
+                                  borderRadius: BorderRadius.circular(
+                                      BrandTokens.cardRadius),
                                   boxShadow: [
                                     BoxShadow(
                                       color:
@@ -646,10 +653,12 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                               horizontal: _kMainPadding,
                                               vertical: _kSmallGap),
                                           decoration: BoxDecoration(
-                                            color: _kPrimary.withValues(
-                                                alpha: _kTranslucentOpacity),
+                                            color: BrandTokens.primary
+                                                .withValues(
+                                                    alpha:
+                                                        _kTranslucentOpacity),
                                             borderRadius: BorderRadius.circular(
-                                                _kBadgeRadius),
+                                                BrandTokens.badgeRadius),
                                           ),
                                           child: Text(
                                             "Reviewed CVs",
@@ -683,14 +692,14 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                             underline: const SizedBox(),
                                             dropdownColor:
                                                 themeProvider.isDarkMode
-                                                    ? _kDarkSurface
+                                                    ? BrandTokens.darkSurface
                                                     : Colors.white,
                                             style: GoogleFonts.poppins(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w600,
                                               color: themeProvider.isDarkMode
                                                   ? Colors.white
-                                                  : _kPrimary,
+                                                  : BrandTokens.primary,
                                             ),
                                             items: const [
                                               DropdownMenuItem(
@@ -740,9 +749,10 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                               filled: true,
                                               fillColor: themeProvider
                                                       .isDarkMode
-                                                  ? _kDarkSurface.withValues(
-                                                      alpha:
-                                                          _kTranslucentOpacity)
+                                                  ? BrandTokens.darkSurface
+                                                      .withValues(
+                                                          alpha:
+                                                              _kTranslucentOpacity)
                                                   : Colors.white.withValues(
                                                       alpha:
                                                           _kTranslucentOpacity),
@@ -789,9 +799,10 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                               filled: true,
                                               fillColor: themeProvider
                                                       .isDarkMode
-                                                  ? _kDarkSurface.withValues(
-                                                      alpha:
-                                                          _kTranslucentOpacity)
+                                                  ? BrandTokens.darkSurface
+                                                      .withValues(
+                                                          alpha:
+                                                              _kTranslucentOpacity)
                                                   : Colors.white.withValues(
                                                       alpha:
                                                           _kTranslucentOpacity),
@@ -802,8 +813,10 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                             ),
                                             dropdownColor: themeProvider
                                                     .isDarkMode
-                                                ? _kDarkSurface.withValues(
-                                                    alpha: _kTranslucentOpacity)
+                                                ? BrandTokens.darkSurface
+                                                    .withValues(
+                                                        alpha:
+                                                            _kTranslucentOpacity)
                                                 : Colors.white.withValues(
                                                     alpha:
                                                         _kTranslucentOpacity),
@@ -855,9 +868,10 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                               filled: true,
                                               fillColor: themeProvider
                                                       .isDarkMode
-                                                  ? _kDarkSurface.withValues(
-                                                      alpha:
-                                                          _kTranslucentOpacity)
+                                                  ? BrandTokens.darkSurface
+                                                      .withValues(
+                                                          alpha:
+                                                              _kTranslucentOpacity)
                                                   : Colors.white.withValues(
                                                       alpha:
                                                           _kTranslucentOpacity),
@@ -868,8 +882,10 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                             ),
                                             dropdownColor: themeProvider
                                                     .isDarkMode
-                                                ? _kDarkSurface.withValues(
-                                                    alpha: _kTranslucentOpacity)
+                                                ? BrandTokens.darkSurface
+                                                    .withValues(
+                                                        alpha:
+                                                            _kTranslucentOpacity)
                                                 : Colors.white.withValues(
                                                     alpha:
                                                         _kTranslucentOpacity),
@@ -897,12 +913,12 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                 child: Container(
                                   decoration: BoxDecoration(
                                     color: themeProvider.isDarkMode
-                                        ? _kDarkSurface.withValues(
+                                        ? BrandTokens.darkSurface.withValues(
                                             alpha: _kCardAndHeaderOpacity)
                                         : Colors.white.withValues(
                                             alpha: _kCardOpacityLight),
-                                    borderRadius:
-                                        BorderRadius.circular(_kCardRadius),
+                                    borderRadius: BorderRadius.circular(
+                                        BrandTokens.cardRadius),
                                     boxShadow: [
                                       BoxShadow(
                                         color:
@@ -922,14 +938,16 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                             vertical: 12),
                                         decoration: BoxDecoration(
                                           color: themeProvider.isDarkMode
-                                              ? _kDarkSurface.withValues(
-                                                  alpha: _kCardAndHeaderOpacity)
+                                              ? BrandTokens.darkSurface
+                                                  .withValues(
+                                                      alpha:
+                                                          _kCardAndHeaderOpacity)
                                               : Colors.white.withValues(
                                                   alpha: _kCardOpacityLight),
                                           borderRadius:
                                               const BorderRadius.vertical(
                                                   top: Radius.circular(
-                                                      _kCardRadius)),
+                                                      BrandTokens.cardRadius)),
                                         ),
                                         child: Row(
                                           children: [
@@ -1005,9 +1023,10 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                       vertical: _kSmallGap),
                                               decoration: BoxDecoration(
                                                 color: themeProvider.isDarkMode
-                                                    ? _kDarkSurface.withValues(
-                                                        alpha:
-                                                            _kCardAndHeaderOpacity)
+                                                    ? BrandTokens.darkSurface
+                                                        .withValues(
+                                                            alpha:
+                                                                _kCardAndHeaderOpacity)
                                                     : Colors.white.withValues(
                                                         alpha:
                                                             _kCardOpacityLight),
@@ -1015,7 +1034,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                     ? const BorderRadius
                                                         .vertical(
                                                         bottom: Radius.circular(
-                                                            _kCardRadius))
+                                                            BrandTokens
+                                                                .cardRadius))
                                                     : null,
                                                 border: isLast
                                                     ? null
@@ -1048,7 +1068,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                               const BoxDecoration(
                                                             shape:
                                                                 BoxShape.circle,
-                                                            color: _kPrimary,
+                                                            color: BrandTokens
+                                                                .primary,
                                                           ),
                                                           child: const Icon(
                                                             Icons.person,
@@ -1126,7 +1147,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                                 vertical: 6),
                                                         decoration:
                                                             BoxDecoration(
-                                                          color: _kPrimary.withValues(
+                                                          color: BrandTokens.primary.withValues(
                                                               alpha: (review['gender'] ==
                                                                           null ||
                                                                       review['gender'] ==
@@ -1137,7 +1158,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                                   : _kTranslucentOpacity),
                                                           borderRadius:
                                                               BorderRadius.circular(
-                                                                  _kCardRadius),
+                                                                  BrandTokens
+                                                                      .cardRadius),
                                                         ),
                                                         child: Text(
                                                           review['gender'] ??
@@ -1215,7 +1237,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                       style: ElevatedButton
                                                           .styleFrom(
                                                         backgroundColor:
-                                                            _kPrimary,
+                                                            BrandTokens.primary,
                                                         foregroundColor:
                                                             Colors.white,
                                                         padding:
@@ -1228,7 +1250,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                             RoundedRectangleBorder(
                                                           borderRadius:
                                                               BorderRadius.circular(
-                                                                  _kCardRadius),
+                                                                  BrandTokens
+                                                                      .cardRadius),
                                                         ),
                                                         elevation: 2,
                                                       ),
@@ -1266,7 +1289,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                       style: ElevatedButton
                                                           .styleFrom(
                                                         backgroundColor:
-                                                            _kPrimary,
+                                                            BrandTokens.primary,
                                                         foregroundColor:
                                                             Colors.white,
                                                         padding:
@@ -1279,7 +1302,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                             RoundedRectangleBorder(
                                                           borderRadius:
                                                               BorderRadius.circular(
-                                                                  _kCardRadius),
+                                                                  BrandTokens
+                                                                      .cardRadius),
                                                         ),
                                                         elevation: 2,
                                                       ),

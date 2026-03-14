@@ -91,6 +91,7 @@ class AdminService {
   }
 
   // Get job with detailed statistics
+
   Future<Map<String, dynamic>> getJobDetailed(int jobId) async {
     final authHeaders = await _getAuthHeaders();
     final res = await http.get(
@@ -1916,6 +1917,167 @@ class AdminService {
     }
 
     throw Exception('Failed to check scheduling conflicts: ${res.body}');
+  }
+
+  // ---------- PIPELINE METHODS ----------
+  /// Load complete pipeline data for admin dashboard
+  Future<Map<String, dynamic>> loadPipelineData() async {
+    // Mock data for now - replace with actual API calls
+    final mockPipelineData = {
+      'requisitions': [
+        {
+          'id': 1,
+          'title': 'Senior Developer',
+          'department': 'Engineering',
+          'status': 'active'
+        },
+        {
+          'id': 2,
+          'title': 'Product Manager',
+          'department': 'Product',
+          'status': 'active'
+        },
+      ],
+      'applications': [
+        {
+          'id': 1,
+          'candidate_name': 'John Doe',
+          'position': 'Frontend Developer',
+          'status': 'applied'
+        },
+        {
+          'id': 2,
+          'candidate_name': 'Jane Smith',
+          'position': 'Backend Developer',
+          'status': 'screening'
+        },
+        {
+          'id': 3,
+          'candidate_name': 'Bob Wilson',
+          'position': 'DevOps Engineer',
+          'status': 'interview'
+        },
+      ],
+      'interviews': [
+        {
+          'id': 1,
+          'candidate_name': 'John Doe',
+          'position': 'Frontend Developer',
+          'date': '2024-01-15',
+          'status': 'scheduled'
+        },
+        {
+          'id': 2,
+          'candidate_name': 'Jane Smith',
+          'position': 'Backend Developer',
+          'date': '2024-01-16',
+          'status': 'completed'
+        },
+      ],
+      'offers': [
+        {
+          'id': 1,
+          'candidate_name': 'John Doe',
+          'position': 'Frontend Developer',
+          'status': 'draft'
+        },
+        {
+          'id': 2,
+          'candidate_name': 'Jane Smith',
+          'position': 'Backend Developer',
+          'status': 'sent'
+        },
+      ],
+      'stages': [
+        {'stage_name': 'Screening', 'count': 5},
+        {'stage_name': 'Assessment', 'count': 3},
+        {'stage_name': 'Interview', 'count': 2},
+        {'stage_name': 'Offer', 'count': 1},
+        {'stage_name': 'Hired', 'count': 0},
+      ],
+      'total_applications': 10,
+      'active_jobs': 2,
+      'offers_sent': 2,
+    };
+
+    return mockPipelineData;
+  }
+
+  /// Get pipeline statistics for dashboard
+  Future<Map<String, dynamic>> getPipelineStats() async {
+    // Mock stats data - replace with actual API calls
+    final mockStats = {
+      'total_requisitions': 5,
+      'active_requisitions': 2,
+      'total_applications': 25,
+      'pending_reviews': 3,
+      'interviews_scheduled': 8,
+      'offers_pending': 4,
+    };
+
+    return mockStats;
+  }
+
+  // ---------- OFFER METHODS ----------
+  /// Get offers by status for review queue
+  Future<List<Map<String, dynamic>>> getOffersByStatus(String status) async {
+    // Mock data - replace with actual API calls
+    final mockOffers = [
+      {
+        'id': 1,
+        'candidate_name': 'Alice Johnson',
+        'candidate_email': 'alice@example.com',
+        'position': 'Senior Frontend Developer',
+        'department': 'Engineering',
+        'salary': '\$120,000',
+        'status': status,
+        'start_date': '2024-01-10',
+        'description': 'Experienced frontend developer with React expertise',
+      },
+      {
+        'id': 2,
+        'candidate_name': 'Bob Williams',
+        'candidate_email': 'bob@example.com',
+        'position': 'Product Manager',
+        'department': 'Product',
+        'salary': '\$110,000',
+        'status': status,
+        'start_date': '2024-01-08',
+        'description': 'Product management background with agile experience',
+      },
+    ];
+
+    return mockOffers;
+  }
+
+  /// Review an offer with action and notes
+  Future<Map<String, dynamic>> reviewOffer({
+    required int offerId,
+    required String action,
+    String notes = '',
+  }) async {
+    final token = await AuthService.getAccessToken();
+
+    final data = {
+      'offer_id': offerId,
+      'action': action,
+      'notes': notes,
+    };
+
+    final res = await http.post(
+      Uri.parse('http://127.0.0.1:5000/api/admin/offers/review'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token'
+      },
+      body: json.encode(data),
+    );
+
+    if (res.statusCode == 200) {
+      return Map<String, dynamic>.from(json.decode(res.body));
+    } else {
+      throw Exception('Failed to review offer: ${res.body}');
+    }
   }
 
   // ---------- INTERVIEW DASHBOARD ----------
