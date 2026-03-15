@@ -9,8 +9,7 @@ import '../../providers/theme_provider.dart';
 import '../../services/admin_service.dart';
 import '../../widgets/custom_button.dart';
 import 'analytics_export_stub.dart'
-    if (dart.library.html) 'analytics_export_web.dart'
-    as analytics_export;
+    if (dart.library.html) 'analytics_export_web.dart' as analytics_export;
 import 'candidate_detail_screen.dart';
 
 class CandidateManagementScreen extends StatefulWidget {
@@ -67,14 +66,11 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     var list = candidates;
     final query = _searchController.text.trim().toLowerCase();
     if (query.isNotEmpty) {
-      final words = query
-          .split(RegExp(r'\s+'))
-          .where((s) => s.isNotEmpty)
-          .toList();
+      final words =
+          query.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
       list = list.where((c) {
-        final name = (c['full_name'] ?? c['name'] ?? '')
-            .toString()
-            .toLowerCase();
+        final name =
+            (c['full_name'] ?? c['name'] ?? '').toString().toLowerCase();
         final email = (c['email'] ?? '').toString().toLowerCase();
         final job = (c['job_title'] ?? '').toString().toLowerCase();
         final s = '$name $email $job';
@@ -113,7 +109,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     });
 
     try {
-      final List<dynamic> rawApplications = [];
+      List<dynamic> rawApplications = [];
       if (widget.jobId <= 0) {
         rawApplications = await admin.getAllApplicationsForMyJobs();
       } else {
@@ -130,8 +126,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
         return {
           'application_id': map['application_id'] ?? map['id'],
           'candidate_id': candidateData['id'] ?? map['candidate_id'],
-          'full_name':
-              candidateData['full_name'] ??
+          'full_name': candidateData['full_name'] ??
               candidateData['name'] ??
               map['full_name'],
           'email': candidateData['email'] ?? map['email'],
@@ -139,8 +134,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
           'status': map['status'],
           'cv_score': map['cv_score'] ?? map['overall_score'] ?? 0,
           'assessment_score': map['assessment_score'] ?? 0,
-          'overall_score':
-              map['overall_score'] ??
+          'overall_score': map['overall_score'] ??
               (map['scoring_breakdown']?['overall'] ?? 0),
           'job_title': map['job_title'],
           'job_id': map['job_id'],
@@ -162,8 +156,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
         candidates = fetched;
         statusMessage = fetched.isEmpty
             ? (widget.jobId <= 0
-                  ? "No candidates have applied to your jobs yet."
-                  : "No candidates have applied to this job yet.")
+                ? "No candidates have applied to your jobs yet."
+                : "No candidates have applied to this job yet.")
             : null;
       });
     } catch (e) {
@@ -186,10 +180,14 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     try {
       headerBytes = (await rootBundle.load(
         'assets/images/logo2.png',
-      )).buffer.asUint8List();
+      ))
+          .buffer
+          .asUint8List();
       footerBytes = (await rootBundle.load(
         'assets/images/logo.png',
-      )).buffer.asUint8List();
+      ))
+          .buffer
+          .asUint8List();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -305,13 +303,13 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                   ...list.map((c) {
                     final cv = c['cv_score'] != null
                         ? (c['cv_score'] is num
-                              ? (c['cv_score'] as num).toStringAsFixed(0)
-                              : c['cv_score'].toString())
+                            ? (c['cv_score'] as num).toStringAsFixed(0)
+                            : c['cv_score'].toString())
                         : '—';
                     final ov = c['overall_score'] != null
                         ? (c['overall_score'] is num
-                              ? (c['overall_score'] as num).toStringAsFixed(0)
-                              : c['overall_score'].toString())
+                            ? (c['overall_score'] as num).toStringAsFixed(0)
+                            : c['overall_score'].toString())
                         : '—';
                     return [
                       (c['full_name'] ?? c['name'] ?? '—').toString(),
@@ -363,18 +361,18 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
       final rows = list.map((c) {
         final cv = c['cv_score'] != null
             ? (c['cv_score'] is num
-                  ? (c['cv_score'] as num).toString()
-                  : c['cv_score'].toString())
+                ? (c['cv_score'] as num).toString()
+                : c['cv_score'].toString())
             : '';
         final assess = c['assessment_score'] != null
             ? (c['assessment_score'] is num
-                  ? (c['assessment_score'] as num).toString()
-                  : c['assessment_score'].toString())
+                ? (c['assessment_score'] as num).toString()
+                : c['assessment_score'].toString())
             : '';
         final ov = c['overall_score'] != null
             ? (c['overall_score'] is num
-                  ? (c['overall_score'] as num).toString()
-                  : c['overall_score'].toString())
+                ? (c['overall_score'] as num).toString()
+                : c['overall_score'].toString())
             : '';
         return '${_csvEscape((c['full_name'] ?? c['name'] ?? '').toString())},${_csvEscape((c['email'] ?? '').toString())},${_csvEscape((c['job_title'] ?? '').toString())},$cv,$assess,$ov,${_csvEscape((c['status'] ?? '').toString())},${_csvEscape((c['recommendation'] ?? '').toString())}';
       });
@@ -497,77 +495,6 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     }
   }
 
-  Future<void> _updateApplicationStatus(
-    int applicationId,
-    String newStatus,
-  ) async {
-    try {
-      final success = await admin.updateApplicationStatus(
-        applicationId,
-        newStatus,
-      );
-      if (success) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Status updated successfully'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-        // Optimistically update local state
-        setState(() {
-          final idx = candidates.indexWhere(
-            (c) => c['application_id'] == applicationId,
-          );
-          if (idx != -1) {
-            candidates[idx]['status'] = newStatus;
-          }
-        });
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to update status'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating status: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
-  // Helper to get status color for dropdown items
-  Color _statusColor(String status, bool isDark) {
-    switch (status) {
-      case 'applied':
-        return Colors.blue;
-      case 'screening':
-        return Colors.orange;
-      case 'assessment':
-        return Colors.purple;
-      case 'interview':
-        return Colors.teal;
-      case 'offer':
-        return Colors.amber;
-      case 'hired':
-        return Colors.green;
-      case 'rejected':
-        return Colors.red;
-      default:
-        return isDark ? Colors.white : Colors.black87;
-    }
-  }
-
   // Helper method to safely get initials
   String getInitials(String? fullName) {
     if (fullName == null || fullName.isEmpty) return "?";
@@ -581,9 +508,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
   Widget _buildCandidatesTable(ThemeProvider themeProvider) {
     final list = _filteredCandidates();
     final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
-    final borderColor = themeProvider.isDarkMode
-        ? Colors.grey.shade800
-        : Colors.grey.shade300;
+    final borderColor =
+        themeProvider.isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
@@ -720,14 +646,13 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                 );
                 final cvScore = c['cv_score'] != null
                     ? (c['cv_score'] is num
-                          ? (c['cv_score'] as num).toDouble()
-                          : double.tryParse(c['cv_score'].toString()) ?? 0.0)
+                        ? (c['cv_score'] as num).toDouble()
+                        : double.tryParse(c['cv_score'].toString()) ?? 0.0)
                     : 0.0;
                 final overallScore = c['overall_score'] != null
                     ? (c['overall_score'] is num
-                          ? (c['overall_score'] as num).toDouble()
-                          : double.tryParse(c['overall_score'].toString()) ??
-                                0.0)
+                        ? (c['overall_score'] as num).toDouble()
+                        : double.tryParse(c['overall_score'].toString()) ?? 0.0)
                     : 0.0;
                 return InkWell(
                   onTap: () => openCandidateDetails(c),
@@ -931,11 +856,10 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                       horizontal: 20,
                       vertical: 16,
                     ),
-                    color:
-                        (themeProvider.isDarkMode
-                                ? const Color(0xFF14131E)
-                                : Colors.white)
-                            .withValues(alpha: 0.9),
+                    color: (themeProvider.isDarkMode
+                            ? const Color(0xFF14131E)
+                            : Colors.white)
+                        .withValues(alpha: 0.9),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -973,9 +897,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             OutlinedButton.icon(
-                              onPressed: _isExportingCsv
-                                  ? null
-                                  : _exportShortlistCsv,
+                              onPressed:
+                                  _isExportingCsv ? null : _exportShortlistCsv,
                               icon: _isExportingCsv
                                   ? const SizedBox(
                                       width: 18,
@@ -1135,7 +1058,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                                         s == 'all'
                                             ? 'All'
                                             : s[0].toUpperCase() +
-                                                  s.substring(1),
+                                                s.substring(1),
                                         style: TextStyle(
                                           fontFamily: 'Poppins',
                                           color: themeProvider.isDarkMode
@@ -1214,35 +1137,35 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                             ),
                           )
                         : statusMessage != null
-                        ? Center(
-                            child: Text(
-                              statusMessage!,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                color: themeProvider.isDarkMode
-                                    ? Colors.grey.shade300
-                                    : Colors.black54,
-                                fontSize: 16,
-                              ),
-                            ),
-                          )
-                        : _filteredCandidates().isEmpty
-                        ? Center(
-                            child: Text(
-                              candidates.isEmpty
-                                  ? "No candidates found"
-                                  : "No candidates match your search or filter",
-                              style: TextStyle(
-                                fontFamily: 'Poppins',
-                                color: themeProvider.isDarkMode
-                                    ? Colors.grey.shade400
-                                    : Colors.black54,
-                                fontSize: 16,
-                              ),
-                            ),
-                          )
-                        : _buildCandidatesTable(themeProvider),
+                            ? Center(
+                                child: Text(
+                                  statusMessage!,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade300
+                                        : Colors.black54,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              )
+                            : _filteredCandidates().isEmpty
+                                ? Center(
+                                    child: Text(
+                                      candidates.isEmpty
+                                          ? "No candidates found"
+                                          : "No candidates match your search or filter",
+                                      style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        color: themeProvider.isDarkMode
+                                            ? Colors.grey.shade400
+                                            : Colors.black54,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  )
+                                : _buildCandidatesTable(themeProvider),
                   ),
                 ],
               ),
@@ -1251,48 +1174,5 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
         ),
       ),
     );
-  }
-
-  // CV Preview and Download Methods
-  Future<void> _previewCV(String cvUrl) async {
-    try {
-      final uri = Uri.parse(cvUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.inAppWebView);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Could not preview CV')));
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error previewing CV: $e')));
-      }
-    }
-  }
-
-  Future<void> _downloadCV(String cvUrl) async {
-    try {
-      final uri = Uri.parse(cvUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not download CV')),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error downloading CV: $e')));
-      }
-    }
   }
 }

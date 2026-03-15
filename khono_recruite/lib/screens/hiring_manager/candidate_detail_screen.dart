@@ -50,6 +50,14 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
     'Reject',
   ];
 
+  static const List<String> _classificationOptions = [
+    'Not Classified',
+    'High Priority',
+    'Medium Priority',
+    'Low Priority',
+    'Not Suitable',
+  ];
+
   late final AnimationController _hoverController;
   late final Animation<double> _hoverAnimation;
 
@@ -80,6 +88,60 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
     if (v == null) return '—';
     if (v is List) return v.isEmpty ? '—' : v.join(', ');
     return v.toString();
+  }
+
+  String _normalizeClassificationStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'high priority':
+        return 'High Priority';
+      case 'medium priority':
+        return 'Medium Priority';
+      case 'low priority':
+        return 'Low Priority';
+      case 'not suitable':
+        return 'Not Suitable';
+      case 'not classified':
+      default:
+        return 'Not Classified';
+    }
+  }
+
+  Color _statusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'high priority':
+        return Colors.red;
+      case 'medium priority':
+        return Colors.orange;
+      case 'low priority':
+        return Colors.yellow;
+      case 'not suitable':
+        return Colors.grey;
+      case 'not classified':
+      default:
+        return Colors.blue;
+    }
+  }
+
+  Future<void> _updateApplicationStatus(String newStatus) async {
+    try {
+      final adminService = AdminService();
+      await adminService.updateApplicationStatus(
+          widget.applicationId, newStatus);
+
+      setState(() {
+        if (candidateData != null) {
+          candidateData!['status'] = newStatus;
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Status updated to $newStatus')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update status: $e')),
+      );
+    }
   }
 
   Future<void> fetchAllData() async {
@@ -269,13 +331,13 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
                   child: CircularProgressIndicator(color: Colors.black87),
                 )
               : errorMessage != null
-              ? Center(
-                  child: Text(
-                    errorMessage!,
-                    style: const TextStyle(color: Colors.black87),
-                  ),
-                )
-              : _buildTilesGrid(themeProvider),
+                  ? Center(
+                      child: Text(
+                        errorMessage!,
+                        style: const TextStyle(color: Colors.black87),
+                      ),
+                    )
+                  : _buildTilesGrid(themeProvider),
         ),
       ),
     );
@@ -355,10 +417,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
                                 candidateData!['status']
                                     ?.toString()
                                     .toLowerCase()) {
-                          await _updateApplicationStatus(
-                            widget.applicationId,
-                            newStatus,
-                          );
+                          await _updateApplicationStatus(newStatus);
                         }
                       },
                     ),
@@ -392,9 +451,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
             Text(
               "Click top-right icon to download CV",
               style: TextStyle(
-                color: themeProvider.isDarkMode
-                    ? Colors.white70
-                    : Colors.black54,
+                color:
+                    themeProvider.isDarkMode ? Colors.white70 : Colors.black54,
                 fontSize: 12,
               ),
             ),
@@ -523,8 +581,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
           int crossAxisCount = 1;
           if (constraints.maxWidth > 1200)
             crossAxisCount = 3;
-          else if (constraints.maxWidth > 800)
-            crossAxisCount = 2;
+          else if (constraints.maxWidth > 800) crossAxisCount = 2;
 
           return GridView.count(
             crossAxisCount: crossAxisCount,
@@ -589,9 +646,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
                 color: textColor,
               ),
             ),
-            ...missing
-                .take(10)
-                .map(
+            ...missing.take(10).map(
                   (s) => Padding(
                     padding: const EdgeInsets.only(left: 8),
                     child: Text(
@@ -616,9 +671,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
                 color: textColor,
               ),
             ),
-            ...suggestions
-                .take(5)
-                .map(
+            ...suggestions.take(5).map(
                   (s) => Padding(
                     padding: const EdgeInsets.only(left: 8),
                     child: Text(
@@ -671,9 +724,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
 
   Widget _buildKnockoutTile(ThemeProvider themeProvider) {
     final violations = candidateData!['knockout_rule_violations'];
-    final list = violations is List
-        ? List<dynamic>.from(violations)
-        : <dynamic>[];
+    final list =
+        violations is List ? List<dynamic>.from(violations) : <dynamic>[];
     final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
     if (list.isEmpty) {
       return _buildFlatTile(
@@ -839,11 +891,10 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color:
-                (themeProvider.isDarkMode
-                        ? const Color(0xFF14131E)
-                        : Colors.white)
-                    .withValues(alpha: 0.9),
+            color: (themeProvider.isDarkMode
+                    ? const Color(0xFF14131E)
+                    : Colors.white)
+                .withValues(alpha: 0.9),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: themeProvider.isDarkMode ? Colors.white24 : Colors.white,
@@ -934,8 +985,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
         style: TextStyle(
           fontSize: 14,
           fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-          color:
-              color ??
+          color: color ??
               (themeProvider.isDarkMode ? Colors.white : Colors.black87),
         ),
       ),
@@ -969,9 +1019,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
               child: Text(
                 "Admin Panel",
                 style: TextStyle(
-                  color: themeProvider.isDarkMode
-                      ? Colors.white
-                      : Colors.black87,
+                  color:
+                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
                 ),

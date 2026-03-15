@@ -14,6 +14,7 @@ import 'job_details_page.dart';
 import 'assessment_page.dart';
 import 'redirect_to_assessment_page.dart';
 import '../../services/candidate_service.dart';
+import '../../services/unified_api_service.dart';
 import 'assessments_results_screen.dart';
 import '../../screens/candidate/user_profile_page.dart';
 import 'saved_application_screen.dart';
@@ -101,9 +102,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         // Token expired and refresh failed; keep showing persisted name if any, and prompt re-login
         final persisted = await AuthService.getPersistedDisplayName();
         _safeSetState(
-          () => _userName = (persisted != null && persisted.isNotEmpty)
-              ? persisted
-              : null,
+          () => _userName =
+              (persisted != null && persisted.isNotEmpty) ? persisted : null,
         );
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -154,9 +154,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       if (mounted) {
         final persisted = await AuthService.getPersistedDisplayName();
         _safeSetState(
-          () => _userName = (persisted != null && persisted.isNotEmpty)
-              ? persisted
-              : null,
+          () => _userName =
+              (persisted != null && persisted.isNotEmpty) ? persisted : null,
         );
       }
     }
@@ -264,9 +263,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       ]);
       if (mounted) {
         final apps = List<dynamic>.from(results[0] as Iterable<dynamic>);
-        final submittedOrCompletedList = apps
-            .where(_isSubmittedOrCompletedApplication)
-            .toList();
+        final submittedOrCompletedList =
+            apps.where(_isSubmittedOrCompletedApplication).toList();
         final submittedOrCompletedMaps = submittedOrCompletedList
             .whereType<Map>()
             .map((e) => Map<String, dynamic>.from(e))
@@ -286,9 +284,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             .whereType<Map>()
             .map((e) => Map<String, dynamic>.from(e))
             .toList();
-        final firstInProgress = inProgressMaps.isNotEmpty
-            ? inProgressMaps.first
-            : null;
+        final firstInProgress =
+            inProgressMaps.isNotEmpty ? inProgressMaps.first : null;
         _CandidateDashboardState._cachedInProgressApps = inProgressMaps;
         final interviewData = results[2] is Map<String, dynamic>
             ? results[2] as Map<String, dynamic>
@@ -296,9 +293,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         final scheduledCount = interviewData['scheduled_count'] is int
             ? interviewData['scheduled_count'] as int
             : (int.tryParse(
-                    interviewData['scheduled_count']?.toString() ?? '',
-                  ) ??
-                  0);
+                  interviewData['scheduled_count']?.toString() ?? '',
+                ) ??
+                0);
         _safeSetState(() {
           _applicationsCount = submittedOrCompletedMaps.length;
           _savedCount = (results[1] as List).length;
@@ -839,9 +836,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           label,
           style: GoogleFonts.poppins(
             fontSize: 15,
-            color: isActive
-                ? Colors.white
-                : Colors.white.withValues(alpha: 0.85),
+            color:
+                isActive ? Colors.white : Colors.white.withValues(alpha: 0.85),
             fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
           ),
         ),
@@ -1319,8 +1315,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             incompleteCount > 0
                 ? 'You have $incompleteCount application${incompleteCount == 1 ? '' : 's'} in progress.'
                 : (_applicationsCount != null && _applicationsCount! > 0)
-                ? 'You have $_applicationsCount submitted application${_applicationsCount == 1 ? '' : 's'}.'
-                : 'Explore your opportunities and applications today',
+                    ? 'You have $_applicationsCount submitted application${_applicationsCount == 1 ? '' : 's'}.'
+                    : 'Explore your opportunities and applications today',
             style: GoogleFonts.poppins(fontSize: 16, color: Colors.white70),
           ),
           SizedBox(height: 24),
@@ -1548,9 +1544,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     if (_pendingApplyJob != null) {
       final pendingId = _pendingApplyJob!['id'];
       if (pendingId != null) {
-        final id = pendingId is int
-            ? pendingId
-            : int.tryParse(pendingId.toString());
+        final id =
+            pendingId is int ? pendingId : int.tryParse(pendingId.toString());
         if (id != null && !seenJobIds.contains(id)) {
           seenJobIds.add(id);
           items.add({
@@ -1695,9 +1690,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       progressPercent = _progressPercent(draftData, lastSaved);
       if (progressPercent == 0) progressPercent = 25;
       showProgressBar = true;
-      final timeAgo = savedAt != null && savedAt.isNotEmpty
-          ? _timeAgo(savedAt)
-          : null;
+      final timeAgo =
+          savedAt != null && savedAt.isNotEmpty ? _timeAgo(savedAt) : null;
       if (timeAgo != null && timeAgo.isNotEmpty) {
         statusLine = '$progressPercent% complete - last updated $timeAgo';
       } else {

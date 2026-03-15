@@ -763,18 +763,16 @@ def list_candidates():
         if search:
             search_term = f"%{search}%"
             query = query.filter(
-                db.or_(
+                or_(
                     Candidate.full_name.ilike(search_term),
-                    Candidate.phone.ilike(search_term),
-                    Candidate.location.ilike(search_term),
+                    User.email.ilike(search_term) if User else False,
                     Candidate.title.ilike(search_term)
                 )
             )
         
         # Apply status filter (based on applications)
         if status_filter:
-            if not (current_user and current_user.role == "hiring_manager"):
-                query = query.join(Application, Application.candidate_id == Candidate.id)
+            query = query.join(Application, Application.candidate_id == Candidate.id)
             query = query.filter(Application.status == status_filter)
         
         # Paginate

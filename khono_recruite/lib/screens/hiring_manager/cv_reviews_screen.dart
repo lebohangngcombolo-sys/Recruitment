@@ -22,6 +22,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   String searchQuery = '';
   String selectedGender = 'All';
   String selectedScoreFilter = 'All';
+  String selectedAnalysisFilter = 'All';
   final Set<int> _expandedIds = {};
 
   @override
@@ -378,8 +379,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
           .where(
             (cv) =>
                 (cv['full_name'] as String?)?.toLowerCase().contains(
-                  searchQuery.toLowerCase(),
-                ) ??
+                      searchQuery.toLowerCase(),
+                    ) ??
                 false,
           )
           .toList();
@@ -420,7 +421,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
         final cvAnalysis = cv['cv_analysis'];
         final status =
             (cvAnalysis is Map ? (cvAnalysis['status'] as String?) : null) ??
-            'not_analyzed';
+                'not_analyzed';
         if (selectedAnalysisFilter == 'Analyzed') {
           return status.toLowerCase() == 'completed';
         }
@@ -471,10 +472,11 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
       margin: const EdgeInsets.symmetric(horizontal: _kMainPadding),
       decoration: BoxDecoration(
         color: isDark
-            ? _kDarkSurface.withValues(alpha: _kCardAndHeaderOpacity * 0.8)
+            ? BrandTokens.darkSurface.withValues(alpha: 0.8)
             : Colors.grey.shade50,
         border: Border(
-          left: BorderSide(color: _kPrimary.withValues(alpha: 0.6), width: 3),
+          left: BorderSide(
+              color: BrandTokens.primary.withValues(alpha: 0.6), width: 3),
         ),
       ),
       child: Column(
@@ -546,9 +548,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            ...suggestions
-                .take(5)
-                .map(
+            ...suggestions.take(5).map(
                   (s) => Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Text(
@@ -585,9 +585,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            ...knockoutViolations
-                .take(5)
-                .map(
+            ...knockoutViolations.take(5).map(
                   (v) => Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Text(
@@ -608,10 +606,9 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
       0.98; // light mode: thick, minimal see-through (match analytics)
 
   // Design system - now using shared BrandTokens
-  // static const Color BrandTokens.primary = Color(0xFFC10D00); // Use BrandTokens.primary
-  // static const Color BrandTokens.darkSurface = Color(0xFF2C3E50); // Use BrandTokens.darkSurface
-  // static const double BrandTokens.cardRadius = 16; // Use BrandTokens.cardRadius
-  // static const double BrandTokens.badgeRadius = 20; // Use BrandTokens.badgeRadius
+  // static const Color _kPrimary = Color(0xFFC10D00); // Use BrandTokens.primary
+  // static const Color _kDarkSurface = Color(0xFF2C3E50); // Use BrandTokens.darkSurface
+  static const double _kCardRadius = 16; // Use _kCardRadius
   static const double _kSearchRadius = 25;
   static const double _kInputRadius = 4;
   static const double _kMainPadding = 16;
@@ -784,7 +781,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                           alpha: _kCardAndHeaderOpacity,
                                         ),
                                   borderRadius: BorderRadius.circular(
-                                    BrandTokens.cardRadius,
+                                    _kCardRadius,
                                   ),
                                   boxShadow: [
                                     BoxShadow(
@@ -833,10 +830,10 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                             vertical: _kSmallGap,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: BrandTokens.primary
-                                                .withValues(
-                                                  alpha: _kTranslucentOpacity,
-                                                ),
+                                            color:
+                                                BrandTokens.primary.withValues(
+                                              alpha: _kTranslucentOpacity,
+                                            ),
                                             borderRadius: BorderRadius.circular(
                                               BrandTokens.badgeRadius,
                                             ),
@@ -873,8 +870,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                             underline: const SizedBox(),
                                             dropdownColor:
                                                 themeProvider.isDarkMode
-                                                ? BrandTokens.darkSurface
-                                                : Colors.white,
+                                                    ? BrandTokens.darkSurface
+                                                    : Colors.white,
                                             style: GoogleFonts.poppins(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w600,
@@ -931,21 +928,21 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                               border: OutlineInputBorder(
                                                 borderRadius:
                                                     BorderRadius.circular(
-                                                      _kSearchRadius,
-                                                    ),
+                                                  _kSearchRadius,
+                                                ),
                                               ),
                                               filled: true,
                                               fillColor:
                                                   themeProvider.isDarkMode
-                                                  ? BrandTokens.darkSurface
-                                                        .withValues(
+                                                      ? BrandTokens.darkSurface
+                                                          .withValues(
                                                           alpha:
                                                               _kTranslucentOpacity,
                                                         )
-                                                  : Colors.white.withValues(
-                                                      alpha:
-                                                          _kTranslucentOpacity,
-                                                    ),
+                                                      : Colors.white.withValues(
+                                                          alpha:
+                                                              _kTranslucentOpacity,
+                                                        ),
                                             ),
                                             style: GoogleFonts.poppins(
                                               color: themeProvider.isDarkMode
@@ -958,7 +955,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                         // Gender filter
                                         Expanded(
                                           flex: 2,
-                                          child: DropdownButtonFormField<String>(
+                                          child:
+                                              DropdownButtonFormField<String>(
                                             value: selectedGender,
                                             onChanged: (value) => setState(
                                               () => selectedGender = value!,
@@ -971,12 +969,11 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                       gender,
                                                       style:
                                                           GoogleFonts.poppins(
-                                                            color:
-                                                                themeProvider
-                                                                    .isDarkMode
-                                                                ? Colors.white
-                                                                : Colors.black,
-                                                          ),
+                                                        color: themeProvider
+                                                                .isDarkMode
+                                                            ? Colors.white
+                                                            : Colors.black,
+                                                      ),
                                                     ),
                                                   ),
                                                 )
@@ -991,34 +988,33 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                               border: OutlineInputBorder(
                                                 borderRadius:
                                                     BorderRadius.circular(
-                                                      _kInputRadius,
-                                                    ),
+                                                  _kInputRadius,
+                                                ),
                                               ),
                                               filled: true,
                                               fillColor:
                                                   themeProvider.isDarkMode
-                                                  ? BrandTokens.darkSurface
-                                                        .withValues(
+                                                      ? BrandTokens.darkSurface
+                                                          .withValues(
                                                           alpha:
                                                               _kTranslucentOpacity,
                                                         )
-                                                  : Colors.white.withValues(
-                                                      alpha:
-                                                          _kTranslucentOpacity,
-                                                    ),
+                                                      : Colors.white.withValues(
+                                                          alpha:
+                                                              _kTranslucentOpacity,
+                                                        ),
                                               contentPadding:
                                                   const EdgeInsets.symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 8,
-                                                  ),
+                                                horizontal: 12,
+                                                vertical: 8,
+                                              ),
                                             ),
-                                            dropdownColor:
-                                                themeProvider.isDarkMode
+                                            dropdownColor: themeProvider
+                                                    .isDarkMode
                                                 ? BrandTokens.darkSurface
-                                                      .withValues(
-                                                        alpha:
-                                                            _kTranslucentOpacity,
-                                                      )
+                                                    .withValues(
+                                                    alpha: _kTranslucentOpacity,
+                                                  )
                                                 : Colors.white.withValues(
                                                     alpha: _kTranslucentOpacity,
                                                   ),
@@ -1034,37 +1030,38 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                         // Score filter
                                         Expanded(
                                           flex: 2,
-                                          child: DropdownButtonFormField<String>(
+                                          child:
+                                              DropdownButtonFormField<String>(
                                             value: selectedScoreFilter,
                                             onChanged: (value) => setState(
                                               () =>
                                                   selectedScoreFilter = value!,
                                             ),
-                                            items:
-                                                [
-                                                      'All',
-                                                      'Above 70%',
-                                                      'Above 50%',
-                                                      'Below 50%',
-                                                    ]
-                                                    .map(
-                                                      (
-                                                        filter,
-                                                      ) => DropdownMenuItem(
-                                                        value: filter,
-                                                        child: Text(
-                                                          filter,
-                                                          style: GoogleFonts.poppins(
-                                                            color:
-                                                                themeProvider
-                                                                    .isDarkMode
-                                                                ? Colors.white
-                                                                : Colors.black,
-                                                          ),
-                                                        ),
+                                            items: [
+                                              'All',
+                                              'Above 70%',
+                                              'Above 50%',
+                                              'Below 50%',
+                                            ]
+                                                .map(
+                                                  (
+                                                    filter,
+                                                  ) =>
+                                                      DropdownMenuItem(
+                                                    value: filter,
+                                                    child: Text(
+                                                      filter,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        color: themeProvider
+                                                                .isDarkMode
+                                                            ? Colors.white
+                                                            : Colors.black,
                                                       ),
-                                                    )
-                                                    .toList(),
+                                                    ),
+                                                  ),
+                                                )
+                                                .toList(),
                                             decoration: InputDecoration(
                                               labelText: 'Score',
                                               labelStyle: GoogleFonts.poppins(
@@ -1075,34 +1072,33 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                               border: OutlineInputBorder(
                                                 borderRadius:
                                                     BorderRadius.circular(
-                                                      _kInputRadius,
-                                                    ),
+                                                  _kInputRadius,
+                                                ),
                                               ),
                                               filled: true,
                                               fillColor:
                                                   themeProvider.isDarkMode
-                                                  ? BrandTokens.darkSurface
-                                                        .withValues(
+                                                      ? BrandTokens.darkSurface
+                                                          .withValues(
                                                           alpha:
                                                               _kTranslucentOpacity,
                                                         )
-                                                  : Colors.white.withValues(
-                                                      alpha:
-                                                          _kTranslucentOpacity,
-                                                    ),
+                                                      : Colors.white.withValues(
+                                                          alpha:
+                                                              _kTranslucentOpacity,
+                                                        ),
                                               contentPadding:
                                                   const EdgeInsets.symmetric(
-                                                    horizontal: 12,
-                                                    vertical: 8,
-                                                  ),
+                                                horizontal: 12,
+                                                vertical: 8,
+                                              ),
                                             ),
-                                            dropdownColor:
-                                                themeProvider.isDarkMode
+                                            dropdownColor: themeProvider
+                                                    .isDarkMode
                                                 ? BrandTokens.darkSurface
-                                                      .withValues(
-                                                        alpha:
-                                                            _kTranslucentOpacity,
-                                                      )
+                                                    .withValues(
+                                                    alpha: _kTranslucentOpacity,
+                                                  )
                                                 : Colors.white.withValues(
                                                     alpha: _kTranslucentOpacity,
                                                   ),
@@ -1140,7 +1136,7 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                             alpha: _kCardOpacityLight,
                                           ),
                                     borderRadius: BorderRadius.circular(
-                                      BrandTokens.cardRadius,
+                                      _kCardRadius,
                                     ),
                                     boxShadow: [
                                       BoxShadow(
@@ -1164,19 +1160,18 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                         decoration: BoxDecoration(
                                           color: themeProvider.isDarkMode
                                               ? BrandTokens.darkSurface
-                                                    .withValues(
-                                                      alpha:
-                                                          _kCardAndHeaderOpacity,
-                                                    )
+                                                  .withValues(
+                                                  alpha: _kCardAndHeaderOpacity,
+                                                )
                                               : Colors.white.withValues(
                                                   alpha: _kCardOpacityLight,
                                                 ),
                                           borderRadius:
                                               const BorderRadius.vertical(
-                                                top: Radius.circular(
-                                                  BrandTokens.cardRadius,
-                                                ),
-                                              ),
+                                            top: Radius.circular(
+                                              _kCardRadius,
+                                            ),
+                                          ),
                                         ),
                                         child: Row(
                                           children: [
@@ -1189,8 +1184,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                   fontSize: 14,
                                                   color:
                                                       themeProvider.isDarkMode
-                                                      ? Colors.white70
-                                                      : Colors.black87,
+                                                          ? Colors.white70
+                                                          : Colors.black87,
                                                 ),
                                               ),
                                             ),
@@ -1204,8 +1199,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                     fontSize: 14,
                                                     color:
                                                         themeProvider.isDarkMode
-                                                        ? Colors.white70
-                                                        : Colors.black87,
+                                                            ? Colors.white70
+                                                            : Colors.black87,
                                                   ),
                                                 ),
                                               ),
@@ -1220,8 +1215,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                     fontSize: 14,
                                                     color:
                                                         themeProvider.isDarkMode
-                                                        ? Colors.white70
-                                                        : Colors.black87,
+                                                            ? Colors.white70
+                                                            : Colors.black87,
                                                   ),
                                                 ),
                                               ),
@@ -1235,8 +1230,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                   fontSize: 14,
                                                   color:
                                                       themeProvider.isDarkMode
-                                                      ? Colors.white70
-                                                      : Colors.black87,
+                                                          ? Colors.white70
+                                                          : Colors.black87,
                                                 ),
                                               ),
                                             ),
@@ -1250,13 +1245,13 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                     fontSize: 14,
                                                     color:
                                                         themeProvider.isDarkMode
-                                                        ? Colors.white70
-                                                        : Colors.black87,
+                                                            ? Colors.white70
+                                                            : Colors.black87,
                                                   ),
                                                 ),
                                               ),
                                             ),
-                                            const SizedBox(width: 100),
+                                            const SizedBox(width: 160),
                                           ],
                                         ),
                                       ),
@@ -1278,83 +1273,83 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                             final review = displayedCVs[index];
                                             final appId =
                                                 review['application_id']
-                                                    as int? ??
-                                                review['application_id'];
-                                            final id = appId is int
-                                                ? appId
-                                                : index;
-                                            final isExpanded = _expandedIds
-                                                .contains(id);
-                                            final hasScore =
-                                                review.containsKey(
+                                                        as int? ??
+                                                    review['application_id'];
+                                            final id =
+                                                appId is int ? appId : index;
+                                            final isExpanded =
+                                                _expandedIds.contains(id);
+                                            final hasScore = review.containsKey(
                                                   'cv_score',
                                                 ) &&
                                                 review['cv_score'] != null;
                                             final score = hasScore
                                                 ? (review['cv_score'] ?? 0)
-                                                      .toDouble()
+                                                    .toDouble()
                                                 : 0.0;
                                             final cvUrl =
                                                 review['cv_url'] as String?;
-                                            final isLast =
-                                                index ==
+                                            final isLast = index ==
                                                 displayedCVs.length - 1;
                                             final screeningOutcome =
                                                 review['screening_outcome']
-                                                    as String? ??
-                                                'Screened';
+                                                        as String? ??
+                                                    'Screened';
                                             final requisitionTitle =
                                                 review['requisition_title']
-                                                    as String? ??
-                                                '—';
+                                                        as String? ??
+                                                    '—';
                                             return Column(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
                                                 Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal:
-                                                            _kMainPadding,
-                                                        vertical: _kSmallGap,
-                                                      ),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: _kMainPadding,
+                                                    vertical: _kSmallGap,
+                                                  ),
                                                   decoration: BoxDecoration(
                                                     color:
                                                         themeProvider.isDarkMode
-                                                        ? _kDarkSurface.withValues(
-                                                            alpha:
-                                                                _kCardAndHeaderOpacity,
-                                                          )
-                                                        : Colors.white.withValues(
-                                                            alpha:
-                                                                _kCardOpacityLight,
-                                                          ),
-                                                    borderRadius:
-                                                        isLast && !isExpanded
-                                                        ? const BorderRadius.vertical(
+                                                            ? BrandTokens
+                                                                .darkSurface
+                                                                .withValues(
+                                                                alpha:
+                                                                    _kCardAndHeaderOpacity,
+                                                              )
+                                                            : Colors.white
+                                                                .withValues(
+                                                                alpha:
+                                                                    _kCardOpacityLight,
+                                                              ),
+                                                    borderRadius: isLast &&
+                                                            !isExpanded
+                                                        ? const BorderRadius
+                                                            .vertical(
                                                             bottom:
                                                                 Radius.circular(
-                                                                  _kCardRadius,
-                                                                ),
+                                                              BrandTokens
+                                                                  .cardRadius,
+                                                            ),
                                                           )
                                                         : null,
-                                                    border:
-                                                        isLast && !isExpanded
+                                                    border: isLast &&
+                                                            !isExpanded
                                                         ? null
                                                         : Border(
                                                             bottom: BorderSide(
-                                                              color:
-                                                                  themeProvider
+                                                              color: themeProvider
                                                                       .isDarkMode
                                                                   ? Colors.white
-                                                                        .withValues(
-                                                                          alpha:
-                                                                              0.15,
-                                                                        )
+                                                                      .withValues(
+                                                                      alpha:
+                                                                          0.15,
+                                                                    )
                                                                   : Colors.black
-                                                                        .withValues(
-                                                                          alpha:
-                                                                              0.12,
-                                                                        ),
+                                                                      .withValues(
+                                                                      alpha:
+                                                                          0.12,
+                                                                    ),
                                                               width: 1,
                                                             ),
                                                           ),
@@ -1365,11 +1360,10 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                         icon: Icon(
                                                           isExpanded
                                                               ? Icons
-                                                                    .expand_less
+                                                                  .expand_less
                                                               : Icons
-                                                                    .expand_more,
-                                                          color:
-                                                              themeProvider
+                                                                  .expand_more,
+                                                          color: themeProvider
                                                                   .isDarkMode
                                                               ? Colors.white70
                                                               : Colors.black54,
@@ -1377,21 +1371,21 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                         ),
                                                         onPressed: () =>
                                                             setState(() {
-                                                              if (isExpanded) {
-                                                                _expandedIds
-                                                                    .remove(id);
-                                                              } else {
-                                                                _expandedIds
-                                                                    .add(id);
-                                                              }
-                                                            }),
+                                                          if (isExpanded) {
+                                                            _expandedIds
+                                                                .remove(id);
+                                                          } else {
+                                                            _expandedIds
+                                                                .add(id);
+                                                          }
+                                                        }),
                                                         padding:
                                                             EdgeInsets.zero,
                                                         constraints:
                                                             const BoxConstraints(
-                                                              minWidth: 32,
-                                                              minHeight: 32,
-                                                            ),
+                                                          minWidth: 32,
+                                                          minHeight: 32,
+                                                        ),
                                                       ),
                                                       Expanded(
                                                         flex: 2,
@@ -1402,11 +1396,12 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                               height: 36,
                                                               decoration:
                                                                   const BoxDecoration(
-                                                                    shape: BoxShape
-                                                                        .circle,
-                                                                    color:
-                                                                        _kPrimary,
-                                                                  ),
+                                                                shape: BoxShape
+                                                                    .circle,
+                                                                color:
+                                                                    BrandTokens
+                                                                        .primary,
+                                                              ),
                                                               child: const Icon(
                                                                 Icons.person,
                                                                 color: Colors
@@ -1421,18 +1416,19 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                               child: Text(
                                                                 review['full_name'] ??
                                                                     'Unknown',
-                                                                style: GoogleFonts.poppins(
+                                                                style:
+                                                                    GoogleFonts
+                                                                        .poppins(
                                                                   fontSize: 13,
                                                                   fontWeight:
                                                                       FontWeight
                                                                           .w500,
-                                                                  color:
-                                                                      themeProvider
+                                                                  color: themeProvider
                                                                           .isDarkMode
                                                                       ? Colors
-                                                                            .white
+                                                                          .white
                                                                       : Colors
-                                                                            .black,
+                                                                          .black,
                                                                 ),
                                                                 maxLines: 1,
                                                                 overflow:
@@ -1448,16 +1444,17 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                         child: Center(
                                                           child: Container(
                                                             padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal:
-                                                                      10,
-                                                                  vertical: 6,
-                                                                ),
-                                                            decoration: BoxDecoration(
-                                                              color: _kPrimary.withValues(
-                                                                alpha:
-                                                                    (review['gender'] ==
-                                                                            null ||
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                              horizontal: 10,
+                                                              vertical: 6,
+                                                            ),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: BrandTokens
+                                                                  .primary
+                                                                  .withValues(
+                                                                alpha: (review['gender'] == null ||
                                                                         review['gender'] ==
                                                                             '' ||
                                                                         review['gender'] ==
@@ -1466,14 +1463,17 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                                     : _kTranslucentOpacity,
                                                               ),
                                                               borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    _kCardRadius,
-                                                                  ),
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                BrandTokens
+                                                                    .cardRadius,
+                                                              ),
                                                             ),
                                                             child: Text(
                                                               review['gender'] ??
                                                                   'N/A',
-                                                              style: GoogleFonts.poppins(
+                                                              style: GoogleFonts
+                                                                  .poppins(
                                                                 fontSize: 10,
                                                                 fontWeight:
                                                                     FontWeight
@@ -1504,15 +1504,16 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                                 hasScore
                                                                     ? Icons.star
                                                                     : Icons
-                                                                          .star_border,
-                                                                color:
-                                                                    themeProvider
+                                                                        .star_border,
+                                                                color: themeProvider
                                                                         .isDarkMode
                                                                     ? (hasScore
-                                                                          ? Colors.white
-                                                                          : Colors.white70)
+                                                                        ? Colors
+                                                                            .white
+                                                                        : Colors
+                                                                            .white70)
                                                                     : Colors
-                                                                          .black,
+                                                                        .black,
                                                                 size: 16,
                                                               ),
                                                               const SizedBox(
@@ -1522,19 +1523,22 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                                 hasScore
                                                                     ? '${score.toStringAsFixed(1)}%'
                                                                     : '—',
-                                                                style: GoogleFonts.poppins(
+                                                                style:
+                                                                    GoogleFonts
+                                                                        .poppins(
                                                                   fontSize: 12,
                                                                   fontWeight:
                                                                       FontWeight
                                                                           .w600,
-                                                                  color:
-                                                                      themeProvider
+                                                                  color: themeProvider
                                                                           .isDarkMode
                                                                       ? (hasScore
-                                                                            ? Colors.white
-                                                                            : Colors.white70)
+                                                                          ? Colors
+                                                                              .white
+                                                                          : Colors
+                                                                              .white70)
                                                                       : Colors
-                                                                            .black,
+                                                                          .black,
                                                                 ),
                                                               ),
                                                             ],
@@ -1548,15 +1552,15 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                               requisitionTitle,
                                                           child: Text(
                                                             requisitionTitle,
-                                                            style: GoogleFonts.poppins(
+                                                            style: GoogleFonts
+                                                                .poppins(
                                                               fontSize: 12,
-                                                              color:
-                                                                  themeProvider
+                                                              color: themeProvider
                                                                       .isDarkMode
                                                                   ? Colors
-                                                                        .white70
+                                                                      .white70
                                                                   : Colors
-                                                                        .black87,
+                                                                      .black87,
                                                             ),
                                                             maxLines: 1,
                                                             overflow:
@@ -1570,36 +1574,40 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                         child: Center(
                                                           child: Container(
                                                             padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal: 8,
-                                                                  vertical: 4,
-                                                                ),
-                                                            decoration: BoxDecoration(
-                                                              color:
-                                                                  screeningOutcome
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                              horizontal: 8,
+                                                              vertical: 4,
+                                                            ),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: screeningOutcome
                                                                       .toLowerCase()
                                                                       .contains(
                                                                         'hold',
                                                                       )
                                                                   ? Colors
-                                                                        .orange
-                                                                        .withValues(
-                                                                          alpha:
-                                                                              0.9,
-                                                                        )
+                                                                      .orange
+                                                                      .withValues(
+                                                                      alpha:
+                                                                          0.9,
+                                                                    )
                                                                   : Colors.green
-                                                                        .withValues(
-                                                                          alpha:
-                                                                              0.9,
-                                                                        ),
+                                                                      .withValues(
+                                                                      alpha:
+                                                                          0.9,
+                                                                    ),
                                                               borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    _kCardRadius,
-                                                                  ),
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                BrandTokens
+                                                                    .cardRadius,
+                                                              ),
                                                             ),
                                                             child: Text(
                                                               screeningOutcome,
-                                                              style: GoogleFonts.poppins(
+                                                              style: GoogleFonts
+                                                                  .poppins(
                                                                 fontSize: 10,
                                                                 fontWeight:
                                                                     FontWeight
@@ -1619,53 +1627,98 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                         ),
                                                       ),
                                                       SizedBox(
-                                                        width: 100,
+                                                        width: 48,
                                                         child: ElevatedButton(
-                                                          onPressed:
-                                                              cvUrl != null &&
-                                                                  cvUrl
-                                                                      .isNotEmpty
-                                                              ? () => launchUrl(
-                                                                  Uri.parse(
-                                                                    cvUrl,
-                                                                  ),
-                                                                )
-                                                              : null,
-                                                          style: ElevatedButton.styleFrom(
+                                                          onPressed: () =>
+                                                              _showCVAnalysis(
+                                                                  review),
+                                                          style: ElevatedButton
+                                                              .styleFrom(
                                                             backgroundColor:
-                                                                cvUrl != null &&
-                                                                    cvUrl
-                                                                        .isNotEmpty
-                                                                ? _kPrimary
-                                                                : (themeProvider
-                                                                          .isDarkMode
-                                                                      ? _kDarkSurface.withValues(
-                                                                          alpha:
-                                                                              _kCardAndHeaderOpacity,
-                                                                        )
-                                                                      : Colors
-                                                                            .grey
-                                                                            .shade300
-                                                                            .withValues(
-                                                                              alpha: _kCardOpacityLight,
-                                                                            )),
+                                                                BrandTokens
+                                                                    .primary,
                                                             foregroundColor:
                                                                 Colors.white,
                                                             padding:
-                                                                const EdgeInsets.symmetric(
-                                                                  horizontal: 8,
-                                                                  vertical: 8,
-                                                                ),
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                              horizontal: 8,
+                                                              vertical: 8,
+                                                            ),
                                                             minimumSize:
                                                                 Size.zero,
-                                                            shape: RoundedRectangleBorder(
+                                                            shape:
+                                                                RoundedRectangleBorder(
                                                               borderRadius:
-                                                                  BorderRadius.circular(
-                                                                    _kCardRadius,
-                                                                  ),
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                BrandTokens
+                                                                    .cardRadius,
+                                                              ),
                                                             ),
-                                                            elevation:
-                                                                cvUrl != null &&
+                                                            elevation: 2,
+                                                          ),
+                                                          child: Icon(
+                                                            Icons.analytics,
+                                                            size: 14,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      SizedBox(
+                                                        width: 100,
+                                                        child: ElevatedButton(
+                                                          onPressed: cvUrl !=
+                                                                      null &&
+                                                                  cvUrl
+                                                                      .isNotEmpty
+                                                              ? () =>
+                                                                  _previewCV(
+                                                                      review)
+                                                              : null,
+                                                          style: ElevatedButton
+                                                              .styleFrom(
+                                                            backgroundColor: cvUrl !=
+                                                                        null &&
+                                                                    cvUrl
+                                                                        .isNotEmpty
+                                                                ? BrandTokens
+                                                                    .primary
+                                                                : (themeProvider
+                                                                        .isDarkMode
+                                                                    ? BrandTokens
+                                                                        .darkSurface
+                                                                        .withValues(
+                                                                        alpha:
+                                                                            _kCardAndHeaderOpacity,
+                                                                      )
+                                                                    : Colors
+                                                                        .grey
+                                                                        .shade300
+                                                                        .withValues(
+                                                                        alpha:
+                                                                            _kCardOpacityLight,
+                                                                      )),
+                                                            foregroundColor:
+                                                                Colors.white,
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                              horizontal: 8,
+                                                              vertical: 8,
+                                                            ),
+                                                            minimumSize:
+                                                                Size.zero,
+                                                            shape:
+                                                                RoundedRectangleBorder(
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                BrandTokens
+                                                                    .cardRadius,
+                                                              ),
+                                                            ),
+                                                            elevation: cvUrl !=
+                                                                        null &&
                                                                     cvUrl
                                                                         .isNotEmpty
                                                                 ? 2
@@ -1686,7 +1739,9 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                                               ),
                                                               Text(
                                                                 'Preview',
-                                                                style: GoogleFonts.poppins(
+                                                                style:
+                                                                    GoogleFonts
+                                                                        .poppins(
                                                                   fontWeight:
                                                                       FontWeight
                                                                           .w600,

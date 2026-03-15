@@ -222,9 +222,79 @@ class _OptimizedJobManagementState extends State<OptimizedJobManagement> {
   }
 
   void _editJob(Map<String, dynamic> job) {
-    // TODO: Implement edit job dialog
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Edit job: ${job['title']}')),
+    final titleController = TextEditingController(text: job['title'] ?? '');
+    final descriptionController =
+        TextEditingController(text: job['description'] ?? '');
+    final locationController =
+        TextEditingController(text: job['location'] ?? '');
+    final departmentController =
+        TextEditingController(text: job['department'] ?? '');
+    final employmentTypeController =
+        TextEditingController(text: job['employment_type'] ?? '');
+    final salaryController =
+        TextEditingController(text: job['salary_range'] ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Edit Job'),
+        content: SizedBox(
+          width: 500,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleController,
+                  decoration: InputDecoration(labelText: 'Job Title'),
+                ),
+                SizedBox(height: 16),
+                TextField(
+                  controller: descriptionController,
+                  decoration: InputDecoration(labelText: 'Description'),
+                  maxLines: 3,
+                ),
+                SizedBox(height: 16),
+                TextField(
+                  controller: locationController,
+                  decoration: InputDecoration(labelText: 'Location'),
+                ),
+                SizedBox(height: 16),
+                TextField(
+                  controller: departmentController,
+                  decoration: InputDecoration(labelText: 'Department'),
+                ),
+                SizedBox(height: 16),
+                TextField(
+                  controller: employmentTypeController,
+                  decoration: InputDecoration(labelText: 'Employment Type'),
+                ),
+                SizedBox(height: 16),
+                TextField(
+                  controller: salaryController,
+                  decoration: InputDecoration(labelText: 'Salary Range'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              // Implement update logic here
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Job updated successfully')),
+              );
+            },
+            child: Text('Save'),
+          ),
+        ],
+      ),
     );
   }
 

@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
 import '../../services/recruitment_service.dart';
 import 'job_management.dart';
 
@@ -72,9 +70,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         _requisitions = List<Map<String, dynamic>>.from(
           requisitionsData['jobs'] ?? [],
         );
-        _activeJobs = _requisitions
-            .where((r) => r['status'] == 'active')
-            .length;
+        _activeJobs =
+            _requisitions.where((r) => r['status'] == 'active').length;
         _offersSent = _offers.length;
 
         _analytics = analyticsData;
@@ -108,9 +105,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           refreshedData['jobs'] ?? [],
         );
 
-        _activeJobs = _requisitions
-            .where((r) => r['status'] == 'active')
-            .length;
+        _activeJobs =
+            _requisitions.where((r) => r['status'] == 'active').length;
         _offersSent = _offers.length;
         _totalApplications = _applications.length;
 
@@ -152,15 +148,14 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           break;
 
         case 1: // Requisitions
-          final requisitionsData = await _recruitmentService
-              .loadRequisitionsData();
+          final requisitionsData =
+              await _recruitmentService.loadRequisitionsData();
           setState(() {
             _requisitions = List<Map<String, dynamic>>.from(
               requisitionsData['jobs'] ?? [],
             );
-            _activeJobs = _requisitions
-                .where((r) => r['status'] == 'active')
-                .length;
+            _activeJobs =
+                _requisitions.where((r) => r['status'] == 'active').length;
           });
           break;
 
@@ -259,8 +254,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         action == 'rec_proceed'
             ? 'Moved to Final Interview'
             : action == 'rec_hold'
-            ? 'Recommendation set to Hold'
-            : 'Rejected',
+                ? 'Recommendation set to Hold'
+                : 'Rejected',
       );
       final index = _applications.indexWhere(
         (app) => app['id'] == applicationId,
@@ -912,16 +907,14 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
     final statusColor = _getStatusColor(status);
     final recommendation = app['recommendation'] ?? 'moderate';
     final recommendationColor = _getRecommendationColor(recommendation);
-    final candidateName =
-        app['candidate_name'] ??
+    final candidateName = app['candidate_name'] ??
         app['candidate']?['name'] ??
         'Unknown Candidate';
     final jobTitle =
         app['requisition_title'] ?? app['job']?['title'] ?? 'Unknown Position';
     final cvScore = app['cv_score'] ?? app['score'] ?? 0;
     final assessmentScore = app['assessment_score'] ?? 0;
-    final appliedDate =
-        app['applied_date'] ??
+    final appliedDate = app['applied_date'] ??
         app['created_at'] ??
         DateTime.now().toIso8601String();
 
@@ -1111,8 +1104,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   Widget _buildApplicationListItem(Map<String, dynamic> app) {
     final status = app['status'] ?? 'screening';
     final statusColor = _getStatusColor(status);
-    final candidateName =
-        app['candidate_name'] ??
+    final candidateName = app['candidate_name'] ??
         app['candidate']?['name'] ??
         'Unknown Candidate';
     final jobTitle =
@@ -1275,9 +1267,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         itemCount: columns.length,
         itemBuilder: (context, columnIndex) {
           final columnName = columns[columnIndex];
-          final columnApps = applications
-              .where((app) => app['status'] == columnName)
-              .toList();
+          final columnApps =
+              applications.where((app) => app['status'] == columnName).toList();
 
           return Container(
             width: 320,
@@ -1352,8 +1343,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildBoardCard(Map<String, dynamic> app) {
-    final candidateName =
-        app['candidate_name'] ??
+    final candidateName = app['candidate_name'] ??
         app['candidate']?['name'] ??
         'Unknown Candidate';
     final jobTitle =
@@ -1618,8 +1608,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
     final applicationsCount =
         req['applications_count'] ?? req['application_count'] ?? 0;
     final vacancy = req['vacancy'] ?? req['positions'] ?? 1;
-    final progress =
-        req['progress'] ??
+    final progress = req['progress'] ??
         ((applicationsCount / (vacancy * 10)) * 100).clamp(0, 100).toDouble();
 
     return Container(
@@ -1887,8 +1876,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildInterviewCard(Map<String, dynamic> interview) {
-    final candidateName =
-        interview['candidate_name'] ??
+    final candidateName = interview['candidate_name'] ??
         interview['candidate']?['name'] ??
         'Unknown Candidate';
     final interviewType =
@@ -1898,8 +1886,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           interview['interview_date'] ??
           DateTime.now().toIso8601String(),
     );
-    final interviewer =
-        interview['interviewer'] ??
+    final interviewer = interview['interviewer'] ??
         interview['interviewer_name'] ??
         'Unknown Interviewer';
     final meetingLink = interview['meeting_link'] ?? interview['meeting_url'];
@@ -2038,8 +2025,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildOfferCard(Map<String, dynamic> offer) {
-    final candidateName =
-        offer['candidate_name'] ??
+    final candidateName = offer['candidate_name'] ??
         offer['candidate']?['name'] ??
         'Unknown Candidate';
     final position =
@@ -2050,8 +2036,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
     final statusColor = status == 'accepted'
         ? Colors.green
         : status == 'rejected'
-        ? Colors.red
-        : Colors.orange;
+            ? Colors.red
+            : Colors.orange;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -2378,8 +2364,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildTopPerformerCard(Map<String, dynamic> app) {
-    final candidateName =
-        app['candidate_name'] ??
+    final candidateName = app['candidate_name'] ??
         app['candidate']?['name'] ??
         'Unknown Candidate';
     final jobTitle =
@@ -2501,13 +2486,13 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
     final numScore = score is int
         ? score
         : score is double
-        ? score.toInt()
-        : 0;
+            ? score.toInt()
+            : 0;
     final color = numScore >= 80
         ? Colors.green
         : numScore >= 60
-        ? Colors.orange
-        : const Color.fromARGB(255, 135, 20, 20);
+            ? Colors.orange
+            : const Color.fromARGB(255, 135, 20, 20);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

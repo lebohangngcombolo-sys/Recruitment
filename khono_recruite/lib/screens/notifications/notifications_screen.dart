@@ -3,8 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../services/notification_service.dart';
 import '../../providers/theme_provider.dart';
-import '../../widgets/state_widgets.dart';
-import '../../widgets/themed_surface_card.dart';
 
 /// Shared notifications screen for Admin and Hiring Manager.
 /// Notifications live in a separate file; API is via [NotificationService].
@@ -296,11 +294,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   ),
                 ],
               ),
-              backgroundColor:
-                  (themeProvider.isDarkMode
-                          ? const Color(0xFF14131E)
-                          : Colors.white)
-                      .withOpacity(0.9),
+              backgroundColor: (themeProvider.isDarkMode
+                      ? const Color(0xFF14131E)
+                      : Colors.white)
+                  .withOpacity(0.9),
               elevation: 1,
               iconTheme: IconThemeData(
                 color: themeProvider.isDarkMode ? Colors.white : Colors.black,
@@ -315,328 +312,354 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ),
                   )
                 : _errorMessage != null
-                ? Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            _errorMessage!,
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.poppins(
-                              color: themeProvider.isDarkMode
-                                  ? Colors.white
-                                  : Colors.black,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          TextButton(
-                            onPressed: _fetch,
-                            child: const Text('Retry'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  )
-                : _notifications.isEmpty
-                ? Center(
-                    child: Text(
-                      'No notifications',
-                      style: GoogleFonts.poppins(
-                        color: themeProvider.isDarkMode
-                            ? Colors.grey.shade400
-                            : Colors.grey.shade600,
-                      ),
-                    ),
-                  )
-                : RefreshIndicator(
-                    onRefresh: _fetch,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: visibleNotifications.isEmpty
-                          ? 2
-                          : visibleNotifications.length + 1,
-                      itemBuilder: (_, index) {
-                        if (index == 0) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Container(
-                                width: double.infinity,
-                                margin: const EdgeInsets.only(bottom: 16),
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color:
-                                      (themeProvider.isDarkMode
-                                              ? const Color(0xFF14131E)
-                                              : Colors.grey[100]!)
-                                          .withOpacity(0.9),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: themeProvider.isDarkMode
-                                        ? Colors.grey.shade800
-                                        : Colors.grey[300]!,
-                                  ),
-                                ),
-                                child: Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: _filters
-                                      .map(
-                                        (filter) => ChoiceChip(
-                                          label: Text(_filterLabel(filter)),
-                                          selected: _selectedFilter == filter,
-                                          onSelected: (_) {
-                                            setState(() {
-                                              _selectedFilter = filter;
-                                            });
-                                          },
-                                        ),
-                                      )
-                                      .toList(),
+                              Text(
+                                _errorMessage!,
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.poppins(
+                                  color: themeProvider.isDarkMode
+                                      ? Colors.white
+                                      : Colors.black,
                                 ),
                               ),
-                              if (visibleNotifications.isEmpty)
-                                Container(
-                                  width: double.infinity,
-                                  margin: const EdgeInsets.only(bottom: 8),
-                                  padding: const EdgeInsets.all(24),
-                                  decoration: BoxDecoration(
-                                    color:
-                                        (themeProvider.isDarkMode
-                                                ? const Color(0xFF14131E)
-                                                : Colors.grey[100]!)
-                                            .withOpacity(0.9),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.grey.shade800
-                                          : Colors.grey[300]!,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    'No notifications match the ${_filterLabel(_selectedFilter).toLowerCase()} filter.',
-                                    textAlign: TextAlign.center,
-                                    style: GoogleFonts.poppins(
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.grey.shade400
-                                          : Colors.grey.shade600,
-                                    ),
-                                  ),
-                                ),
+                              const SizedBox(height: 16),
+                              TextButton(
+                                onPressed: _fetch,
+                                child: const Text('Retry'),
+                              ),
                             ],
-                          );
-                        }
-
-                        if (visibleNotifications.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
-
-                        final n = visibleNotifications[index - 1];
-                        final isUnread = n['is_read'] != true;
-                        final createdAt = n['created_at'] != null
-                            ? DateTime.tryParse(n['created_at'].toString())
-                            : null;
-                        final accent = _accentColor(n, themeProvider);
-
-                        return TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0, end: 1),
-                          duration: Duration(milliseconds: 500 + (index * 100)),
-                          builder: (context, opacity, child) {
-                            return Opacity(
-                              opacity: opacity,
-                              child: Transform.translate(
-                                offset: Offset(0, (1 - opacity) * 20),
-                                child: child,
+                          ),
+                        ),
+                      )
+                    : _notifications.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No notifications',
+                              style: GoogleFonts.poppins(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.grey.shade400
+                                    : Colors.grey.shade600,
                               ),
-                            );
-                          },
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: () => _onTapNotification(n),
-                              borderRadius: BorderRadius.circular(16),
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(vertical: 8),
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color:
-                                      (themeProvider.isDarkMode
-                                              ? const Color(0xFF14131E)
-                                              : Colors.grey[100]!)
-                                          .withOpacity(0.9),
-                                  borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(
-                                    color: isUnread
-                                        ? accent.withOpacity(0.35)
-                                        : (themeProvider.isDarkMode
-                                              ? Colors.grey.shade800
-                                              : Colors.grey[300]!),
-                                  ),
-                                  gradient: isUnread
-                                      ? LinearGradient(
-                                          colors: [
-                                            accent.withOpacity(0.12),
-                                            Colors.transparent,
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        )
-                                      : null,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 6,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      margin: const EdgeInsets.only(
-                                        right: 12,
-                                        top: 2,
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _fetch,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: visibleNotifications.isEmpty
+                                  ? 2
+                                  : visibleNotifications.length + 1,
+                              itemBuilder: (_, index) {
+                                if (index == 0) {
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Container(
+                                        width: double.infinity,
+                                        margin:
+                                            const EdgeInsets.only(bottom: 16),
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: (themeProvider.isDarkMode
+                                                  ? const Color(0xFF14131E)
+                                                  : Colors.grey[100]!)
+                                              .withOpacity(0.9),
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          border: Border.all(
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.grey.shade800
+                                                : Colors.grey[300]!,
+                                          ),
+                                        ),
+                                        child: Wrap(
+                                          spacing: 8,
+                                          runSpacing: 8,
+                                          children: _filters
+                                              .map(
+                                                (filter) => ChoiceChip(
+                                                  label: Text(
+                                                      _filterLabel(filter)),
+                                                  selected:
+                                                      _selectedFilter == filter,
+                                                  onSelected: (_) {
+                                                    setState(() {
+                                                      _selectedFilter = filter;
+                                                    });
+                                                  },
+                                                ),
+                                              )
+                                              .toList(),
+                                        ),
                                       ),
-                                      padding: const EdgeInsets.all(10),
-                                      decoration: BoxDecoration(
-                                        color: accent.withOpacity(0.12),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Icon(
-                                        _iconFor(n),
-                                        color: accent,
-                                        size: 22,
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            _titleFor(n),
-                                            style: GoogleFonts.poppins(
+                                      if (visibleNotifications.isEmpty)
+                                        Container(
+                                          width: double.infinity,
+                                          margin:
+                                              const EdgeInsets.only(bottom: 8),
+                                          padding: const EdgeInsets.all(24),
+                                          decoration: BoxDecoration(
+                                            color: (themeProvider.isDarkMode
+                                                    ? const Color(0xFF14131E)
+                                                    : Colors.grey[100]!)
+                                                .withOpacity(0.9),
+                                            borderRadius:
+                                                BorderRadius.circular(16),
+                                            border: Border.all(
                                               color: themeProvider.isDarkMode
-                                                  ? Colors.white
-                                                  : Colors.black,
-                                              fontWeight: isUnread
-                                                  ? FontWeight.bold
-                                                  : FontWeight.w600,
-                                              fontSize: 16,
+                                                  ? Colors.grey.shade800
+                                                  : Colors.grey[300]!,
                                             ),
                                           ),
-                                          const SizedBox(height: 6),
-                                          Wrap(
-                                            spacing: 8,
-                                            runSpacing: 8,
-                                            crossAxisAlignment:
-                                                WrapCrossAlignment.center,
-                                            children: [
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 10,
-                                                      vertical: 4,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: accent.withOpacity(
-                                                    0.12,
-                                                  ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                        999,
-                                                      ),
-                                                ),
-                                                child: Text(
-                                                  _filterLabel(
-                                                    _typeFor(n) ==
-                                                            'new_application'
-                                                        ? 'applications'
-                                                        : _typeFor(n) ==
-                                                              'new_candidate'
-                                                        ? 'candidates'
-                                                        : _typeFor(n) ==
-                                                                  'interview' ||
-                                                              _typeFor(n) ==
-                                                                  'feedback_reminder' ||
-                                                              _typeFor(n) ==
-                                                                  'feedback_received' ||
-                                                              _typeFor(n) ==
-                                                                  'reminder' ||
-                                                              _typeFor(n) ==
-                                                                  'reminder_urgent' ||
-                                                              _typeFor(n) ==
-                                                                  'warning'
-                                                        ? 'interviews'
-                                                        : 'all',
-                                                  ),
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: accent,
-                                                  ),
-                                                ),
-                                              ),
-                                              if (isUnread)
-                                                Container(
-                                                  width: 8,
-                                                  height: 8,
-                                                  decoration:
-                                                      const BoxDecoration(
-                                                        color: Colors.redAccent,
-                                                        shape: BoxShape.circle,
-                                                      ),
-                                                ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 10),
-                                          Text(
-                                            n['message']?.toString() ?? '',
+                                          child: Text(
+                                            'No notifications match the ${_filterLabel(_selectedFilter).toLowerCase()} filter.',
+                                            textAlign: TextAlign.center,
                                             style: GoogleFonts.poppins(
                                               color: themeProvider.isDarkMode
                                                   ? Colors.grey.shade400
-                                                  : Colors.black87,
-                                              fontSize: 14,
+                                                  : Colors.grey.shade600,
                                             ),
                                           ),
-                                          if (createdAt != null)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                top: 10,
+                                        ),
+                                    ],
+                                  );
+                                }
+
+                                if (visibleNotifications.isEmpty) {
+                                  return const SizedBox.shrink();
+                                }
+
+                                final n = visibleNotifications[index - 1];
+                                final isUnread = n['is_read'] != true;
+                                final createdAt = n['created_at'] != null
+                                    ? DateTime.tryParse(
+                                        n['created_at'].toString())
+                                    : null;
+                                final accent = _accentColor(n, themeProvider);
+
+                                return TweenAnimationBuilder<double>(
+                                  tween: Tween(begin: 0, end: 1),
+                                  duration: Duration(
+                                      milliseconds: 500 + (index * 100)),
+                                  builder: (context, opacity, child) {
+                                    return Opacity(
+                                      opacity: opacity,
+                                      child: Transform.translate(
+                                        offset: Offset(0, (1 - opacity) * 20),
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () => _onTapNotification(n),
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Container(
+                                        margin: const EdgeInsets.symmetric(
+                                            vertical: 8),
+                                        padding: const EdgeInsets.all(16),
+                                        decoration: BoxDecoration(
+                                          color: (themeProvider.isDarkMode
+                                                  ? const Color(0xFF14131E)
+                                                  : Colors.grey[100]!)
+                                              .withOpacity(0.9),
+                                          borderRadius:
+                                              BorderRadius.circular(16),
+                                          border: Border.all(
+                                            color: isUnread
+                                                ? accent.withOpacity(0.35)
+                                                : (themeProvider.isDarkMode
+                                                    ? Colors.grey.shade800
+                                                    : Colors.grey[300]!),
+                                          ),
+                                          gradient: isUnread
+                                              ? LinearGradient(
+                                                  colors: [
+                                                    accent.withOpacity(0.12),
+                                                    Colors.transparent,
+                                                  ],
+                                                  begin: Alignment.topLeft,
+                                                  end: Alignment.bottomRight,
+                                                )
+                                              : null,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black
+                                                  .withOpacity(0.05),
+                                              blurRadius: 6,
+                                              offset: const Offset(0, 3),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Container(
+                                              margin: const EdgeInsets.only(
+                                                right: 12,
+                                                top: 2,
                                               ),
-                                              child: Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.end,
+                                              padding: const EdgeInsets.all(10),
+                                              decoration: BoxDecoration(
+                                                color: accent.withOpacity(0.12),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: Icon(
+                                                _iconFor(n),
+                                                color: accent,
+                                                size: 22,
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
-                                                    _formatCreatedAt(createdAt),
+                                                    _titleFor(n),
                                                     style: GoogleFonts.poppins(
-                                                      fontSize: 12,
-                                                      color:
-                                                          themeProvider
+                                                      color: themeProvider
                                                               .isDarkMode
-                                                          ? Colors.grey.shade500
-                                                          : Colors.grey,
+                                                          ? Colors.white
+                                                          : Colors.black,
+                                                      fontWeight: isUnread
+                                                          ? FontWeight.bold
+                                                          : FontWeight.w600,
+                                                      fontSize: 16,
                                                     ),
                                                   ),
+                                                  const SizedBox(height: 6),
+                                                  Wrap(
+                                                    spacing: 8,
+                                                    runSpacing: 8,
+                                                    crossAxisAlignment:
+                                                        WrapCrossAlignment
+                                                            .center,
+                                                    children: [
+                                                      Container(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .symmetric(
+                                                          horizontal: 10,
+                                                          vertical: 4,
+                                                        ),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: accent
+                                                              .withOpacity(
+                                                            0.12,
+                                                          ),
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                            999,
+                                                          ),
+                                                        ),
+                                                        child: Text(
+                                                          _filterLabel(
+                                                            _typeFor(n) ==
+                                                                    'new_application'
+                                                                ? 'applications'
+                                                                : _typeFor(n) ==
+                                                                        'new_candidate'
+                                                                    ? 'candidates'
+                                                                    : _typeFor(n) == 'interview' ||
+                                                                            _typeFor(n) ==
+                                                                                'feedback_reminder' ||
+                                                                            _typeFor(n) ==
+                                                                                'feedback_received' ||
+                                                                            _typeFor(n) ==
+                                                                                'reminder' ||
+                                                                            _typeFor(n) ==
+                                                                                'reminder_urgent' ||
+                                                                            _typeFor(n) ==
+                                                                                'warning'
+                                                                        ? 'interviews'
+                                                                        : 'all',
+                                                          ),
+                                                          style: GoogleFonts
+                                                              .poppins(
+                                                            fontSize: 11,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color: accent,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      if (isUnread)
+                                                        Container(
+                                                          width: 8,
+                                                          height: 8,
+                                                          decoration:
+                                                              const BoxDecoration(
+                                                            color: Colors
+                                                                .redAccent,
+                                                            shape:
+                                                                BoxShape.circle,
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                  const SizedBox(height: 10),
+                                                  Text(
+                                                    n['message']?.toString() ??
+                                                        '',
+                                                    style: GoogleFonts.poppins(
+                                                      color: themeProvider
+                                                              .isDarkMode
+                                                          ? Colors.grey.shade400
+                                                          : Colors.black87,
+                                                      fontSize: 14,
+                                                    ),
+                                                  ),
+                                                  if (createdAt != null)
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                        top: 10,
+                                                      ),
+                                                      child: Row(
+                                                        mainAxisAlignment:
+                                                            MainAxisAlignment
+                                                                .end,
+                                                        children: [
+                                                          Text(
+                                                            _formatCreatedAt(
+                                                                createdAt),
+                                                            style: GoogleFonts
+                                                                .poppins(
+                                                              fontSize: 12,
+                                                              color: themeProvider
+                                                                      .isDarkMode
+                                                                  ? Colors.grey
+                                                                      .shade500
+                                                                  : Colors.grey,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
                                                 ],
                                               ),
                                             ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ),
+                                  ),
+                                );
+                              },
                             ),
                           ),
-                        );
-                      },
-                    ),
-                  ),
           ),
         ),
       ),
