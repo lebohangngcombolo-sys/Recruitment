@@ -128,6 +128,10 @@ class Config:
     GOOGLE_CALENDAR_DEFAULT_DURATION = int(os.getenv('GOOGLE_CALENDAR_DEFAULT_DURATION', '60'))  # minutes
     GOOGLE_CALENDAR_TIMEZONE = os.getenv('GOOGLE_CALENDAR_TIMEZONE', 'UTC')
 
+    # FastAPI Analysis Service Configuration
+    ANALYSIS_SERVICE_URL = os.getenv('ANALYSIS_SERVICE_URL', 'http://localhost:8000')
+    ANALYSIS_SERVICE_API_KEY = os.getenv('ANALYSIS_SERVICE_API_KEY', '')
+
     
 class DevelopmentConfig(Config):
     DEBUG = True

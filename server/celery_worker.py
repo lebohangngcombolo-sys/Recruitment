@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 import os
 import ssl
 from dotenv import load_dotenv
@@ -27,6 +28,7 @@ def make_celery(app_name=__name__):
         enable_utc=True,
         task_always_eager=task_always_eager,
         task_eager_propagates=task_eager_propagates,
+        # Removed: CV analysis polling now uses lazy polling on request
     )
     if redis_url.startswith("rediss://") or backend.startswith("rediss://"):
         ssl_opts = {"ssl_cert_reqs": ssl.CERT_REQUIRED}

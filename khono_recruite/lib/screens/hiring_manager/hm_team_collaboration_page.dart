@@ -17,6 +17,7 @@ class HMTeamCollaborationPage extends StatefulWidget {
 
 class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
   final TextEditingController _messageController = TextEditingController();
+  final TextEditingController _timelineCommentController = TextEditingController();
   final List<CollaborationMessage> _messages = [];
   final List<TeamMember> _teamMembers = [];
   final List<SharedNote> _sharedNotes = [];
@@ -28,8 +29,21 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
   int? _currentThreadId;
 
-  final AdminService _apiService = AdminService(); // ADD API SERVICE
+  final AdminService _apiService = AdminService();
   bool _isLoading = true;
+
+  /// Entity options for chat: General + applications (Candidate - Job).
+  List<Map<String, String>> _entityOptions = [
+    {'value': 'general', 'label': 'General Chat'}
+  ];
+  List<Map<String, dynamic>> _applicationsList = [];
+
+  /// Candidate audit timeline (per-application: who moved stage when + comments).
+  int? _selectedTimelineApplicationId;
+  List<Map<String, dynamic>> _timelineEntries = [];
+  bool _timelineLoading = false;
+  bool _timelineSending = false;
+  int _rightPanelTab = 0; // 0 = Team Chat, 1 = Candidate timeline
 
   @override
   void initState() {
@@ -74,6 +88,12 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
   Map<String, String?> _mapSelectedEntity() {
     if (_selectedEntity == 'general') {
       return {'entityType': 'general', 'entityId': null};
+    }
+    if (_selectedEntity.startsWith('application:')) {
+      return {
+        'entityType': 'application',
+        'entityId': _selectedEntity.split(':').last,
+      };
     }
     if (_selectedEntity.startsWith('candidate:')) {
       return {
@@ -230,6 +250,31 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
             .toList());
       });
 
+      // Load applications for my jobs (for entity selector and timeline dropdown)
+      try {
+        final appsData = await _apiService.getApplicationsForMyJobsPage(page: 1, perPage: 100);
+        final apps = (appsData['applications'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+        if (mounted) {
+          setState(() {
+            _applicationsList = apps;
+            _entityOptions = [
+              {'value': 'general', 'label': 'General Chat'},
+              ...apps.take(50).map((a) {
+                final id = a['id'] ?? a['application_id'];
+                final cand = a['candidate'] is Map ? a['candidate'] as Map<String, dynamic> : null;
+                final name = cand?['full_name']?.toString().trim() ?? 'Candidate';
+                final job = a['job_title']?.toString().trim() ?? 'Job';
+                return {'value': 'application:$id', 'label': '$name – $job'};
+              }),
+            ];
+          });
+        }
+      } catch (_) {
+        debugPrint('Failed to load applications for entity list');
+      }
+
       // Load team members from API
       await _loadTeamMembers();
 
@@ -283,14 +328,319 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                         ),
                       ),
                       const SizedBox(width: 20),
-                      // Right Panel
+                      // Right Panel: Team Chat or Candidate timeline
                       Expanded(
                         flex: 2,
-                        child: _buildChatPanel(themeProvider),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                _buildTabChip(themeProvider, 0, 'Team Chat'),
+                                const SizedBox(width: 8),
+                                _buildTabChip(themeProvider, 1, 'Candidate timeline'),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Expanded(
+                              child: _rightPanelTab == 0
+                                  ? _buildChatPanel(themeProvider)
+                                  : _buildCandidateTimelinePanel(themeProvider),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabChip(ThemeProvider themeProvider, int index, String label) {
+    final selected = _rightPanelTab == index;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          setState(() => _rightPanelTab = index);
+          if (index == 1 && _selectedTimelineApplicationId != null) {
+            _loadTimeline();
+          }
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.primaryRed
+                : (themeProvider.isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w600,
+              color: selected ? Colors.white : (themeProvider.isDarkMode ? Colors.white70 : Colors.black87),
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadTimeline() async {
+    if (_selectedTimelineApplicationId == null) return;
+    setState(() => _timelineLoading = true);
+    try {
+      final list = await _apiService.getApplicationTimeline(_selectedTimelineApplicationId!);
+      if (mounted) setState(() {
+        _timelineEntries = list;
+        _timelineLoading = false;
+      });
+    } catch (e) {
+      if (mounted) setState(() {
+        _timelineEntries = [];
+        _timelineLoading = false;
+      });
+    }
+  }
+
+  Future<void> _addTimelineComment() async {
+    final comment = _timelineCommentController.text.trim();
+    if (comment.isEmpty || _selectedTimelineApplicationId == null) return;
+    setState(() => _timelineSending = true);
+    try {
+      await _apiService.addApplicationTimelineNote(_selectedTimelineApplicationId!, comment);
+      _timelineCommentController.clear();
+      await _loadTimeline();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Comment added to timeline', style: GoogleFonts.inter()),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to add comment: $e', style: GoogleFonts.inter()),
+            backgroundColor: AppColors.primaryRed,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+    if (mounted) setState(() => _timelineSending = false);
+  }
+
+  Widget _buildCandidateTimelinePanel(ThemeProvider themeProvider) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.history, color: AppColors.primaryRed, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Candidate audit timeline',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: themeProvider.isDarkMode ? Colors.white : AppColors.textDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Who moved stage when + comments for an application',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: themeProvider.isDarkMode ? Colors.grey.shade400 : AppColors.textGrey,
+            ),
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<int>(
+            value: _selectedTimelineApplicationId,
+            decoration: InputDecoration(
+              labelText: 'Select application',
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+            items: _applicationsList.take(80).map((a) {
+              final id = a['id'] ?? a['application_id'];
+              final cand = a['candidate'] is Map ? a['candidate'] as Map<String, dynamic> : null;
+              final name = cand?['full_name']?.toString().trim() ?? 'Candidate';
+              final job = a['job_title']?.toString().trim() ?? 'Job';
+              final appId = id is int ? id : int.tryParse(id.toString());
+              if (appId == null) return null;
+              return DropdownMenuItem<int>(
+                value: appId,
+                child: Text('$name – $job', overflow: TextOverflow.ellipsis, style: GoogleFonts.inter(fontSize: 13)),
+              );
+            }).whereType<DropdownMenuItem<int>>().toList(),
+            onChanged: (v) {
+              setState(() => _selectedTimelineApplicationId = v);
+              if (v != null) _loadTimeline();
+            },
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: _timelineLoading
+                ? const Center(child: CircularProgressIndicator(color: AppColors.primaryRed))
+                : _selectedTimelineApplicationId == null
+                    ? Center(
+                        child: Text(
+                          'Select an application to view timeline',
+                          style: GoogleFonts.inter(
+                            color: themeProvider.isDarkMode ? Colors.grey.shade400 : AppColors.textGrey,
+                            fontSize: 14,
+                          ),
+                        ),
+                      )
+                    : _timelineEntries.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No timeline entries yet. Add a comment below.',
+                              style: GoogleFonts.inter(
+                                color: themeProvider.isDarkMode ? Colors.grey.shade400 : AppColors.textGrey,
+                                fontSize: 14,
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: _timelineEntries.length,
+                            itemBuilder: (context, i) {
+                              final e = _timelineEntries[i];
+                              final isNote = e['is_note'] == true;
+                              final ts = e['timestamp']?.toString();
+                              final time = ts != null ? DateTime.tryParse(ts) : null;
+                              final actor = e['actor_name']?.toString() ?? 'System';
+                              final details = e['details']?.toString() ?? '';
+                              final oldStatus = e['old_status']?.toString();
+                              final newStatus = e['new_status']?.toString();
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isNote
+                                      ? (themeProvider.isDarkMode ? Colors.grey.shade900 : Colors.blue.shade50)
+                                      : (themeProvider.isDarkMode ? const Color(0xFF2D2D2D) : Colors.grey.shade50),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isNote ? Colors.blue.shade200 : Colors.transparent,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          isNote ? Icons.comment : Icons.update,
+                                          size: 16,
+                                          color: isNote ? Colors.blue : AppColors.primaryRed,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          actor,
+                                          style: GoogleFonts.inter(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 12,
+                                            color: themeProvider.isDarkMode ? Colors.white : AppColors.textDark,
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        if (time != null)
+                                          Text(
+                                            _formatTimeAgo(time),
+                                            style: GoogleFonts.inter(fontSize: 11, color: Colors.grey.shade600),
+                                          ),
+                                      ],
+                                    ),
+                                    if (isNote) ...[
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        details,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 13,
+                                          color: themeProvider.isDarkMode ? Colors.white70 : Colors.black87,
+                                        ),
+                                      ),
+                                    ] else ...[
+                                      if (oldStatus != null || newStatus != null)
+                                        Text(
+                                          '${oldStatus ?? '?'} → ${newStatus ?? '?'}',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            color: themeProvider.isDarkMode ? Colors.grey.shade400 : AppColors.textGrey,
+                                          ),
+                                        ),
+                                      if (details.isNotEmpty)
+                                        Text(
+                                          details,
+                                          style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600),
+                                        ),
+                                    ],
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+          ),
+          if (_selectedTimelineApplicationId != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _timelineCommentController,
+                    decoration: InputDecoration(
+                      hintText: 'Add a comment to the timeline...',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                    maxLines: 1,
+                    style: GoogleFonts.inter(fontSize: 14),
+                    onSubmitted: (_) => _addTimelineComment(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _timelineSending ? null : _addTimelineComment,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryRed,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  ),
+                  child: _timelineSending
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('Add comment'),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -909,17 +1259,21 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: DropdownButton<String>(
-                  value: _selectedEntity,
-                  items: const [
-                    DropdownMenuItem(
-                        value: 'general', child: Text('General Chat')),
-                    DropdownMenuItem(
-                        value: 'candidate:123',
-                        child: Text('Candidate Discussion')),
-                    DropdownMenuItem(
-                        value: 'requisition:456',
-                        child: Text('Job Requisition')),
-                  ],
+                  value: _entityOptions.any((e) => e['value'] == _selectedEntity)
+                      ? _selectedEntity
+                      : 'general',
+                  items: _entityOptions.map((e) {
+                    final v = e['value']!;
+                    final label = e['label']!;
+                    return DropdownMenuItem<String>(
+                      value: v,
+                      child: Text(
+                        label,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(fontSize: 12),
+                      ),
+                    );
+                  }).toList(),
                   onChanged: (value) async {
                     if (value == null) return;
                     setState(() {
@@ -1674,6 +2028,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
   @override
   void dispose() {
     _messageController.dispose();
+    _timelineCommentController.dispose();
     _channel?.sink.close();
     super.dispose();
   }
