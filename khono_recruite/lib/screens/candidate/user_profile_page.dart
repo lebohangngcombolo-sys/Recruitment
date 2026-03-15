@@ -31,7 +31,11 @@ class _ProfilePageState extends State<ProfilePage>
   String? _selectedNationality;
   String? _selectedTitle;
   DateTime? _selectedDate;
-  List<TextEditingController> _workExpControllers = [TextEditingController()];
+
+  // Work history state (single current role for now)
+  final TextEditingController workFromController = TextEditingController();
+  final TextEditingController workToController = TextEditingController();
+  bool _currentlyWorkHere = false;
 
   // Profile Controllers
   final TextEditingController fullNameController = TextEditingController();
@@ -503,6 +507,8 @@ class _ProfilePageState extends State<ProfilePage>
   @override
   void dispose() {
     _addSkillController.dispose();
+    workFromController.dispose();
+    workToController.dispose();
     for (final row in _educationExtraRows) {
       row['institution']?.dispose();
       row['degree']?.dispose();
@@ -1151,31 +1157,41 @@ class _ProfilePageState extends State<ProfilePage>
           }
         }
 
-        // Work experience from enrollment: list of {position, company, description}
+        // Work experience: single editable block (combine all entries into one text)
         final workExperience = candidate['work_experience'] ?? [];
+        final List<String> workBlocks = [];
         if (workExperience.isNotEmpty && workExperience is List) {
-          _workExpControllers.clear();
           for (var exp in workExperience) {
-            String text = exp.toString();
             if (exp is Map) {
-              final pos = exp['position'] ?? exp['title'] ?? '';
-              final co = exp['company'] ?? '';
-              final desc = exp['description'] ?? '';
-              text = [
-                if (pos.isNotEmpty) pos,
-                if (co.isNotEmpty) 'at $co',
-                if (desc.isNotEmpty) desc
-              ].join(' • ');
+              final position =
+                  (exp['position'] ?? exp['title'] ?? '').toString().trim();
+              final company = (exp['company'] ?? '').toString().trim();
+              final description = (exp['description'] ?? '').toString().trim();
+              final dateRange =
+                  (exp['dates'] ?? exp['period'] ?? exp['duration'] ?? '')
+                      .toString()
+                      .trim();
+              workBlocks.add([
+                if (company.isNotEmpty && dateRange.isNotEmpty)
+                  '$company $dateRange',
+                if (position.isNotEmpty) position,
+                if (description.isNotEmpty) description,
+              ].where((s) => s.isNotEmpty).join('\n'));
+            } else {
+              final s = exp.toString().trim();
+              if (s.isNotEmpty) workBlocks.add(s);
             }
-            _workExpControllers.add(TextEditingController(text: text));
           }
-        } else {
-          _workExpControllers = [TextEditingController()];
         }
-
-        // Initialize the workExpController with first entry for backward compatibility
-        if (_workExpControllers.isNotEmpty) {
-          workExpController.text = _workExpControllers.first.text;
+        // Persist manually entered work experience details:
+        // if the backend has a saved value, show the first block; otherwise start empty.
+        if (workBlocks.isNotEmpty) {
+          workExpController.text = workBlocks.first;
+        } else if (workExperience is String &&
+            workExperience.toString().trim().isNotEmpty) {
+          workExpController.text = workExperience.toString().trim();
+        } else if (workExpController.text.trim().isEmpty) {
+          workExpController.text = '';
         }
 
         // Parse skills: separate actual skills from reference-like text (show references under Work Experience)
@@ -1210,9 +1226,23 @@ class _ProfilePageState extends State<ProfilePage>
           }
         }
         skillsController.text = _skillList.join(", ");
-        jobTitleController.text = candidate['job_title'] ?? "";
-        companyController.text = candidate['company'] ?? "";
-        yearsOfExpController.text = candidate['years_of_experience'] ?? "";
+
+        // Structured work experience: only overwrite parsed values when backend actually has data.
+        final backendJobTitle =
+            (candidate['job_title'] ?? "").toString().trim();
+        if (backendJobTitle.isNotEmpty) {
+          jobTitleController.text = backendJobTitle;
+        }
+        final backendCompany = (candidate['company'] ?? "").toString().trim();
+        if (backendCompany.isNotEmpty) {
+          companyController.text = backendCompany;
+        }
+        final backendYears =
+            (candidate['years_of_experience'] ?? "").toString().trim();
+        if (backendYears.isNotEmpty) {
+          yearsOfExpController.text = backendYears;
+        }
+
         linkedinController.text = candidate['linkedin'] ?? "";
         githubController.text = candidate['github'] ?? "";
         portfolioController.text = candidate['portfolio'] ?? "";
@@ -1298,16 +1328,10 @@ class _ProfilePageState extends State<ProfilePage>
 
   Future<void> updateProfile() async {
     try {
-      // Collect all work experience entries
-      final workExpEntries = _workExpControllers
-          .map((controller) => controller.text.trim())
-          .where((text) => text.isNotEmpty)
-          .toList();
-
-      // For backward compatibility, set the first work experience to the original controller
-      if (workExpEntries.isNotEmpty) {
-        workExpController.text = workExpEntries.first;
-      }
+      // Single work experience field: send as one block
+      final workExpEntries = workExpController.text.trim().isNotEmpty
+          ? [workExpController.text.trim()]
+          : <String>[];
 
       // Build structured education entries from separate fields (first row + extra rows)
       final educationEntries = <Map<String, String>>[];
@@ -1637,118 +1661,141 @@ class _ProfilePageState extends State<ProfilePage>
                   ),
                   child: Column(
                     children: [
-                      // Profile Section (transparent background)
-                      Column(
+                      // Top row: arrow top-left, profile block centered
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Stack(
-                            children: [
-                              Container(
-                                width: 100,
-                                height: 100,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.3),
-                                    width: 2,
-                                  ),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(50),
-                                  child: Image(
-                                    image: _getProfileImageProvider(),
-                                    fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            Container(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.1),
-                                      child: Icon(
-                                        Icons.person,
-                                        color:
-                                            Colors.white.withValues(alpha: 0.3),
-                                        size: 40,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: GestureDetector(
-                                  onTap: _pickProfileImage,
-                                  child: Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      color: Colors.redAccent
-                                          .withValues(alpha: 0.8),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 2,
-                                      ),
-                                    ),
-                                    child: const Icon(
-                                      Icons.edit,
-                                      color: Colors.white,
-                                      size: 14,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                          IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: Icon(Icons.arrow_back_rounded,
+                                color: Colors.white, size: 24),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                                minWidth: 40, minHeight: 40),
                           ),
-                          const SizedBox(height: 16),
-                          Text(
-                            fullNameController.text.isNotEmpty
-                                ? fullNameController.text
-                                : "Your Name",
-                            style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            titleController.text.isNotEmpty
-                                ? titleController.text
-                                : "Your Title",
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              color: Colors.white70,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          if (_mfaEnabled) ...[
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
+                          Expanded(
+                            child: Center(
+                              child: Column(
                                 mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
-                                  Icon(Icons.verified,
-                                      color: Colors.greenAccent, size: 12),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    "2FA Enabled",
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      color: Colors.greenAccent,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                                  Stack(
+                                    children: [
+                                      Container(
+                                        width: 100,
+                                        height: 100,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white
+                                                .withValues(alpha: 0.3),
+                                            width: 2,
+                                          ),
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(50),
+                                          child: Image(
+                                            image: _getProfileImageProvider(),
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (context, error, stackTrace) =>
+                                                    Container(
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.1),
+                                              child: Icon(
+                                                Icons.person,
+                                                color: Colors.white
+                                                    .withValues(alpha: 0.3),
+                                                size: 40,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        bottom: 0,
+                                        right: 0,
+                                        child: GestureDetector(
+                                          onTap: _pickProfileImage,
+                                          child: Container(
+                                            width: 32,
+                                            height: 32,
+                                            decoration: BoxDecoration(
+                                              color: Colors.redAccent
+                                                  .withValues(alpha: 0.8),
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: Colors.white,
+                                                width: 2,
+                                              ),
+                                            ),
+                                            child: const Icon(
+                                              Icons.edit,
+                                              color: Colors.white,
+                                              size: 14,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    fullNameController.text.isNotEmpty
+                                        ? fullNameController.text
+                                        : "Your Name",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    titleController.text.isNotEmpty
+                                        ? titleController.text
+                                        : "Your Title",
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: Colors.white70,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  if (_mfaEnabled) ...[
+                                    const SizedBox(height: 12),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green
+                                            .withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.verified,
+                                              color: Colors.greenAccent,
+                                              size: 12),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            "2FA Enabled",
+                                            style: GoogleFonts.inter(
+                                              fontSize: 12,
+                                              color: Colors.greenAccent,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
-                          ],
+                          ),
                         ],
                       ),
                       const SizedBox(height: 40),
@@ -2728,19 +2775,6 @@ class _ProfilePageState extends State<ProfilePage>
               children: [
                 Row(
                   children: [
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(Icons.arrow_back_rounded,
-                            color: Colors.redAccent, size: 20),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2764,28 +2798,6 @@ class _ProfilePageState extends State<ProfilePage>
                             ),
                           ),
                         ],
-                      ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: updateProfile,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 14),
-                        shadowColor: Colors.redAccent.withValues(alpha: 0.3),
-                      ),
-                      icon: Icon(Icons.save_rounded, size: 18),
-                      label: Text(
-                        "Save Changes",
-                        style: GoogleFonts.inter(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
                       ),
                     ),
                   ],
@@ -3010,6 +3022,31 @@ class _ProfilePageState extends State<ProfilePage>
                   hintText: "Tell us about yourself...",
                   prefixIcon: Icon(Icons.description_outlined, size: 20),
                 ),
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.center,
+                  child: ElevatedButton(
+                    onPressed: updateProfile,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 28,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Text(
+                      "Save",
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -3227,40 +3264,78 @@ class _ProfilePageState extends State<ProfilePage>
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.center,
+                  child: ElevatedButton(
+                    onPressed: updateProfile,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 28,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Text(
+                      "Save",
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
 
-          // Work Experience Section
+          // Work Experience Section — structured, manual entry
           _modernCard(
             "Work Experience",
             Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                CustomTextField(
-                  label: "Job Title",
-                  controller: jobTitleController,
-                  backgroundColor: Colors.transparent,
-                  borderColor: Colors.grey.shade300,
-                  focusedBorderColor: Colors.redAccent,
-                  borderRadius: 12,
-                  borderWidth: 1.5,
-                  focusedBorderWidth: 2,
-                  textColor: Colors.black87,
-                  labelColor: Colors.black,
-                  hintColor: Colors.grey.shade500,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
+                Text(
+                  "Capture your current or most recent role. You can still paste from your CV, but the key details are structured.",
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
                   ),
-                  prefixIcon: Icon(Icons.work_outline_rounded, size: 20),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
 
+                // Job Title & Company row
                 Row(
                   children: [
                     Expanded(
                       child: CustomTextField(
-                        label: "Company",
+                        label: "Job Title *",
+                        controller: jobTitleController,
+                        backgroundColor: Colors.transparent,
+                        borderColor: Colors.grey.shade300,
+                        focusedBorderColor: Colors.redAccent,
+                        borderRadius: 12,
+                        borderWidth: 1.5,
+                        focusedBorderWidth: 2,
+                        textColor: Colors.black87,
+                        labelColor: Colors.black,
+                        hintColor: Colors.grey.shade500,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        prefixIcon:
+                            const Icon(Icons.work_outline_rounded, size: 20),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: CustomTextField(
+                        label: "Company *",
                         controller: companyController,
                         backgroundColor: Colors.transparent,
                         borderColor: Colors.grey.shade300,
@@ -3273,221 +3348,203 @@ class _ProfilePageState extends State<ProfilePage>
                         hintColor: Colors.grey.shade500,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 16,
-                          vertical: 16,
+                          vertical: 12,
                         ),
-                        prefixIcon: Icon(Icons.business_outlined, size: 20),
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    Expanded(
-                      child: CustomTextField(
-                        label: "Years of Experience",
-                        controller: yearsOfExpController,
-                        backgroundColor: Colors.transparent,
-                        borderColor: Colors.grey.shade300,
-                        focusedBorderColor: Colors.redAccent,
-                        borderRadius: 12,
-                        borderWidth: 1.5,
-                        focusedBorderWidth: 2,
-                        textColor: Colors.black87,
-                        labelColor: Colors.black,
-                        hintColor: Colors.grey.shade500,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
-                        ),
-                        prefixIcon: Icon(Icons.timeline_outlined, size: 20),
-                        inputType: TextInputType.number,
+                        prefixIcon:
+                            const Icon(Icons.business_outlined, size: 20),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
 
-                // Dynamic work experience entries
-                ..._workExpControllers.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final controller = entry.value;
-                  return Container(
-                    margin: EdgeInsets.only(
-                      bottom: index == _workExpControllers.length - 1 ? 0 : 20,
+                // From / To + currently here (compact, grouped)
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 200,
+                      child: CustomTextField(
+                        label: "From",
+                        controller: workFromController,
+                        readOnly: true,
+                        backgroundColor: Colors.transparent,
+                        borderColor: Colors.grey.shade300,
+                        focusedBorderColor: Colors.redAccent,
+                        borderRadius: 10,
+                        borderWidth: 1.3,
+                        focusedBorderWidth: 1.8,
+                        textColor: Colors.black87,
+                        labelColor: Colors.black,
+                        hintColor: Colors.grey.shade500,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        prefixIcon: IconButton(
+                          icon: const Icon(Icons.calendar_today_outlined,
+                              size: 18),
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: DateTime.now(),
+                              firstDate: DateTime(1980),
+                              lastDate: DateTime.now()
+                                  .add(const Duration(days: 365 * 5)),
+                            );
+                            if (picked != null) {
+                              setState(() {
+                                workFromController.text =
+                                    DateFormat('dd MMM yyyy').format(picked);
+                              });
+                            }
+                          },
+                        ),
+                      ),
                     ),
-                    child: Row(
+                    const SizedBox(width: 12),
+                    SizedBox(
+                      width: 200,
+                      child: CustomTextField(
+                        label: "To",
+                        controller: workToController,
+                        readOnly: _currentlyWorkHere,
+                        backgroundColor: Colors.transparent,
+                        borderColor: Colors.grey.shade300,
+                        focusedBorderColor: Colors.redAccent,
+                        borderRadius: 10,
+                        borderWidth: 1.3,
+                        focusedBorderWidth: 1.8,
+                        textColor: Colors.black87,
+                        labelColor: Colors.black,
+                        hintColor: Colors.grey.shade500,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        prefixIcon: IconButton(
+                          icon: const Icon(Icons.calendar_today_outlined,
+                              size: 18),
+                          onPressed: _currentlyWorkHere
+                              ? null
+                              : () async {
+                                  final picked = await showDatePicker(
+                                    context: context,
+                                    initialDate: DateTime.now(),
+                                    firstDate: DateTime(1980),
+                                    lastDate: DateTime.now()
+                                        .add(const Duration(days: 365 * 5)),
+                                  );
+                                  if (picked != null) {
+                                    setState(() {
+                                      workToController.text =
+                                          DateFormat('dd MMM yyyy')
+                                              .format(picked);
+                                    });
+                                  }
+                                },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Expanded(
-                          child: CustomTextField(
-                            label: index == 0
-                                ? "Work Experience Details"
-                                : "Additional Experience",
-                            controller: controller,
-                            maxLines: 3,
-                            backgroundColor: Colors.transparent,
-                            borderColor: Colors.grey.shade300,
-                            focusedBorderColor: Colors.redAccent,
-                            borderRadius: 12,
-                            borderWidth: 1.5,
-                            focusedBorderWidth: 2,
-                            textColor: Colors.black87,
-                            labelColor: Colors.black,
-                            hintColor: Colors.grey.shade500,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 16,
-                            ),
-                            hintText:
-                                "Describe your responsibilities and achievements...",
-                            prefixIcon: Icon(
-                              Icons.description_outlined,
-                              size: 20,
-                              color: index == 0
-                                  ? Colors.redAccent
-                                  : Colors.grey.shade600,
-                            ),
+                        Checkbox(
+                          value: _currentlyWorkHere,
+                          activeColor: Colors.redAccent,
+                          onChanged: (val) {
+                            setState(() {
+                              _currentlyWorkHere = val ?? false;
+                              if (_currentlyWorkHere) {
+                                workToController.clear();
+                              }
+                            });
+                          },
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          "I currently work here",
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: Colors.black87,
                           ),
                         ),
-                        if (_workExpControllers.length > 1)
-                          Container(
-                            margin: const EdgeInsets.only(left: 12),
-                            child: IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _workExpControllers.removeAt(index);
-                                });
-                              },
-                              icon: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color:
-                                      Colors.redAccent.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Icon(
-                                  Icons.remove_rounded,
-                                  color: Colors.redAccent,
-                                  size: 18,
-                                ),
-                              ),
-                            ),
-                          ),
                       ],
                     ),
-                  );
-                }).toList(),
+                  ],
+                ),
+                const SizedBox(height: 16),
 
-                // Add more experience button
+                // Work experience details / responsibilities
+                Text(
+                  "Work Experience Details",
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Container(
-                  margin: const EdgeInsets.only(top: 10),
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _workExpControllers.add(TextEditingController());
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor: Colors.redAccent,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 14,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: Colors.redAccent.withValues(alpha: 0.3),
-                          width: 1.5,
-                        ),
-                      ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300, width: 1),
+                  ),
+                  child: TextFormField(
+                    controller: workExpController,
+                    maxLines: 6,
+                    minLines: 4,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: Colors.black87,
+                      height: 1.5,
                     ),
-                    icon: Icon(
-                      Icons.add_circle_outline_rounded,
-                      color: Colors.redAccent,
-                      size: 20,
-                    ),
-                    label: Text(
-                      "Add Another Experience",
-                      style: GoogleFonts.inter(
-                        color: Colors.redAccent,
-                        fontWeight: FontWeight.w600,
+                    decoration: InputDecoration(
+                      hintText:
+                          "Describe your day-to-day responsibilities and key achievements for this role.",
+                      hintStyle: GoogleFonts.inter(
                         fontSize: 14,
+                        color: Colors.grey.shade500,
+                        height: 1.5,
                       ),
+                      filled: true,
+                      fillColor: Colors.transparent,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 16),
+                      alignLabelWithHint: true,
                     ),
                   ),
                 ),
-                if (_referenceEntries.isNotEmpty) ...[
-                  const SizedBox(height: 28),
-                  Divider(color: Colors.grey.shade200),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Icon(Icons.people_outline_rounded,
-                          size: 20, color: Colors.grey.shade700),
-                      const SizedBox(width: 8),
-                      Text(
-                        "References",
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.center,
+                  child: ElevatedButton(
+                    onPressed: updateProfile,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 28,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: Text("Save",
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ],
+                        )),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    "Reference contact details (moved here from skills).",
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ..._referenceEntries.asMap().entries.map((entry) {
-                    final i = entry.key;
-                    final ref = entry.value;
-                    return Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 10),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.person_outline_rounded,
-                              size: 18, color: Colors.grey.shade600),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              ref,
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                color: Colors.black87,
-                                height: 1.35,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.close,
-                                size: 18, color: Colors.grey.shade600),
-                            onPressed: () {
-                              setState(() {
-                                _referenceEntries.removeAt(i);
-                              });
-                            },
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                                minWidth: 32, minHeight: 32),
-                            tooltip: "Remove reference",
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                ],
+                ),
+                const SizedBox(height: 12),
               ],
             ),
           ),
@@ -3556,56 +3613,27 @@ class _ProfilePageState extends State<ProfilePage>
                   hintText: "https://yourportfolio.com",
                   prefixIcon: Icon(Icons.public_outlined, size: 20),
                 ),
-              ],
-            ),
-          ),
-
-          // Save Button Section
-          Container(
-            margin: const EdgeInsets.symmetric(vertical: 40),
-            child: Column(
-              children: [
-                ElevatedButton(
-                  onPressed: updateProfile,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.redAccent,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 40,
-                      vertical: 18,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    elevation: 0,
-                    shadowColor: Colors.redAccent.withValues(alpha: 0.4),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.save_rounded, size: 20),
-                      const SizedBox(width: 10),
-                      Text(
-                        "Save All Changes",
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
                 const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: Text(
-                    "Cancel",
-                    style: GoogleFonts.inter(
-                      color: Colors.grey.shade600,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton(
+                    onPressed: updateProfile,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 28,
+                        vertical: 14,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
+                    child: Text("Save",
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        )),
                   ),
                 ),
               ],

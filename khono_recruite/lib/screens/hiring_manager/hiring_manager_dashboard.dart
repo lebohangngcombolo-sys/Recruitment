@@ -10,11 +10,13 @@ import '../notifications/notifications_screen.dart';
 import 'job_management.dart';
 import '../admin/interviews_list_screen.dart';
 import 'offer_list_screen.dart';
+import 'review_queue_screen.dart';
 import 'hm_analytics_page.dart';
-import 'hm_team_collaboration_page.dart';
+import '../admin/hm_team_collaboration_page.dart';
 import 'hiring_manager_profile_screen.dart';
 import 'hiring_manager_settings_screen.dart';
 import 'pipeline_page.dart';
+import 'meeting_screen.dart';
 import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -22,6 +24,9 @@ import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../utils/api_endpoints.dart';
 import '../../utils/app_config.dart';
+import '../../services/notification_service.dart';
+// ignore: unused_import - json.decode used in fetchAudits, fetchPipelineActivity, fetchChartData
+import 'dart:convert';
 
 class _DashboardCalendarDataSource extends CalendarDataSource {
   _DashboardCalendarDataSource(List<Appointment> source) {
@@ -108,6 +113,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   bool sidebarCollapsed = false;
+  bool candidateMenuExpanded = false;
   late final AnimationController _sidebarAnimController;
   late final Animation<double> _sidebarWidthAnimation;
 
@@ -139,8 +145,16 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     "logout",
     "create",
     "update",
-    "delete"
+    "delete",
   ];
+
+  // Pipeline activity (who advanced/declined and when) - for HM and admin
+  List<Map<String, dynamic>> pipelineActivity = [];
+  bool loadingPipelineActivity = false;
+
+  // Notifications for dashboard widget (status changes + upcoming interviews)
+  List<Map<String, dynamic>> dashboardNotifications = [];
+  bool loadingNotifications = false;
 
   // ---------- Profile image state ----------
   String _profileImageUrl = "";
@@ -158,6 +172,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     fetchCandidates();
     fetchChartData();
     fetchAudits(page: 1);
+    fetchPipelineActivity();
+    fetchDashboardNotifications();
     fetchProfileImage();
     _loadUserName();
     _loadCalendarData();
@@ -195,8 +211,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         if (refresh || candidatePage == 1) {
           candidates = List<Map<String, dynamic>>.from(data['candidates']);
         } else {
-          candidates
-              .addAll(List<Map<String, dynamic>>.from(data['candidates']));
+          candidates.addAll(
+            List<Map<String, dynamic>>.from(data['candidates']),
+          );
         }
         loadingCandidates = false;
       });
@@ -240,7 +257,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       final profile = info['profile'] ?? {};
       final candidate = info['candidate'] ?? {};
 
-      final name = info['full_name'] ??
+      final name =
+          info['full_name'] ??
           info['name'] ??
           profile['full_name'] ??
           profile['name'] ??
@@ -278,7 +296,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       List<Map<String, dynamic>> interviews = [];
       try {
         interviews = await admin.getInterviewsForCalendar(
-            startDate: startStr, endDate: endStr);
+          startDate: startStr,
+          endDate: endStr,
+        );
       } catch (_) {}
       final List<Appointment> appointments = [];
       for (final m in meetings) {
@@ -299,12 +319,14 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         } catch (_) {
           continue;
         }
-        appointments.add(Appointment(
-          startTime: startTime,
-          endTime: endTime,
-          subject: map['title'] as String? ?? 'Meeting',
-          color: Colors.blue,
-        ));
+        appointments.add(
+          Appointment(
+            startTime: startTime,
+            endTime: endTime,
+            subject: map['title'] as String? ?? 'Meeting',
+            color: Colors.blue,
+          ),
+        );
       }
       for (final i in interviews) {
         final scheduledStr = i['scheduled_time'] as String?;
@@ -321,13 +343,15 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         }
         final jobTitle = i['job_title'] as String? ?? 'Interview';
         final candidateName = i['candidate_name'] as String? ?? '';
-        appointments.add(Appointment(
-          startTime: startTime,
-          endTime: endTime,
-          subject:
-              'Interview: $jobTitle${candidateName.isNotEmpty ? ' – $candidateName' : ''}',
-          color: Colors.deepOrange,
-        ));
+        appointments.add(
+          Appointment(
+            startTime: startTime,
+            endTime: endTime,
+            subject:
+                'Interview: $jobTitle${candidateName.isNotEmpty ? ' – $candidateName' : ''}',
+            color: Colors.deepOrange,
+          ),
+        );
       }
       if (!mounted) return;
       setState(() {
@@ -378,7 +402,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         Uri.parse("$apiBase/profile"),
         headers: {
           'Authorization': 'Bearer ${widget.token}',
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
       );
 
@@ -407,8 +431,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
       final List<String> activities = [];
       if (audits.isNotEmpty) {
-        activities
-            .addAll(audits.map((a) => a['action']?.toString() ?? '').take(5));
+        activities.addAll(
+          audits.map((a) => a['action']?.toString() ?? '').take(5),
+        );
       }
 
       if (!mounted) return;
@@ -434,8 +459,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
         applicationStatusBreakdown = data['application_status_breakdown'] ?? {};
         candidateDemographics = data['candidate_demographics'] ?? {};
-        recentCandidates =
-            List<Map<String, dynamic>>.from(data['recent_candidates'] ?? []);
+        recentCandidates = List<Map<String, dynamic>>.from(
+          data['recent_candidates'] ?? [],
+        );
         recentActivities = activities;
 
         loadingStats = false;
@@ -463,10 +489,12 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       if (pipelineRes.statusCode == 200) {
         final data = json.decode(pipelineRes.body) as List;
         candidatePipelineData = data
-            .map((item) => _ChartData(
-                  item['title'] ?? 'Unknown',
-                  item['applications'] ?? 0,
-                ))
+            .map(
+              (item) => _ChartData(
+                item['title'] ?? 'Unknown',
+                item['applications'] ?? 0,
+              ),
+            )
             .toList();
       }
 
@@ -482,12 +510,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             .where((item) => item['time_to_interview_days'] != null)
             .toList();
         if (validTimes.isNotEmpty) {
-          final avgTime = validTimes
+          final avgTime =
+              validTimes
                   .map((item) => item['time_to_interview_days'] as int)
                   .reduce((a, b) => a + b) /
               validTimes.length;
           timeToFillData = [
-            _ChartData("Avg Time to Interview", avgTime.round())
+            _ChartData("Avg Time to Interview", avgTime.round()),
           ];
         }
       }
@@ -501,10 +530,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         if (genderRes.statusCode == 200) {
           final data = json.decode(genderRes.body) as List;
           genderData = data
-              .map((item) => _ChartData(
-                    item['gender'] ?? 'Unknown',
-                    item['count'] ?? 0,
-                  ))
+              .map(
+                (item) =>
+                    _ChartData(item['gender'] ?? 'Unknown', item['count'] ?? 0),
+              )
               .toList();
         } else {
           // Fallback to conversion rate if gender endpoint not available
@@ -515,8 +544,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           if (conversionRes.statusCode == 200) {
             final data = json.decode(conversionRes.body);
             genderData = [
-              _ChartData("Interview Rate",
-                  (data['conversion_rate_percent'] ?? 0).toInt()),
+              _ChartData(
+                "Interview Rate",
+                (data['conversion_rate_percent'] ?? 0).toInt(),
+              ),
             ];
           }
         }
@@ -529,8 +560,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         if (conversionRes.statusCode == 200) {
           final data = json.decode(conversionRes.body);
           genderData = [
-            _ChartData("Interview Rate",
-                (data['conversion_rate_percent'] ?? 0).toInt()),
+            _ChartData(
+              "Interview Rate",
+              (data['conversion_rate_percent'] ?? 0).toInt(),
+            ),
           ];
         }
       }
@@ -545,19 +578,22 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           final decoded = json.decode(ethnicityRes.body);
           List<dynamic> rows = [];
           if (decoded is Map && decoded['ethnicity_distribution'] is List) {
-            rows =
-                List<dynamic>.from(decoded['ethnicity_distribution'] as List);
+            rows = List<dynamic>.from(
+              decoded['ethnicity_distribution'] as List,
+            );
           } else if (decoded is List) {
             rows = decoded;
           }
           ethnicityData = rows
-              .map((item) => _ChartData(
-                    (item is Map ? (item['ethnicity'] ?? 'Unknown') : 'Unknown')
-                        .toString(),
-                    item is Map && item['count'] is num
-                        ? (item['count'] as num).toInt()
-                        : 0,
-                  ))
+              .map(
+                (item) => _ChartData(
+                  (item is Map ? (item['ethnicity'] ?? 'Unknown') : 'Unknown')
+                      .toString(),
+                  item is Map && item['count'] is num
+                      ? (item['count'] as num).toInt()
+                      : 0,
+                ),
+              )
               .toList();
         } else {
           if (ethnicityRes.statusCode == 404 && mounted) {
@@ -604,10 +640,12 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         final data = json.decode(monthlyRes.body) as List;
         sourcePerformanceData = data
             .take(6)
-            .map((item) => _ChartData(
-                  item['month'] ?? 'Unknown',
-                  item['applications'] ?? 0,
-                ))
+            .map(
+              (item) => _ChartData(
+                item['month'] ?? 'Unknown',
+                item['applications'] ?? 0,
+              ),
+            )
             .toList();
       }
 
@@ -623,20 +661,24 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           if (raw is Map<String, dynamic>) {
             skillsData = raw.entries
                 .take(10)
-                .map((e) => _ChartData(
-                      e.key,
-                      (e.value is num) ? (e.value as num).toInt() : 0,
-                    ))
+                .map(
+                  (e) => _ChartData(
+                    e.key,
+                    (e.value is num) ? (e.value as num).toInt() : 0,
+                  ),
+                )
                 .toList();
           } else if (raw is List) {
             skillsData = raw
                 .take(10)
-                .map((item) => _ChartData(
-                      item['skill']?.toString() ?? 'Unknown',
-                      (item['frequency'] is num)
-                          ? (item['frequency'] as num).toInt()
-                          : 0,
-                    ))
+                .map(
+                  (item) => _ChartData(
+                    item['skill']?.toString() ?? 'Unknown',
+                    (item['frequency'] is num)
+                        ? (item['frequency'] as num).toInt()
+                        : 0,
+                  ),
+                )
                 .toList();
           }
         }
@@ -654,26 +696,30 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           final raw = json.decode(experienceRes.body);
           if (raw is Map<String, dynamic>) {
             experienceData = raw.entries
-                .map((e) => _ChartData(
-                      '${e.key} yrs',
-                      (e.value is num) ? (e.value as num).toInt() : 0,
-                    ))
+                .map(
+                  (e) => _ChartData(
+                    '${e.key} yrs',
+                    (e.value is num) ? (e.value as num).toInt() : 0,
+                  ),
+                )
                 .toList();
           } else if (raw is Map) {
             experienceData = raw.entries
-                .map((e) => _ChartData(
-                      '${e.key} yrs',
-                      (e.value is num) ? (e.value as num).toInt() : 0,
-                    ))
+                .map(
+                  (e) => _ChartData(
+                    '${e.key} yrs',
+                    (e.value is num) ? (e.value as num).toInt() : 0,
+                  ),
+                )
                 .toList();
           } else if (raw is List) {
             experienceData = raw
-                .map((item) => _ChartData(
-                      item['experience_level']?.toString() ?? 'Unknown',
-                      (item['count'] is num)
-                          ? (item['count'] as num).toInt()
-                          : 0,
-                    ))
+                .map(
+                  (item) => _ChartData(
+                    item['experience_level']?.toString() ?? 'Unknown',
+                    (item['count'] is num) ? (item['count'] as num).toInt() : 0,
+                  ),
+                )
                 .toList();
           }
         }
@@ -690,10 +736,12 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         if (cvDropRes.statusCode == 200) {
           final data = json.decode(cvDropRes.body) as List;
           cvScreeningData = data
-              .map((item) => _ChartData(
-                    item['date'] ?? 'Unknown',
-                    item['drop_count'] ?? 0,
-                  ))
+              .map(
+                (item) => _ChartData(
+                  item['date'] ?? 'Unknown',
+                  item['drop_count'] ?? 0,
+                ),
+              )
               .toList();
         }
       } catch (e) {
@@ -709,10 +757,12 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         if (assessmentRes.statusCode == 200) {
           final data = json.decode(assessmentRes.body) as List;
           assessmentData = data
-              .map((item) => _ChartData(
-                    item['date'] ?? 'Unknown',
-                    item['pass_rate'] ?? 0,
-                  ))
+              .map(
+                (item) => _ChartData(
+                  item['date'] ?? 'Unknown',
+                  item['pass_rate'] ?? 0,
+                ),
+              )
               .toList();
         }
       } catch (e) {
@@ -750,10 +800,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               "${auditEndDate!.year}-${auditEndDate!.month.toString().padLeft(2, '0')}-${auditEndDate!.day.toString().padLeft(2, '0')}",
         if (auditSearchQuery != null) "q": auditSearchQuery!,
       };
-      final uri = Uri.parse(AppConfig.apiBase + "/api/admin/audits")
-          .replace(queryParameters: queryParams);
-      final res =
-          await http.get(uri, headers: {"Authorization": "Bearer $token"});
+      final uri = Uri.parse(
+        AppConfig.apiBase + "/api/admin/audits",
+      ).replace(queryParameters: queryParams);
+      final res = await http.get(
+        uri,
+        headers: {"Authorization": "Bearer $token"},
+      );
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
@@ -785,6 +838,85 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     }
   }
 
+  Future<void> fetchPipelineActivity() async {
+    setState(() => loadingPipelineActivity = true);
+    try {
+      final token = await AuthService.getAccessToken();
+      final uri = Uri.parse(ApiEndpoints.pipelineActivity);
+      final res = await http.get(
+        uri,
+        headers: {"Authorization": "Bearer $token"},
+      );
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body) as Map<String, dynamic>;
+        final results = data["results"];
+        setState(() {
+          pipelineActivity = results is List
+              ? List<Map<String, dynamic>>.from(
+                  results.map((e) => Map<String, dynamic>.from(e as Map)),
+                )
+              : [];
+          loadingPipelineActivity = false;
+        });
+      } else {
+        setState(() => loadingPipelineActivity = false);
+      }
+    } catch (e) {
+      setState(() => loadingPipelineActivity = false);
+    }
+  }
+
+  Future<void> fetchDashboardNotifications() async {
+    setState(() => loadingNotifications = true);
+    try {
+      final response = await NotificationService.getNotifications();
+      if (!mounted) return;
+      setState(() {
+        dashboardNotifications = response.notifications;
+        loadingNotifications = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => loadingNotifications = false);
+    }
+  }
+
+  void _handleNotificationTap(Map<String, dynamic> notification) {
+    final type = (notification['type']?.toString() ?? '').toLowerCase();
+    setState(() {
+      if (type == 'new_application' || type == 'new_candidate') {
+        currentScreen = 'candidates';
+      } else if (type == 'interview' ||
+          type == 'feedback_reminder' ||
+          type == 'feedback_received' ||
+          type == 'reminder' ||
+          type == 'reminder_urgent' ||
+          type == 'warning') {
+        currentScreen = 'interviews';
+      } else if (type == 'status_update') {
+        currentScreen = 'pipeline';
+      } else {
+        currentScreen = 'notifications';
+      }
+    });
+  }
+
+  String _notificationSectionLabel(Map<String, dynamic> notification) {
+    final type = (notification['type']?.toString() ?? '').toLowerCase();
+    if (type == 'new_application') return 'Applications';
+    if (type == 'new_candidate') return 'Candidates';
+    if (type == 'interview' ||
+        type == 'feedback_reminder' ||
+        type == 'feedback_received' ||
+        type == 'reminder' ||
+        type == 'reminder_urgent' ||
+        type == 'warning') {
+      return 'Interviews';
+    }
+    if (type == 'status_update') return 'Pipeline';
+    return 'General';
+  }
+
   void _showLogoutConfirmation(BuildContext context) {
     final navigatorContext = context;
     showDialog(
@@ -792,21 +924,27 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text("Logout", style: TextStyle(fontFamily: 'Poppins')),
-          content: const Text("Are you sure you want to logout?",
-              style: TextStyle(fontFamily: 'Poppins')),
+          content: const Text(
+            "Are you sure you want to logout?",
+            style: TextStyle(fontFamily: 'Poppins'),
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child:
-                  const Text("Cancel", style: TextStyle(fontFamily: 'Poppins')),
+              child: const Text(
+                "Cancel",
+                style: TextStyle(fontFamily: 'Poppins'),
+              ),
             ),
             TextButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop();
                 _performLogout(navigatorContext);
               },
-              child: const Text("Logout",
-                  style: TextStyle(color: Colors.red, fontFamily: 'Poppins')),
+              child: const Text(
+                "Logout",
+                style: TextStyle(color: Colors.red, fontFamily: 'Poppins'),
+              ),
             ),
           ],
         );
@@ -850,13 +988,19 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                           ? const Color(0xFF1F2840)
                           : const Color.fromARGB(156, 255, 255, 255),
                       border: Border(
-                        right:
-                            BorderSide(color: Colors.grey.shade200, width: 1),
+                        right: BorderSide(
+                          color: Colors.grey.shade200,
+                          width: 1,
+                        ),
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color.fromARGB(255, 20, 19, 30)
-                              .withValues(alpha: 0.02),
+                          color: const Color.fromARGB(
+                            255,
+                            20,
+                            19,
+                            30,
+                          ).withValues(alpha: 0.02),
                           blurRadius: 8,
                           offset: const Offset(2, 0),
                         ),
@@ -909,43 +1053,59 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                             padding: EdgeInsets.zero,
                             children: [
                               _sidebarEntry(
-                                  'assets/images/Home_Remote_Work_Red_Badge_White.png',
-                                  'Home',
-                                  'dashboard'),
+                                'assets/images/Home_Remote_Work_Red_Badge_White.png',
+                                'Home',
+                                'dashboard',
+                              ),
                               _sidebarEntry(
-                                  Icons.person_outline, 'Profile', 'profile'),
+                                Icons.person_outline,
+                                'Profile',
+                                'profile',
+                              ),
                               _sidebarEntry(
-                                  'assets/images/Approval_Red_Badge_White.png',
-                                  'Jobs',
-                                  'jobs'),
-                              _sidebarEntry('assets/images/candidates.png',
-                                  'Candidates', 'candidates'),
+                                'assets/images/Approval_Red_Badge_White.png',
+                                'Jobs',
+                                'jobs',
+                              ),
+                              _candidateSidebarGroup(),
                               _sidebarEntry(
-                                  'assets/images/red_Management_Red_Badge_White.png',
-                                  'Interviews',
-                                  'interviews'),
+                                'assets/images/red_Management_Red_Badge_White.png',
+                                'Interviews',
+                                'interviews',
+                              ),
                               _sidebarEntry(
-                                  'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
-                                  'CV Reviews',
-                                  'cv_reviews'),
-                              _sidebarEntry('assets/icons/data-analytics.png',
-                                  'Analytics', 'analytics'),
-                              _sidebarEntry('assets/icons/teamC.png',
-                                  'Team Collaboration', 'team_collaboration'),
+                                'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
+                                'CV Reviews',
+                                'cv_reviews',
+                              ),
                               _sidebarEntry(
-                                  'assets/images/Notification_Red_White.png',
-                                  'Notifications',
-                                  'notifications'),
+                                'assets/icons/data-analytics.png',
+                                'Analytics',
+                                'analytics',
+                              ),
                               _sidebarEntry(
-                                  'assets/images/innovation_brainstorm_red_badge_white.png',
-                                  'Settings',
-                                  'settings'),
+                                'assets/icons/teamC.png',
+                                'Team Collaboration',
+                                'team_collaboration',
+                              ),
+                              _sidebarEntry(
+                                'assets/images/Notification_Red_White.png',
+                                'Notifications',
+                                'notifications',
+                              ),
+                              _sidebarEntry(
+                                'assets/images/innovation_brainstorm_red_badge_white.png',
+                                'Settings',
+                                'settings',
+                              ),
                             ],
                           ),
                         ),
                         Padding(
                           padding: const EdgeInsets.symmetric(
-                              vertical: 12.0, horizontal: 8),
+                            vertical: 12.0,
+                            horizontal: 8,
+                          ),
                           child: Column(
                             children: [
                               if (!sidebarCollapsed)
@@ -953,15 +1113,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                   onPressed: () =>
                                       _showLogoutConfirmation(context),
                                   icon: const Icon(Icons.logout, size: 16),
-                                  label: const Text("Logout",
-                                      style: TextStyle(fontFamily: 'Poppins')),
+                                  label: const Text(
+                                    "Logout",
+                                    style: TextStyle(fontFamily: 'Poppins'),
+                                  ),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: themeProvider.isDarkMode
                                         ? const Color(0xFF2D2D2D)
                                         : Colors.white,
                                     foregroundColor: Colors.redAccent,
-                                    side:
-                                        BorderSide(color: Colors.grey.shade300),
+                                    side: BorderSide(
+                                      color: Colors.grey.shade300,
+                                    ),
                                     minimumSize: const Size.fromHeight(40),
                                   ),
                                 )
@@ -969,8 +1132,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                 IconButton(
                                   onPressed: () =>
                                       _showLogoutConfirmation(context),
-                                  icon: const Icon(Icons.logout,
-                                      color: Colors.grey),
+                                  icon: const Icon(
+                                    Icons.logout,
+                                    color: Colors.grey,
+                                  ),
                                 ),
                             ],
                           ),
@@ -1041,7 +1206,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                       borderRadius: BorderRadius.circular(40),
                                     ),
                                     contentPadding: const EdgeInsets.symmetric(
-                                        vertical: 14, horizontal: 10),
+                                      vertical: 14,
+                                      horizontal: 10,
+                                    ),
                                   ),
                                   onSubmitted: (query) {
                                     final q = query.toLowerCase();
@@ -1053,8 +1220,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                       } else if (q.contains('interview')) {
                                         currentScreen = "interviews";
                                       } else if (q.contains('pipeline')) {
-                                        // For now, treat pipeline as analytics view
-                                        currentScreen = "analytics";
+                                        currentScreen = "pipeline";
+                                      } else if (q.contains('offer')) {
+                                        currentScreen = "offers";
+                                      } else if (q.contains('meeting')) {
+                                        currentScreen = "meetings";
                                       } else if (q.contains('analytics') ||
                                           q.contains('report')) {
                                         currentScreen = "analytics";
@@ -1064,11 +1234,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                           q.contains('dashboard')) {
                                         currentScreen = "dashboard";
                                       } else {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
                                           SnackBar(
                                             content: Text(
-                                                "No results found for '$query'"),
+                                              "No results found for '$query'",
+                                            ),
                                           ),
                                         );
                                       }
@@ -1125,9 +1297,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                              builder: (context) =>
-                                                  RecruitmentPipelinePage(
-                                                      token: widget.token)),
+                                            builder: (context) =>
+                                                RecruitmentPipelinePage(
+                                                  token: widget.token,
+                                                ),
+                                          ),
                                         );
                                       },
                                       icon: Image.asset(
@@ -1136,7 +1310,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                         width: 24,
                                         height: 24,
                                         color: const Color.fromARGB(
-                                            255, 193, 13, 0),
+                                          255,
+                                          193,
+                                          13,
+                                          0,
+                                        ),
                                       ),
                                       tooltip: "Analytics Dashboard",
                                     ),
@@ -1144,15 +1322,21 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
                                     // ---------- Team Collaboration Icon ----------
                                     IconButton(
-                                      onPressed: () => setState(() =>
-                                          currentScreen = "team_collaboration"),
+                                      onPressed: () => setState(
+                                        () => currentScreen =
+                                            "team_collaboration",
+                                      ),
                                       icon: Image.asset(
                                         // Changed from Icon to Image.asset
                                         'assets/icons/teamC.png',
                                         width: 34,
                                         height: 34,
                                         color: const Color.fromARGB(
-                                            255, 193, 13, 0),
+                                          255,
+                                          193,
+                                          13,
+                                          0,
+                                        ),
                                       ),
                                       tooltip: "Team Collaboration",
                                     ),
@@ -1163,8 +1347,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                              builder: (context) =>
-                                                  AdminOfferListScreen()),
+                                            builder: (context) =>
+                                                AdminOfferListScreen(),
+                                          ),
                                         );
                                       },
                                       icon: Image.asset(
@@ -1172,7 +1357,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                         width: 30,
                                         height: 30,
                                         color: const Color.fromARGB(
-                                            255, 193, 13, 0),
+                                          255,
+                                          193,
+                                          13,
+                                          0,
+                                        ),
                                       ),
                                       label: Text(
                                         "Create",
@@ -1186,22 +1375,28 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     ),
                                     const SizedBox(width: 12),
                                     IconButton(
-                                      onPressed: () => setState(() =>
-                                          currentScreen = "notifications"),
+                                      onPressed: () => setState(
+                                        () => currentScreen = "notifications",
+                                      ),
                                       icon: Image.asset(
                                         // Changed from Icon to Image.asset
                                         'assets/icons/notification.png',
                                         width: 45,
                                         height: 45,
                                         color: const Color.fromARGB(
-                                            255, 193, 13, 0),
+                                          255,
+                                          193,
+                                          13,
+                                          0,
+                                        ),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
                                     GestureDetector(
                                       onTap: () {
                                         context.push(
-                                            '/profile?token=${widget.token}');
+                                          '/profile?token=${widget.token}',
+                                        );
                                       },
                                       onLongPress: _pickProfileImage,
                                       child: CircleAvatar(
@@ -1248,15 +1443,191 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     });
   }
 
-  Widget _sidebarEntry(dynamic icon, String label, String screenKey,
-      {VoidCallback? onTapOverride}) {
+  bool _isCandidateMenuScreen(String screenKey) {
+    return screenKey == 'candidates' ||
+        screenKey == 'pipeline' ||
+        screenKey == 'offers' ||
+        screenKey == 'review_queue' ||
+        screenKey == 'meetings';
+  }
+
+  Widget _buildSidebarIcon(
+    dynamic icon,
+    bool selected,
+    Color iconColor,
+    ThemeProvider themeProvider,
+  ) {
+    if (icon is IconData) {
+      return Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: selected
+              ? Colors.white
+              : themeProvider.isDarkMode
+              ? Colors.grey.shade700
+              : Colors.grey.shade600,
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+          color: selected ? const Color(0xFFC10D00) : Colors.white,
+        ),
+      );
+    }
+
+    return Image.asset(
+      icon as String,
+      width: 32,
+      height: 32,
+      errorBuilder: (context, error, stackTrace) {
+        return Icon(Icons.error, color: iconColor, size: 32);
+      },
+    );
+  }
+
+  Widget _candidateSidebarGroup() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final selected = _isCandidateMenuScreen(currentScreen);
+    final iconColor = selected
+        ? const Color.fromRGBO(151, 18, 8, 1)
+        : themeProvider.isDarkMode
+        ? Colors.grey.shade400
+        : Colors.grey.shade800;
+
+    return Column(
+      children: [
+        Container(
+          color: selected ? const Color(0xFFC10D00) : Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () => setState(() => currentScreen = 'candidates'),
+                  child: Row(
+                    children: [
+                      _buildSidebarIcon(
+                        'assets/images/candidates.png',
+                        selected,
+                        iconColor,
+                        themeProvider,
+                      ),
+                      const SizedBox(width: 12),
+                      if (!sidebarCollapsed)
+                        Expanded(
+                          child: Text(
+                            'Candidates',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: selected
+                                  ? Colors.white
+                                  : themeProvider.isDarkMode
+                                  ? Colors.grey.shade400
+                                  : Colors.grey.shade800,
+                              fontWeight: selected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              if (!sidebarCollapsed)
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      candidateMenuExpanded = !candidateMenuExpanded;
+                    });
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      candidateMenuExpanded
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      color: selected ? Colors.white : iconColor,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (!sidebarCollapsed && candidateMenuExpanded) ...[
+          _sidebarChildEntry(Icons.account_tree, 'Pipeline', 'pipeline'),
+          _sidebarChildEntry(Icons.request_quote, 'Offers', 'offers'),
+          _sidebarChildEntry(
+            Icons.pending_actions,
+            'Review queue',
+            'review_queue',
+          ),
+          _sidebarChildEntry(Icons.video_call, 'Meetings', 'meetings'),
+        ],
+      ],
+    );
+  }
+
+  Widget _sidebarChildEntry(dynamic icon, String label, String screenKey) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final selected = currentScreen == screenKey;
     final iconColor = selected
         ? const Color.fromRGBO(151, 18, 8, 1)
         : themeProvider.isDarkMode
-            ? Colors.grey.shade400
-            : Colors.grey.shade800;
+        ? Colors.grey.shade400
+        : Colors.grey.shade800;
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          candidateMenuExpanded = true;
+          currentScreen = screenKey;
+        });
+      },
+      child: Container(
+        color: selected
+            ? const Color(0xFFC10D00).withValues(alpha: 0.12)
+            : Colors.transparent,
+        padding: const EdgeInsets.fromLTRB(28, 10, 12, 10),
+        child: Row(
+          children: [
+            Icon(icon as IconData, size: 18, color: iconColor),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: selected
+                      ? const Color(0xFFC10D00)
+                      : themeProvider.isDarkMode
+                      ? Colors.grey.shade400
+                      : Colors.grey.shade800,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sidebarEntry(
+    dynamic icon,
+    String label,
+    String screenKey, {
+    VoidCallback? onTapOverride,
+  }) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final selected = currentScreen == screenKey;
+    final iconColor = selected
+        ? const Color.fromRGBO(151, 18, 8, 1)
+        : themeProvider.isDarkMode
+        ? Colors.grey.shade400
+        : Colors.grey.shade800;
     return InkWell(
       onTap: onTapOverride ?? () => setState(() => currentScreen = screenKey),
       child: Container(
@@ -1264,27 +1635,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
           children: [
-            icon is IconData
-                ? Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: selected
-                          ? Colors.white
-                          : themeProvider.isDarkMode
-                              ? Colors.grey.shade700
-                              : Colors.grey.shade600,
-                    ),
-                    child: Icon(icon,
-                        size: 20,
-                        color:
-                            selected ? const Color(0xFFC10D00) : Colors.white),
-                  )
-                : Image.asset(icon as String, width: 32, height: 32,
-                    errorBuilder: (context, error, stackTrace) {
-                    return Icon(Icons.error, color: iconColor, size: 32);
-                  }),
+            _buildSidebarIcon(icon, selected, iconColor, themeProvider),
             const SizedBox(width: 12),
             if (!sidebarCollapsed)
               Expanded(
@@ -1295,8 +1646,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     color: selected
                         ? Colors.white
                         : themeProvider.isDarkMode
-                            ? Colors.grey.shade400
-                            : Colors.grey.shade800,
+                        ? Colors.grey.shade400
+                        : Colors.grey.shade800,
                     fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
@@ -1324,12 +1675,20 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         return const InterviewListScreen();
       case "cv_reviews":
         return CVReviewsScreen();
+      case "pipeline":
+        return RecruitmentPipelinePage(token: widget.token);
+      case "offers":
+        return AdminOfferListScreen(token: widget.token);
+      case "review_queue":
+        return const HiringManagerReviewQueueScreen();
       case "analytics":
         return HMAnalyticsPage();
       case "team_collaboration":
         return HMTeamCollaborationPage();
+      case "meetings":
+        return const HMMeetingsPage();
       case "notifications":
-        return NotificationsScreen();
+        return NotificationsScreen(onNotificationTap: _handleNotificationTap);
       case "settings":
         return HiringManagerSettingsScreen(
           token: widget.token,
@@ -1351,7 +1710,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
     if (loadingStats) {
       return const Center(
-          child: CircularProgressIndicator(color: Colors.redAccent));
+        child: CircularProgressIndicator(color: Colors.redAccent),
+      );
     }
 
     final stats = [
@@ -1360,28 +1720,28 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         "count": jobsCount,
         "subtitle": "$activeJobs active",
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/jobs.png"
+        "icon": "assets/icons/jobs.png",
       },
       {
         "title": "Candidates",
         "count": candidatesCount,
         "subtitle": "${candidatesWithCV} with CV",
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/candidates.png"
+        "icon": "assets/icons/candidates.png",
       },
       {
         "title": "Interviews",
         "count": interviewsCount,
         "subtitle": "$upcomingInterviews upcoming",
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/interview.png"
+        "icon": "assets/icons/interview.png",
       },
       {
         "title": "Applications",
         "count": cvReviewsCount,
         "subtitle": "$newApplicationsWeek this week",
         "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/review.png"
+        "icon": "assets/icons/review.png",
       },
       {
         "title": "Offers",
@@ -1389,7 +1749,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         "subtitle": "$acceptedOffers accepted",
         "color": const Color.fromARGB(255, 193, 13, 0),
         "icon":
-            "assets/icons/add.png" // Using existing icon instead of missing offer.png
+            "assets/icons/add.png", // Using existing icon instead of missing offer.png
       },
       {
         "title": "Assessments",
@@ -1397,7 +1757,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         "subtitle": "Completed",
         "color": const Color.fromARGB(255, 193, 13, 0),
         "icon":
-            "assets/icons/audit.png" // Using existing icon instead of missing assessment.png
+            "assets/icons/audit.png", // Using existing icon instead of missing assessment.png
       },
     ];
 
@@ -1446,23 +1806,23 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 8),
-            Text("Welcome Back, ${_effectiveWelcomeName(userName)}!",
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: themeProvider.isDarkMode
-                        ? Colors.white
-                        : const Color.fromARGB(225, 20, 19, 30))),
+            Text(
+              "Welcome Back, ${_effectiveWelcomeName(userName)}!",
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: themeProvider.isDarkMode
+                    ? Colors.white
+                    : const Color.fromARGB(225, 20, 19, 30),
+              ),
+            ),
             const SizedBox(height: 12),
 
             // KPI Cards
             // Instead of SizedBox with fixed height, use:
             ConstrainedBox(
-              constraints: const BoxConstraints(
-                minHeight: 160,
-                maxHeight: 180,
-              ),
+              constraints: const BoxConstraints(minHeight: 160, maxHeight: 180),
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: stats.length,
@@ -1471,15 +1831,17 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   final item = stats[index];
                   return Container(
                     decoration: BoxDecoration(
-                      color: (themeProvider.isDarkMode
-                              ? const Color(0xFF14131E)
-                              : Colors.white)
-                          .withValues(alpha: 0.9),
+                      color:
+                          (themeProvider.isDarkMode
+                                  ? const Color(0xFF14131E)
+                                  : Colors.white)
+                              .withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color:
-                              (item["color"] as Color).withValues(alpha: 0.1),
+                          color: (item["color"] as Color).withValues(
+                            alpha: 0.1,
+                          ),
                           blurRadius: 15,
                           offset: const Offset(0, 6),
                         ),
@@ -1502,47 +1864,77 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             _buildCandidatesSection(themeProvider),
             const SizedBox(height: 24),
 
+            // Shortlist / Recommended for interview summary
+            _buildShortlistSummaryCard(themeProvider),
+            const SizedBox(height: 16),
+
+            // Notifications: status changes and upcoming interviews
+            _buildNotificationsFocusCard(themeProvider),
+            const SizedBox(height: 16),
+
+            // Activity trail: who advanced/declined and when
+            _buildActivityTrailCard(themeProvider),
+            const SizedBox(height: 24),
+
             // Candidate Demographics Section
             _buildCandidateDemographicsSection(themeProvider),
             const SizedBox(height: 24),
 
-            LayoutBuilder(builder: (context, constraints) {
-              int crossAxisCount = constraints.maxWidth > 900 ? 2 : 1;
-              // Lower aspect ratio so chart cards (220px chart + header) fit without overflow
-              double aspectRatio = constraints.maxWidth > 900 ? 1.35 : 1.15;
-              return GridView.count(
-                crossAxisCount: crossAxisCount,
-                shrinkWrap: true,
-                childAspectRatio: aspectRatio,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  SingleChildScrollView(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                int crossAxisCount = constraints.maxWidth > 900 ? 2 : 1;
+                // Lower aspect ratio so chart cards (220px chart + header) fit without overflow
+                double aspectRatio = constraints.maxWidth > 900 ? 1.35 : 1.15;
+                return GridView.count(
+                  crossAxisCount: crossAxisCount,
+                  shrinkWrap: true,
+                  childAspectRatio: aspectRatio,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    SingleChildScrollView(
                       child: stylishBarChartCard(
-                          "Candidate Pipeline",
-                          candidatePipeline,
-                          const Color.fromARGB(255, 193, 13, 0))),
-                  SingleChildScrollView(
-                      child: stylishLineChartCard("Time to Fill Trend",
-                          timeToFill, const Color.fromARGB(255, 193, 13, 0))),
-                  SingleChildScrollView(
+                        "Candidate Pipeline",
+                        candidatePipeline,
+                        const Color.fromARGB(255, 193, 13, 0),
+                      ),
+                    ),
+                    SingleChildScrollView(
+                      child: stylishLineChartCard(
+                        "Time to Fill Trend",
+                        timeToFill,
+                        const Color.fromARGB(255, 193, 13, 0),
+                      ),
+                    ),
+                    SingleChildScrollView(
                       child: stylishDualDonutCard(
-                          "Diversity Metrics", genderData, ethnicityData)),
-                  SingleChildScrollView(
+                        "Diversity Metrics",
+                        genderData,
+                        ethnicityData,
+                      ),
+                    ),
+                    SingleChildScrollView(
                       child: stylishBarChartCard(
-                          "Source Performance",
-                          sourcePerformance,
-                          const Color.fromARGB(255, 193, 13, 0))),
-                  SingleChildScrollView(
+                        "Source Performance",
+                        sourcePerformance,
+                        const Color.fromARGB(255, 193, 13, 0),
+                      ),
+                    ),
+                    SingleChildScrollView(
                       child: stylishTeamCollaborationCard(
-                          "Team Collaboration", teamMessages)),
-                  SingleChildScrollView(child: modernCalendarCard()),
-                  SingleChildScrollView(
-                      child: stylishActivitiesCard(recentActivities)),
-                ],
-              );
-            }),
+                        "Team Collaboration",
+                        teamMessages,
+                      ),
+                    ),
+                    SingleChildScrollView(child: modernCalendarCard()),
+                    SingleChildScrollView(
+                      child: stylishActivitiesCard(recentActivities),
+                    ),
+                  ],
+                );
+              },
+            ),
             const SizedBox(height: 50),
           ],
         ),
@@ -1597,26 +1989,32 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title,
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.black87)),
+              Text(
+                title,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: themeProvider.isDarkMode
+                      ? Colors.white
+                      : Colors.black87,
+                ),
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text("${data.length} stages",
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: color,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold)),
+                child: Text(
+                  "${data.length} stages",
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    color: color,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
@@ -1664,7 +2062,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                       fontSize: 10,
                     ),
                   ),
-                )
+                ),
               ],
             ),
           ),
@@ -1674,7 +2072,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   Widget stylishLineChartCard(
-      String title, List<_ChartData> data, Color color) {
+    String title,
+    List<_ChartData> data,
+    Color color,
+  ) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
@@ -1703,10 +2104,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             : LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Colors.blue.shade50,
-                  Colors.purple.shade50,
-                ],
+                colors: [Colors.blue.shade50, Colors.purple.shade50],
               ),
       ),
       child: Column(
@@ -1715,14 +2113,17 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title,
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.black87)),
+              Text(
+                title,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: themeProvider.isDarkMode
+                      ? Colors.white
+                      : Colors.black87,
+                ),
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
@@ -1733,12 +2134,15 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   children: [
                     Icon(Icons.trending_down, color: color, size: 12),
                     const SizedBox(width: 4),
-                    Text("Improving",
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: color,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold)),
+                    Text(
+                      "Improving",
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: color,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1788,7 +2192,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                       fontSize: 10,
                     ),
                   ),
-                )
+                ),
               ],
             ),
           ),
@@ -1798,7 +2202,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   Widget stylishDualDonutCard(
-      String title, List<_ChartData> data1, List<_ChartData> data2) {
+    String title,
+    List<_ChartData> data1,
+    List<_ChartData> data2,
+  ) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
@@ -1827,23 +2234,21 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             : LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Colors.purple.shade50,
-                  Colors.indigo.shade50,
-                ],
+                colors: [Colors.purple.shade50, Colors.indigo.shade50],
               ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: themeProvider.isDarkMode
-                      ? Colors.white
-                      : Colors.black87)),
+          Text(
+            title,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+              color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+            ),
+          ),
           const SizedBox(height: 16),
           SizedBox(
             height: 220,
@@ -1853,21 +2258,25 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   child: SfCircularChart(
                     margin: EdgeInsets.zero,
                     title: ChartTitle(
-                        text: "Gender",
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 12)),
+                      text: "Gender",
+                      textStyle: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: themeProvider.isDarkMode
+                            ? Colors.white
+                            : Colors.black87,
+                        fontSize: 12,
+                      ),
+                    ),
                     legend: Legend(
-                        isVisible: true,
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 10)),
+                      isVisible: true,
+                      textStyle: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: themeProvider.isDarkMode
+                            ? Colors.white
+                            : Colors.black87,
+                        fontSize: 10,
+                      ),
+                    ),
                     series: <DoughnutSeries<_ChartData, String>>[
                       DoughnutSeries<_ChartData, String>(
                         dataSource: data1,
@@ -1884,7 +2293,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                 : Colors.black87,
                           ),
                         ),
-                      )
+                      ),
                     ],
                   ),
                 ),
@@ -1892,21 +2301,25 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   child: SfCircularChart(
                     margin: EdgeInsets.zero,
                     title: ChartTitle(
-                        text: "Ethnicity",
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 12)),
+                      text: "Ethnicity",
+                      textStyle: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: themeProvider.isDarkMode
+                            ? Colors.white
+                            : Colors.black87,
+                        fontSize: 12,
+                      ),
+                    ),
                     legend: Legend(
-                        isVisible: true,
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 10)),
+                      isVisible: true,
+                      textStyle: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: themeProvider.isDarkMode
+                            ? Colors.white
+                            : Colors.black87,
+                        fontSize: 10,
+                      ),
+                    ),
                     series: <DoughnutSeries<_ChartData, String>>[
                       DoughnutSeries<_ChartData, String>(
                         dataSource: data2,
@@ -1923,7 +2336,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                 : Colors.black87,
                           ),
                         ),
-                      )
+                      ),
                     ],
                   ),
                 ),
@@ -1964,10 +2377,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             : LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Colors.green.shade50,
-                  Colors.teal.shade50,
-                ],
+                colors: [Colors.green.shade50, Colors.teal.shade50],
               ),
       ),
       child: Column(
@@ -1976,26 +2386,32 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title,
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.black87)),
+              Text(
+                title,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: themeProvider.isDarkMode
+                      ? Colors.white
+                      : Colors.black87,
+                ),
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text("${messages.length} updates",
-                    style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.green,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold)),
+                child: Text(
+                  "${messages.length} updates",
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.green,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
@@ -2084,10 +2500,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             : LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Colors.orange.shade50,
-                  Colors.amber.shade50,
-                ],
+                colors: [Colors.orange.shade50, Colors.amber.shade50],
               ),
       ),
       child: Column(
@@ -2096,23 +2509,29 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Recent Activities",
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16)),
+              const Text(
+                "Recent Activities",
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text("${activities.length} items",
-                    style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.orange,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold)),
+                child: Text(
+                  "${activities.length} items",
+                  style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    color: Colors.orange,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
@@ -2121,12 +2540,15 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             height: 200,
             child: activities.isEmpty
                 ? Center(
-                    child: Text("No recent activities",
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.grey.shade400
-                                : Colors.grey.shade600)),
+                    child: Text(
+                      "No recent activities",
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: themeProvider.isDarkMode
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
+                      ),
+                    ),
                   )
                 : ListView.builder(
                     shrinkWrap: true,
@@ -2205,10 +2627,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             : LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [
-                  Colors.blue.shade50,
-                  Colors.purple.shade50,
-                ],
+                colors: [Colors.blue.shade50, Colors.purple.shade50],
               ),
       ),
       child: Column(
@@ -2222,12 +2641,19 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color.fromARGB(255, 153, 26, 26)
-                          .withValues(alpha: 0.1),
+                      color: const Color.fromARGB(
+                        255,
+                        153,
+                        26,
+                        26,
+                      ).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.calendar_month,
-                        color: Color.fromARGB(255, 250, 250, 250), size: 22),
+                    child: const Icon(
+                      Icons.calendar_month,
+                      color: Color.fromARGB(255, 250, 250, 250),
+                      size: 22,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -2242,8 +2668,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 ],
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.blueAccent.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(16),
@@ -2286,8 +2714,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   ? const Center(child: CircularProgressIndicator())
                   : SfCalendar(
                       view: CalendarView.month,
-                      dataSource:
-                          _DashboardCalendarDataSource(_calendarAppointments),
+                      dataSource: _DashboardCalendarDataSource(
+                        _calendarAppointments,
+                      ),
                       onViewChanged: (ViewChangedDetails details) {
                         final visibleDates = details.visibleDates;
                         if (visibleDates.isNotEmpty &&
@@ -2321,8 +2750,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     );
   }
 
-  Widget kpiCard(String title, int count, Color color, String iconPath,
-      [String? subtitle]) {
+  Widget kpiCard(
+    String title,
+    int count,
+    Color color,
+    String iconPath, [
+    String? subtitle,
+  ]) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
@@ -2340,10 +2774,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.grey.shade200,
-                    width: 1,
-                  ),
+                  border: Border.all(color: Colors.grey.shade200, width: 1),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.08),
@@ -2418,6 +2849,415 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     );
   }
 
+  // ---------------- Shortlist / Recommended for interview ----------------
+  Widget _buildShortlistSummaryCard(ThemeProvider themeProvider) {
+    final inInterview = applicationStatusBreakdown['interview'] is int
+        ? applicationStatusBreakdown['interview'] as int
+        : (applicationStatusBreakdown['interview'] is num
+              ? (applicationStatusBreakdown['interview'] as num).toInt()
+              : 0);
+    final recommended = applicationStatusBreakdown['recommended'] is int
+        ? applicationStatusBreakdown['recommended'] as int
+        : (applicationStatusBreakdown['recommended'] is num
+              ? (applicationStatusBreakdown['recommended'] as num).toInt()
+              : 0);
+    final total = inInterview + recommended;
+    final bg =
+        (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
+            .withValues(alpha: 0.9);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color.fromARGB(255, 193, 13, 0).withValues(alpha: 0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Shortlist & recommended",
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: themeProvider.isDarkMode
+                      ? Colors.white
+                      : Colors.black87,
+                ),
+              ),
+              if (total > 0)
+                TextButton(
+                  onPressed: () => setState(() => currentScreen = "candidates"),
+                  child: const Text("View all", style: TextStyle(fontSize: 12)),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color.fromARGB(255, 193, 13, 0),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _shortlistChip(themeProvider, "In interview", inInterview),
+              const SizedBox(width: 12),
+              _shortlistChip(themeProvider, "Recommended", recommended),
+            ],
+          ),
+          if (total == 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                "No candidates in shortlist or recommended yet.",
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  color: themeProvider.isDarkMode
+                      ? Colors.grey.shade400
+                      : Colors.grey.shade600,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _shortlistChip(ThemeProvider themeProvider, String label, int count) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color.fromARGB(255, 193, 13, 0).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              color: themeProvider.isDarkMode ? Colors.white70 : Colors.black87,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            "$count",
+            style: const TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Color.fromARGB(255, 193, 13, 0),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------- Notifications: status changes & upcoming interviews ----------------
+  Widget _buildNotificationsFocusCard(ThemeProvider themeProvider) {
+    final notificationPreview = dashboardNotifications
+        .where((n) => n['is_read'] != true)
+        .toList();
+    final recentNotifications =
+        (notificationPreview.isNotEmpty
+                ? notificationPreview
+                : dashboardNotifications)
+            .take(5)
+            .toList();
+    final upcomingFromCalendar =
+        _calendarAppointments
+            .where((a) => a.startTime.isAfter(DateTime.now()))
+            .toList()
+          ..sort((a, b) => a.startTime.compareTo(b.startTime));
+    final upcomingList = upcomingFromCalendar.take(3).toList();
+    final bg =
+        (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
+            .withValues(alpha: 0.9);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withValues(alpha: 0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Notifications",
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: themeProvider.isDarkMode
+                      ? Colors.white
+                      : Colors.black87,
+                ),
+              ),
+              TextButton(
+                onPressed: () =>
+                    setState(() => currentScreen = "notifications"),
+                child: const Text("View all", style: TextStyle(fontSize: 12)),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color.fromARGB(255, 193, 13, 0),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "Upcoming interviews",
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: themeProvider.isDarkMode ? Colors.white70 : Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (upcomingList.isEmpty)
+            Text(
+              "No upcoming interviews.",
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade400
+                    : Colors.grey.shade600,
+              ),
+            )
+          else
+            ...upcomingList.map(
+              (a) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  "${a.subject} — ${DateFormat.MMMd().add_Hm().format(a.startTime)}",
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    color: themeProvider.isDarkMode
+                        ? Colors.white70
+                        : Colors.black87,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          const SizedBox(height: 10),
+          Text(
+            "Recent updates",
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: themeProvider.isDarkMode ? Colors.white70 : Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (recentNotifications.isEmpty)
+            Text(
+              "No recent notifications.",
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade400
+                    : Colors.grey.shade600,
+              ),
+            )
+          else
+            ...recentNotifications
+                .take(3)
+                .map(
+                  (n) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _notificationSectionLabel(n),
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: const Color.fromARGB(255, 193, 13, 0),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          n['message']?.toString() ?? 'Notification',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: themeProvider.isDarkMode
+                                ? Colors.white70
+                                : Colors.black87,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------- Activity trail: who advanced/declined and when ----------------
+  Widget _buildActivityTrailCard(ThemeProvider themeProvider) {
+    final bg =
+        (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
+            .withValues(alpha: 0.9);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.orange.withValues(alpha: 0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Activity trail",
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: themeProvider.isDarkMode
+                      ? Colors.white
+                      : Colors.black87,
+                ),
+              ),
+              Text(
+                "Who advanced/declined and when",
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 11,
+                  color: themeProvider.isDarkMode
+                      ? Colors.grey.shade400
+                      : Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (loadingPipelineActivity)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.redAccent,
+                  ),
+                ),
+              ),
+            )
+          else if (pipelineActivity.isEmpty)
+            Text(
+              "No recent pipeline changes.",
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 12,
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade400
+                    : Colors.grey.shade600,
+              ),
+            )
+          else
+            ...pipelineActivity.take(10).map((e) {
+              final ts = e['timestamp']?.toString();
+              final when = ts != null ? _formatActivityTime(ts) : '';
+              final candidate = e['candidate_name']?.toString() ?? 'Candidate';
+              final job = e['job_title']?.toString() ?? 'Job';
+              final newS = e['new_status']?.toString() ?? '';
+              final actor = e['actor_name']?.toString();
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(
+                      Icons.arrow_forward,
+                      size: 14,
+                      color: Colors.orange.shade700,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        actor != null && actor.isNotEmpty
+                            ? "$candidate → $newS for $job (by $actor, $when)"
+                            : "$candidate → $newS for $job ($when)",
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 11,
+                          color: themeProvider.isDarkMode
+                              ? Colors.white70
+                              : Colors.black87,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  String _formatActivityTime(String iso) {
+    try {
+      final dt = DateTime.parse(iso);
+      final now = DateTime.now();
+      final diff = now.difference(dt);
+      if (diff.inDays > 0) return '${diff.inDays}d ago';
+      if (diff.inHours > 0) return '${diff.inHours}h ago';
+      if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+      return 'Just now';
+    } catch (_) {
+      return iso;
+    }
+  }
+
   // ---------------- Enhanced Candidates Section ----------------
   Widget _buildCandidatesSection(ThemeProvider themeProvider) {
     return Column(
@@ -2442,37 +3282,46 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               children: [
                 // Status Filter Dropdown
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
-                    color: (themeProvider.isDarkMode
-                            ? const Color(0xFF14131E)
-                            : Colors.white)
-                        .withValues(alpha: 0.9),
+                    color:
+                        (themeProvider.isDarkMode
+                                ? const Color(0xFF14131E)
+                                : Colors.white)
+                            .withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.grey.shade300),
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: candidateStatusFilter,
-                      hint: const Text("All Status",
-                          style: TextStyle(fontSize: 12)),
-                      items: [
-                        'all',
-                        'applied',
-                        'reviewed',
-                        'interviewed',
-                        'offered',
-                        'rejected'
-                      ]
-                          .map((status) => DropdownMenuItem(
-                                value: status == 'all' ? null : status,
-                                child: Text(
+                      hint: const Text(
+                        "All Status",
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      items:
+                          [
+                                'all',
+                                'applied',
+                                'reviewed',
+                                'interviewed',
+                                'offered',
+                                'rejected',
+                              ]
+                              .map(
+                                (status) => DropdownMenuItem(
+                                  value: status == 'all' ? null : status,
+                                  child: Text(
                                     status[0].toUpperCase() +
                                         status.substring(1),
-                                    style: const TextStyle(fontSize: 12)),
-                              ))
-                          .toList(),
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
+                                ),
+                              )
+                              .toList(),
                       onChanged: (value) => _filterCandidatesByStatus(value),
                     ),
                   ),
@@ -2483,10 +3332,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   width: 200,
                   height: 36,
                   decoration: BoxDecoration(
-                    color: (themeProvider.isDarkMode
-                            ? const Color(0xFF14131E)
-                            : Colors.white)
-                        .withValues(alpha: 0.9),
+                    color:
+                        (themeProvider.isDarkMode
+                                ? const Color(0xFF14131E)
+                                : Colors.white)
+                            .withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.grey.shade300),
                   ),
@@ -2496,8 +3346,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                       hintStyle: TextStyle(fontSize: 12),
                       prefixIcon: Icon(Icons.search, size: 16),
                       border: InputBorder.none,
-                      contentPadding:
-                          EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 8,
+                      ),
                     ),
                     style: const TextStyle(fontSize: 12),
                     onChanged: _searchCandidates,
@@ -2514,7 +3366,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           Container(
             height: 300,
             child: const Center(
-                child: CircularProgressIndicator(color: Colors.redAccent)),
+              child: CircularProgressIndicator(color: Colors.redAccent),
+            ),
           )
         else if (candidates.isEmpty)
           Container(
@@ -2556,8 +3409,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           child: TextButton.icon(
             onPressed: () => setState(() => currentScreen = "candidates"),
             icon: const Icon(Icons.people_outline, size: 16),
-            label: const Text("View All Candidates",
-                style: TextStyle(fontSize: 12)),
+            label: const Text(
+              "View All Candidates",
+              style: TextStyle(fontSize: 12),
+            ),
             style: TextButton.styleFrom(
               foregroundColor: const Color.fromARGB(255, 193, 13, 0),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -2569,7 +3424,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   Widget _buildCandidateCard(
-      Map<String, dynamic> candidate, ThemeProvider themeProvider) {
+    Map<String, dynamic> candidate,
+    ThemeProvider themeProvider,
+  ) {
     final stats = candidate['statistics'] as Map<String, dynamic>? ?? {};
     final fullName = candidate['full_name']?.toString() ?? 'Unknown';
     final location = candidate['location']?.toString() ?? '';
@@ -2602,10 +3459,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
-          color: (themeProvider.isDarkMode
-                  ? const Color(0xFF14131E)
-                  : Colors.white)
-              .withValues(alpha: 0.9),
+          color:
+              (themeProvider.isDarkMode
+                      ? const Color(0xFF14131E)
+                      : Colors.white)
+                  .withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
@@ -2641,7 +3499,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     : null,
               ),
               const SizedBox(width: 8), // Reduced from 12
-
               // Candidate Info
               Expanded(
                 child: Column(
@@ -2706,7 +3563,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     if (latestStatus != null)
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 4, vertical: 1),
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
                         decoration: BoxDecoration(
                           color: statusColor.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
@@ -2715,9 +3574,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                           latestStatus.length > 6
                               ? '${latestStatus.substring(0, 6)}.'
                               : latestStatus.isNotEmpty
-                                  ? latestStatus[0].toUpperCase() +
-                                      latestStatus.substring(1)
-                                  : '',
+                              ? latestStatus[0].toUpperCase() +
+                                    latestStatus.substring(1)
+                              : '',
                           style: TextStyle(
                             fontSize: 8,
                             fontWeight: FontWeight.w600,
@@ -2773,16 +3632,17 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
     final genderDistribution =
         candidateDemographics['gender_distribution'] as Map<String, dynamic>? ??
-            {};
-    final locationDistribution = candidateDemographics['location_distribution']
+        {};
+    final locationDistribution =
+        candidateDemographics['location_distribution']
             as Map<String, dynamic>? ??
         {};
     final topSkills =
         candidateDemographics['top_skills'] as Map<String, dynamic>? ?? {};
     final educationDistribution =
         candidateDemographics['education_distribution']
-                as Map<String, dynamic>? ??
-            {};
+            as Map<String, dynamic>? ??
+        {};
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2804,8 +3664,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             int crossAxisCount = constraints.maxWidth > 1200
                 ? 4
                 : constraints.maxWidth > 800
-                    ? 2
-                    : 1;
+                ? 2
+                : 1;
 
             return GridView.count(
               shrinkWrap: true,
@@ -2829,7 +3689,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 _buildDemographicCard(
                   "Top Locations",
                   Map<String, dynamic>.fromEntries(
-                      locationDistribution.entries.take(5)),
+                    locationDistribution.entries.take(5),
+                  ),
                   Icons.location_on,
                   themeProvider,
                 ),
@@ -2866,10 +3727,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     if (data.isEmpty) {
       return Container(
         decoration: BoxDecoration(
-          color: (themeProvider.isDarkMode
-                  ? const Color(0xFF14131E)
-                  : Colors.white)
-              .withValues(alpha: 0.9),
+          color:
+              (themeProvider.isDarkMode
+                      ? const Color(0xFF14131E)
+                      : Colors.white)
+                  .withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.grey.shade200),
         ),
@@ -2911,17 +3773,20 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final sortedEntries = data.entries.toList()
       ..sort((a, b) => (b.value as num).compareTo(a.value as num));
 
-    final total =
-        sortedEntries.fold<int>(0, (sum, entry) => sum + (entry.value as int));
+    final total = sortedEntries.fold<int>(
+      0,
+      (sum, entry) => sum + (entry.value as int),
+    );
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
-          color: (themeProvider.isDarkMode
-                  ? const Color(0xFF14131E)
-                  : Colors.white)
-              .withValues(alpha: 0.9),
+          color:
+              (themeProvider.isDarkMode
+                      ? const Color(0xFF14131E)
+                      : Colors.white)
+                  .withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
@@ -2940,8 +3805,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             children: [
               Row(
                 children: [
-                  Icon(icon,
-                      size: 16, color: const Color.fromARGB(255, 193, 13, 0)),
+                  Icon(
+                    icon,
+                    size: 16,
+                    color: const Color.fromARGB(255, 193, 13, 0),
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -2966,12 +3834,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 child: ListView(
                   shrinkWrap: true,
                   physics: const ClampingScrollPhysics(),
-                  children: sortedEntries
-                      .take(4)
-                      .toList()
-                      .asMap()
-                      .entries
-                      .map((entry) {
+                  children: sortedEntries.take(4).toList().asMap().entries.map((
+                    entry,
+                  ) {
                     final index = entry.key;
                     final item = entry.value;
                     final label = item.key.toString();
@@ -3066,8 +3931,14 @@ class StackedLineData {
   final int create;
   final int update;
   final int delete;
-  StackedLineData(this.month, this.login, this.logout, this.create, this.update,
-      this.delete);
+  StackedLineData(
+    this.month,
+    this.login,
+    this.logout,
+    this.create,
+    this.update,
+    this.delete,
+  );
 }
 
 class _ChartData {

@@ -3,8 +3,14 @@ import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:provider/provider.dart';
 import '../../services/admin_service.dart';
 import '../../providers/theme_provider.dart';
+import '../../widgets/filter_chip.dart';
+import '../../widgets/state_widgets.dart';
 
 class AnalyticsDashboard extends StatefulWidget {
+  final bool embedded;
+
+  const AnalyticsDashboard({super.key, this.embedded = false});
+
   @override
   _AnalyticsDashboardState createState() => _AnalyticsDashboardState();
 }
@@ -19,6 +25,25 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
   bool _isLoading = true;
   String _errorMessage = '';
   int _selectedTimeRange = 30; // 30 days by default
+
+  String _timeRangeLabel(int days) {
+    switch (days) {
+      case 7:
+        return '7 Days';
+      case 30:
+        return '30 Days';
+      case 90:
+        return '90 Days';
+      default:
+        return '$days Days';
+    }
+  }
+
+  int _parseTimeRangeLabel(String value) {
+    final trimmed = value.trim();
+    final firstToken = trimmed.split(' ').first;
+    return int.tryParse(firstToken) ?? 30;
+  }
 
   @override
   void initState() {
@@ -70,6 +95,12 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+
+    if (widget.embedded) {
+      return SafeArea(
+        child: _buildBody(themeProvider),
+      );
+    }
 
     return Scaffold(
       // 🌆 Enhanced Dynamic background with gradient overlay
@@ -172,55 +203,25 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                       // Premium controls with better spacing
                       Row(
                         children: [
-                          // Enhanced time range filter with better styling
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                          SizedBox(
                             height: 42,
-                            decoration: BoxDecoration(
-                              color: (themeProvider.isDarkMode
-                                      ? const Color(0xFF14131E)
-                                      : Colors.white)
-                                  .withValues(alpha: 0.95),
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                color: themeProvider.isDarkMode
-                                    ? Colors.white24
-                                    : Colors.grey.shade300,
-                                width: 1.5,
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.08),
-                                  blurRadius: 12,
-                                  offset: const Offset(0, 3),
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Center(
+                                child: FilterChipGroup(
+                                  options: const [
+                                    '7 Days',
+                                    '30 Days',
+                                    '90 Days'
+                                  ],
+                                  selectedValue:
+                                      _timeRangeLabel(_selectedTimeRange),
+                                  onSelected: (value) {
+                                    if (value == null) return;
+                                    _onTimeRangeChanged(
+                                        _parseTimeRangeLabel(value));
+                                  },
                                 ),
-                              ],
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<int>(
-                                value: _selectedTimeRange,
-                                icon: Icon(Icons.expand_more_rounded,
-                                    size: 18,
-                                    color: themeProvider.isDarkMode
-                                        ? Colors.white60
-                                        : Colors.grey.shade600),
-                                style: TextStyle(
-                                  color: themeProvider.isDarkMode
-                                      ? Colors.white
-                                      : const Color(0xFF14131E),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  fontFamily: 'Poppins',
-                                ),
-                                items: const [
-                                  DropdownMenuItem(
-                                      value: 7, child: Text("Last 7 Days")),
-                                  DropdownMenuItem(
-                                      value: 30, child: Text("Last 30 Days")),
-                                  DropdownMenuItem(
-                                      value: 90, child: Text("Last 90 Days")),
-                                ],
-                                onChanged: _onTimeRangeChanged,
                               ),
                             ),
                           ),
@@ -269,12 +270,9 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
                   ),
                 ),
               ),
+              // 📊 Main Content
               Expanded(
-                child: _isLoading
-                    ? _buildLoading(themeProvider)
-                    : _errorMessage.isNotEmpty
-                        ? _buildError(themeProvider)
-                        : _buildDashboard(themeProvider),
+                child: _buildBody(themeProvider),
               ),
             ],
           ),
@@ -283,130 +281,29 @@ class _AnalyticsDashboardState extends State<AnalyticsDashboard> {
     );
   }
 
+  Widget _buildBody(ThemeProvider themeProvider) {
+    if (_isLoading) return _buildLoading(themeProvider);
+    if (_errorMessage.isNotEmpty) return _buildError(themeProvider);
+    if (_dashboardData == null) {
+      return _buildError(themeProvider);
+    }
+    return _buildDashboard(themeProvider);
+  }
+
   Widget _buildLoading(ThemeProvider themeProvider) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Enhanced loading animation
-          Container(
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.redAccent.withValues(alpha: 0.2),
-                width: 3,
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(10.0),
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.redAccent),
-              ),
-            ),
-          ),
-          const SizedBox(height: 28),
-          Text(
-            'Loading Analytics Data',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: themeProvider.isDarkMode
-                  ? Colors.white70
-                  : Colors.grey.shade800,
-              fontFamily: 'Poppins',
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'Please wait while we gather your insights',
-            style: TextStyle(
-              color: themeProvider.isDarkMode
-                  ? Colors.white54
-                  : Colors.grey.shade500,
-              fontSize: 14,
-              fontFamily: 'Poppins',
-            ),
-          ),
-        ],
-      ),
+    return const ThemedLoadingState(
+      message: 'Loading Analytics Data...',
     );
   }
 
   Widget _buildError(ThemeProvider themeProvider) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Enhanced error illustration
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.redAccent.withValues(alpha: 0.1),
-                    Colors.redAccent.withValues(alpha: 0.05),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: Icon(Icons.error_outline_rounded,
-                  size: 52, color: Colors.redAccent),
-            ),
-            const SizedBox(height: 32),
-            Text(
-              'Unable to Load Data',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-                color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
-                fontFamily: 'Poppins',
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              _errorMessage,
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 14,
-                fontFamily: 'Poppins',
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            // Enhanced retry button
-            ElevatedButton(
-              onPressed: _loadAnalyticsData,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                foregroundColor: Colors.white,
-                elevation: 3,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 36, vertical: 16),
-                shadowColor: Colors.redAccent.withValues(alpha: 0.3),
-              ),
-              child: Text(
-                'Try Again',
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 15,
-                  fontFamily: 'Poppins',
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+    return ThemedErrorState(
+      title: 'Unable to Load Data',
+      subtitle: _errorMessage.isNotEmpty
+          ? _errorMessage
+          : 'Something went wrong while loading analytics data.',
+      icon: Icons.error_outline_rounded,
+      onRetry: _loadAnalyticsData,
     );
   }
 

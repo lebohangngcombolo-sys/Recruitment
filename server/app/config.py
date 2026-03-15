@@ -40,11 +40,17 @@ class Config:
     # PostgreSQL (from .env DATABASE_URL; SSL enabled for remote e.g. Render)
     SQLALCHEMY_DATABASE_URI = _database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    # Resilient to Render free-tier (sleep/wake) and dropped connections
+    # Enhanced connection pooling for production scalability
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
-        "connect_args": {"connect_timeout": 30},
-        "pool_recycle": 300,
+        "pool_size": int(os.getenv('DB_POOL_SIZE', '10')),
+        "max_overflow": int(os.getenv('DB_MAX_OVERFLOW', '20')),
+        "pool_recycle": int(os.getenv('DB_POOL_RECYCLE', '300')),
+        "pool_timeout": int(os.getenv('DB_POOL_TIMEOUT', '30')),
+        "connect_args": {
+            "connect_timeout": int(os.getenv('DB_CONNECT_TIMEOUT', '30')),
+            "application_name": "khono_recruite_admin",
+        },
     }
     
     # MongoDB
@@ -121,6 +127,10 @@ class Config:
     GOOGLE_CALENDAR_TOKEN_PATH = os.getenv('GOOGLE_CALENDAR_TOKEN_PATH', 'token.pickle')
     GOOGLE_CALENDAR_DEFAULT_DURATION = int(os.getenv('GOOGLE_CALENDAR_DEFAULT_DURATION', '60'))  # minutes
     GOOGLE_CALENDAR_TIMEZONE = os.getenv('GOOGLE_CALENDAR_TIMEZONE', 'UTC')
+
+    # FastAPI Analysis Service Configuration
+    ANALYSIS_SERVICE_URL = os.getenv('ANALYSIS_SERVICE_URL', 'http://localhost:8000')
+    ANALYSIS_SERVICE_API_KEY = os.getenv('ANALYSIS_SERVICE_API_KEY', '')
 
     
 class DevelopmentConfig(Config):
