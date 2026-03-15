@@ -91,6 +91,7 @@ class AdminService {
   }
 
   // Get job with detailed statistics
+
   Future<Map<String, dynamic>> getJobDetailed(int jobId) async {
     final authHeaders = await _getAuthHeaders();
     final res = await http.get(
@@ -182,6 +183,17 @@ class AdminService {
     int perPage = 100,
     String? scope,
   }) async {
+    final data =
+        await getApplicationsForMyJobsPage(page: page, perPage: perPage);
+    return data['applications'] ?? [];
+  }
+
+  /// Same as getApplicationsForMyJobs but returns full response with pagination.
+  Future<Map<String, dynamic>> getApplicationsForMyJobsPage({
+    int page = 1,
+    int perPage = 200,
+    String? scope,
+  }) async {
     final uri = Uri.parse(ApiEndpoints.getApplicationsForMyJobs).replace(
       queryParameters: {
         'page': page.toString(),
@@ -191,13 +203,30 @@ class AdminService {
     );
     final res = await _getWithAuthRetry(uri);
     if (res.statusCode == 200) {
-      final data = json.decode(res.body);
-      return data['applications'] ?? [];
+      return json.decode(res.body) as Map<String, dynamic>;
     } else {
       final error = json.decode(res.body);
       final msg = error['msg'] ?? error['error'] ?? res.body;
       throw Exception('Failed to load candidates: $msg');
     }
+  }
+
+  /// Fetches all applications for the current user's jobs (all pages).
+  Future<List<dynamic>> getAllApplicationsForMyJobs() async {
+    final all = <dynamic>[];
+    int page = 1;
+    const perPage = 500;
+    while (true) {
+      final data =
+          await getApplicationsForMyJobsPage(page: page, perPage: perPage);
+      final list = data['applications'] as List<dynamic>? ?? [];
+      all.addAll(list);
+      final pagination = data['pagination'] as Map<String, dynamic>?;
+      final hasNext = pagination?['has_next'] == true;
+      if (!hasNext || list.length < perPage) break;
+      page++;
+    }
+    return all;
   }
 
   // Get job statistics
@@ -428,6 +457,39 @@ class AdminService {
     throw Exception('Failed to fetch application: ${res.body}');
   }
 
+  /// Per-application audit timeline (who moved status when).
+  Future<List<Map<String, dynamic>>> getApplicationTimeline(
+      int applicationId) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.get(
+      Uri.parse(ApiEndpoints.getApplicationTimeline(applicationId)),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      return List<Map<String, dynamic>>.from(data['results'] ?? []);
+    }
+    throw Exception('Failed to fetch application timeline: ${res.body}');
+  }
+
+  /// Add a comment/note to the application's audit timeline.
+  Future<Map<String, dynamic>> addApplicationTimelineNote(
+      int applicationId, String comment) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.post(
+      Uri.parse(ApiEndpoints.addApplicationTimelineNote(applicationId)),
+      headers: {
+        ...headers,
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json'
+      },
+      body: json.encode({'comment': comment}),
+    );
+    if (res.statusCode == 201) return json.decode(res.body);
+    final err = json.decode(res.body);
+    throw Exception(err is Map ? (err['error'] ?? res.body) : res.body);
+  }
+
   /// All applications for a candidate with job details (title, company, employment_type).
   Future<List<Map<String, dynamic>>> getCandidateApplications(
       int candidateId) async {
@@ -468,6 +530,30 @@ class AdminService {
     throw Exception('Failed to fetch shortlisted candidates: ${res.body}');
   }
 
+  /// Fetch shortlist export as CSV from server (for optional server-side export).
+  Future<String> getShortlistExportCsv(int jobId) async {
+    final authHeaders = await _getAuthHeaders();
+    final uri = Uri.parse(ApiEndpoints.shortlistExport(jobId))
+        .replace(queryParameters: {'format': 'csv'});
+    final res = await http.get(uri, headers: authHeaders);
+    if (res.statusCode == 200) return res.body;
+    throw Exception('Failed to export shortlist CSV: ${res.body}');
+  }
+
+  /// Set hiring committee recommendation: "Proceed to Final Interview" | "Hold" | "Reject"
+  Future<void> updateApplicationRecommendation(
+      int applicationId, String recommendation) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.patch(
+      Uri.parse(ApiEndpoints.updateApplicationRecommendation(applicationId)),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: json.encode({'recommendation': recommendation}),
+    );
+    if (res.statusCode != 200) {
+      throw Exception('Failed to update recommendation: ${res.body}');
+    }
+  }
+
   Future<List<Map<String, dynamic>>> getAllApplications() async {
     final token = await AuthService.getAccessToken();
     final res = await http.get(
@@ -495,14 +581,81 @@ class AdminService {
   // ---------- INTERVIEWS ----------
   Future<Map<String, dynamic>> scheduleInterview(
       Map<String, dynamic> data) async {
-    final token = await AuthService.getAccessToken();
+    final authHeaders = await _getAuthHeaders();
     final res = await http.post(
-      Uri.parse('${ApiEndpoints.adminJobs}/interviews'),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
+      Uri.parse(ApiEndpoints.scheduleInterview),
+      headers: authHeaders,
       body: json.encode(data),
     );
     if (res.statusCode == 201) return json.decode(res.body);
-    throw Exception('Failed to schedule interview: ${res.body}');
+    final err = json.decode(res.body);
+    throw Exception(
+        err['error'] ?? 'Failed to schedule interview: ${res.body}');
+  }
+
+  // ---------- INTERVIEW SLOTS (HM availability for smart scheduling) ----------
+  Future<List<Map<String, dynamic>>> getAvailableInterviewSlots(
+      {int? requisitionId}) async {
+    final authHeaders = await _getAuthHeaders();
+    final q = <String, String>{};
+    if (requisitionId != null) q['requisition_id'] = requisitionId.toString();
+    final uri = Uri.parse(ApiEndpoints.interviewSlotsAvailable)
+        .replace(queryParameters: q.isEmpty ? null : q);
+    final res = await http.get(uri, headers: authHeaders);
+    if (res.statusCode != 200)
+      throw Exception('Failed to load slots: ${res.body}');
+    final data = json.decode(res.body);
+    return List<Map<String, dynamic>>.from(data['slots'] ?? []);
+  }
+
+  Future<List<Map<String, dynamic>>> getInterviewSlots(
+      {int? requisitionId, bool fromNow = true}) async {
+    final authHeaders = await _getAuthHeaders();
+    final q = <String, String>{'from_now': fromNow.toString()};
+    if (requisitionId != null) q['requisition_id'] = requisitionId.toString();
+    final uri =
+        Uri.parse(ApiEndpoints.interviewSlots).replace(queryParameters: q);
+    final res = await http.get(uri, headers: authHeaders);
+    if (res.statusCode != 200)
+      throw Exception('Failed to load slots: ${res.body}');
+    final data = json.decode(res.body);
+    return List<Map<String, dynamic>>.from(data['slots'] ?? []);
+  }
+
+  Future<Map<String, dynamic>> createInterviewSlot({
+    required DateTime startTime,
+    required DateTime endTime,
+    String? meetingLink,
+    String interviewType = 'Online',
+    int? requisitionId,
+  }) async {
+    final authHeaders = await _getAuthHeaders();
+    final data = {
+      'start_time': startTime.toIso8601String(),
+      'end_time': endTime.toIso8601String(),
+      'meeting_link': meetingLink,
+      'interview_type': interviewType,
+      if (requisitionId != null) 'requisition_id': requisitionId,
+    };
+    final res = await http.post(
+      Uri.parse(ApiEndpoints.interviewSlots),
+      headers: authHeaders,
+      body: json.encode(data),
+    );
+    if (res.statusCode != 201)
+      throw Exception(
+          json.decode(res.body)['error'] ?? 'Failed to create slot');
+    return json.decode(res.body);
+  }
+
+  Future<void> deleteInterviewSlot(int slotId) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.delete(
+      Uri.parse(ApiEndpoints.deleteInterviewSlot(slotId)),
+      headers: authHeaders,
+    );
+    if (res.statusCode != 200)
+      throw Exception('Failed to delete slot: ${res.body}');
   }
 
   Future<List<Map<String, dynamic>>> getAllInterviews() async {
@@ -966,6 +1119,38 @@ class AdminService {
     );
     final body = _handleResponse(res);
     return {"meetings": body["meetings"] ?? body["data"] ?? []};
+  }
+
+  // ---------- NOTIFICATION PREFERENCES (admin/HM) ----------
+  Future<Map<String, dynamic>> getNotificationPreferences() async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.get(
+      Uri.parse(ApiEndpoints.getNotificationPreferences),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+    if (res.statusCode != 200)
+      throw Exception('Failed to fetch notification preferences: ${res.body}');
+    final body = json.decode(res.body);
+    return body['preferences'] ?? body;
+  }
+
+  Future<Map<String, dynamic>> updateNotificationPreferences({
+    bool? statusChanges,
+    bool? upcomingInterviews,
+  }) async {
+    final token = await AuthService.getAccessToken();
+    final body = <String, dynamic>{};
+    if (statusChanges != null) body['status_changes'] = statusChanges;
+    if (upcomingInterviews != null)
+      body['upcoming_interviews'] = upcomingInterviews;
+    final res = await http.put(
+      Uri.parse(ApiEndpoints.updateNotificationPreferences),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: convert.jsonEncode(body),
+    );
+    if (res.statusCode != 200)
+      throw Exception('Failed to update preferences: ${res.body}');
+    return json.decode(res.body);
   }
 
 // ---------- PRIVATE HELPER ----------
@@ -1916,6 +2101,167 @@ class AdminService {
     }
 
     throw Exception('Failed to check scheduling conflicts: ${res.body}');
+  }
+
+  // ---------- PIPELINE METHODS ----------
+  /// Load complete pipeline data for admin dashboard
+  Future<Map<String, dynamic>> loadPipelineData() async {
+    // Mock data for now - replace with actual API calls
+    final mockPipelineData = {
+      'requisitions': [
+        {
+          'id': 1,
+          'title': 'Senior Developer',
+          'department': 'Engineering',
+          'status': 'active'
+        },
+        {
+          'id': 2,
+          'title': 'Product Manager',
+          'department': 'Product',
+          'status': 'active'
+        },
+      ],
+      'applications': [
+        {
+          'id': 1,
+          'candidate_name': 'John Doe',
+          'position': 'Frontend Developer',
+          'status': 'applied'
+        },
+        {
+          'id': 2,
+          'candidate_name': 'Jane Smith',
+          'position': 'Backend Developer',
+          'status': 'screening'
+        },
+        {
+          'id': 3,
+          'candidate_name': 'Bob Wilson',
+          'position': 'DevOps Engineer',
+          'status': 'interview'
+        },
+      ],
+      'interviews': [
+        {
+          'id': 1,
+          'candidate_name': 'John Doe',
+          'position': 'Frontend Developer',
+          'date': '2024-01-15',
+          'status': 'scheduled'
+        },
+        {
+          'id': 2,
+          'candidate_name': 'Jane Smith',
+          'position': 'Backend Developer',
+          'date': '2024-01-16',
+          'status': 'completed'
+        },
+      ],
+      'offers': [
+        {
+          'id': 1,
+          'candidate_name': 'John Doe',
+          'position': 'Frontend Developer',
+          'status': 'draft'
+        },
+        {
+          'id': 2,
+          'candidate_name': 'Jane Smith',
+          'position': 'Backend Developer',
+          'status': 'sent'
+        },
+      ],
+      'stages': [
+        {'stage_name': 'Screening', 'count': 5},
+        {'stage_name': 'Assessment', 'count': 3},
+        {'stage_name': 'Interview', 'count': 2},
+        {'stage_name': 'Offer', 'count': 1},
+        {'stage_name': 'Hired', 'count': 0},
+      ],
+      'total_applications': 10,
+      'active_jobs': 2,
+      'offers_sent': 2,
+    };
+
+    return mockPipelineData;
+  }
+
+  /// Get pipeline statistics for dashboard
+  Future<Map<String, dynamic>> getPipelineStats() async {
+    // Mock stats data - replace with actual API calls
+    final mockStats = {
+      'total_requisitions': 5,
+      'active_requisitions': 2,
+      'total_applications': 25,
+      'pending_reviews': 3,
+      'interviews_scheduled': 8,
+      'offers_pending': 4,
+    };
+
+    return mockStats;
+  }
+
+  // ---------- OFFER METHODS ----------
+  /// Get offers by status for review queue
+  Future<List<Map<String, dynamic>>> getOffersByStatus(String status) async {
+    // Mock data - replace with actual API calls
+    final mockOffers = [
+      {
+        'id': 1,
+        'candidate_name': 'Alice Johnson',
+        'candidate_email': 'alice@example.com',
+        'position': 'Senior Frontend Developer',
+        'department': 'Engineering',
+        'salary': '\$120,000',
+        'status': status,
+        'start_date': '2024-01-10',
+        'description': 'Experienced frontend developer with React expertise',
+      },
+      {
+        'id': 2,
+        'candidate_name': 'Bob Williams',
+        'candidate_email': 'bob@example.com',
+        'position': 'Product Manager',
+        'department': 'Product',
+        'salary': '\$110,000',
+        'status': status,
+        'start_date': '2024-01-08',
+        'description': 'Product management background with agile experience',
+      },
+    ];
+
+    return mockOffers;
+  }
+
+  /// Review an offer with action and notes
+  Future<Map<String, dynamic>> reviewOffer({
+    required int offerId,
+    required String action,
+    String notes = '',
+  }) async {
+    final token = await AuthService.getAccessToken();
+
+    final data = {
+      'offer_id': offerId,
+      'action': action,
+      'notes': notes,
+    };
+
+    final res = await http.post(
+      Uri.parse('http://127.0.0.1:5000/api/admin/offers/review'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token'
+      },
+      body: json.encode(data),
+    );
+
+    if (res.statusCode == 200) {
+      return Map<String, dynamic>.from(json.decode(res.body));
+    } else {
+      throw Exception('Failed to review offer: ${res.body}');
+    }
   }
 
   // ---------- INTERVIEW DASHBOARD ----------

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../constants/brand_tokens.dart';
 
 class ThemeProvider extends ChangeNotifier {
   bool _isDarkMode = false;
@@ -61,26 +62,27 @@ class ThemeProvider extends ChangeNotifier {
   final ThemeData lightTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
-    primaryColor: const Color(0xFF971208),
+    primaryColor: BrandTokens.primary,
     colorScheme: ColorScheme.light(
-      primary: const Color(0xFF971208),
-      secondary: const Color(0xFFCF2030),
+      primary: BrandTokens.primary,
+      secondary: BrandTokens.primaryDeep,
     ),
     scaffoldBackgroundColor: const Color(0xFFF8F8F8),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: Color(0xFF971208),
+    appBarTheme: AppBarTheme(
+      backgroundColor: BrandTokens.primary,
       foregroundColor: Colors.white,
       elevation: 0,
     ),
-    floatingActionButtonTheme: const FloatingActionButtonThemeData(
-      backgroundColor: Color(0xFF971208),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      backgroundColor: BrandTokens.primary,
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF971208),
+        backgroundColor: BrandTokens.primary,
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderRadius:
+              BorderRadius.all(Radius.circular(BrandTokens.buttonRadius)),
         ),
       ),
     ),
@@ -90,26 +92,27 @@ class ThemeProvider extends ChangeNotifier {
   final ThemeData darkTheme = ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
-    primaryColor: const Color(0xFF14131E),
+    primaryColor: BrandTokens.primaryDeep,
     colorScheme: ColorScheme.dark(
-      primary: const Color(0xFF14131E),
-      secondary: const Color(0xFF272A3D),
+      primary: BrandTokens.primaryDeep,
+      secondary: BrandTokens.darkSurface,
     ),
     scaffoldBackgroundColor: const Color(0xFF121212),
-    appBarTheme: const AppBarTheme(
-      backgroundColor: Color(0xFF14131E),
+    appBarTheme: AppBarTheme(
+      backgroundColor: BrandTokens.primaryDeep,
       foregroundColor: Colors.white,
       elevation: 0,
     ),
-    floatingActionButtonTheme: const FloatingActionButtonThemeData(
-      backgroundColor: Color(0xFF14131E),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      backgroundColor: BrandTokens.primaryDeep,
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF14131E),
+        backgroundColor: BrandTokens.primaryDeep,
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
+          borderRadius:
+              BorderRadius.all(Radius.circular(BrandTokens.buttonRadius)),
         ),
       ),
     ),

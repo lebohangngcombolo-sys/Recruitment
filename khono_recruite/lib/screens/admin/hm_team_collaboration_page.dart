@@ -6,6 +6,7 @@ import '../../../providers/theme_provider.dart';
 import '../../../services/websocket_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/admin_service.dart';
+import '../../widgets/themed_dialog.dart';
 import 'meeting_screen.dart';
 
 class HMTeamCollaborationPage extends StatefulWidget {
@@ -1569,14 +1570,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor:
-            themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
-        title: Text('New Chat Thread',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-            )),
+      builder: (context) => ThemedDialog(
+        title: 'New Chat Thread',
+        subtitle: 'Create a new thread for your team',
+        icon: Icon(Icons.chat_bubble_outline, color: AppColors.primaryRed),
+        iconColor: AppColors.primaryRed,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1607,68 +1605,54 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                         ? Colors.grey.shade400
                         : AppColors.textGrey)),
           ),
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryRed.withValues(alpha: 0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+          ElevatedButton(
+            onPressed: () async {
+              if (titleController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Please enter a title',
+                        style: GoogleFonts.inter()),
+                    backgroundColor: AppColors.primaryRed,
+                  ),
+                );
+                return;
+              }
+
+              try {
+                final participantIds =
+                    _teamMembers.map((m) => m.userId).toList();
+
+                final newThread = await _apiService.createChatThread(
+                  title: titleController.text.trim(),
+                  participantIds: participantIds,
+                );
+
+                Navigator.pop(context);
+
+                setState(() {
+                  _currentThreadId = newThread['id'];
+                  _currentThreadTitle = newThread['title'] ?? 'Chat';
+                  _chatThreads.insert(0, newThread);
+                });
+
+                await _loadThreadMessages(_currentThreadId!);
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to create chat: $e',
+                        style: GoogleFonts.inter()),
+                    backgroundColor: AppColors.primaryRed,
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
-            child: ElevatedButton(
-              onPressed: () async {
-                if (titleController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Please enter a title',
-                          style: GoogleFonts.inter()),
-                      backgroundColor: AppColors.primaryRed,
-                    ),
-                  );
-                  return;
-                }
-
-                try {
-                  // Create thread with all team members
-                  final participantIds =
-                      _teamMembers.map((m) => m.userId).toList();
-
-                  final newThread = await _apiService.createChatThread(
-                    title: titleController.text.trim(),
-                    participantIds: participantIds,
-                  );
-
-                  Navigator.pop(context);
-
-                  setState(() {
-                    _currentThreadId = newThread['id'];
-                    _currentThreadTitle = newThread['title'] ?? 'Chat';
-                    _chatThreads.insert(0, newThread);
-                  });
-
-                  await _loadThreadMessages(_currentThreadId!);
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to create chat: $e',
-                          style: GoogleFonts.inter()),
-                      backgroundColor: AppColors.primaryRed,
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryRed,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: Text('Create',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-            ),
+            child: Text('Create',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -1682,14 +1666,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor:
-            themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
-        title: Text('Create Shared Note',
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-            )),
+      builder: (context) => ThemedDialog(
+        title: 'Create Shared Note',
+        subtitle: 'Share a note with your team',
+        icon: Icon(Icons.note_add_outlined, color: AppColors.primaryRed),
+        iconColor: AppColors.primaryRed,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1738,75 +1719,62 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                         ? Colors.grey.shade400
                         : AppColors.textGrey)),
           ),
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.primaryRed.withValues(alpha: 0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+          ElevatedButton(
+            onPressed: () async {
+              if (titleController.text.trim().isEmpty ||
+                  contentController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Please fill in both title and content',
+                        style: GoogleFonts.inter()),
+                    backgroundColor: AppColors.primaryRed,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                );
+                return;
+              }
+
+              try {
+                await _apiService.createNote({
+                  'title': titleController.text.trim(),
+                  'content': contentController.text.trim(),
+                });
+
+                Navigator.pop(context);
+                await _loadTeamData();
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Shared note created successfully',
+                        style: GoogleFonts.inter()),
+                    backgroundColor: Colors.green,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to create note: $e',
+                        style: GoogleFonts.inter()),
+                    backgroundColor: AppColors.primaryRed,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                  ),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryRed,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
-            child: ElevatedButton(
-              onPressed: () async {
-                if (titleController.text.trim().isEmpty ||
-                    contentController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Please fill in both title and content',
-                          style: GoogleFonts.inter()),
-                      backgroundColor: AppColors.primaryRed,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  );
-                  return;
-                }
-
-                try {
-                  await _apiService.createNote({
-                    'title': titleController.text.trim(),
-                    'content': contentController.text.trim(),
-                  });
-
-                  Navigator.pop(context);
-                  await _loadTeamData(); // Refresh the notes list
-
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Shared note created successfully',
-                          style: GoogleFonts.inter()),
-                      backgroundColor: Colors.green,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  );
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Failed to create note: $e',
-                          style: GoogleFonts.inter()),
-                      backgroundColor: AppColors.primaryRed,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryRed,
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: Text('Create',
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
-            ),
+            child: Text('Create',
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600)),
           ),
         ],
       ),
@@ -1818,20 +1786,19 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor:
-            themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
-        title: Text(note.title,
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-            )),
+      builder: (context) => ThemedDialog(
+        title: note.title,
+        subtitle: 'Shared note',
+        icon: Icon(Icons.description_outlined, color: AppColors.primaryRed),
+        iconColor: AppColors.primaryRed,
         content: SingleChildScrollView(
-          child: Text(note.content,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: themeProvider.isDarkMode ? Colors.white : Colors.black,
-              )),
+          child: Text(
+            note.content,
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
+            ),
+          ),
         ),
         actions: [
           TextButton(

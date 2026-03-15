@@ -8,6 +8,7 @@ import '../../services/candidate_service.dart';
 import '../../utils/api_endpoints.dart';
 import 'assessment_page.dart';
 import 'cv_upload_page.dart';
+import 'pick_interview_slot_page.dart';
 
 /// Display status for UI. Backend status is mapped to one of these.
 enum _DisplayStatus { inProgress, applied, interview, offer, rejected }
@@ -595,6 +596,9 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                           _drawerSectionTitle('Application Status'),
                           const SizedBox(height: 8),
                           _buildStatusPill(displayStatus),
+                          if (displayStatus == _DisplayStatus.interview) ...[
+                            _buildScheduledInterviewInfo(app),
+                          ],
                           if (displayStatus == _DisplayStatus.rejected) ...[
                             const SizedBox(height: 20),
                             _buildUnsuccessfulExplanation(app),
@@ -654,6 +658,46 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                               ),
                             ),
                           ],
+                          if (assessmentDone && cvDone &&
+                              (app['interview_status']?.toString().toLowerCase() ?? '') != 'scheduled') ...[
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => PickInterviewSlotPage(
+                                        applicationId: app['application_id'] as int,
+                                        jobTitle: app['job_title']?.toString() ?? 'Interview',
+                                      ),
+                                    ),
+                                  ).then((_) {
+                                    _closeDrawer();
+                                    _fetchApplications();
+                                  });
+                                },
+                                icon: const Icon(Icons.event_available, size: 20, color: Color(0xFFC10D00)),
+                                label: Text(
+                                  'Pick a slot',
+                                  style: GoogleFonts.poppins(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
+                                    color: const Color(0xFFC10D00),
+                                  ),
+                                ),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFFC10D00),
+                                  side: const BorderSide(color: Color(0xFFC10D00)),
+                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                           if (_cvUploaded(app)) ...[
                             const SizedBox(height: 24),
                             _drawerSectionTitle('Documents'),
@@ -702,6 +746,66 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
           ),
         ),
       ],
+    );
+  }
+
+  /// Shows date, time and type when the Hiring Manager has scheduled an interview (Interview tab).
+  Widget _buildScheduledInterviewInfo(Map<String, dynamic> app) {
+    final scheduled = app['scheduled_interview'];
+    if (scheduled is! Map) return const SizedBox.shrink();
+    final timeStr = scheduled['scheduled_time']?.toString();
+    final type = scheduled['interview_type']?.toString() ?? 'Interview';
+    final meetingLink = scheduled['meeting_link']?.toString().trim();
+    String dateLabel = 'Scheduled';
+    if (timeStr != null && timeStr.isNotEmpty) {
+      try {
+        final dt = DateTime.parse(timeStr);
+        dateLabel = '${dt.day}/${dt.month}/${dt.year} at ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      } catch (_) {
+        dateLabel = timeStr;
+      }
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.blue.shade900.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.blue.shade700.withValues(alpha: 0.5)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.event_available, size: 18, color: Colors.blue.shade300),
+                const SizedBox(width: 8),
+                Text(
+                  'Interview scheduled',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '$type — $dateLabel',
+              style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70),
+            ),
+            if (meetingLink != null && meetingLink.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              SelectableText(
+                meetingLink,
+                style: GoogleFonts.poppins(fontSize: 12, color: Colors.blue.shade300),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 

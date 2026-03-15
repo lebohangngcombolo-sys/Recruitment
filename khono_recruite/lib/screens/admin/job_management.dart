@@ -8,6 +8,9 @@ import '../../widgets/search_bar.dart'; // your custom SearchBar
 import '../../widgets/filter_chip.dart'; // your custom FilterChip
 import '../../services/admin_service.dart';
 import '../../providers/theme_provider.dart';
+import '../../widgets/state_widgets.dart';
+import '../../widgets/themed_dialog.dart';
+import '../../widgets/themed_surface_card.dart';
 
 class JobManagement extends StatefulWidget {
   final Function(int jobId)? onJobSelected;
@@ -171,60 +174,33 @@ class _JobManagementState extends State<JobManagement> {
   void _showJobDetailsDialog(Map<String, dynamic> detailedJob) {
     showDialog(
       context: context,
-      builder: (_) => Dialog(
-        child: Container(
-          width: 600,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: Theme.of(context).cardColor,
-          ),
+      builder: (_) => ThemedDialog(
+        title: detailedJob['title'] ?? 'Job Details',
+        subtitle: 'View job details and requirements',
+        icon: const Icon(Icons.work_outline),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      detailedJob['title'] ?? 'Job Details',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Job Information
                 _buildDetailSection("Description", detailedJob['description']),
                 if (detailedJob['job_summary'] != null &&
                     detailedJob['job_summary'].isNotEmpty)
                   _buildDetailSection("Summary", detailedJob['job_summary']),
-
-                // Requirements
                 if (detailedJob['required_skills'] != null &&
                     detailedJob['required_skills'].isNotEmpty)
                   _buildListSection(
                       "Required Skills", detailedJob['required_skills']),
-
                 if (detailedJob['responsibilities'] != null &&
                     detailedJob['responsibilities'].isNotEmpty)
                   _buildListSection(
                       "Responsibilities", detailedJob['responsibilities']),
-
                 if (detailedJob['qualifications'] != null &&
                     detailedJob['qualifications'].isNotEmpty)
                   _buildListSection(
                       "Qualifications", detailedJob['qualifications']),
-
-                // Job Stats
                 const SizedBox(height: 20),
                 const Text("Job Statistics",
                     style:
@@ -250,44 +226,39 @@ class _JobManagementState extends State<JobManagement> {
                             : Colors.red),
                   ],
                 ),
-
-                // Advanced stats if available
                 if (detailedJob['statistics'] != null)
                   _buildAdvancedStatistics(detailedJob['statistics']),
-
-                const SizedBox(height: 30),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("Close"),
-                    ),
-                    const SizedBox(width: 12),
-                    CustomButton(
-                      text: "Edit Job",
-                      onPressed: () {
-                        Navigator.pop(context);
-                        openJobForm(job: detailedJob);
-                      },
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Close"),
+          ),
+          CustomButton(
+            text: "Edit Job",
+            onPressed: () {
+              Navigator.pop(context);
+              openJobForm(job: detailedJob);
+            },
+          ),
+        ],
       ),
     );
   }
 
-  void _showJobApplicationsDialog(Map<String, dynamic> job, ThemeProvider themeProvider) async {
+  void _showJobApplicationsDialog(
+      Map<String, dynamic> job, ThemeProvider themeProvider) async {
     final jobId = job['id'] as int?;
     if (jobId == null) return;
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
+      builder: (_) => const ThemedLoadingState(
+        message: 'Loading applicants...',
+      ),
     );
     try {
       final applications = await admin.getJobApplications(jobId);
@@ -295,14 +266,10 @@ class _JobManagementState extends State<JobManagement> {
       Navigator.of(context).pop();
       showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(
-            'Applicants',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
-            ),
-          ),
+        builder: (ctx) => ThemedDialog(
+          title: 'Applicants',
+          subtitle: job['title'] ?? 'Job',
+          icon: const Icon(Icons.people_outline),
           content: SizedBox(
             width: 500,
             child: Column(
@@ -313,7 +280,9 @@ class _JobManagementState extends State<JobManagement> {
                   '${job['title'] ?? 'Job'}${(job['company'] != null && (job['company'] as String).isNotEmpty) ? ' at ${job['company']}' : ''}',
                   style: TextStyle(
                     fontSize: 14,
-                    color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                    color: themeProvider.isDarkMode
+                        ? Colors.grey.shade400
+                        : Colors.grey.shade700,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -323,7 +292,9 @@ class _JobManagementState extends State<JobManagement> {
                     child: Text(
                       'No applications yet',
                       style: TextStyle(
-                        color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                        color: themeProvider.isDarkMode
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
                       ),
                     ),
                   )
@@ -334,22 +305,20 @@ class _JobManagementState extends State<JobManagement> {
                       shrinkWrap: true,
                       itemCount: applications.length,
                       itemBuilder: (_, i) {
-                        final app = applications[i] is Map ? applications[i] as Map<String, dynamic> : <String, dynamic>{};
-                        final cand = app['candidate'] is Map ? app['candidate'] as Map<String, dynamic> : <String, dynamic>{};
+                        final app = applications[i] is Map
+                            ? applications[i] as Map<String, dynamic>
+                            : <String, dynamic>{};
+                        final cand = app['candidate'] is Map
+                            ? app['candidate'] as Map<String, dynamic>
+                            : <String, dynamic>{};
                         final name = cand['full_name'] ?? 'Unknown';
                         final email = cand['email'] ?? '';
                         final phone = cand['phone'] ?? '';
                         final status = app['status'] ?? '';
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),
-                          child: Container(
+                          child: ThemedSurfaceCard(
                             padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: themeProvider.isDarkMode
-                                  ? Colors.white.withValues(alpha: 0.05)
-                                  : Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -358,7 +327,9 @@ class _JobManagementState extends State<JobManagement> {
                                   style: TextStyle(
                                     fontWeight: FontWeight.w600,
                                     fontSize: 14,
-                                    color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.white
+                                        : Colors.black87,
                                   ),
                                 ),
                                 if (email.isNotEmpty)
@@ -368,7 +339,9 @@ class _JobManagementState extends State<JobManagement> {
                                       email,
                                       style: TextStyle(
                                         fontSize: 12,
-                                        color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                                        color: themeProvider.isDarkMode
+                                            ? Colors.grey.shade400
+                                            : Colors.grey.shade700,
                                       ),
                                     ),
                                   ),
@@ -379,7 +352,9 @@ class _JobManagementState extends State<JobManagement> {
                                       phone,
                                       style: TextStyle(
                                         fontSize: 12,
-                                        color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
+                                        color: themeProvider.isDarkMode
+                                            ? Colors.grey.shade400
+                                            : Colors.grey.shade700,
                                       ),
                                     ),
                                   ),
@@ -387,9 +362,12 @@ class _JobManagementState extends State<JobManagement> {
                                   Padding(
                                     padding: const EdgeInsets.only(top: 6),
                                     child: Chip(
-                                      label: Text(status, style: const TextStyle(fontSize: 11)),
-                                      backgroundColor: Colors.teal.withValues(alpha: 0.2),
-                                      side: BorderSide(color: Colors.teal, width: 0.5),
+                                      label: Text(status,
+                                          style: const TextStyle(fontSize: 11)),
+                                      backgroundColor:
+                                          Colors.teal.withValues(alpha: 0.2),
+                                      side: BorderSide(
+                                          color: Colors.teal, width: 0.5),
                                     ),
                                   ),
                               ],
@@ -421,8 +399,10 @@ class _JobManagementState extends State<JobManagement> {
   void _showBasicJobDetails(Map<String, dynamic> job) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: Text(job['title'] ?? 'Job Details'),
+      builder: (_) => ThemedDialog(
+        title: job['title'] ?? 'Job Details',
+        subtitle: 'Quick overview',
+        icon: const Icon(Icons.work_outline),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -564,42 +544,32 @@ class _JobManagementState extends State<JobManagement> {
   void _showStatisticsDialog(Map<String, dynamic> stats) {
     showDialog(
       context: context,
-      builder: (_) => Dialog(
-        child: Container(
-          width: 500,
-          padding: const EdgeInsets.all(24),
+      builder: (_) => ThemedDialog(
+        title: 'Job Statistics',
+        subtitle: 'Overview and breakdown',
+        icon: const Icon(Icons.analytics_outlined),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500),
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Job Statistics",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 20),
-
-                // Overall Statistics
                 if (stats['overall'] != null)
                   _buildStatisticsSection("Overall", stats['overall']),
-
-                // By Category
                 if (stats['by_category'] != null &&
                     (stats['by_category'] as List).isNotEmpty)
                   _buildCategorySection(stats['by_category']),
-
-                const SizedBox(height: 30),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: CustomButton(
-                    text: "Close",
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ),
               ],
             ),
           ),
         ),
+        actions: [
+          CustomButton(
+            text: "Close",
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
       ),
     );
   }
@@ -637,7 +607,9 @@ class _JobManagementState extends State<JobManagement> {
               decoration: BoxDecoration(
                 color: colors[index % colors.length].withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: colors[index % colors.length]),
+                border: Border.all(
+                  color: colors[index % colors.length],
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -735,7 +707,8 @@ class _JobManagementState extends State<JobManagement> {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        if (job['company'] != null && (job['company'] as String).isNotEmpty)
+                        if (job['company'] != null &&
+                            (job['company'] as String).isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
                             child: Text(
@@ -799,7 +772,8 @@ class _JobManagementState extends State<JobManagement> {
                 spacing: 8,
                 runSpacing: 4,
                 children: [
-                  if (job['employment_type'] != null && (job['employment_type'] as String).isNotEmpty)
+                  if (job['employment_type'] != null &&
+                      (job['employment_type'] as String).isNotEmpty)
                     Chip(
                       label: Text(
                         (job['employment_type'] as String).replaceAll('_', ' '),
@@ -894,7 +868,8 @@ class _JobManagementState extends State<JobManagement> {
                         icon: const Icon(Icons.people, size: 20),
                         color: Colors.teal,
                         tooltip: "View Applicants",
-                        onPressed: () => _showJobApplicationsDialog(job, themeProvider),
+                        onPressed: () =>
+                            _showJobApplicationsDialog(job, themeProvider),
                       ),
                       IconButton(
                         icon: const Icon(Icons.visibility, size: 20),
@@ -1016,8 +991,9 @@ class _JobManagementState extends State<JobManagement> {
         child: Scaffold(
           backgroundColor: Colors.transparent,
           body: loading
-              ? const Center(
-                  child: CircularProgressIndicator(color: Colors.redAccent))
+              ? const ThemedLoadingState(
+                  message: 'Loading Jobs...',
+                )
               : Column(
                   children: [
                     // Header
@@ -1059,17 +1035,11 @@ class _JobManagementState extends State<JobManagement> {
                           const SizedBox(height: 20),
 
                           // Search and Filters
-                          Container(
+                          ThemedSurfaceCard(
                             padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: themeProvider.isDarkMode
-                                  ? Colors.black.withOpacity(0.6)
-                                  : Colors.white.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
                             child: Column(
                               children: [
-                                // Search Bar
+                                // Search bar
                                 SearchBar(
                                   hintText:
                                       "Search jobs by title, description, or skills...",

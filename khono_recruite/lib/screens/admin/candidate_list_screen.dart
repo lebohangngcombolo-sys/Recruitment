@@ -6,6 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/auth_service.dart';
 import '../../utils/api_endpoints.dart';
 import '../../providers/theme_provider.dart';
+import '../../widgets/themed_surface_card.dart';
+import '../../widgets/state_widgets.dart';
 import 'candidate_detail_screen.dart';
 
 class CandidateListScreen extends StatefulWidget {
@@ -93,26 +95,8 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                     themeProvider.isDarkMode ? Colors.white : Colors.black87),
           ),
           body: loading
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const CircularProgressIndicator(
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.redAccent),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        "Loading Candidates...",
-                        style: GoogleFonts.inter(
-                          color: themeProvider.isDarkMode
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade600,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
+              ? const ThemedLoadingState(
+                  message: "Loading Candidates...",
                 )
               : candidates.isEmpty
                   ? Center(
@@ -153,82 +137,13 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                   : Column(
                       children: [
                         // Header with stats
-                        Container(
+                        Padding(
                           padding: const EdgeInsets.all(20),
-                          margin: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: (themeProvider.isDarkMode
-                                    ? const Color(0xFF14131E)
-                                    : Colors.white)
-                                .withValues(alpha: 0.9),
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.05),
-                                blurRadius: 20,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color:
-                                      Colors.redAccent.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  Icons.people_alt,
-                                  color: Colors.redAccent,
-                                  size: 28,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "Candidate Directory",
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w600,
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87,
-                                    ),
-                                  ),
-                                  Text(
-                                    "${candidates.length} candidates registered",
-                                    style: GoogleFonts.inter(
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.grey.shade400
-                                          : Colors.grey.shade600,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const Spacer(),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color:
-                                      Colors.redAccent.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  "Active",
-                                  style: GoogleFonts.inter(
-                                    color: Colors.redAccent,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ],
+                          child: ThemedStatCard(
+                            title: "Candidate Directory",
+                            value: "${candidates.length}",
+                            icon: Icons.people_alt,
+                            iconColor: Colors.redAccent,
                           ),
                         ),
                         // Candidates Grid
@@ -275,229 +190,325 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                                   vm.Vector3(0, -8, 0)))
                                             : Matrix4.identity(),
                                         width: cardWidth,
-                                        decoration: BoxDecoration(
-                                          color: (themeProvider.isDarkMode
-                                                  ? const Color(0xFF14131E)
-                                                  : Colors.white)
-                                              .withValues(alpha: 0.9),
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: isHovered
-                                                  ? Colors.redAccent
-                                                      .withValues(alpha: 0.15)
-                                                  : Colors.black
-                                                      .withValues(alpha: 0.08),
-                                              blurRadius: isHovered ? 25 : 15,
-                                              offset: const Offset(0, 8),
-                                            ),
-                                          ],
-                                          border: Border.all(
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.grey.shade800
-                                                : Colors.grey
-                                                    .withValues(alpha: 0.1),
-                                          ),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            // Header with avatar
-                                            Container(
-                                              padding: const EdgeInsets.all(20),
-                                              decoration: BoxDecoration(
-                                                color: Colors.redAccent
-                                                    .withValues(alpha: 0.03),
-                                                borderRadius:
-                                                    const BorderRadius.only(
-                                                  topLeft: Radius.circular(20),
-                                                  topRight: Radius.circular(20),
+                                        child: ThemedSurfaceCard(
+                                          padding: EdgeInsets.zero,
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              // Header with avatar
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.all(20),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.redAccent
+                                                      .withValues(alpha: 0.03),
+                                                  borderRadius:
+                                                      const BorderRadius.only(
+                                                    topLeft:
+                                                        Radius.circular(20),
+                                                    topRight:
+                                                        Radius.circular(20),
+                                                  ),
                                                 ),
-                                              ),
-                                              child: Row(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Stack(
-                                                    children: [
-                                                      Container(
-                                                        width: 60,
-                                                        height: 60,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: Colors
-                                                              .redAccent
-                                                              .withValues(
-                                                                  alpha: 0.1),
-                                                          shape:
-                                                              BoxShape.circle,
-                                                          border: Border.all(
+                                                child: Row(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Stack(
+                                                      children: [
+                                                        Container(
+                                                          width: 60,
+                                                          height: 60,
+                                                          decoration:
+                                                              BoxDecoration(
                                                             color: Colors
                                                                 .redAccent
                                                                 .withValues(
-                                                                    alpha: 0.2),
-                                                            width: 2,
-                                                          ),
-                                                        ),
-                                                        child:
-                                                            c['profile_picture'] !=
-                                                                    null
-                                                                ? ClipOval(
-                                                                    child: Image
-                                                                        .network(
-                                                                      c['profile_picture'],
-                                                                      width: 60,
-                                                                      height:
-                                                                          60,
-                                                                      fit: BoxFit
-                                                                          .cover,
-                                                                    ),
-                                                                  )
-                                                                : Icon(
-                                                                    Icons
-                                                                        .person,
-                                                                    size: 30,
-                                                                    color: Colors
-                                                                        .redAccent
-                                                                        .withValues(
-                                                                            alpha:
-                                                                                0.6),
-                                                                  ),
-                                                      ),
-                                                      Positioned(
-                                                        bottom: 0,
-                                                        right: 0,
-                                                        child: Container(
-                                                          width: 16,
-                                                          height: 16,
-                                                          decoration:
-                                                              BoxDecoration(
-                                                            color: Colors.green,
+                                                                    alpha: 0.1),
                                                             shape:
                                                                 BoxShape.circle,
                                                             border: Border.all(
-                                                              color:
-                                                                  Colors.white,
+                                                              color: Colors
+                                                                  .redAccent
+                                                                  .withValues(
+                                                                      alpha:
+                                                                          0.2),
                                                               width: 2,
                                                             ),
                                                           ),
+                                                          child:
+                                                              c['profile_picture'] !=
+                                                                      null
+                                                                  ? ClipOval(
+                                                                      child: Image
+                                                                          .network(
+                                                                        c['profile_picture'],
+                                                                        width:
+                                                                            60,
+                                                                        height:
+                                                                            60,
+                                                                        fit: BoxFit
+                                                                            .cover,
+                                                                      ),
+                                                                    )
+                                                                  : Icon(
+                                                                      Icons
+                                                                          .person,
+                                                                      size: 30,
+                                                                      color: Colors
+                                                                          .redAccent
+                                                                          .withValues(
+                                                                              alpha: 0.6),
+                                                                    ),
                                                         ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  const SizedBox(width: 16),
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Text(
-                                                          c['full_name'] ??
-                                                              'Unknown Candidate',
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                            fontSize: 18,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            color: themeProvider
-                                                                    .isDarkMode
-                                                                ? Colors.white
-                                                                : Colors
-                                                                    .black87,
+                                                        Positioned(
+                                                          bottom: 0,
+                                                          right: 0,
+                                                          child: Container(
+                                                            width: 16,
+                                                            height: 16,
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color:
+                                                                  Colors.green,
+                                                              shape: BoxShape
+                                                                  .circle,
+                                                              border:
+                                                                  Border.all(
+                                                                color: Colors
+                                                                    .white,
+                                                                width: 2,
+                                                              ),
+                                                            ),
                                                           ),
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
-                                                        ),
-                                                        const SizedBox(
-                                                            height: 4),
-                                                        Text(
-                                                          c['email'] ??
-                                                              'No email provided',
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                            color: themeProvider
-                                                                    .isDarkMode
-                                                                ? Colors.grey
-                                                                    .shade400
-                                                                : Colors.grey
-                                                                    .shade600,
-                                                            fontSize: 12,
-                                                          ),
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
                                                         ),
                                                       ],
                                                     ),
-                                                  ),
-                                                ],
+                                                    const SizedBox(width: 16),
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                        children: [
+                                                          Text(
+                                                            c['full_name'] ??
+                                                                'Unknown Candidate',
+                                                            style: GoogleFonts
+                                                                .inter(
+                                                              fontSize: 18,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                              color: themeProvider
+                                                                      .isDarkMode
+                                                                  ? Colors.white
+                                                                  : Colors
+                                                                      .black87,
+                                                            ),
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                          ),
+                                                          const SizedBox(
+                                                              height: 4),
+                                                          Text(
+                                                            c['email'] ??
+                                                                'No email provided',
+                                                            style: GoogleFonts
+                                                                .inter(
+                                                              color: themeProvider
+                                                                      .isDarkMode
+                                                                  ? Colors.grey
+                                                                      .shade400
+                                                                  : Colors.grey
+                                                                      .shade600,
+                                                              fontSize: 12,
+                                                            ),
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
-                                            ),
-                                            // Details section
-                                            Padding(
-                                              padding: const EdgeInsets.all(20),
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  _buildInfoRow(
-                                                    icon: Icons.phone,
-                                                    label: "Phone",
-                                                    value: c['phone'] ?? 'N/A',
-                                                    themeProvider:
-                                                        themeProvider,
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  _buildInfoRow(
-                                                    icon: Icons.location_on,
-                                                    label: "Location",
-                                                    value:
-                                                        c['location'] ?? 'N/A',
-                                                    themeProvider:
-                                                        themeProvider,
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  _buildInfoRow(
-                                                    icon: Icons.female,
-                                                    label: "Gender",
-                                                    value: c['gender'] ?? 'N/A',
-                                                    themeProvider:
-                                                        themeProvider,
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  _buildInfoRow(
-                                                    icon: Icons.badge,
-                                                    label: "ID Number",
-                                                    value:
-                                                        c['id_number'] ?? 'N/A',
-                                                    themeProvider:
-                                                        themeProvider,
-                                                  ),
-                                                  if (c['applications_summary'] !=
-                                                          null &&
-                                                      (c['applications_summary']
-                                                              as List)
-                                                          .isNotEmpty) ...[
-                                                    const SizedBox(height: 8),
+                                              // Details section
+                                              Padding(
+                                                padding:
+                                                    const EdgeInsets.all(20),
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
                                                     _buildInfoRow(
-                                                      icon: Icons.work,
-                                                      label: "Jobs applied",
+                                                      icon: Icons.phone,
+                                                      label: "Phone",
                                                       value:
-                                                          "${(c['applications_summary'] as List).length} job(s): ${(c['applications_summary'] as List).map((a) => a is Map ? (a['job_title'] ?? '') : '').where((s) => s.isNotEmpty).take(3).join(', ')}${(c['applications_summary'] as List).length > 3 ? '...' : ''}",
+                                                          c['phone'] ?? 'N/A',
                                                       themeProvider:
                                                           themeProvider,
                                                     ),
-                                                  ],
-                                                  const SizedBox(height: 16),
-                                                  // Action buttons
-                                                  Row(
-                                                    children: [
-                                                      Expanded(
-                                                        child: Container(
+                                                    const SizedBox(height: 8),
+                                                    _buildInfoRow(
+                                                      icon: Icons.location_on,
+                                                      label: "Location",
+                                                      value: c['location'] ??
+                                                          'N/A',
+                                                      themeProvider:
+                                                          themeProvider,
+                                                    ),
+                                                    const SizedBox(height: 8),
+                                                    _buildInfoRow(
+                                                      icon: Icons.female,
+                                                      label: "Gender",
+                                                      value:
+                                                          c['gender'] ?? 'N/A',
+                                                      themeProvider:
+                                                          themeProvider,
+                                                    ),
+                                                    const SizedBox(height: 8),
+                                                    _buildInfoRow(
+                                                      icon: Icons.badge,
+                                                      label: "ID Number",
+                                                      value: c['id_number'] ??
+                                                          'N/A',
+                                                      themeProvider:
+                                                          themeProvider,
+                                                    ),
+                                                    if (c['applications_summary'] !=
+                                                            null &&
+                                                        (c['applications_summary']
+                                                                as List)
+                                                            .isNotEmpty) ...[
+                                                      const SizedBox(height: 8),
+                                                      _buildInfoRow(
+                                                        icon: Icons.work,
+                                                        label: "Jobs applied",
+                                                        value:
+                                                            "${(c['applications_summary'] as List).length} job(s): ${(c['applications_summary'] as List).map((a) => a is Map ? (a['job_title'] ?? '') : '').where((s) => s.isNotEmpty).take(3).join(', ')}${(c['applications_summary'] as List).length > 3 ? '...' : ''}",
+                                                        themeProvider:
+                                                            themeProvider,
+                                                      ),
+                                                    ],
+                                                    const SizedBox(height: 16),
+                                                    // Action buttons
+                                                    Row(
+                                                      children: [
+                                                        Expanded(
+                                                          child: Container(
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          12),
+                                                              boxShadow: [
+                                                                BoxShadow(
+                                                                  color: Colors
+                                                                      .blue
+                                                                      .withValues(
+                                                                          alpha:
+                                                                              0.3),
+                                                                  blurRadius: 8,
+                                                                  offset:
+                                                                      const Offset(
+                                                                          0, 4),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                            child:
+                                                                ElevatedButton
+                                                                    .icon(
+                                                              icon: const Icon(
+                                                                  Icons
+                                                                      .visibility,
+                                                                  size: 16),
+                                                              label: Text(
+                                                                "View Profile",
+                                                                style:
+                                                                    GoogleFonts
+                                                                        .inter(
+                                                                  fontSize: 12,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                ),
+                                                              ),
+                                                              onPressed: () {
+                                                                final summary =
+                                                                    c['applications_summary']
+                                                                        as List?;
+                                                                final firstAppId = summary !=
+                                                                            null &&
+                                                                        summary
+                                                                            .isNotEmpty &&
+                                                                        summary.first
+                                                                            is Map
+                                                                    ? (summary.first
+                                                                            as Map)[
+                                                                        'application_id']
+                                                                    : null;
+                                                                if (firstAppId !=
+                                                                    null) {
+                                                                  Navigator.of(
+                                                                          context)
+                                                                      .push(
+                                                                    MaterialPageRoute(
+                                                                      builder:
+                                                                          (_) =>
+                                                                              CandidateDetailScreen(
+                                                                        candidateId:
+                                                                            c['id']
+                                                                                as int,
+                                                                        applicationId:
+                                                                            firstAppId
+                                                                                as int,
+                                                                      ),
+                                                                    ),
+                                                                  );
+                                                                } else {
+                                                                  ScaffoldMessenger.of(
+                                                                          context)
+                                                                      .showSnackBar(
+                                                                    const SnackBar(
+                                                                        content:
+                                                                            Text('No applications yet')),
+                                                                  );
+                                                                }
+                                                              },
+                                                              style:
+                                                                  ElevatedButton
+                                                                      .styleFrom(
+                                                                backgroundColor:
+                                                                    Colors.blue,
+                                                                foregroundColor:
+                                                                    Colors
+                                                                        .white,
+                                                                padding:
+                                                                    const EdgeInsets
+                                                                        .symmetric(
+                                                                        vertical:
+                                                                            12),
+                                                                shape:
+                                                                    RoundedRectangleBorder(
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              12),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                            width: 8),
+                                                        Container(
                                                           decoration:
                                                               BoxDecoration(
                                                             borderRadius:
@@ -507,7 +518,7 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                                             boxShadow: [
                                                               BoxShadow(
                                                                 color: Colors
-                                                                    .blue
+                                                                    .redAccent
                                                                     .withValues(
                                                                         alpha:
                                                                             0.3),
@@ -518,130 +529,30 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                                               ),
                                                             ],
                                                           ),
-                                                          child: ElevatedButton
-                                                              .icon(
+                                                          child: IconButton(
+                                                            onPressed: () {},
                                                             icon: const Icon(
-                                                                Icons
-                                                                    .visibility,
-                                                                size: 16),
-                                                            label: Text(
-                                                              "View Profile",
-                                                              style: GoogleFonts
-                                                                  .inter(
-                                                                fontSize: 12,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
-                                                              ),
-                                                            ),
-                                                            onPressed: () {
-                                                              final summary =
-                                                                  c['applications_summary']
-                                                                      as List?;
-                                                              final firstAppId = summary !=
-                                                                          null &&
-                                                                      summary
-                                                                          .isNotEmpty &&
-                                                                      summary.first
-                                                                          is Map
-                                                                  ? (summary.first
-                                                                          as Map)[
-                                                                      'application_id']
-                                                                  : null;
-                                                              if (firstAppId !=
-                                                                  null) {
-                                                                Navigator.of(
-                                                                        context)
-                                                                    .push(
-                                                                  MaterialPageRoute(
-                                                                    builder: (_) =>
-                                                                        CandidateDetailScreen(
-                                                                      candidateId:
-                                                                          c['id']
-                                                                              as int,
-                                                                      applicationId:
-                                                                          firstAppId
-                                                                              as int,
-                                                                    ),
-                                                                  ),
-                                                                );
-                                                              } else {
-                                                                ScaffoldMessenger.of(
-                                                                        context)
-                                                                    .showSnackBar(
-                                                                  const SnackBar(
-                                                                      content: Text(
-                                                                          'No applications yet')),
-                                                                );
-                                                              }
-                                                            },
-                                                            style:
-                                                                ElevatedButton
-                                                                    .styleFrom(
+                                                                Icons.more_vert,
+                                                                color: Colors
+                                                                    .white),
+                                                            style: IconButton
+                                                                .styleFrom(
                                                               backgroundColor:
-                                                                  Colors.blue,
-                                                              foregroundColor:
-                                                                  Colors.white,
+                                                                  Colors
+                                                                      .redAccent,
                                                               padding:
                                                                   const EdgeInsets
-                                                                      .symmetric(
-                                                                      vertical:
-                                                                          12),
-                                                              shape:
-                                                                  RoundedRectangleBorder(
-                                                                borderRadius:
-                                                                    BorderRadius
-                                                                        .circular(
-                                                                            12),
-                                                              ),
+                                                                      .all(12),
                                                             ),
                                                           ),
                                                         ),
-                                                      ),
-                                                      const SizedBox(width: 8),
-                                                      Container(
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(12),
-                                                          boxShadow: [
-                                                            BoxShadow(
-                                                              color: Colors
-                                                                  .redAccent
-                                                                  .withValues(
-                                                                      alpha:
-                                                                          0.3),
-                                                              blurRadius: 8,
-                                                              offset:
-                                                                  const Offset(
-                                                                      0, 4),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                        child: IconButton(
-                                                          onPressed: () {},
-                                                          icon: const Icon(
-                                                              Icons.more_vert,
-                                                              color:
-                                                                  Colors.white),
-                                                          style: IconButton
-                                                              .styleFrom(
-                                                            backgroundColor:
-                                                                Colors
-                                                                    .redAccent,
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .all(12),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ],
+                                                      ],
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     );

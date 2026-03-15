@@ -1,3 +1,5 @@
+// ignore_for_file: unused_import
+import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -34,38 +36,27 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
   final storage = const FlutterSecureStorage();
 
   Map<String, dynamic>? candidateData;
+  Map<String, dynamic>? application;
+  Map<String, dynamic>? job;
+  List<Map<String, dynamic>> timeline = [];
   List<Map<String, dynamic>> interviews = [];
   bool loading = true;
   String? errorMessage;
   String currentScreen = "candidates";
 
-  static const List<String> _classificationOptions = [
-    'applied',
-    'screening',
-    'assessment',
-    'interview',
-    'offer',
-    'hired',
-    'rejected',
+  static const List<String> _recommendationOptions = [
+    'Proceed to Final Interview',
+    'Hold',
+    'Reject',
   ];
 
-  String _normalizeClassificationStatus(String raw) {
-    final v = raw.trim().toLowerCase();
-    switch (v) {
-      case 'in_progress':
-      case 'in-progress':
-      case 'in progress':
-        return 'screening';
-      case 'assessment_submitted':
-      case 'assessment-submitted':
-      case 'assessment submitted':
-        return 'assessment';
-      default:
-        break;
-    }
-    if (_classificationOptions.contains(v)) return v;
-    return 'applied';
-  }
+  static const List<String> _classificationOptions = [
+    'Not Classified',
+    'High Priority',
+    'Medium Priority',
+    'Low Priority',
+    'Not Suitable',
+  ];
 
   late final AnimationController _hoverController;
   late final Animation<double> _hoverAnimation;
@@ -81,9 +72,10 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
       lowerBound: 0.0,
       upperBound: 0.05,
     );
-    _hoverAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
-      CurvedAnimation(parent: _hoverController, curve: Curves.easeOut),
-    );
+    _hoverAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.05,
+    ).animate(CurvedAnimation(parent: _hoverController, curve: Curves.easeOut));
   }
 
   @override
@@ -92,62 +84,63 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
     super.dispose();
   }
 
-  Future<void> _updateApplicationStatus(
-      int applicationId, String newStatus) async {
-    try {
-      final success =
-          await admin.updateApplicationStatus(applicationId, newStatus);
-      if (success) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Status updated successfully'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-        // Refresh data to reflect change
-        await fetchAllData();
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to update status'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error updating status: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+  String _formatList(dynamic v) {
+    if (v == null) return '—';
+    if (v is List) return v.isEmpty ? '—' : v.join(', ');
+    return v.toString();
+  }
+
+  String _normalizeClassificationStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'high priority':
+        return 'High Priority';
+      case 'medium priority':
+        return 'Medium Priority';
+      case 'low priority':
+        return 'Low Priority';
+      case 'not suitable':
+        return 'Not Suitable';
+      case 'not classified':
+      default:
+        return 'Not Classified';
     }
   }
 
   Color _statusColor(String status) {
-    switch (status) {
-      case 'applied':
-        return Colors.blue;
-      case 'screening':
-        return Colors.orange;
-      case 'assessment':
-        return Colors.purple;
-      case 'interview':
-        return Colors.teal;
-      case 'offer':
-        return Colors.amber;
-      case 'hired':
-        return Colors.green;
-      case 'rejected':
+    switch (status.toLowerCase()) {
+      case 'high priority':
         return Colors.red;
-      default:
+      case 'medium priority':
+        return Colors.orange;
+      case 'low priority':
+        return Colors.yellow;
+      case 'not suitable':
         return Colors.grey;
+      case 'not classified':
+      default:
+        return Colors.blue;
+    }
+  }
+
+  Future<void> _updateApplicationStatus(String newStatus) async {
+    try {
+      final adminService = AdminService();
+      await adminService.updateApplicationStatus(
+          widget.applicationId, newStatus);
+
+      setState(() {
+        if (candidateData != null) {
+          candidateData!['status'] = newStatus;
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Status updated to $newStatus')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update status: $e')),
+      );
     }
   }
 
@@ -159,39 +152,89 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
 
     try {
       final data = await admin.getApplication(widget.applicationId);
-      final application = data['application'] ?? {};
-      final assessment = data['assessment'] ?? {};
+      final app = data['application'] as Map<String, dynamic>? ?? {};
+      final cand = data['candidate'] as Map<String, dynamic>? ?? {};
+      final assessment = data['assessment'] as Map<String, dynamic>? ?? {};
+      final jobPayload = data['job'] as Map<String, dynamic>?;
+
+      application = app;
+      job = jobPayload;
 
       candidateData = {
-        "full_name": application['full_name'] ?? 'Unnamed',
-        "email": application['email'] ?? '',
-        "phone": application['phone'] ?? '',
-        "cv_score": application['cv_score'] ?? 0,
-        "cv_file": application['cv_url'] ?? '',
-        "education": application['education'] ?? '',
-        "skills": application['skills'] ?? '',
-        "work_experience": application['work_experience'] ?? '',
-        "assessment_score": assessment['score'] ?? 'N/A',
+        "full_name": cand['full_name'] ?? app['full_name'] ?? 'Unnamed',
+        "email": cand['email'] ?? '',
+        "phone": cand['phone'] ?? '',
+        "cv_score": app['cv_score'] ?? 0,
+        "cv_file": app['resume_url'] ?? app['cv_url'] ?? '',
+        "education": _formatList(cand['education']),
+        "skills": _formatList(cand['skills']),
+        "work_experience": _formatList(cand['work_experience']),
+        "assessment_score":
+            assessment['percentage_score'] ?? assessment['score'] ?? 'N/A',
         "assessment_recommendation": assessment['recommendation'] ?? 'N/A',
-        "status": application['status'] ?? 'Pending',
-        "candidate_id": application['id'] ?? widget.candidateId,
+        "status": app['status'] ?? 'Pending',
+        "candidate_id": app['candidate_id'] ?? widget.candidateId,
+        "recommendation": app['recommendation'],
+        "cv_parser_result": app['cv_parser_result'],
+        "knockout_rule_violations": app['knockout_rule_violations'],
+        "scoring_breakdown": app['scoring_breakdown'],
+        "overall_score": app['overall_score'],
       };
 
-      final interviewData =
-          await admin.getCandidateInterviews(widget.candidateId);
+      final interviewData = await admin.getCandidateInterviews(
+        widget.candidateId,
+      );
       interviews = List<Map<String, dynamic>>.from(interviewData);
+
+      try {
+        final tl = await admin.getApplicationTimeline(widget.applicationId);
+        if (mounted) timeline = tl;
+      } catch (_) {
+        if (mounted) timeline = [];
+      }
     } catch (e) {
       print("Error fetching candidate details: $e");
       errorMessage = "Failed to load data: $e";
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text("Error: $e")));
+      }
     } finally {
-      setState(() => loading = false);
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> _setRecommendation(String value) async {
+    try {
+      await admin.updateApplicationRecommendation(widget.applicationId, value);
+      if (!mounted) return;
+      setState(() {
+        candidateData = Map<String, dynamic>.from(candidateData!);
+        candidateData!['recommendation'] = value;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Recommendation set to $value')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to set recommendation: $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
     }
   }
 
   Future<void> downloadCV(
-      int applicationId, BuildContext context, String candidateName) async {
+    int applicationId,
+    BuildContext context,
+    String candidateName,
+  ) async {
     try {
       // 🔥 FIX: Always read token inside the function
       final jwtToken = await storage.read(key: "access_token");
@@ -205,7 +248,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
 
       final response = await http.get(
         Uri.parse(
-            '${ApiEndpoints.adminBase}/applications/$applicationId/download-cv'),
+          '${ApiEndpoints.adminBase}/applications/$applicationId/download-cv',
+        ),
         headers: {
           'Authorization': 'Bearer $jwtToken',
           'Content-Type': 'application/json',
@@ -220,14 +264,14 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
         return;
       }
 
-      final data = json.decode(response.body);
+      final data = jsonDecode(response.body);
       final cvUrl = data['cv_url'];
       final fullName = data['candidate_name'] ?? candidateName;
 
       if (cvUrl == null || cvUrl.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("CV URL is invalid")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("CV URL is invalid")));
         return;
       }
 
@@ -235,9 +279,9 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
         final uri = Uri.parse(cvUrl);
         await launchUrl(uri, mode: LaunchMode.externalApplication);
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Download started")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Download started")));
       } else {
         final dir = await getApplicationDocumentsDirectory();
         final savePath = "${dir.path}/cv_$fullName.pdf";
@@ -251,9 +295,9 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
         await OpenFile.open(savePath);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error downloading CV: $e")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error downloading CV: $e")));
     }
   }
 
@@ -284,11 +328,14 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
           ),
           body: loading
               ? const Center(
-                  child: CircularProgressIndicator(color: Colors.black87))
+                  child: CircularProgressIndicator(color: Colors.black87),
+                )
               : errorMessage != null
                   ? Center(
-                      child: Text(errorMessage!,
-                          style: const TextStyle(color: Colors.black87)),
+                      child: Text(
+                        errorMessage!,
+                        style: const TextStyle(color: Colors.black87),
+                      ),
                     )
                   : _buildTilesGrid(themeProvider),
         ),
@@ -305,8 +352,12 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _dashboardText(candidateData!['full_name'], 20, FontWeight.bold,
-                themeProvider),
+            _dashboardText(
+              candidateData!['full_name'],
+              20,
+              FontWeight.bold,
+              themeProvider,
+            ),
             const SizedBox(height: 6),
             _dashboardInfo("Email", candidateData!['email'], themeProvider),
             _dashboardInfo("Phone", candidateData!['phone'], themeProvider),
@@ -339,24 +390,26 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
                         fontFamily: 'Poppins',
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: _statusColor(candidateData!['status']
-                                ?.toString()
-                                .toLowerCase() ??
-                            'applied'),
+                        color: _statusColor(
+                          candidateData!['status']?.toString().toLowerCase() ??
+                              'applied',
+                        ),
                       ),
                       items: _classificationOptions
-                          .map((s) => DropdownMenuItem<String>(
-                                value: s,
-                                child: Text(
-                                  s[0].toUpperCase() + s.substring(1),
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: _statusColor(s),
-                                  ),
+                          .map(
+                            (s) => DropdownMenuItem<String>(
+                              value: s,
+                              child: Text(
+                                s[0].toUpperCase() + s.substring(1),
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: _statusColor(s),
                                 ),
-                              ))
+                              ),
+                            ),
+                          )
                           .toList(),
                       onChanged: (newStatus) async {
                         if (newStatus != null &&
@@ -364,8 +417,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
                                 candidateData!['status']
                                     ?.toString()
                                     .toLowerCase()) {
-                          await _updateApplicationStatus(
-                              widget.applicationId, newStatus);
+                          await _updateApplicationStatus(newStatus);
                         }
                       },
                     ),
@@ -382,7 +434,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
         topRightIcon: Icons.download_outlined,
         onTopRightTap: () {
           downloadCV(
-            candidateData!['candidate_id'],
+            widget.applicationId,
             context,
             candidateData!['full_name'] ?? "candidate",
           );
@@ -390,15 +442,20 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _dashboardInfo("CV Score", candidateData!['cv_score'].toString(),
-                themeProvider),
+            _dashboardInfo(
+              "CV Score",
+              candidateData!['cv_score'].toString(),
+              themeProvider,
+            ),
             const SizedBox(height: 8),
-            Text("Click top-right icon to download CV",
-                style: TextStyle(
-                    color: themeProvider.isDarkMode
-                        ? Colors.white70
-                        : Colors.black54,
-                    fontSize: 12)),
+            Text(
+              "Click top-right icon to download CV",
+              style: TextStyle(
+                color:
+                    themeProvider.isDarkMode ? Colors.white70 : Colors.black54,
+                fontSize: 12,
+              ),
+            ),
           ],
         ),
       ),
@@ -409,10 +466,16 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _dashboardInfo(
-                "Education", candidateData!['education'], themeProvider),
+              "Education",
+              candidateData!['education'],
+              themeProvider,
+            ),
             _dashboardInfo("Skills", candidateData!['skills'], themeProvider),
-            _dashboardInfo("Work Experience", candidateData!['work_experience'],
-                themeProvider),
+            _dashboardInfo(
+              "Work Experience",
+              candidateData!['work_experience'],
+              themeProvider,
+            ),
           ],
         ),
       ),
@@ -422,13 +485,24 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _dashboardInfo("Assessment Score",
-                candidateData!['assessment_score'].toString(), themeProvider),
-            _dashboardInfo("Assessment Recommendation",
-                candidateData!['assessment_recommendation'], themeProvider),
+            _dashboardInfo(
+              "Assessment Score",
+              candidateData!['assessment_score'].toString(),
+              themeProvider,
+            ),
+            _dashboardInfo(
+              "Assessment Recommendation",
+              candidateData!['assessment_recommendation'],
+              themeProvider,
+            ),
           ],
         ),
       ),
+      _buildCvMatchBreakdownTile(themeProvider),
+      _buildApplicationRecommendationTile(themeProvider),
+      _buildKnockoutTile(themeProvider),
+      _buildScoringBreakdownTile(themeProvider),
+      _buildTimelineTile(themeProvider),
       _buildFlatTile(
         themeProvider: themeProvider,
         icon: Icons.event_note_outlined,
@@ -437,22 +511,22 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => ScheduleInterviewPage(
-                candidateId: widget.candidateId,
-              ),
+              builder: (_) =>
+                  ScheduleInterviewPage(candidateId: widget.candidateId),
             ),
           ).then((_) => fetchAllData());
         },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Scheduled Interviews",
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: themeProvider.isDarkMode
-                        ? Colors.white
-                        : Colors.black87)),
+            Text(
+              "Scheduled Interviews",
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+              ),
+            ),
             const SizedBox(height: 8),
             ...interviews.map((i) {
               final scheduled = DateTime.parse(i['scheduled_time']);
@@ -464,23 +538,27 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
                         ? const Color(0xFF14131E)
                         : Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                     elevation: 3,
                     shadowColor: Colors.black26,
                     child: ListTile(
                       title: Text(
                         DateFormat.yMd().add_jm().format(scheduled),
                         style: TextStyle(
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87),
+                          color: themeProvider.isDarkMode
+                              ? Colors.white
+                              : Colors.black87,
+                        ),
                       ),
                       subtitle: Text(
-                          "Interviewer: ${i['hiring_manager_name'] ?? 'N/A'}",
-                          style: TextStyle(
-                              color: themeProvider.isDarkMode
-                                  ? Colors.white70
-                                  : Colors.black87)),
+                        "Interviewer: ${i['hiring_manager_name'] ?? 'N/A'}",
+                        style: TextStyle(
+                          color: themeProvider.isDarkMode
+                              ? Colors.white70
+                              : Colors.black87,
+                        ),
+                      ),
                       trailing: CustomButton(
                         text: "Cancel",
                         color: Colors.black87,
@@ -518,6 +596,289 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
     );
   }
 
+  Widget _buildCvMatchBreakdownTile(ThemeProvider themeProvider) {
+    final cvResult = candidateData!['cv_parser_result'];
+    if (cvResult == null || cvResult is! Map) {
+      return _buildFlatTile(
+        themeProvider: themeProvider,
+        icon: Icons.fact_check_outlined,
+        child: Text(
+          "CV match breakdown not available",
+          style: TextStyle(
+            fontSize: 14,
+            color: themeProvider.isDarkMode ? Colors.white70 : Colors.black54,
+          ),
+        ),
+      );
+    }
+    final map = Map<String, dynamic>.from(cvResult);
+    final missing = map['missing_skills'] is List
+        ? (map['missing_skills'] as List).cast<String>()
+        : <String>[];
+    final suggestions = map['suggestions'] is List
+        ? (map['suggestions'] as List).cast<String>()
+        : <String>[];
+    final matchScore = map['match_score'];
+    final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
+    return _buildFlatTile(
+      themeProvider: themeProvider,
+      icon: Icons.fact_check_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "CV match breakdown",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+          if (matchScore != null)
+            _dashboardInfo("Match score", matchScore.toString(), themeProvider),
+          if (missing.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              "Missing skills",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+            ),
+            ...missing.take(10).map(
+                  (s) => Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Text(
+                      "• $s",
+                      style: TextStyle(fontSize: 12, color: textColor),
+                    ),
+                  ),
+                ),
+            if (missing.length > 10)
+              Text(
+                "... and ${missing.length - 10} more",
+                style: TextStyle(fontSize: 11, color: textColor),
+              ),
+          ],
+          if (suggestions.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              "Suggestions",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: textColor,
+              ),
+            ),
+            ...suggestions.take(5).map(
+                  (s) => Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Text(
+                      "• $s",
+                      style: TextStyle(fontSize: 12, color: textColor),
+                    ),
+                  ),
+                ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildApplicationRecommendationTile(ThemeProvider themeProvider) {
+    final rec = (candidateData!['recommendation'] ?? '').toString();
+    final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
+    return _buildFlatTile(
+      themeProvider: themeProvider,
+      icon: Icons.how_to_vote_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Application recommendation",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+          const SizedBox(height: 6),
+          if (rec.isNotEmpty) _dashboardInfo("Current", rec, themeProvider),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: _recommendationOptions
+                .map(
+                  (opt) => ActionChip(
+                    label: Text(opt, style: const TextStyle(fontSize: 11)),
+                    onPressed: () => _setRecommendation(opt),
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKnockoutTile(ThemeProvider themeProvider) {
+    final violations = candidateData!['knockout_rule_violations'];
+    final list =
+        violations is List ? List<dynamic>.from(violations) : <dynamic>[];
+    final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
+    if (list.isEmpty) {
+      return _buildFlatTile(
+        themeProvider: themeProvider,
+        icon: Icons.rule_outlined,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Knockout / holds",
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: textColor,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text("None", style: TextStyle(fontSize: 14, color: textColor)),
+          ],
+        ),
+      );
+    }
+    return _buildFlatTile(
+      themeProvider: themeProvider,
+      icon: Icons.rule_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Knockout / holds",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+          const SizedBox(height: 6),
+          ...list.map(
+            (v) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                "• ${v is Map ? (v['reason'] ?? v['rule'] ?? v.toString()) : v}",
+                style: TextStyle(fontSize: 13, color: textColor),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScoringBreakdownTile(ThemeProvider themeProvider) {
+    final breakdown = candidateData!['scoring_breakdown'];
+    final overall = candidateData!['overall_score'];
+    final weightings = job != null && job!['weightings'] is Map
+        ? Map<String, dynamic>.from(job!['weightings'] as Map)
+        : <String, dynamic>{"cv": 60, "assessment": 40};
+    final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
+    final cvPct = weightings['cv'] ?? 60;
+    final assessPct = weightings['assessment'] ?? 40;
+    return _buildFlatTile(
+      themeProvider: themeProvider,
+      icon: Icons.pie_chart_outline,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Scoring breakdown",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+          const SizedBox(height: 6),
+          _dashboardInfo(
+            "Weights",
+            "CV $cvPct% · Assessment $assessPct%",
+            themeProvider,
+          ),
+          if (breakdown is Map) ...[
+            if (breakdown['cv'] != null)
+              _dashboardInfo(
+                "CV score",
+                breakdown['cv'].toString(),
+                themeProvider,
+              ),
+            if (breakdown['assessment'] != null)
+              _dashboardInfo(
+                "Assessment score",
+                breakdown['assessment'].toString(),
+                themeProvider,
+              ),
+          ],
+          if (overall != null)
+            _dashboardInfo(
+              "Overall",
+              overall is num
+                  ? (overall).toStringAsFixed(1)
+                  : overall.toString(),
+              themeProvider,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimelineTile(ThemeProvider themeProvider) {
+    final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
+    return _buildFlatTile(
+      themeProvider: themeProvider,
+      icon: Icons.timeline_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Stage timeline",
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if (timeline.isEmpty)
+            Text(
+              "No status changes recorded",
+              style: TextStyle(fontSize: 14, color: textColor),
+            )
+          else
+            ...timeline.take(10).map((e) {
+              final ts = e['timestamp']?.toString();
+              final actor = e['actor_name'] ?? 'Unknown';
+              final oldS = e['old_status'] ?? '';
+              final newS = e['new_status'] ?? '';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  "${ts != null && ts.length >= 16 ? ts.substring(0, 16).replaceAll('T', ' ') : ts} · $actor: $oldS → $newS",
+                  style: TextStyle(fontSize: 12, color: textColor),
+                ),
+              );
+            }),
+          if (timeline.length > 10)
+            Text(
+              "... and ${timeline.length - 10} more",
+              style: TextStyle(fontSize: 11, color: textColor),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFlatTile({
     required ThemeProvider themeProvider,
     required Widget child,
@@ -536,8 +897,9 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
                 .withValues(alpha: 0.9),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-                color: themeProvider.isDarkMode ? Colors.white24 : Colors.white,
-                width: 1.5),
+              color: themeProvider.isDarkMode ? Colors.white24 : Colors.white,
+              width: 1.5,
+            ),
             boxShadow: const [
               BoxShadow(
                 color: Colors.black26,
@@ -553,11 +915,13 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
               if (icon != null)
                 Row(
                   children: [
-                    Icon(icon,
-                        color: themeProvider.isDarkMode
-                            ? Colors.white
-                            : Colors.black87,
-                        size: 28),
+                    Icon(
+                      icon,
+                      color: themeProvider.isDarkMode
+                          ? Colors.white
+                          : Colors.black87,
+                      size: 28,
+                    ),
                     const SizedBox(width: 8),
                     Expanded(child: child),
                   ],
@@ -573,42 +937,58 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
             right: 12,
             child: GestureDetector(
               onTap: onTopRightTap,
-              child: Icon(topRightIcon,
-                  color:
-                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
-                  size: 24),
+              child: Icon(
+                topRightIcon,
+                color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                size: 24,
+              ),
             ),
           ),
       ],
     );
   }
 
-  Widget _dashboardText(String text, double size, FontWeight weight,
-      ThemeProvider themeProvider) {
-    return Text(text,
-        style: TextStyle(
-            fontSize: size,
-            fontWeight: weight,
-            color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
-            shadows: [
-              Shadow(
-                  color:
-                      themeProvider.isDarkMode ? Colors.black : Colors.black26,
-                  blurRadius: 4,
-                  offset: const Offset(2, 2))
-            ]));
+  Widget _dashboardText(
+    String text,
+    double size,
+    FontWeight weight,
+    ThemeProvider themeProvider,
+  ) {
+    return Text(
+      text,
+      style: TextStyle(
+        fontSize: size,
+        fontWeight: weight,
+        color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+        shadows: [
+          Shadow(
+            color: themeProvider.isDarkMode ? Colors.black : Colors.black26,
+            blurRadius: 4,
+            offset: const Offset(2, 2),
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _dashboardInfo(String label, String value, ThemeProvider themeProvider,
-      {bool bold = false, Color? color}) {
+  Widget _dashboardInfo(
+    String label,
+    String value,
+    ThemeProvider themeProvider, {
+    bool bold = false,
+    Color? color,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Text("$label: $value",
-          style: TextStyle(
-              fontSize: 14,
-              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
-              color: color ??
-                  (themeProvider.isDarkMode ? Colors.white : Colors.black87))),
+      child: Text(
+        "$label: $value",
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+          color: color ??
+              (themeProvider.isDarkMode ? Colors.white : Colors.black87),
+        ),
+      ),
     );
   }
 
@@ -639,26 +1019,46 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
               child: Text(
                 "Admin Panel",
                 style: TextStyle(
-                    color: themeProvider.isDarkMode
-                        ? Colors.white
-                        : Colors.black87,
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold),
+                  color:
+                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-            drawerItem("Dashboard", "dashboard", Icons.dashboard_outlined,
-                themeProvider),
-            drawerItem("Jobs", "jobs", Icons.work_outline, themeProvider),
-            drawerItem("Candidates", "candidates", Icons.people_alt_outlined,
-                themeProvider),
             drawerItem(
-                "Interviews", "interviews", Icons.event_note, themeProvider),
-            drawerItem("CV Reviews", "cv_reviews", Icons.assignment_outlined,
-                themeProvider),
+              "Dashboard",
+              "dashboard",
+              Icons.dashboard_outlined,
+              themeProvider,
+            ),
+            drawerItem("Jobs", "jobs", Icons.work_outline, themeProvider),
+            drawerItem(
+              "Candidates",
+              "candidates",
+              Icons.people_alt_outlined,
+              themeProvider,
+            ),
+            drawerItem(
+              "Interviews",
+              "interviews",
+              Icons.event_note,
+              themeProvider,
+            ),
+            drawerItem(
+              "CV Reviews",
+              "cv_reviews",
+              Icons.assignment_outlined,
+              themeProvider,
+            ),
             drawerItem("Audits", "audits", Icons.history, themeProvider),
             drawerItem("Role Access", "roles", Icons.security, themeProvider),
-            drawerItem("Notifications", "notifications",
-                Icons.notifications_active_outlined, themeProvider),
+            drawerItem(
+              "Notifications",
+              "notifications",
+              Icons.notifications_active_outlined,
+              themeProvider,
+            ),
           ],
         ),
       ),
@@ -666,19 +1066,26 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
   }
 
   Widget drawerItem(
-      String title, String screen, IconData icon, ThemeProvider themeProvider) {
+    String title,
+    String screen,
+    IconData icon,
+    ThemeProvider themeProvider,
+  ) {
     final bool selected = currentScreen == screen;
     return ListTile(
-      leading: Icon(icon,
-          color: themeProvider.isDarkMode ? Colors.white : Colors.black87),
-      title: Text(title,
-          style: TextStyle(
-              color: selected
-                  ? (themeProvider.isDarkMode ? Colors.white : Colors.black87)
-                  : (themeProvider.isDarkMode
-                      ? Colors.white70
-                      : Colors.black54),
-              fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
+      leading: Icon(
+        icon,
+        color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+      ),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: selected
+              ? (themeProvider.isDarkMode ? Colors.white : Colors.black87)
+              : (themeProvider.isDarkMode ? Colors.white70 : Colors.black54),
+          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
       onTap: () {
         setState(() => currentScreen = screen);
         Navigator.pop(context);
@@ -689,16 +1096,20 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
   Future<void> cancelInterview(int interviewId) async {
     try {
       await admin.cancelInterview(interviewId);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Interview cancelled")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Interview cancelled")));
 
-      final interviewData =
-          await admin.getCandidateInterviews(widget.candidateId);
+      final interviewData = await admin.getCandidateInterviews(
+        widget.candidateId,
+      );
       setState(
-          () => interviews = List<Map<String, dynamic>>.from(interviewData));
+        () => interviews = List<Map<String, dynamic>>.from(interviewData),
+      );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error cancelling interview: $e")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error cancelling interview: $e")));
     }
   }
 }
