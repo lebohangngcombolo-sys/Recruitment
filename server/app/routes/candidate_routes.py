@@ -7,7 +7,7 @@ from app.extensions import bcrypt
 import cloudinary.uploader
 import cloudinary.utils
 from app.models import (
-    User, Candidate, Requisition, Application, AssessmentResult, Notification, AuditLog, CVAnalysis, Interview
+    User, Candidate, Requisition, Application, AssessmentResult, Notification, AuditLog, CVAnalysis, Interview, InterviewSlot
 )
 from datetime import datetime
 from werkzeug.utils import secure_filename
@@ -50,6 +50,40 @@ def _cv_analysis_state_for_application(application):
     if has_parser_result:
         return "completed"
     return "processing"
+
+
+def _next_scheduled_interview_for_application(application):
+    """Return the next upcoming (or most recent) scheduled interview for this application for candidate display."""
+    if not application or not getattr(application, "interviews", None):
+        return None
+    now = datetime.utcnow()
+    upcoming = [
+        i for i in application.interviews
+        if i.scheduled_time and i.scheduled_time >= now
+        and (i.status or "scheduled") in ("scheduled", "confirmed")
+    ]
+    if upcoming:
+        i = min(upcoming, key=lambda x: x.scheduled_time)
+        return {
+            "id": i.id,
+            "scheduled_time": i.scheduled_time.isoformat(),
+            "interview_type": i.interview_type,
+            "meeting_link": i.meeting_link,
+            "status": i.status or "scheduled",
+        }
+    # Fallback: most recent scheduled interview (for "Interview" tab display)
+    recent = [i for i in application.interviews if i.scheduled_time]
+    if not recent:
+        return None
+    i = max(recent, key=lambda x: x.scheduled_time)
+    return {
+        "id": i.id,
+        "scheduled_time": i.scheduled_time.isoformat(),
+        "interview_type": i.interview_type,
+        "meeting_link": i.meeting_link,
+        "status": i.status or "scheduled",
+    }
+
 
 # ----------------- APPLY FOR JOB -----------------
 @candidate_bp.route("/apply/<int:job_id>", methods=["POST"])
@@ -343,17 +377,33 @@ def upload_resume(application_id):
         db.session.commit()
 
         try:
-            # import task lazily to avoid circular import during app initialization
-            from app.tasks.cv_tasks import analyze_cv_task
-            analyze_cv_task.delay(cv_analysis.id, application.id)
-        except Exception:
-            current_app.logger.exception("Failed to enqueue CV analysis task")
+            # Send to external analysis service
+            from app.services.analysis_service_client import AnalysisServiceClient
+            # Ensure stream is reset for the external service upload
+            try:
+                file.stream.seek(0)
+            except Exception:
+                pass
+            external_result = AnalysisServiceClient.submit_cv(
+                file_storage=file,
+                filename=filename,
+                job_description=JobService.build_job_spec_for_cv(job),
+            )
+            cv_analysis.external_analysis_id = external_result.get('analysis_id')
+            cv_analysis.status = 'submitted'
+            db.session.commit()
+        except Exception as e:
+            cv_analysis.status = 'failed'
+            cv_analysis.result = {"error": str(e)}
+            db.session.commit()
+            current_app.logger.exception("Failed to submit CV to analysis service")
+            return jsonify({"error": "Failed to submit CV for analysis"}), 500
 
         return jsonify({
-            "message": "Resume uploaded; analysis queued",
+            "message": "Resume uploaded and submitted for analysis",
             "analysis_id": cv_analysis.id,
             "resume_url": resume_url,
-            "status": "queued"
+            "status": "submitted"
         }), 202
 
     except Exception as e:
@@ -495,6 +545,7 @@ def get_applications():
                 "interview_status": app.interview_status,
                 "interview_feedback_score": app.interview_feedback_score,
                 "assessment_result": assessment_result.to_dict() if assessment_result else None,
+                "scheduled_interview": _next_scheduled_interview_for_application(app),
             })
             
         # Audit log
@@ -508,6 +559,129 @@ def get_applications():
         return jsonify(result)
     except Exception as e:
         current_app.logger.error(f"Get applications error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+# ----------------- SELF-SERVICE: INTERVIEW SLOTS (pick a slot) -----------------
+@candidate_bp.route("/applications/<int:application_id>/interview-slots", methods=["GET"])
+@role_required(["candidate"])
+def get_application_interview_slots(application_id):
+    """Get available interview slots for this application (same job / HM). Candidate must own the application."""
+    try:
+        application = Application.query.get_or_404(application_id)
+        candidate = Candidate.query.filter_by(user_id=get_jwt_identity()).first_or_404()
+        if application.candidate_id != candidate.id:
+            return jsonify({"error": "Unauthorized"}), 403
+        job = application.requisition
+        if not job:
+            return jsonify({"error": "Job not found"}), 404
+        hm_id = job.created_by
+        if not hm_id:
+            return jsonify({"slots": []}), 200
+        now = datetime.utcnow()
+        slots = InterviewSlot.query.filter(
+            InterviewSlot.hiring_manager_id == hm_id,
+            InterviewSlot.interview_id.is_(None),
+            InterviewSlot.start_time >= now,
+            (InterviewSlot.requisition_id == job.id) | (InterviewSlot.requisition_id.is_(None)),
+        ).order_by(InterviewSlot.start_time.asc()).all()
+        return jsonify({"slots": [s.to_dict() for s in slots]}), 200
+    except Exception as e:
+        current_app.logger.error(f"Get interview slots error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@candidate_bp.route("/applications/<int:application_id>/book-slot", methods=["POST"])
+@role_required(["candidate"])
+def book_interview_slot(application_id):
+    """Candidate self-service: book an available slot. Creates interview and updates application status."""
+    try:
+        application = Application.query.get_or_404(application_id)
+        candidate = Candidate.query.filter_by(user_id=get_jwt_identity()).first_or_404()
+        if application.candidate_id != candidate.id:
+            return jsonify({"error": "Unauthorized"}), 403
+        data = request.get_json() or {}
+        slot_id = data.get("slot_id")
+        if not slot_id:
+            return jsonify({"error": "slot_id required"}), 400
+        slot = InterviewSlot.query.get_or_404(slot_id)
+        if slot.interview_id is not None:
+            return jsonify({"error": "This slot is no longer available"}), 400
+        job = application.requisition
+        if not job or (slot.requisition_id is not None and slot.requisition_id != job.id):
+            return jsonify({"error": "Slot does not apply to this application"}), 400
+        if slot.hiring_manager_id != job.created_by:
+            return jsonify({"error": "Slot does not apply to this application"}), 400
+        if slot.start_time < datetime.utcnow():
+            return jsonify({"error": "This slot has passed"}), 400
+
+        interview = Interview(
+            candidate_id=candidate.id,
+            application_id=application.id,
+            hiring_manager_id=slot.hiring_manager_id,
+            scheduled_time=slot.start_time,
+            interview_type=slot.interview_type or "Online",
+            meeting_link=slot.meeting_link,
+        )
+        db.session.add(interview)
+        db.session.flush()
+        slot.interview_id = interview.id
+        if application.status not in ("hired", "rejected"):
+            application.status = "interview"
+        application.interview_status = "scheduled"
+        application.last_interview_date = slot.start_time
+
+        notif = Notification(
+            user_id=candidate.user_id,
+            message=f"Your interview has been scheduled for {slot.start_time.strftime('%Y-%m-%d %H:%M')}.",
+            type="interview",
+            interview_id=interview.id,
+        )
+        db.session.add(notif)
+        candidate_name = candidate.full_name or (
+            candidate.user.email if candidate.user else "Candidate"
+        )
+        job_title = (
+            application.requisition.title
+            if application.requisition and application.requisition.title
+            else "position"
+        )
+        db.session.add(Notification(
+            user_id=slot.hiring_manager_id,
+            message=(
+                f"{candidate_name} booked an interview for {job_title} on "
+                f"{slot.start_time.strftime('%d %b %Y')} at {slot.start_time.strftime('%H:%M')}."
+            ),
+            type="interview",
+            interview_id=interview.id,
+        ))
+        db.session.commit()
+
+        try:
+            from app.services.email_service import EmailService
+            EmailService.send_interview_invitation(
+                email=candidate.user.email if candidate.user else None,
+                candidate_name=candidate.full_name,
+                interview_date=slot.start_time.strftime("%A, %d %B %Y at %H:%M"),
+                interview_type=slot.interview_type or "Online",
+                meeting_link=slot.meeting_link,
+                calendar_link=None,
+            )
+        except Exception as e:
+            current_app.logger.warning(f"Book slot email failed: {e}")
+
+        return jsonify({
+            "message": "Interview scheduled successfully.",
+            "interview": {
+                "id": interview.id,
+                "scheduled_time": interview.scheduled_time.isoformat(),
+                "interview_type": interview.interview_type,
+                "meeting_link": interview.meeting_link,
+            },
+        }), 201
+    except Exception as e:
+        current_app.logger.error(f"Book slot error: {e}", exc_info=True)
+        db.session.rollback()
         return jsonify({"error": "Internal server error"}), 500
 
 

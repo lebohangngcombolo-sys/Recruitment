@@ -2,7 +2,7 @@ name: khono_recruite
 description: A recruitment app with modern red & white UI and authentication flow.
 publish_to: "none"
 
-version: 1.0.1+2
+version: 1.0.0+1
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -19,6 +19,7 @@ dependencies:
   percent_indicator: ^4.2.5
   dio: ^5.9.0
   open_file: ^3.5.10
+  path_provider: ^2.1.0
   dotted_border: ^3.1.0
   url_launcher: ^6.3.2
   syncfusion_flutter_calendar: ^32.1.23

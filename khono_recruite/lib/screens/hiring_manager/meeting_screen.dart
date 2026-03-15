@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../constants/app_colors.dart';
 import '../../../providers/theme_provider.dart';
 import '../../services/admin_service.dart';
+import 'interview_slots_screen.dart';
 
 class HMMeetingsPage extends StatefulWidget {
   const HMMeetingsPage({super.key});
@@ -20,11 +21,61 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
   bool _isLoading = true;
   int _selectedTab = 0; // 0: Upcoming, 1: Past, 2: All
   String _searchQuery = '';
+  bool _notifyStatusChanges = true;
+  bool _notifyUpcomingInterviews = true;
+  bool _prefsLoading = false;
 
   @override
   void initState() {
     super.initState();
     _loadMeetings();
+    _loadNotificationPreferences();
+  }
+
+  Future<void> _loadNotificationPreferences() async {
+    setState(() => _prefsLoading = true);
+    try {
+      final prefs = await _apiService.getNotificationPreferences();
+      if (!mounted) return;
+      setState(() {
+        _notifyStatusChanges = prefs['status_changes'] as bool? ?? true;
+        _notifyUpcomingInterviews =
+            prefs['upcoming_interviews'] as bool? ?? true;
+      });
+    } catch (_) {
+      // keep defaults
+    } finally {
+      if (mounted) setState(() => _prefsLoading = false);
+    }
+  }
+
+  Future<void> _updateNotificationPrefs({
+    bool? statusChanges,
+    bool? upcomingInterviews,
+  }) async {
+    try {
+      await _apiService.updateNotificationPreferences(
+        statusChanges: statusChanges ?? _notifyStatusChanges,
+        upcomingInterviews: upcomingInterviews ?? _notifyUpcomingInterviews,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (statusChanges != null) _notifyStatusChanges = statusChanges;
+        if (upcomingInterviews != null)
+          _notifyUpcomingInterviews = upcomingInterviews;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Notification preferences saved')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to save: $e'),
+          backgroundColor: AppColors.primaryRed,
+        ),
+      );
+    }
   }
 
   Future<void> _loadMeetings() async {
@@ -54,8 +105,9 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
         debugPrint("Fetched ${meetingsData.length} meetings from API");
 
       // Convert to Meeting objects
-      final loadedMeetings =
-          meetingsData.map((meeting) => Meeting.fromJson(meeting)).toList();
+      final loadedMeetings = meetingsData
+          .map((meeting) => Meeting.fromJson(meeting))
+          .toList();
 
       // Optional: filter manually by start/end time to ensure upcoming/past correctness
       List<Meeting> filteredMeetings;
@@ -81,8 +133,10 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-              Text('Failed to load meetings: $e', style: GoogleFonts.inter()),
+          content: Text(
+            'Failed to load meetings: $e',
+            style: GoogleFonts.inter(),
+          ),
           backgroundColor: AppColors.primaryRed,
         ),
       );
@@ -118,7 +172,11 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(themeProvider),
-              const SizedBox(height: 20),
+              const SizedBox(height: 12),
+              _buildInterviewSlotsAndBookingLinks(themeProvider),
+              const SizedBox(height: 12),
+              _buildNotificationPreferences(themeProvider),
+              const SizedBox(height: 16),
               Expanded(child: _buildMeetingsSection(themeProvider)),
             ],
           ),
@@ -152,12 +210,139 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
     );
   }
 
+  Widget _buildInterviewSlotsAndBookingLinks(ThemeProvider themeProvider) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        ActionChip(
+          avatar: const Icon(
+            Icons.schedule,
+            size: 18,
+            color: AppColors.primaryRed,
+          ),
+          label: Text('Interview slots', style: GoogleFonts.inter()),
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const InterviewSlotsPage()),
+          ),
+        ),
+        ActionChip(
+          avatar: const Icon(
+            Icons.book_online,
+            size: 18,
+            color: AppColors.primaryRed,
+          ),
+          label: Text('Self-service booking', style: GoogleFonts.inter()),
+          onPressed: () => showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text('Self-service booking', style: GoogleFonts.poppins()),
+              content: Text(
+                'Candidates can book interview times from the link sent in their interview email. '
+                'Add available slots in "Interview slots" so they can choose a time.',
+                style: GoogleFonts.inter(),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNotificationPreferences(ThemeProvider themeProvider) {
+    if (_prefsLoading) {
+      return const SizedBox(
+        height: 32,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: themeProvider.isDarkMode
+            ? const Color(0xFF14131E)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: themeProvider.isDarkMode
+              ? Colors.grey.shade800
+              : Colors.grey.shade300,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Notifications',
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w600,
+              color: themeProvider.isDarkMode
+                  ? Colors.white
+                  : AppColors.textDark,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Status changes (e.g. interview scheduled, rescheduled)',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: themeProvider.isDarkMode
+                        ? Colors.grey.shade400
+                        : AppColors.textGrey,
+                  ),
+                ),
+              ),
+              Switch(
+                value: _notifyStatusChanges,
+                onChanged: (v) => _updateNotificationPrefs(statusChanges: v),
+                activeColor: AppColors.primaryRed,
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Upcoming interviews (reminders)',
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: themeProvider.isDarkMode
+                        ? Colors.grey.shade400
+                        : AppColors.textGrey,
+                  ),
+                ),
+              ),
+              Switch(
+                value: _notifyUpcomingInterviews,
+                onChanged: (v) =>
+                    _updateNotificationPrefs(upcomingInterviews: v),
+                activeColor: AppColors.primaryRed,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMeetingsSection(ThemeProvider themeProvider) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color:
-            themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
+        color: themeProvider.isDarkMode
+            ? const Color(0xFF14131E)
+            : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -190,14 +375,17 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                     hintText: 'Search meetings...',
                     prefixIcon: const Icon(Icons.search, size: 18),
                     border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: BorderSide.none),
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
                     fillColor: themeProvider.isDarkMode
                         ? Colors.grey.shade800
                         : Colors.grey.shade100,
                     filled: true,
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 0,
+                    ),
                   ),
                 ),
               ),
@@ -208,16 +396,19 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _meetings.isEmpty
-                    ? Center(
-                        child: Text('No meetings found',
-                            style: GoogleFonts.inter()))
-                    : ListView.builder(
-                        itemCount: _meetings.length,
-                        itemBuilder: (context, index) {
-                          final meeting = _meetings[index];
-                          return _buildMeetingCard(meeting, themeProvider);
-                        },
-                      ),
+                ? Center(
+                    child: Text(
+                      'No meetings found',
+                      style: GoogleFonts.inter(),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: _meetings.length,
+                    itemBuilder: (context, index) {
+                      final meeting = _meetings[index];
+                      return _buildMeetingCard(meeting, themeProvider);
+                    },
+                  ),
           ),
         ],
       ),
@@ -243,8 +434,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
             color: isSelected
                 ? Colors.white
                 : themeProvider.isDarkMode
-                    ? Colors.grey.shade400
-                    : AppColors.textGrey,
+                ? Colors.grey.shade400
+                : AppColors.textGrey,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -256,8 +447,9 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
     final isPast = meeting.endTime.isBefore(DateTime.now());
     final isCancelled = meeting.cancelled;
 
-    final dateText =
-        DateFormat('MMM dd, yyyy – hh:mm a').format(meeting.startTime);
+    final dateText = DateFormat(
+      'MMM dd, yyyy – hh:mm a',
+    ).format(meeting.startTime);
     final organizerLabel = meeting.organizerName.isNotEmpty
         ? ' • Organizer: ${meeting.organizerName}'
         : '';
@@ -279,16 +471,19 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
           children: [
             if (!isCancelled && !isPast)
               IconButton(
-                  onPressed: () => _showMeetingForm(meeting: meeting),
-                  icon: Icon(Icons.edit, color: AppColors.primaryRed)),
+                onPressed: () => _showMeetingForm(meeting: meeting),
+                icon: Icon(Icons.edit, color: AppColors.primaryRed),
+              ),
             if (!isCancelled && !isPast)
               IconButton(
-                  onPressed: () => _cancelMeeting(meeting),
-                  icon: const Icon(Icons.cancel, color: Colors.orange)),
+                onPressed: () => _cancelMeeting(meeting),
+                icon: const Icon(Icons.cancel, color: Colors.orange),
+              ),
             if (isCancelled)
               IconButton(
-                  onPressed: () => _deleteMeeting(meeting),
-                  icon: const Icon(Icons.delete, color: Colors.red)),
+                onPressed: () => _deleteMeeting(meeting),
+                icon: const Icon(Icons.delete, color: Colors.red),
+              ),
           ],
         ),
         onTap: () => _showMeetingDetailsDialog(meeting),
@@ -297,14 +492,18 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
   }
 
   void _showMeetingForm({Meeting? meeting}) {
-    final titleController =
-        TextEditingController(text: meeting != null ? meeting.title : '');
-    final descController =
-        TextEditingController(text: meeting != null ? meeting.description : '');
-    final linkController =
-        TextEditingController(text: meeting != null ? meeting.meetingLink : '');
-    final locationController =
-        TextEditingController(text: meeting != null ? meeting.location : '');
+    final titleController = TextEditingController(
+      text: meeting != null ? meeting.title : '',
+    );
+    final descController = TextEditingController(
+      text: meeting != null ? meeting.description : '',
+    );
+    final linkController = TextEditingController(
+      text: meeting != null ? meeting.meetingLink : '',
+    );
+    final locationController = TextEditingController(
+      text: meeting != null ? meeting.location : '',
+    );
 
     // Initialize with current time + 1 hour for new meetings, or existing times for edits
     final now = DateTime.now();
@@ -320,30 +519,34 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: Text(meeting != null ? 'Edit Meeting' : 'Create Meeting',
-              style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+          title: Text(
+            meeting != null ? 'Edit Meeting' : 'Create Meeting',
+            style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+          ),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
-                    controller: titleController,
-                    decoration: const InputDecoration(labelText: 'Title *')),
+                  controller: titleController,
+                  decoration: const InputDecoration(labelText: 'Title *'),
+                ),
                 const SizedBox(height: 12),
                 TextField(
-                    controller: descController,
-                    maxLines: 3,
-                    decoration:
-                        const InputDecoration(labelText: 'Description')),
+                  controller: descController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: 'Description'),
+                ),
                 const SizedBox(height: 12),
                 TextField(
-                    controller: linkController,
-                    decoration:
-                        const InputDecoration(labelText: 'Meeting Link')),
+                  controller: linkController,
+                  decoration: const InputDecoration(labelText: 'Meeting Link'),
+                ),
                 const SizedBox(height: 12),
                 TextField(
-                    controller: locationController,
-                    decoration: const InputDecoration(labelText: 'Location')),
+                  controller: locationController,
+                  decoration: const InputDecoration(labelText: 'Location'),
+                ),
                 const SizedBox(height: 16),
                 // Start Date & Time
                 Row(
@@ -360,8 +563,9 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                           if (date != null) {
                             final time = await showTimePicker(
                               context: context,
-                              initialTime:
-                                  TimeOfDay.fromDateTime(startTime ?? now),
+                              initialTime: TimeOfDay.fromDateTime(
+                                startTime ?? now,
+                              ),
                             );
                             if (time != null) {
                               setState(() {
@@ -375,8 +579,9 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                                 // Auto-adjust end time if it's before start time
                                 if (endTime == null ||
                                     endTime!.isBefore(startTime!)) {
-                                  endTime =
-                                      startTime!.add(const Duration(hours: 1));
+                                  endTime = startTime!.add(
+                                    const Duration(hours: 1),
+                                  );
                                 }
                               });
                             }
@@ -409,7 +614,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                             final time = await showTimePicker(
                               context: context,
                               initialTime: TimeOfDay.fromDateTime(
-                                  endTime ?? (startTime ?? now)),
+                                endTime ?? (startTime ?? now),
+                              ),
                             );
                             if (time != null) {
                               setState(() {
@@ -439,8 +645,9 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
           ),
           actions: [
             TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel')),
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
             ElevatedButton(
               onPressed: () async {
                 if (titleController.text.trim().isEmpty) {
@@ -453,7 +660,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                 if (startTime == null || endTime == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                        content: Text('Start and end times are required')),
+                      content: Text('Start and end times are required'),
+                    ),
                   );
                   return;
                 }
@@ -462,7 +670,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                     endTime!.isAtSameMomentAs(startTime!)) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                        content: Text('End time must be after start time')),
+                      content: Text('End time must be after start time'),
+                    ),
                   );
                   return;
                 }
@@ -470,7 +679,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                 if (startTime!.isBefore(DateTime.now())) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                        content: Text('Start time cannot be in the past')),
+                      content: Text('Start time cannot be in the past'),
+                    ),
                   );
                   return;
                 }
@@ -498,10 +708,15 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                   Navigator.pop(context);
                   await _loadMeetings();
                   if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(meeting == null
-                          ? 'Meeting created successfully'
-                          : 'Meeting updated successfully')));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        meeting == null
+                            ? 'Meeting created successfully'
+                            : 'Meeting updated successfully',
+                      ),
+                    ),
+                  );
                 } catch (e) {
                   if (!mounted) return;
                   String errorMessage = 'Failed to create meeting';
@@ -534,12 +749,14 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
       await _apiService.cancelMeeting(meeting.id);
       await _loadMeetings();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Meeting cancelled')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Meeting cancelled')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Error: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
@@ -548,40 +765,44 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
       await _apiService.deleteMeeting(meeting.id);
       await _loadMeetings();
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Meeting deleted')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Meeting deleted')));
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Error: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
 
   void _showMeetingDetailsDialog(Meeting meeting) {
     showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-              title: Text(meeting.title),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (meeting.organizerName.isNotEmpty)
-                    Text('Organizer: ${meeting.organizerName}'),
-                  Text('Description: ${meeting.description}'),
-                  Text('Location: ${meeting.location}'),
-                  Text('Start: ${meeting.startTime}'),
-                  Text('End: ${meeting.endTime}'),
-                  Text('Link: ${meeting.meetingLink}'),
-                  Text('Participants: ${meeting.participants.join(", ")}'),
-                ],
-              ),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'))
-              ],
-            ));
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(meeting.title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (meeting.organizerName.isNotEmpty)
+              Text('Organizer: ${meeting.organizerName}'),
+            Text('Description: ${meeting.description}'),
+            Text('Location: ${meeting.location}'),
+            Text('Start: ${meeting.startTime}'),
+            Text('End: ${meeting.endTime}'),
+            Text('Link: ${meeting.meetingLink}'),
+            Text('Participants: ${meeting.participants.join(", ")}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -616,8 +837,9 @@ class Meeting {
       final organizer = json['organizer'];
       if (organizer is Map<String, dynamic>) {
         final profile = organizer['profile'] as Map<String, dynamic>? ?? {};
-        final fullName =
-            (profile['full_name'] ?? profile['name'])?.toString().trim();
+        final fullName = (profile['full_name'] ?? profile['name'])
+            ?.toString()
+            .trim();
         final email = (organizer['email'] ?? '').toString().trim();
         if (fullName != null && fullName.isNotEmpty) {
           organizerName = fullName;
@@ -634,7 +856,8 @@ class Meeting {
         endTime: DateTime.parse(json['end_time']),
         participants: json['participants'] != null
             ? List<String>.from(
-                (json['participants'] as List).map((p) => p.toString()))
+                (json['participants'] as List).map((p) => p.toString()),
+              )
             : [],
         meetingLink: json['meeting_link']?.toString() ?? '',
         location: json['location']?.toString() ?? '',

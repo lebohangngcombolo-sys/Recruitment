@@ -28,7 +28,7 @@ def ensure_transition(current, target):
 
 # ---------------- CREATE / UPDATE OFFERS ----------------
 @offer_bp.route("/", methods=["POST"])
-@role_required("admin")
+@role_required(["admin", "hiring_manager"])
 @audit_action("Drafted offer")
 def draft_offer():
     data = request.json
@@ -142,31 +142,52 @@ def expire_offer(offer_id):
     db.session.commit()
     return jsonify(offer.to_dict()), 200
 
+def _enrich_offer_dict(offer):
+    """Add candidate_name and job_title from application for list/detail views."""
+    d = offer.to_dict()
+    if offer.application:
+        if offer.application.candidate and hasattr(offer.application.candidate, "full_name"):
+            d["candidate_name"] = offer.application.candidate.full_name
+        elif offer.application.candidate and getattr(offer.application.candidate, "user", None):
+            profile = getattr(offer.application.candidate.user, "profile", None) or {}
+            fn = profile.get("first_name", "")
+            ln = profile.get("last_name", "")
+            d["candidate_name"] = f"{fn} {ln}".strip() or None
+        else:
+            d["candidate_name"] = None
+        req = getattr(offer.application, "requisition", None)
+        d["job_title"] = req.title if req else None
+    else:
+        d["candidate_name"] = None
+        d["job_title"] = None
+    return d
+
+
 # ---------------- GET OFFERS ----------------
 @offer_bp.route("/", methods=["GET"])
 @role_required(["admin", "hr", "hiring_manager"])
 def get_offers():
-    status = request.args.get("status", "").lower()  # normalize to lowercase
+    status = request.args.get("status", "").strip().lower()
+    if status == "all":
+        status = ""
     query = Offer.query
 
-    # Filter by status if provided
+    claims = get_jwt()
+    role = (claims.get("role") or "").lower()
+
+    # Apply status filter: explicit param or role default when "all"
     if status:
         try:
             query = query.filter_by(status=OfferStatus(status))
         except ValueError:
             return jsonify({"error": f"Invalid status: {status}"}), 400
-
-    # Role-based filtering
-    claims = get_jwt()
-    role = claims.get("role", "")
-
-    if role == "hiring_manager":
-        query = query.filter_by(status=OfferStatus.DRAFT)
-    elif role == "hr":
-        query = query.filter_by(status=OfferStatus.REVIEWED)
+    else:
+        # When no status (e.g. "all"): admin and HM see all; HR sees review queue (reviewed)
+        if role == "hr":
+            query = query.filter_by(status=OfferStatus.REVIEWED)
 
     offers = query.all()
-    return jsonify([offer.to_dict() for offer in offers]), 200
+    return jsonify([_enrich_offer_dict(offer) for offer in offers]), 200
 
 
 @offer_bp.route("/<int:offer_id>", methods=["GET"])
@@ -182,7 +203,7 @@ def get_offer(offer_id):
         if offer.application.candidate.user_id != current_user_id:
             return jsonify({"error": "Unauthorized"}), 403
 
-    return jsonify(offer.to_dict()), 200
+    return jsonify(_enrich_offer_dict(offer)), 200
 
 # ---------------- CANDIDATE OFFERS ----------------
 @offer_bp.route("/candidate/<int:candidate_id>", methods=["GET"])
