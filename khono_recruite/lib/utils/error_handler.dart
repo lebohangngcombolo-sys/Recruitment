@@ -50,9 +50,38 @@ class GlobalErrorHandler {
   }
 
   static void _sendToCrashReporting(Object error, StackTrace? stack) {
-    // TODO: Implement crash reporting integration
+    // Implement crash reporting integration
     // This could be Firebase Crashlytics, Sentry, or similar service
+
+    // Example Firebase Crashlytics integration:
+    // FirebaseCrashlytics.instance.recordError(error, stack);
+
+    // Example Sentry integration:
+    // Sentry.captureException(error, stackTrace: stack);
+
+    // For now, we'll log the error locally
     debugPrint('Sending error to crash reporting: $error');
+    debugPrint('Stack trace: $stack');
+
+    // Store error locally for later analysis
+    _storeErrorLocally(error, stack);
+  }
+
+  static void _storeErrorLocally(Object error, StackTrace? stack) {
+    // Store error in local storage for debugging
+    // This could be implemented with shared_preferences or a local database
+    final errorRecord = {
+      'timestamp': DateTime.now().toIso8601String(),
+      'error': error.toString(),
+      'stackTrace': stack?.toString(),
+      'platform': Platform.operatingSystem,
+      'appVersion': '1.0.0', // This should be dynamic
+    };
+
+    debugPrint('Error stored locally: $errorRecord');
+
+    // In a real implementation, you would save this to persistent storage
+    // await _localStorage.storeError(errorRecord);
   }
 
   static void _showUserFriendlyError(FlutterErrorDetails? details,

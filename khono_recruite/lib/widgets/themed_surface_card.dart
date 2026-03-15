@@ -141,7 +141,7 @@ class ThemedStatCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
               ],
-              Expanded(
+              Flexible(
                 child: Text(
                   title,
                   style: TextStyle(

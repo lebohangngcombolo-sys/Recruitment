@@ -2609,7 +2609,7 @@ class _JobFormDialogState extends State<JobFormDialog>
                               Text(
                                 "Create custom questions",
                                 style: const TextStyle(fontFamily: 'Poppins'),
-                              ),
+                               ),
                             ],
                           ),
                           const SizedBox(height: 12),
