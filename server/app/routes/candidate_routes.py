@@ -222,10 +222,10 @@ def get_available_jobs():
     try:
         user_id = get_jwt_identity()
 
-        jobs = Requisition.query.filter_by(is_active=True)\
-                                .filter(Requisition.deleted_at.is_(None))\
-                                .order_by(Requisition.created_at.desc())\
-                                .all()
+        query = Requisition.query.filter_by(is_active=True).filter(Requisition.deleted_at.is_(None))
+        if hasattr(Requisition, "approval_status"):
+            query = query.filter(Requisition.approval_status == "approved")
+        jobs = query.order_by(Requisition.created_at.desc()).all()
         result = []
 
         for job in jobs:

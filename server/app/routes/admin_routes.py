@@ -306,20 +306,22 @@ def create_job():
             }), 400
         
         current_user_id = get_jwt_identity()
-        
-        # Use service to create job
-        job, error = JobService.create_job(validated_data, current_user_id)
-        
+        current_user = User.query.get(current_user_id)
+        role = current_user.role if current_user else None
+
+        # Use service to create job (role sets approval_status: admin=approved, others=pending)
+        job, error = JobService.create_job(validated_data, current_user_id, role=role)
+
         if error:
             return jsonify(error), error.get('status_code', 400)
-        
+
         # Return response
         return jsonify({
             "message": "Job created successfully",
             "job": job_response_schema.dump(job),
             "job_id": job.id
         }), 201
-        
+
     except Exception as e:
         current_app.logger.error(f"Create job route error: {str(e)}", exc_info=True)
         return jsonify({
@@ -460,11 +462,12 @@ def list_jobs():
             'per_page': request.args.get('per_page', 20, type=int),
             'category': request.args.get('category'),
             'status': request.args.get('status', 'active'),
+            'approval_status': request.args.get('approval_status', 'all'),
             'sort_by': request.args.get('sort_by', 'created_at'),
             'sort_order': request.args.get('sort_order', 'desc'),
             'search': request.args.get('search')
         }
-        
+
         # Use service to list jobs
         jobs_data, error = JobService.list_jobs(filters)
         
@@ -479,6 +482,56 @@ def list_jobs():
             "error": "Internal server error",
             "message": str(e)
         }), 500
+
+
+@admin_bp.route("/jobs/<int:job_id>/approve", methods=["POST"])
+@jwt_required()
+@role_required(["admin"])
+def approve_job(job_id):
+    """Approve a pending job (admin only)."""
+    try:
+        current_user_id = get_jwt_identity()
+        job, error = JobService.approve_job(job_id, current_user_id)
+        if error:
+            return jsonify(error), error.get("status_code", 400)
+        return jsonify({"message": "Job approved", "job": job_response_schema.dump(job)}), 200
+    except Exception as e:
+        current_app.logger.error(f"Approve job route error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
+
+
+@admin_bp.route("/jobs/<int:job_id>/reject", methods=["POST"])
+@jwt_required()
+@role_required(["admin"])
+def reject_job(job_id):
+    """Reject a pending job with reason (admin only)."""
+    try:
+        data = request.get_json() or {}
+        reason = data.get("reason") or ""
+        current_user_id = get_jwt_identity()
+        job, error = JobService.reject_job(job_id, current_user_id, reason)
+        if error:
+            return jsonify(error), error.get("status_code", 400)
+        return jsonify({"message": "Job rejected", "job": job_response_schema.dump(job)}), 200
+    except Exception as e:
+        current_app.logger.error(f"Reject job route error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
+
+
+@admin_bp.route("/jobs/<int:job_id>/resubmit", methods=["POST"])
+@jwt_required()
+@role_required(["admin", "hiring_manager"])
+def resubmit_job(job_id):
+    """Resubmit a rejected job for approval (HM or admin)."""
+    try:
+        current_user_id = get_jwt_identity()
+        job, error = JobService.resubmit_job(job_id, current_user_id)
+        if error:
+            return jsonify(error), error.get("status_code", 400)
+        return jsonify({"message": "Job resubmitted for approval", "job": job_response_schema.dump(job)}), 200
+    except Exception as e:
+        current_app.logger.error(f"Resubmit job route error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
 
 
 @admin_bp.route("/jobs/<int:job_id>/restore", methods=["POST"])
