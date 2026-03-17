@@ -60,6 +60,7 @@ class AdminService {
     int perPage = 20,
     String? category,
     String status = 'active',
+    String? approvalStatus,
     String sortBy = 'created_at',
     String sortOrder = 'desc',
     String? search,
@@ -75,6 +76,7 @@ class AdminService {
     };
 
     if (category != null) queryParams['category'] = category;
+    if (approvalStatus != null && approvalStatus != 'all') queryParams['approval_status'] = approvalStatus;
     if (search != null && search.isNotEmpty) queryParams['search'] = search;
 
     final uri =
@@ -118,6 +120,46 @@ class AdminService {
     if (res.statusCode != 200) {
       final error = json.decode(res.body);
       throw Exception('Failed to restore job: ${error['error'] ?? res.body}');
+    }
+  }
+
+  /// Approve a pending job (admin only).
+  Future<void> approveJob(int jobId) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.adminJobs}/$jobId/approve'),
+      headers: authHeaders,
+    );
+    if (res.statusCode != 200) {
+      final body = json.decode(res.body);
+      throw Exception(body['error'] ?? 'Failed to approve job');
+    }
+  }
+
+  /// Reject a pending job with reason (admin only).
+  Future<void> rejectJob(int jobId, String reason) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.adminJobs}/$jobId/reject'),
+      headers: authHeaders,
+      body: json.encode({'reason': reason}),
+    );
+    if (res.statusCode != 200) {
+      final body = json.decode(res.body);
+      throw Exception(body['error'] ?? 'Failed to reject job');
+    }
+  }
+
+  /// Resubmit a rejected job for approval (HM or admin).
+  Future<void> resubmitJob(int jobId) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.adminJobs}/$jobId/resubmit'),
+      headers: authHeaders,
+    );
+    if (res.statusCode != 200) {
+      final body = json.decode(res.body);
+      throw Exception(body['error'] ?? 'Failed to resubmit job');
     }
   }
 

@@ -18,30 +18,35 @@ class JobService:
     """Service for job/requisition operations"""
     
     @staticmethod
-    def create_job(data: Dict, user_id: int) -> Tuple[Optional[Requisition], Optional[Dict]]:
+    def create_job(data: Dict, user_id: int, role: Optional[str] = None) -> Tuple[Optional[Requisition], Optional[Dict]]:
         """
-        Create a new job posting
-        
+        Create a new job posting. Non-admin users get approval_status='pending'; admin gets 'approved'.
+
         Args:
             data: Job data
             user_id: ID of user creating the job
-            
+            role: Caller role ('admin', 'hiring_manager', etc.). If None, looked up from user_id.
+
         Returns:
             Tuple of (job object, error dict)
         """
         try:
+            if role is None:
+                user = User.query.get(user_id)
+                role = user.role if user else None
+
             # Validate input data
             validated_data = job_create_schema.load(data)
-            
+
             # Check for duplicate active job titles
             existing_job = Requisition.query.filter(
                 Requisition.title == validated_data["title"],
                 Requisition.is_active == True
             ).first()
-            
+
             if existing_job:
                 return None, {"error": "Job title already exists for an active position"}
-            
+
             # Create job
             job = Requisition(
                 **validated_data,
@@ -49,11 +54,17 @@ class JobService:
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
             )
-            
+            if role == "admin":
+                job.approval_status = "approved"
+                job.approved_at = datetime.utcnow()
+                job.approved_by = user_id
+            else:
+                job.approval_status = "pending"
+
             db.session.add(job)
             # Ensure job.id is assigned before logging activity
             db.session.flush()
-            
+
             # Log activity (job.id is now set)
             JobService._log_activity(
                 action="CREATE",
@@ -61,11 +72,11 @@ class JobService:
                 user_id=user_id,
                 details={"title": job.title, "category": job.category}
             )
-            
+
             db.session.commit()
-            
+
             return job, None
-            
+
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Create job error: {str(e)}", exc_info=True)
@@ -238,7 +249,78 @@ class JobService:
             db.session.rollback()
             current_app.logger.error(f"Restore job error for job {job_id}: {str(e)}", exc_info=True)
             return None, {"error": "Internal server error", "message": str(e)}
-    
+
+    @staticmethod
+    def approve_job(job_id: int, user_id: int) -> Tuple[Optional[Requisition], Optional[Dict]]:
+        """Approve a pending job. Only jobs with approval_status='pending' can be approved."""
+        try:
+            job = Requisition.query.get(job_id)
+            if not job:
+                return None, {"error": "Job not found"}
+            if getattr(job, "approval_status", None) != "pending":
+                return None, {"error": "Job is not pending approval", "status_code": 400}
+            job.approval_status = "approved"
+            job.approved_at = datetime.utcnow()
+            job.approved_by = user_id
+            job.rejection_reason = None
+            job.updated_at = datetime.utcnow()
+            JobService._log_activity(action="APPROVE", job_id=job.id, user_id=user_id, details={"title": job.title})
+            db.session.commit()
+            return job, None
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Approve job error for job {job_id}: {str(e)}", exc_info=True)
+            return None, {"error": "Internal server error", "message": str(e)}
+
+    @staticmethod
+    def reject_job(job_id: int, user_id: int, reason: str) -> Tuple[Optional[Requisition], Optional[Dict]]:
+        """Reject a pending job. Only jobs with approval_status='pending' can be rejected."""
+        try:
+            job = Requisition.query.get(job_id)
+            if not job:
+                return None, {"error": "Job not found"}
+            if getattr(job, "approval_status", None) != "pending":
+                return None, {"error": "Job is not pending approval", "status_code": 400}
+            job.approval_status = "rejected"
+            job.rejection_reason = reason or None
+            job.updated_at = datetime.utcnow()
+            JobService._log_activity(
+                action="REJECT", job_id=job.id, user_id=user_id, details={"title": job.title, "reason": reason}
+            )
+            db.session.commit()
+            return job, None
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Reject job error for job {job_id}: {str(e)}", exc_info=True)
+            return None, {"error": "Internal server error", "message": str(e)}
+
+    @staticmethod
+    def resubmit_job(job_id: int, user_id: int) -> Tuple[Optional[Requisition], Optional[Dict]]:
+        """Set a rejected job back to pending (for HM resubmission). Caller must be job creator or admin."""
+        try:
+            job = Requisition.query.get(job_id)
+            if not job:
+                return None, {"error": "Job not found"}
+            if getattr(job, "approval_status", None) != "rejected":
+                return None, {"error": "Only rejected jobs can be resubmitted", "status_code": 400}
+            user = User.query.get(user_id)
+            if not user:
+                return None, {"error": "User not found"}
+            if user.role != "admin" and job.created_by != user_id:
+                return None, {"error": "Only the job creator or an admin can resubmit", "status_code": 403}
+            job.approval_status = "pending"
+            job.rejection_reason = None
+            job.approved_at = None
+            job.approved_by = None
+            job.updated_at = datetime.utcnow()
+            JobService._log_activity(action="RESUBMIT", job_id=job.id, user_id=user_id, details={"title": job.title})
+            db.session.commit()
+            return job, None
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Resubmit job error for job {job_id}: {str(e)}", exc_info=True)
+            return None, {"error": "Internal server error", "message": str(e)}
+
     @staticmethod
     def get_job_with_stats(job_id: int, user_id: int) -> Tuple[Optional[Dict], Optional[Dict]]:
         """
@@ -348,11 +430,16 @@ class JobService:
                 query = query.filter_by(is_active=False)
             # 'all' includes both active and inactive
             
+            # Apply approval_status filter
+            approval_status = validated_filters.get('approval_status', 'all')
+            if approval_status and approval_status != 'all':
+                query = query.filter(Requisition.approval_status == approval_status)
+
             # Apply category filter
             category = validated_filters.get('category')
             if category:
                 query = query.filter_by(category=category)
-            
+
             # Apply search filter
             search = validated_filters.get('search')
             if search:
@@ -408,14 +495,15 @@ class JobService:
                 "filters": {
                     "category": category,
                     "status": status,
+                    "approval_status": approval_status,
                     "search": search,
                     "sort_by": sort_by,
                     "sort_order": sort_order
                 }
             }
-            
+
             return response, None
-            
+
         except Exception as e:
             current_app.logger.error(f"List jobs error: {str(e)}", exc_info=True)
             return None, {"error": "Internal server error", "message": str(e)}

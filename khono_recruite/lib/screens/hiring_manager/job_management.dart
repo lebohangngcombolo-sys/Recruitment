@@ -181,6 +181,7 @@ class _JobManagementState extends State<JobManagement> {
                     ),
                   ),
                 ),
+                Expanded(flex: 1, child: _hmApprovalChip(job)),
                 Expanded(flex: 2, child: Text(createdBy, style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: textColor), overflow: TextOverflow.ellipsis)),
                 SizedBox(
                   width: 120,
@@ -255,12 +256,44 @@ class _JobManagementState extends State<JobManagement> {
             style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: themeProvider.isDarkMode ? Colors.white : Colors.black87),
           ),
           const SizedBox(height: 8),
+          if ((job['approval_status'] ?? '') == 'rejected') ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 18, color: Colors.red.shade700),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Rejection reason: ${job['rejection_reason'] ?? 'Not provided'}',
+                      style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.red.shade700),
+                    ),
+                  ),
+                  TextButton.icon(
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Resubmit'),
+                    onPressed: () => _resubmitJob(job),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if ((job['approval_status'] ?? '') == 'approved' && job['approved_at'] != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Approved on ${job['approved_at']}${job['approved_by_user'] != null ? ' by ${job['approved_by_user']['name'] ?? job['approved_by_user']['email'] ?? ''}' : ''}',
+                style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: textColor),
+              ),
+            ),
           // Metrics summary
           Row(
             children: [
               _metricChip('Total applications', '${job['application_count'] ?? 0}', themeProvider),
               const SizedBox(width: 12),
               _metricChip('Job status', (job['is_active'] == true ? 'Active' : 'Inactive'), themeProvider),
+              const SizedBox(width: 12),
+              _metricChip('Approval', (job['approval_status'] ?? 'pending').toString(), themeProvider),
             ],
           ),
           const SizedBox(height: 12),
@@ -349,6 +382,36 @@ class _JobManagementState extends State<JobManagement> {
     );
   }
 
+  Widget _hmApprovalChip(Map<String, dynamic> job) {
+    final status = (job['approval_status'] ?? 'pending').toString();
+    Color color;
+    String label;
+    switch (status) {
+      case 'approved':
+        color = Colors.green;
+        label = 'Approved';
+        break;
+      case 'rejected':
+        color = Colors.red;
+        label = 'Rejected';
+        break;
+      default:
+        color = Colors.orange;
+        label = 'Pending';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 11, color: color),
+      ),
+    );
+  }
+
   Widget _metricChip(String label, String value, ThemeProvider themeProvider) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -390,6 +453,24 @@ class _JobManagementState extends State<JobManagement> {
       context: context,
       builder: (_) => JobFormDialog(job: job, onSaved: fetchJobs),
     );
+  }
+
+  Future<void> _resubmitJob(Map<String, dynamic> job) async {
+    try {
+      await admin.resubmitJob(job['id'] as int);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Job resubmitted for approval'), backgroundColor: Colors.green),
+        );
+        fetchJobs();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error resubmitting: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -667,6 +748,7 @@ class _JobManagementState extends State<JobManagement> {
                                             _tableHeaderCell('Category', flex: 1, themeProvider: themeProvider),
                                             _tableHeaderCell('Applications', flex: 1, themeProvider: themeProvider),
                                             _tableHeaderCell('Status', flex: 1, themeProvider: themeProvider),
+                                            _tableHeaderCell('Approval', flex: 1, themeProvider: themeProvider),
                                             _tableHeaderCell('Created by', flex: 2, themeProvider: themeProvider),
                                             SizedBox(width: 120, child: Text('Actions', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold, fontSize: 14, color: themeProvider.isDarkMode ? Colors.white : Colors.black87))),
                                           ],
@@ -1331,6 +1413,29 @@ class _JobFormDialogState extends State<JobFormDialog>
     }
   }
 
+  Widget _hmJobFormApprovalBanner(Map<String, dynamic> job) {
+    final status = (job['approval_status'] ?? 'pending').toString();
+    final reason = (job['rejection_reason'] ?? '').toString();
+    Color color = status == 'approved' ? Colors.green : status == 'rejected' ? Colors.red : Colors.orange;
+    String label = status == 'approved' ? 'Approved' : status == 'rejected' ? 'Rejected' : 'Pending approval';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color),
+      ),
+      child: Row(
+        children: [
+          Text('Approval: ', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, color: color)),
+          Text(label, style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, color: color)),
+          if (status == 'rejected' && reason.isNotEmpty)
+            Expanded(child: Padding(padding: const EdgeInsets.only(left: 8), child: Text('Reason: $reason', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.red.shade800), maxLines: 2, overflow: TextOverflow.ellipsis))),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
@@ -1381,6 +1486,27 @@ class _JobFormDialogState extends State<JobFormDialog>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            if (widget.job != null && (widget.job!['approval_status'] ?? '').toString().isNotEmpty) ...[
+                              _hmJobFormApprovalBanner(widget.job!),
+                              const SizedBox(height: 16),
+                            ] else if (widget.job == null) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.blue),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                                    SizedBox(width: 8),
+                                    Expanded(child: Text('This job will be submitted for approval after creation.', style: TextStyle(fontSize: 13, color: Colors.blue))),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
                             Row(
                               children: [
                                 Icon(Icons.work,
