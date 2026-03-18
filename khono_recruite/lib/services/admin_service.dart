@@ -1506,6 +1506,44 @@ class AdminService {
     throw Exception('Failed to reschedule interview: ${res.body}');
   }
 
+  // ---------- INTERVIEW APPROVAL WORKFLOW ----------
+  Future<void> approveInterview(int interviewId) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.post(
+      Uri.parse(ApiEndpoints.approveInterview(interviewId)),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+    if (res.statusCode >= 200 && res.statusCode < 300) return;
+    dynamic body;
+    try {
+      body = json.decode(res.body);
+    } catch (_) {
+      body = null;
+    }
+    final msg =
+        body is Map ? (body['error'] ?? body['message'] ?? res.body) : res.body;
+    throw Exception(msg.toString());
+  }
+
+  Future<void> rejectInterview(int interviewId, String reason) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.post(
+      Uri.parse(ApiEndpoints.rejectInterview(interviewId)),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: json.encode({'reason': reason}),
+    );
+    if (res.statusCode >= 200 && res.statusCode < 300) return;
+    dynamic body;
+    try {
+      body = json.decode(res.body);
+    } catch (_) {
+      body = null;
+    }
+    final msg =
+        body is Map ? (body['error'] ?? body['message'] ?? res.body) : res.body;
+    throw Exception(msg.toString());
+  }
+
   // ---------- INTERVIEW FEEDBACK ----------
   /// Submit interview feedback
   Future<Map<String, dynamic>> submitInterviewFeedback({

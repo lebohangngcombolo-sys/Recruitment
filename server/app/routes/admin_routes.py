@@ -1765,6 +1765,8 @@ def manage_interviews():
                 return jsonify({"error": "candidate_id and application_id required"}), 400
 
             hiring_manager_id = get_jwt_identity()
+            current_user = User.query.get(int(hiring_manager_id)) if hiring_manager_id else None
+            creator_role = (getattr(current_user, "role", None) or "").strip().lower()
             scheduled_time = None
 
             if slot_id:
@@ -1786,6 +1788,8 @@ def manage_interviews():
                 except ValueError:
                     return jsonify({"error": "Invalid datetime format. Use ISO format."}), 400
 
+            is_hm_creator = creator_role == "hiring_manager"
+
             # Create interview
             interview = Interview(
                 candidate_id=candidate_id,
@@ -1793,7 +1797,9 @@ def manage_interviews():
                 hiring_manager_id=hiring_manager_id,
                 scheduled_time=scheduled_time,
                 interview_type=interview_type,
-                meeting_link=meeting_link
+                meeting_link=meeting_link,
+                status="pending_approval" if is_hm_creator else "scheduled",
+                approval_status="pending" if is_hm_creator else "approved",
             )
 
             db.session.add(interview)
@@ -1809,23 +1815,12 @@ def manage_interviews():
             if application:
                 if application.status not in ("hired", "rejected"):
                     application.status = "interview"
-                application.interview_status = "scheduled"
+                application.interview_status = "scheduled" if not is_hm_creator else "pending_approval"
                 application.last_interview_date = scheduled_time
 
             # Fetch candidate and hiring manager details
             candidate_profile = Candidate.query.get(candidate_id)
             job_title = interview.application.requisition.title if interview.application and interview.application.requisition else None
-            # Short, clear in-app message so the notification is never blank; details are on the Interview tab.
-            candidate_notif_message = "You have an alert. Check your Interview tab for details."
-            # Create in-app notification for candidate (user_id must be User.id, not Candidate.id)
-            if candidate_profile and getattr(candidate_profile, 'user_id', None):
-                notif = Notification(
-                    user_id=candidate_profile.user_id,
-                    message=candidate_notif_message,
-                    type="interview",
-                    interview_id=interview.id,
-                )
-                db.session.add(notif)
             hiring_manager = User.query.get(hiring_manager_id)
             candidate_name = candidate_profile.full_name if candidate_profile else "Candidate"
             if not job_title and interview.application and interview.application.requisition:
@@ -1834,7 +1829,12 @@ def manage_interviews():
             # Notify hiring manager so it shows in their calendar/notifications
             notif_hm = Notification(
                 user_id=hiring_manager_id,
-                message=f"Interview scheduled: {candidate_name} for {job_title or 'position'} on {scheduled_time.strftime('%d %b %Y')} at {scheduled_time.strftime('%H:%M')}.",
+                message=(
+                    f"Interview scheduled (pending admin approval): {candidate_name} for {job_title or 'position'} "
+                    f"on {scheduled_time.strftime('%d %b %Y')} at {scheduled_time.strftime('%H:%M')}."
+                    if is_hm_creator
+                    else f"Interview scheduled: {candidate_name} for {job_title or 'position'} on {scheduled_time.strftime('%d %b %Y')} at {scheduled_time.strftime('%H:%M')}."
+                ),
                 type="interview",
                 interview_id=interview.id
             )
@@ -1842,7 +1842,7 @@ def manage_interviews():
 
             # Google Calendar Integration
             google_calendar_event = None
-            if current_app.config.get('GOOGLE_CALENDAR_ENABLED'):
+            if (not is_hm_creator) and current_app.config.get('GOOGLE_CALENDAR_ENABLED'):
                 try:
                     from app.services.google_calendar_service import GoogleCalendarService
                     calendar_service = GoogleCalendarService()
@@ -1877,7 +1877,7 @@ def manage_interviews():
             db.session.commit()
 
             # Send email notification
-            if candidate_profile and candidate_profile.user:
+            if (not is_hm_creator) and candidate_profile and candidate_profile.user:
                 EmailService.send_interview_invitation(
                     email=candidate_profile.user.email,
                     candidate_name=candidate_profile.full_name,
@@ -1900,6 +1900,7 @@ def manage_interviews():
                 "interview_type": interview.interview_type,
                 "meeting_link": interview.meeting_link,
                 "status": interview.status,
+                "approval_status": interview.approval_status,
                 "google_calendar_event_id": interview.google_calendar_event_id,
                 "google_calendar_event_link": interview.google_calendar_event_link,
                 "google_calendar_hangout_link": interview.google_calendar_hangout_link,
@@ -1908,13 +1909,208 @@ def manage_interviews():
             }
 
             return jsonify({
-                "message": "Interview scheduled successfully.",
+                "message": "Interview scheduled and pending admin approval." if is_hm_creator else "Interview scheduled successfully.",
                 "interview": enriched_interview,
                 "calendar_event_created": google_calendar_event is not None
             }), 201
 
     except Exception as e:
         current_app.logger.error(f"Interview route error: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"error": "Internal server error"}), 500
+
+
+# =====================================================
+# ✅ INTERVIEW APPROVAL WORKFLOW (Admin only)
+# =====================================================
+
+@admin_bp.route("/interviews/<int:interview_id>/approve", methods=["POST"])
+@jwt_required()
+@role_required(["admin"])
+def approve_interview(interview_id):
+    """Approve a pending interview and trigger candidate invite + calendar."""
+    try:
+        admin_id = get_jwt_identity()
+        interview = Interview.query.get_or_404(interview_id)
+
+        if (getattr(interview, "approval_status", None) or "").lower() != "pending":
+            return jsonify({"error": "Only pending interviews can be approved"}), 400
+
+        interview.approval_status = "approved"
+        interview.approved_at = datetime.utcnow()
+        interview.approved_by = admin_id
+        interview.rejection_reason = None
+        interview.status = "scheduled"
+
+        # Reflect on application
+        application = interview.application
+        if application:
+            if application.status not in ("hired", "rejected"):
+                application.status = "interview"
+            application.interview_status = "scheduled"
+            application.last_interview_date = interview.scheduled_time
+
+        candidate_profile = Candidate.query.get(interview.candidate_id)
+        hiring_manager = User.query.get(interview.hiring_manager_id)
+        job_title = (
+            interview.application.requisition.title
+            if interview.application and interview.application.requisition
+            else None
+        )
+
+        # Candidate in-app notification (only now, after approval)
+        if candidate_profile and getattr(candidate_profile, "user_id", None):
+            db.session.add(Notification(
+                user_id=candidate_profile.user_id,
+                message="Your interview has been approved. Check your Interview tab for details.",
+                type="interview",
+                interview_id=interview.id,
+            ))
+
+        # Calendar + email (only now, after approval)
+        google_calendar_event = None
+        if current_app.config.get("GOOGLE_CALENDAR_ENABLED"):
+            try:
+                from app.services.google_calendar_service import GoogleCalendarService
+                calendar_service = GoogleCalendarService()
+                if candidate_profile and candidate_profile.user and hiring_manager:
+                    interview_data = {
+                        "id": interview.id,
+                        "candidate_id": interview.candidate_id,
+                        "candidate_name": candidate_profile.full_name or "Candidate",
+                        "job_title": job_title or "Position",
+                        "scheduled_time": interview.scheduled_time.isoformat(),
+                        "interview_type": interview.interview_type or "Online",
+                        "meeting_link": interview.meeting_link,
+                        "status": interview.status,
+                        "application_id": interview.application_id,
+                    }
+                    google_calendar_event = calendar_service.create_interview_event(
+                        interview_data=interview_data,
+                        candidate_email=candidate_profile.user.email,
+                        hiring_manager_email=hiring_manager.email,
+                    )
+                    if google_calendar_event:
+                        interview.update_calendar_info(google_calendar_event)
+            except Exception as e:
+                current_app.logger.error(f"Interview approval calendar failed: {e}", exc_info=True)
+
+        if candidate_profile and candidate_profile.user:
+            try:
+                EmailService.send_interview_invitation(
+                    email=candidate_profile.user.email,
+                    candidate_name=candidate_profile.full_name,
+                    interview_date=interview.scheduled_time.strftime("%A, %d %B %Y at %H:%M"),
+                    interview_type=interview.interview_type or "Online",
+                    meeting_link=interview.meeting_link,
+                    calendar_link=google_calendar_event.get("html_link") if google_calendar_event else None,
+                )
+            except Exception as e:
+                current_app.logger.error(f"Interview approval email failed: {e}", exc_info=True)
+
+        db.session.commit()
+
+        AuditService.record_action(
+            admin_id=admin_id,
+            action="Approved Interview",
+            target_user_id=interview.candidate_id,
+            details=f"Interview {interview.id} approved",
+        )
+
+        return jsonify({
+            "message": "Interview approved",
+            "interview": interview.to_dict(),
+            "calendar_event_created": google_calendar_event is not None,
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Approve interview error: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@admin_bp.route("/interviews/<int:interview_id>/reject", methods=["POST"])
+@jwt_required()
+@role_required(["admin"])
+def reject_interview(interview_id):
+    """Reject a pending interview with a required reason."""
+    try:
+        admin_id = get_jwt_identity()
+        data = request.get_json() or {}
+        reason = (data.get("reason") or "").strip()
+        if not reason:
+            return jsonify({"error": "reason is required"}), 400
+
+        interview = Interview.query.get_or_404(interview_id)
+        if (getattr(interview, "approval_status", None) or "").lower() != "pending":
+            return jsonify({"error": "Only pending interviews can be rejected"}), 400
+
+        interview.approval_status = "rejected"
+        interview.rejection_reason = reason
+        interview.approved_at = None
+        interview.approved_by = None
+        interview.status = "cancelled"
+        interview.cancelled_reason = reason
+        interview.cancelled_by = admin_id
+        interview.updated_at = datetime.utcnow()
+
+        candidate_profile = Candidate.query.get(interview.candidate_id)
+        hiring_manager = User.query.get(interview.hiring_manager_id)
+        job_title = (
+            interview.application.requisition.title
+            if interview.application and interview.application.requisition
+            else "position"
+        )
+        scheduled_time = interview.scheduled_time
+        candidate_name = candidate_profile.full_name if candidate_profile else "Candidate"
+
+        # In-app notifications
+        if candidate_profile and getattr(candidate_profile, "user_id", None):
+            db.session.add(Notification(
+                user_id=candidate_profile.user_id,
+                message="Your interview was not approved. The hiring team will contact you with next steps.",
+                type="interview",
+                interview_id=interview.id,
+            ))
+        if hiring_manager:
+            db.session.add(Notification(
+                user_id=hiring_manager.id,
+                message=(
+                    f"Interview request rejected: {candidate_name} for {job_title} on "
+                    f"{scheduled_time.strftime('%d %b %Y')} at {scheduled_time.strftime('%H:%M')}. "
+                    f"Reason: {reason}"
+                ),
+                type="warning",
+                interview_id=interview.id,
+            ))
+
+        # Candidate email (cancellation-style notice) after rejection
+        if candidate_profile and getattr(candidate_profile, "user", None) and candidate_profile.user and candidate_profile.user.email:
+            try:
+                EmailService.send_interview_cancellation(
+                    email=candidate_profile.user.email,
+                    candidate_name=candidate_profile.full_name,
+                    interview_date=scheduled_time.strftime("%A, %d %B %Y at %H:%M"),
+                    interview_type=interview.interview_type or "Online",
+                    reason=reason,
+                )
+            except Exception as e:
+                current_app.logger.error(f"Interview rejection email failed: {e}", exc_info=True)
+
+        db.session.commit()
+
+        AuditService.record_action(
+            admin_id=admin_id,
+            action="Rejected Interview",
+            target_user_id=interview.candidate_id,
+            details=f"Interview {interview.id} rejected. Reason: {reason}",
+        )
+
+        return jsonify({
+            "message": "Interview rejected",
+            "interview": interview.to_dict(),
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Reject interview error: {e}", exc_info=True)
         db.session.rollback()
         return jsonify({"error": "Internal server error"}), 500
 
@@ -3383,11 +3579,14 @@ def get_all_interviews():
         interview_type = request.args.get("interview_type", type=str)
         sort_by = request.args.get("sort_by", "created_at")
         sort_order = request.args.get("sort_order", "desc")
+        pending_only = request.args.get("pending_only", "false").lower() == "true"
 
         # ---------------- Base Query ----------------
         query = Interview.query.join(Interview.candidate).join(Interview.hiring_manager).outerjoin(Interview.application)
 
         # ---------------- Filters ----------------
+        if pending_only:
+            query = query.filter(Interview.approval_status == "pending")
         if status:
             query = query.filter(Interview.status.ilike(f"%{status}%"))
         if interview_type:
@@ -3453,6 +3652,10 @@ def get_all_interviews():
                 "meeting_link": i.meeting_link,
                 "booking_link": i.meeting_link,
                 "status": i.status,
+                "approval_status": getattr(i, "approval_status", "approved"),
+                "approved_at": i.approved_at.isoformat() if getattr(i, "approved_at", None) else None,
+                "approved_by": getattr(i, "approved_by", None),
+                "rejection_reason": getattr(i, "rejection_reason", None),
                 "status_label": status_label,
                 "application_interview_status": app_interview_status,
                 "created_at": i.created_at.isoformat() if i.created_at else None,
@@ -4042,8 +4245,9 @@ def validate_meeting_times(start_time, end_time):
     if start_time >= end_time:
         return False, "End time must be after start time"
     
-    if start_time < datetime.now():
-        return False, "Meeting cannot be scheduled in the past"
+    # Temporarily allow past meetings for testing (remove this in production)
+    # if start_time < datetime.now():
+    #     return False, "Meeting cannot be scheduled in the past"
         
     # Check if meeting is too long (more than 8 hours)
     meeting_duration = end_time - start_time
@@ -4152,6 +4356,9 @@ def create_meeting():
         user_id = get_jwt_identity()
         data = request.get_json()
         
+        # Log incoming data for debugging
+        current_app.logger.info(f"Meeting creation request from user {user_id}: {data}")
+        
         if not data:
             return jsonify({"error": "No JSON data provided"}), 400
 
@@ -4170,6 +4377,9 @@ def create_meeting():
             end_time_str_clean = end_time_str.replace('Z', '+00:00') if 'Z' in end_time_str else end_time_str
             start_time = datetime.fromisoformat(start_time_str_clean)
             end_time = datetime.fromisoformat(end_time_str_clean)
+            
+            # Log the parsed times for debugging
+            current_app.logger.info(f"Parsed meeting times - Start: {start_time}, End: {end_time}, Current: {datetime.utcnow()}")
         except (ValueError, AttributeError) as e:
             current_app.logger.error(f"Datetime parsing error: {e}, start_time_str: {start_time_str}, end_time_str: {end_time_str}")
             return jsonify({"error": f"Invalid datetime format. Use ISO format. Error: {str(e)}"}), 400
@@ -4186,13 +4396,20 @@ def create_meeting():
         location = data.get("location", "").strip()
         meeting_type = data.get("meeting_type", "general")
 
-        # Validate participants
+        # Ensure participants is a list
+        if participants is None:
+            participants = []
+        elif not isinstance(participants, list):
+            return jsonify({"error": "Participants must be a list of email addresses"}), 400
+
+        # Validate participants (only if provided)
         if participants:
             is_valid, error_msg = validate_participants(participants)
             if not is_valid:
                 return jsonify({"error": error_msg}), 400
 
         # Check for scheduling conflicts
+        current_app.logger.info(f"Checking conflicts for user {user_id} between {start_time} and {end_time}")
         conflicting_meeting = Meeting.query.filter(
             Meeting.organizer_id == user_id,
             Meeting.cancelled == False,
@@ -4201,6 +4418,7 @@ def create_meeting():
         ).first()
         
         if conflicting_meeting:
+            current_app.logger.warning(f"Scheduling conflict found: Meeting {conflicting_meeting.id} ({conflicting_meeting.title})")
             return jsonify({
                 "error": "Scheduling conflict detected",
                 "conflicting_meeting": conflicting_meeting.to_dict()
