@@ -4,11 +4,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:file_picker/file_picker.dart';
 import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
 import '../../providers/theme_provider.dart';
 import '../../constants/brand_tokens.dart';
 import '../../utils/api_endpoints.dart';
+import '../../services/cv_analyser_service.dart';
+import '../../screens/admin/analysis_screen.dart';
 import '../../widgets/themed_surface_card.dart';
 import '../../widgets/filter_chip.dart';
 import '../../widgets/themed_dialog.dart';
@@ -24,6 +27,7 @@ class CVReviewsScreen extends StatefulWidget {
 class _CVReviewsScreenState extends State<CVReviewsScreen>
     with AutomaticKeepAliveClientMixin {
   final AdminService admin = AdminService();
+  final CVAnalyserService cvAnalyser = CVAnalyserService();
   List<Map<String, dynamic>> cvReviews = [];
   List<Map<String, dynamic>> filteredReviews = [];
   bool loading = true;
@@ -35,6 +39,9 @@ class _CVReviewsScreenState extends State<CVReviewsScreen>
   String? selectedFilter;
   Timer? _searchDebounce;
 
+  bool _analysisInProgress = false;
+  String? _analysisStatusText;
+
   @override
   bool get wantKeepAlive => true;
 
@@ -43,6 +50,107 @@ class _CVReviewsScreenState extends State<CVReviewsScreen>
     super.initState();
     _scrollController.addListener(_onScroll);
     fetchCVReviews();
+  }
+
+  Future<void> _analyseCvForCandidate(Map<String, dynamic> review) async {
+    if (_analysisInProgress) return;
+
+    try {
+      final picked = await FilePicker.platform.pickFiles(
+        allowMultiple: false,
+        withData: true,
+        type: FileType.custom,
+        allowedExtensions: const [
+          'pdf',
+          'doc',
+          'docx',
+          'txt',
+          'png',
+          'jpg',
+          'jpeg',
+        ],
+      );
+
+      if (picked == null || picked.files.isEmpty) return;
+
+      final file = picked.files.first;
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception('Could not read file bytes');
+      }
+
+      // Client-side size validation: 15MB
+      const maxBytes = 15 * 1024 * 1024;
+      if (bytes.length > maxBytes) {
+        throw Exception('File too large. Max size is 15MB');
+      }
+
+      final filename = file.name;
+      final ext = (file.extension ?? '').toLowerCase();
+      final contentType = _inferContentType(ext);
+
+      setState(() {
+        _analysisInProgress = true;
+        _analysisStatusText = 'Uploading…';
+      });
+
+      final result = await cvAnalyser.uploadAndPoll(
+        bytes: bytes,
+        filename: filename,
+        contentType: contentType,
+        jobDescription: (review['requisition_title'] ?? '').toString(),
+        onStatus: (status) {
+          if (!mounted) return;
+          setState(() {
+            _analysisStatusText = 'Status: ${status.status}';
+          });
+        },
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _analysisInProgress = false;
+        _analysisStatusText = null;
+      });
+
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => AnalysisScreen(result: result),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _analysisInProgress = false;
+        _analysisStatusText = null;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('CV analysis failed: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  String _inferContentType(String ext) {
+    switch (ext) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'doc':
+        return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'txt':
+        return 'text/plain';
+      case 'png':
+        return 'image/png';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      default:
+        return 'application/octet-stream';
+    }
   }
 
   @override
@@ -197,10 +305,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen>
     });
   }
 
-  void _showMatchBreakdownDialog(
-      BuildContext context,
-      Map<String, dynamic> review,
-      ThemeProvider themeProvider) {
+  void _showMatchBreakdownDialog(BuildContext context,
+      Map<String, dynamic> review, ThemeProvider themeProvider) {
     final parser = review['cv_parser_result'] is Map
         ? Map<String, dynamic>.from(review['cv_parser_result'] as Map)
         : <String, dynamic>{};
@@ -252,10 +358,13 @@ class _CVReviewsScreenState extends State<CVReviewsScreen>
                   children: missingSkills
                       .take(15)
                       .map((s) => Chip(
-                            label: Text(s, style: GoogleFonts.inter(fontSize: 11)),
-                            backgroundColor: Colors.orange.withValues(alpha: 0.2),
+                            label:
+                                Text(s, style: GoogleFonts.inter(fontSize: 11)),
+                            backgroundColor:
+                                Colors.orange.withValues(alpha: 0.2),
                             padding: EdgeInsets.zero,
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
                           ))
                       .toList(),
                 ),
@@ -292,7 +401,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen>
                     style: GoogleFonts.inter(
                       fontSize: 11,
                       fontStyle: FontStyle.italic,
-                      color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
+                      color:
+                          isDark ? Colors.grey.shade500 : Colors.grey.shade600,
                     ),
                   ),
                 ),
@@ -313,7 +423,9 @@ class _CVReviewsScreenState extends State<CVReviewsScreen>
                         v.toString(),
                         style: GoogleFonts.inter(
                           fontSize: 11,
-                          color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
+                          color: isDark
+                              ? Colors.grey.shade500
+                              : Colors.grey.shade600,
                         ),
                       ),
                     )),
@@ -416,6 +528,38 @@ class _CVReviewsScreenState extends State<CVReviewsScreen>
                       : Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            if (_analysisInProgress ||
+                                _analysisStatusText != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: Row(
+                                  children: [
+                                    if (_analysisInProgress)
+                                      const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2),
+                                      ),
+                                    if (_analysisInProgress)
+                                      const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _analysisStatusText ?? 'Analysing…',
+                                        style: GoogleFonts.inter(
+                                          fontSize: 12,
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.white70
+                                              : Colors.black87,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
                             // Header with stats
                             Container(
                               padding: const EdgeInsets.all(20),
@@ -688,35 +832,53 @@ class _CVReviewsScreenState extends State<CVReviewsScreen>
                                                 const SizedBox(height: 12),
                                                 // Role & Screening
                                                 Text(
-                                                  review['requisition_title']?.toString() ?? '—',
+                                                  review['requisition_title']
+                                                          ?.toString() ??
+                                                      '—',
                                                   style: GoogleFonts.inter(
                                                     fontSize: 11,
                                                     fontWeight: FontWeight.w500,
-                                                    color: themeProvider.isDarkMode
+                                                    color: themeProvider
+                                                            .isDarkMode
                                                         ? Colors.grey.shade400
                                                         : Colors.grey.shade700,
                                                   ),
                                                   maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
                                                 ),
                                                 const SizedBox(height: 6),
                                                 Container(
-                                                  padding: const EdgeInsets.symmetric(
-                                                      horizontal: 8, vertical: 4),
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4),
                                                   decoration: BoxDecoration(
-                                                    color: (review['screening_outcome']?.toString() ?? '')
+                                                    color: (review['screening_outcome']
+                                                                    ?.toString() ??
+                                                                '')
                                                             .toLowerCase()
                                                             .contains('hold')
-                                                        ? Colors.orange.withValues(alpha: 0.2)
-                                                        : Colors.green.withValues(alpha: 0.2),
-                                                    borderRadius: BorderRadius.circular(8),
+                                                        ? Colors.orange
+                                                            .withValues(
+                                                                alpha: 0.2)
+                                                        : Colors.green
+                                                            .withValues(
+                                                                alpha: 0.2),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
                                                   ),
                                                   child: Text(
-                                                    review['screening_outcome']?.toString() ?? 'Screened',
+                                                    review['screening_outcome']
+                                                            ?.toString() ??
+                                                        'Screened',
                                                     style: GoogleFonts.inter(
                                                       fontSize: 10,
-                                                      fontWeight: FontWeight.w600,
-                                                      color: themeProvider.isDarkMode
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: themeProvider
+                                                              .isDarkMode
                                                           ? Colors.white70
                                                           : Colors.black87,
                                                     ),
@@ -724,14 +886,20 @@ class _CVReviewsScreenState extends State<CVReviewsScreen>
                                                 ),
                                                 const SizedBox(height: 8),
                                                 TextButton.icon(
-                                                  onPressed: () => _showMatchBreakdownDialog(
-                                                      context, review, themeProvider),
-                                                  icon: const Icon(Icons.info_outline, size: 14),
+                                                  onPressed: () =>
+                                                      _showMatchBreakdownDialog(
+                                                          context,
+                                                          review,
+                                                          themeProvider),
+                                                  icon: const Icon(
+                                                      Icons.info_outline,
+                                                      size: 14),
                                                   label: Text(
                                                     'Match breakdown',
                                                     style: GoogleFonts.inter(
                                                       fontSize: 11,
-                                                      fontWeight: FontWeight.w600,
+                                                      fontWeight:
+                                                          FontWeight.w600,
                                                     ),
                                                   ),
                                                 ),
@@ -877,57 +1045,58 @@ class _CVReviewsScreenState extends State<CVReviewsScreen>
 
                                                 // Work Experience
                                                 if (workExp.isNotEmpty)
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Text(
-                                                          "Experience",
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            fontSize: 12,
-                                                            color: themeProvider
-                                                                    .isDarkMode
-                                                                ? Colors.grey
-                                                                    .shade400
-                                                                : Colors.grey
-                                                                    .shade700,
-                                                          ),
+                                                  Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Text(
+                                                        "Experience",
+                                                        style:
+                                                            GoogleFonts.inter(
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          fontSize: 12,
+                                                          color: themeProvider
+                                                                  .isDarkMode
+                                                              ? Colors
+                                                                  .grey.shade400
+                                                              : Colors.grey
+                                                                  .shade700,
                                                         ),
-                                                        const SizedBox(
-                                                            height: 6),
-                                                        ...workExp
-                                                            .take(2)
-                                                            .map<Widget>(
-                                                                (exp) =>
-                                                                    Padding(
-                                                                      padding: const EdgeInsets
-                                                                          .only(
-                                                                          bottom:
-                                                                              4),
-                                                                      child:
-                                                                          Text(
-                                                                        "• ${exp['role'] ?? ''} at ${exp['company'] ?? ''}",
-                                                                        style: GoogleFonts
-                                                                            .inter(
-                                                                          fontSize:
-                                                                              10,
-                                                                          color: themeProvider.isDarkMode
-                                                                              ? Colors.grey.shade500
-                                                                              : Colors.grey.shade600,
-                                                                        ),
-                                                                        maxLines:
-                                                                            1,
-                                                                        overflow:
-                                                                            TextOverflow.ellipsis,
-                                                                      ),
-                                                                    )),
-                                                      ],
-                                                    ),
+                                                      ),
+                                                      const SizedBox(height: 6),
+                                                      ...workExp
+                                                          .take(2)
+                                                          .map<Widget>(
+                                                            (exp) => Padding(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .only(
+                                                                      bottom:
+                                                                          4),
+                                                              child: Text(
+                                                                "• ${exp['role'] ?? ''} at ${exp['company'] ?? ''}",
+                                                                style:
+                                                                    GoogleFonts
+                                                                        .inter(
+                                                                  fontSize: 10,
+                                                                  color: themeProvider.isDarkMode
+                                                                      ? Colors
+                                                                          .grey
+                                                                          .shade500
+                                                                      : Colors
+                                                                          .grey
+                                                                          .shade600,
+                                                                ),
+                                                                maxLines: 1,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                    ],
                                                   ),
                                                 const SizedBox(height: 12),
 
@@ -935,29 +1104,69 @@ class _CVReviewsScreenState extends State<CVReviewsScreen>
                                                 Align(
                                                   alignment:
                                                       Alignment.bottomRight,
-                                                  child: ElevatedButton.icon(
-                                                    onPressed: () =>
-                                                        _previewCV(review),
-                                                    icon: const Icon(
-                                                        Icons.remove_red_eye,
-                                                        size: 16),
-                                                    label: const Text(
-                                                        'Preview CV'),
-                                                    style: ElevatedButton
-                                                        .styleFrom(
-                                                      backgroundColor:
-                                                          BrandTokens.primary,
-                                                      foregroundColor:
-                                                          Colors.white,
-                                                      minimumSize:
-                                                          const Size(100, 36),
-                                                      textStyle:
-                                                          GoogleFonts.inter(
-                                                              fontSize: 12,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w600),
-                                                    ),
+                                                  child: Wrap(
+                                                    spacing: 8,
+                                                    runSpacing: 8,
+                                                    alignment:
+                                                        WrapAlignment.end,
+                                                    children: [
+                                                      ElevatedButton.icon(
+                                                        onPressed: () =>
+                                                            _previewCV(review),
+                                                        icon: const Icon(
+                                                            Icons
+                                                                .remove_red_eye,
+                                                            size: 16),
+                                                        label: const Text(
+                                                            'Preview CV'),
+                                                        style: ElevatedButton
+                                                            .styleFrom(
+                                                          backgroundColor:
+                                                              BrandTokens
+                                                                  .primary,
+                                                          foregroundColor:
+                                                              Colors.white,
+                                                          minimumSize:
+                                                              const Size(
+                                                                  100, 36),
+                                                          textStyle:
+                                                              GoogleFonts.inter(
+                                                            fontSize: 12,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      ElevatedButton.icon(
+                                                        onPressed:
+                                                            _analysisInProgress
+                                                                ? null
+                                                                : () =>
+                                                                    _analyseCvForCandidate(
+                                                                        review),
+                                                        icon: const Icon(
+                                                            Icons.auto_awesome,
+                                                            size: 16),
+                                                        label: const Text(
+                                                            'Analyse CV'),
+                                                        style: ElevatedButton
+                                                            .styleFrom(
+                                                          backgroundColor:
+                                                              Colors.black87,
+                                                          foregroundColor:
+                                                              Colors.white,
+                                                          minimumSize:
+                                                              const Size(
+                                                                  110, 36),
+                                                          textStyle:
+                                                              GoogleFonts.inter(
+                                                            fontSize: 12,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
                                                 ),
                                               ],
