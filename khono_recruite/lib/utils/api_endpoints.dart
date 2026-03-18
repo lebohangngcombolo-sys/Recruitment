@@ -20,12 +20,11 @@ class ApiEndpoints {
   static const generateQuestions = "$aiBase/generate_questions";
 
   // ------------------- CV Analyser (proxied via recruitment backend) -------------------
-  static const cvAnalyserUpload =
-      "http://127.0.0.1:5000/api/cv-analyser/upload";
+  static const cvAnalyserUpload = "$apiBase/api/cv-analyser/upload";
   static String cvAnalyserStatus(String analysisId) =>
-      "http://127.0.0.1:5000/api/cv-analyser/analyses/$analysisId/status";
+      "$apiBase/api/cv-analyser/analyses/$analysisId/status";
   static String cvAnalyserResult(String analysisId) =>
-      "http://127.0.0.1:5000/api/cv-analyser/analyses/$analysisId/result";
+      "$apiBase/api/cv-analyser/analyses/$analysisId/result";
 
   // NEW: Offer management base URL (matches your Flask blueprint)
   static const offerBase = "$apiBase/api/offer";
