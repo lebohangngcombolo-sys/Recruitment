@@ -164,8 +164,10 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
 
     try {
       final result = await _admin.scheduleInterview(data);
-      setState(() => message =
-          result["message"] ?? "Interview scheduled successfully.");
+      final serverMsg = (result["message"] ?? "").toString().trim();
+      setState(() => message = serverMsg.isNotEmpty
+          ? serverMsg
+          : "Interview scheduled and pending admin approval.");
     } catch (e) {
       setState(() => message = "Request failed: $e");
     }

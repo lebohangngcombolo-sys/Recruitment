@@ -33,6 +33,10 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
   List<dynamic> get filteredInterviews {
     final now = DateTime.now();
     switch (_selectedFilter) {
+      case 'pending_approval':
+        return interviews
+            .where((i) => (i['approval_status'] ?? '').toString() == 'pending')
+            .toList();
       case 'today':
         return interviews.where((i) {
           if (i['scheduled_time'] == null) return false;
@@ -63,6 +67,76 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
         }).toList();
       default:
         return interviews;
+    }
+  }
+
+  int get _pendingApprovalCount => interviews
+      .where((i) => (i['approval_status'] ?? '').toString() == 'pending')
+      .length;
+
+  Future<void> _approveInterview(int id) async {
+    try {
+      await _adminService.approveInterview(id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Interview approved')),
+        );
+      }
+      fetchInterviews();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to approve interview: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _rejectInterview(int id) async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reject interview'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Rejection reason (required)',
+          ),
+          autofocus: true,
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final r = controller.text.trim();
+              if (r.isEmpty) return;
+              Navigator.of(ctx).pop(r);
+            },
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+    if (reason == null || reason.trim().isEmpty) return;
+    try {
+      await _adminService.rejectInterview(id, reason.trim());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Interview rejected')),
+        );
+      }
+      fetchInterviews();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to reject interview: $e')),
+        );
+      }
     }
   }
 
@@ -423,6 +497,9 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                 const SizedBox(width: 8),
                                 _buildFilterChip('Past', 'past', themeProvider),
                                 const SizedBox(width: 8),
+                                _buildFilterChip('Pending Approval',
+                                    'pending_approval', themeProvider),
+                                const SizedBox(width: 8),
                                 _buildFilterChip('Action Required',
                                     'action_required', themeProvider),
                               ],
@@ -495,7 +572,7 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                   _buildStatusBadge(
                                       'Scheduled', Colors.blue, themeProvider),
                                   _buildStatusBadge(
-                                      'Pending', Colors.amber, themeProvider),
+                                      'Pending Approval ($_pendingApprovalCount)', Colors.amber, themeProvider),
                                   _buildStatusBadge(
                                       'Completed', Colors.green, themeProvider),
                                 ],
@@ -519,6 +596,11 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                 final status = i['status'] ?? 'Scheduled';
                                 final statusColor = getStatusColor(status);
                                 final statusIcon = getStatusIcon(status);
+                                final approvalStatus = (i['approval_status'] ?? '')
+                                    .toString()
+                                    .toLowerCase();
+                                final isPendingApproval =
+                                    approvalStatus == 'pending';
 
                                 return Container(
                                   width: width < 600 ? double.infinity : 400,
@@ -590,6 +672,33 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                                 ],
                                               ),
                                             ),
+                                            if (isPendingApproval) ...[
+                                              const SizedBox(width: 10),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 6),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.amber
+                                                      .withValues(alpha: 0.18),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  border: Border.all(
+                                                      color: Colors.amber
+                                                          .withValues(
+                                                              alpha: 0.35)),
+                                                ),
+                                                child: Text(
+                                                  'PENDING APPROVAL',
+                                                  style: GoogleFonts.inter(
+                                                    color: Colors.amber.shade800,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                             const Spacer(),
                                             Icon(
                                               Icons.calendar_today,
@@ -732,6 +841,42 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                                   // Action Buttons
                                                   Column(
                                                     children: [
+                                                      if (isPendingApproval) ...[
+                                                        Row(
+                                                          children: [
+                                                            Expanded(
+                                                              child:
+                                                                  _buildActionButton(
+                                                                icon: Icons
+                                                                    .check_circle_outline,
+                                                                label: "Approve",
+                                                                color: Colors
+                                                                    .green,
+                                                                onPressed: () =>
+                                                                    _approveInterview(
+                                                                        i['id']),
+                                                              ),
+                                                            ),
+                                                            const SizedBox(
+                                                                width: 8),
+                                                            Expanded(
+                                                              child:
+                                                                  _buildActionButton(
+                                                                icon: Icons
+                                                                    .cancel_outlined,
+                                                                label: "Reject",
+                                                                color: Colors
+                                                                    .red,
+                                                                onPressed: () =>
+                                                                    _rejectInterview(
+                                                                        i['id']),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        const SizedBox(
+                                                            height: 12),
+                                                      ],
                                                       // NEW: Status-specific buttons
                                                       if (status ==
                                                           'scheduled') ...[

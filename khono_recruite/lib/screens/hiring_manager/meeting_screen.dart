@@ -39,7 +39,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
       if (!mounted) return;
       setState(() {
         _notifyStatusChanges = prefs['status_changes'] as bool? ?? true;
-        _notifyUpcomingInterviews = prefs['upcoming_interviews'] as bool? ?? true;
+        _notifyUpcomingInterviews =
+            prefs['upcoming_interviews'] as bool? ?? true;
       });
     } catch (_) {
       // keep defaults
@@ -48,7 +49,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
     }
   }
 
-  Future<void> _updateNotificationPrefs({bool? statusChanges, bool? upcomingInterviews}) async {
+  Future<void> _updateNotificationPrefs(
+      {bool? statusChanges, bool? upcomingInterviews}) async {
     try {
       await _apiService.updateNotificationPreferences(
         statusChanges: statusChanges ?? _notifyStatusChanges,
@@ -57,7 +59,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
       if (!mounted) return;
       setState(() {
         if (statusChanges != null) _notifyStatusChanges = statusChanges;
-        if (upcomingInterviews != null) _notifyUpcomingInterviews = upcomingInterviews;
+        if (upcomingInterviews != null)
+          _notifyUpcomingInterviews = upcomingInterviews;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Notification preferences saved')),
@@ -65,7 +68,9 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save: $e'), backgroundColor: AppColors.primaryRed),
+        SnackBar(
+            content: Text('Failed to save: $e'),
+            backgroundColor: AppColors.primaryRed),
       );
     }
   }
@@ -93,7 +98,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
 
       if (kDebugMode) debugPrint("Meetings response: $meetingsResponse");
       final meetingsData = meetingsResponse['meetings'] as List<dynamic>? ?? [];
-      if (kDebugMode) debugPrint("Fetched ${meetingsData.length} meetings from API");
+      if (kDebugMode)
+        debugPrint("Fetched ${meetingsData.length} meetings from API");
 
       // Convert to Meeting objects
       final loadedMeetings =
@@ -117,7 +123,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
         _meetings.clear();
         _meetings.addAll(filteredMeetings);
       });
-      if (kDebugMode) debugPrint("Displayed meetings count: ${_meetings.length}");
+      if (kDebugMode)
+        debugPrint("Displayed meetings count: ${_meetings.length}");
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -192,7 +199,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
       runSpacing: 8,
       children: [
         ActionChip(
-          avatar: const Icon(Icons.schedule, size: 18, color: AppColors.primaryRed),
+          avatar:
+              const Icon(Icons.schedule, size: 18, color: AppColors.primaryRed),
           label: Text('Interview slots', style: GoogleFonts.inter()),
           onPressed: () => Navigator.push(
             context,
@@ -200,7 +208,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
           ),
         ),
         ActionChip(
-          avatar: const Icon(Icons.book_online, size: 18, color: AppColors.primaryRed),
+          avatar: const Icon(Icons.book_online,
+              size: 18, color: AppColors.primaryRed),
           label: Text('Self-service booking', style: GoogleFonts.inter()),
           onPressed: () => showDialog(
             context: context,
@@ -226,15 +235,19 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
 
   Widget _buildNotificationPreferences(ThemeProvider themeProvider) {
     if (_prefsLoading) {
-      return const SizedBox(height: 32, child: Center(child: CircularProgressIndicator()));
+      return const SizedBox(
+          height: 32, child: Center(child: CircularProgressIndicator()));
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
+        color:
+            themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: themeProvider.isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
+          color: themeProvider.isDarkMode
+              ? Colors.grey.shade800
+              : Colors.grey.shade300,
         ),
       ),
       child: Column(
@@ -245,7 +258,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
             'Notifications',
             style: GoogleFonts.inter(
               fontWeight: FontWeight.w600,
-              color: themeProvider.isDarkMode ? Colors.white : AppColors.textDark,
+              color:
+                  themeProvider.isDarkMode ? Colors.white : AppColors.textDark,
             ),
           ),
           const SizedBox(height: 8),
@@ -256,7 +270,9 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                   'Status changes (e.g. interview scheduled, rescheduled)',
                   style: GoogleFonts.inter(
                     fontSize: 13,
-                    color: themeProvider.isDarkMode ? Colors.grey.shade400 : AppColors.textGrey,
+                    color: themeProvider.isDarkMode
+                        ? Colors.grey.shade400
+                        : AppColors.textGrey,
                   ),
                 ),
               ),
@@ -274,13 +290,16 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                   'Upcoming interviews (reminders)',
                   style: GoogleFonts.inter(
                     fontSize: 13,
-                    color: themeProvider.isDarkMode ? Colors.grey.shade400 : AppColors.textGrey,
+                    color: themeProvider.isDarkMode
+                        ? Colors.grey.shade400
+                        : AppColors.textGrey,
                   ),
                 ),
               ),
               Switch(
                 value: _notifyUpcomingInterviews,
-                onChanged: (v) => _updateNotificationPrefs(upcomingInterviews: v),
+                onChanged: (v) =>
+                    _updateNotificationPrefs(upcomingInterviews: v),
                 activeColor: AppColors.primaryRed,
               ),
             ],
@@ -622,6 +641,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                       'end_time': endTime!.toIso8601String(),
                       'meeting_link': linkController.text.trim(),
                       'location': locationController.text.trim(),
+                      'participants':
+                          [], // Empty participants list for HM meetings
                     });
                   } else {
                     await _apiService.updateMeeting(meeting.id, {
@@ -631,6 +652,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                       'end_time': endTime!.toIso8601String(),
                       'meeting_link': linkController.text.trim(),
                       'location': locationController.text.trim(),
+                      'participants':
+                          [], // Empty participants list for HM meetings
                     });
                   }
                   Navigator.pop(context);
