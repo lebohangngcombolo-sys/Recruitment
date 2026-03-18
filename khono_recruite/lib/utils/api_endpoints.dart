@@ -9,6 +9,14 @@ class ApiEndpoints {
   static const generateJobDetails = "$aiBase/generate_job_details";
   static const generateQuestions = "$aiBase/generate_questions";
 
+  // ------------------- CV Analyser (proxied via recruitment backend) -------------------
+  static const cvAnalyserUpload =
+      "http://127.0.0.1:5000/api/cv-analyser/upload";
+  static String cvAnalyserStatus(String analysisId) =>
+      "http://127.0.0.1:5000/api/cv-analyser/analyses/$analysisId/status";
+  static String cvAnalyserResult(String analysisId) =>
+      "http://127.0.0.1:5000/api/cv-analyser/analyses/$analysisId/result";
+
   // NEW: Offer management base URL (matches your Flask blueprint)
   static const offerBase = "http://127.0.0.1:5000/api/offer";
 
@@ -72,11 +80,14 @@ class ApiEndpoints {
   static const saveDraft = "$candidateBase/apply/save_draft";
   static const getDrafts = "$candidateBase/applications/drafts";
   static const submitDraft = "$candidateBase/applications/submit_draft";
+
   /// GET – Candidate's interviews (same as getInterviews in service)
   static const getCandidateInterviewsList = "$candidateBase/interviews";
+
   /// POST – Candidate accepts an interview invite
   static String acceptInterviewInvite(int interviewId) =>
       "$candidateBase/interviews/$interviewId/accept";
+
   /// POST – Candidate declines an interview invite
   static String declineInterviewInvite(int interviewId) =>
       "$candidateBase/interviews/$interviewId/decline";
@@ -117,8 +128,10 @@ class ApiEndpoints {
   static const getInterviewsForCalendar = "$adminBase/interviews/calendar";
   static const getInterviewsAll = "$adminBase/interviews/all";
   static const getInterviewSlots = "$adminBase/interview-slots";
-  static const getInterviewSlotsAvailable = "$adminBase/interview-slots/available";
-  static String rescheduleInterview(int id) => "$adminBase/interviews/reschedule/$id";
+  static const getInterviewSlotsAvailable =
+      "$adminBase/interview-slots/available";
+  static String rescheduleInterview(int id) =>
+      "$adminBase/interviews/reschedule/$id";
   static String cancelInterview(int id) => "$adminBase/interviews/cancel/$id";
 
   // ------------------- Test packs -------------------
@@ -177,6 +190,7 @@ class ApiEndpoints {
       "$adminBase/candidates/$candidateId/applications";
   static String shortlistCandidates(int jobId) =>
       "$adminBase/jobs/$jobId/shortlist";
+
   /// GET – Export shortlist as CSV (returns file attachment)
   static String shortlistExport(int jobId) =>
       "$adminBase/jobs/$jobId/shortlist/export";
@@ -187,6 +201,7 @@ class ApiEndpoints {
   static const getAllInterviews = "$adminBase/interviews";
   static const getNotifications = "$adminBase/notifications";
   static const auditLogs = "$adminBase/audits";
+
   /// Pipeline activity (application status changes) for HM audit trail / admin
   static const pipelineActivity = "$adminBase/activity/pipeline";
   static const parseResume = "$adminBase/cv/parse";
@@ -351,8 +366,10 @@ class ApiEndpoints {
   static const getUpcomingMeetings = "$adminBase/meetings/upcoming";
 
   // ------------------- Notification preferences (admin/HM: status changes, upcoming interviews) -------------------
-  static const getNotificationPreferences = "$adminBase/notification-preferences";
-  static const updateNotificationPreferences = "$adminBase/notification-preferences";
+  static const getNotificationPreferences =
+      "$adminBase/notification-preferences";
+  static const updateNotificationPreferences =
+      "$adminBase/notification-preferences";
 
   // ------------------- Interview Calendar (Google Calendar) -------------------
   /// GET – Sync & compare upcoming interviews with Google Calendar
