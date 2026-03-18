@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from .extensions import db, jwt, mail, cloudinary_client, mongo_client, migrate, cors, bcrypt, oauth, limiter, socketio
 from .models import *
-from .routes import auth, admin_routes, candidate_routes, ai_routes, mfa_routes, sso_routes, analytics_routes, chat_routes, offer_routes, public_routes, test_pack_routes
+from .routes import auth, admin_routes, candidate_routes, ai_routes, mfa_routes, sso_routes, analytics_routes, chat_routes, offer_routes, public_routes, test_pack_routes, cv_analyser_routes
 from .websocket_handler import register_websocket_handlers
 import firebase_admin
 from firebase_admin import credentials
@@ -10,6 +10,13 @@ import os
 def create_app():
     app = Flask(__name__)
     app.config.from_object("app.config.Config")
+
+    # Warn if CV analyser proxy is not configured.
+    if not (os.getenv("CV_ANALYSER_SIGNING_SECRET") or os.getenv("SIGNING_SECRET")):
+        app.logger.warning(
+            "CV analyser proxy is enabled but no signing secret found. "
+            "Set CV_ANALYSER_SIGNING_SECRET (recommended) or SIGNING_SECRET."
+        )
 
     # ---------------- Initialize Extensions ----------------
     db.init_app(app)
@@ -103,6 +110,7 @@ def create_app():
     app.register_blueprint(chat_routes.chat_bp, url_prefix="/api/chat")
     app.register_blueprint(offer_routes.offer_bp, url_prefix="/api/offer")
     app.register_blueprint(public_routes.public_bp, url_prefix="/api/public")
+    app.register_blueprint(cv_analyser_routes.cv_analyser_bp, url_prefix="/api")
 
     # ---------------- Register SSO Blueprint ----------------
     sso_routes.register_sso_provider(app)      # initialize Auth0 / SSO provider
