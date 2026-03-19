@@ -931,6 +931,66 @@ def list_candidates():
         current_app.logger.error(f"Error fetching candidates: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
 
+
+@admin_bp.route("/candidates/all", methods=["GET"])
+@role_required(["admin", "hiring_manager", "hr"])
+def list_all_candidates():
+    """Get all candidates without pagination - for admin portal full list view."""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id) if current_user_id else None
+
+        # Build query
+        query = Candidate.query
+        if current_user and current_user.role == "hiring_manager":
+            # Restrict to candidates who have at least one application to this HM's jobs (or unowned jobs)
+            # Use subquery to avoid DISTINCT on JSON columns (PostgreSQL limitation)
+            candidate_ids_subquery = db.session.query(Candidate.id).join(
+                Application, Application.candidate_id == Candidate.id
+            ).join(
+                Requisition, Application.requisition_id == Requisition.id
+            ).filter(
+                or_(
+                    Requisition.created_by == current_user_id,
+                    Requisition.created_by.is_(None),
+                )
+            ).distinct().subquery()
+            
+            query = Candidate.query.filter(Candidate.id.in_(candidate_ids_subquery))
+        
+        # Get all candidates (no pagination for the 'all' endpoint)
+        all_candidates = query.all()
+        
+        # Enrich candidate data with applications and user info
+        enriched_candidates = []
+        for candidate in all_candidates:
+            # Get user information
+            user = User.query.get(candidate.user_id) if candidate.user_id else None
+            
+            # Get applications for this candidate
+            applications = Application.query.filter_by(candidate_id=candidate.id).all()
+            
+            # Get latest application status
+            latest_application = max(applications, key=lambda x: x.created_at) if applications else None
+            
+            enriched_candidates.append({
+                **candidate.to_dict(),
+                'user_email': user.email if user else None,
+                'user_role': user.role if user else None,
+                'user_created_at': user.created_at.isoformat() if user and user.created_at else None,
+                'latest_application_status': latest_application.status if latest_application else None,
+                'total_applications': len(applications),
+            })
+        
+        return jsonify({
+            'candidates': enriched_candidates,
+            'total': len(enriched_candidates)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching all candidates: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
 @admin_bp.route("/applications/<int:application_id>", methods=["GET"])
 @role_required(["admin", "hiring_manager", "hr"])
 def get_application(application_id):
