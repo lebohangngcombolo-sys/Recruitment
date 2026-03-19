@@ -1553,6 +1553,37 @@ def get_candidate_notifications():
         return jsonify({'error': 'Failed to fetch notifications', 'notifications': []}), 500
 
 
+@candidate_bp.route("/notifications/<int:notification_id>/read", methods=["PATCH", "POST", "OPTIONS"])
+@role_required(["candidate"])
+def mark_candidate_notification_read(notification_id):
+    """Mark a notification as read. Candidate can only mark their own."""
+    if request.method == "OPTIONS":
+        return "", 204
+    try:
+        current_user_id = get_jwt_identity()
+        current_user_id = int(current_user_id) if current_user_id is not None else None
+        if current_user_id is None:
+            return jsonify({"error": "Unauthorized"}), 401
+
+        notification = Notification.query.get(notification_id)
+        if not notification:
+            return jsonify({"error": "Notification not found"}), 404
+        if int(notification.user_id) != int(current_user_id):
+            return jsonify({"error": "Forbidden: you can only mark your own notifications"}), 403
+
+        notification.is_read = True
+        db.session.commit()
+        return jsonify(
+            {"message": "Marked as read", "notification": notification.to_dict()}
+        ), 200
+    except Exception as e:
+        current_app.logger.error(
+            "Mark candidate notification read error: %s", e, exc_info=True
+        )
+        db.session.rollback()
+        return jsonify({"error": "Failed to mark notification as read"}), 500
+
+
 # ----------------- SAVE APPLICATION DRAFT -----------------
 @candidate_bp.route("/applications/<int:application_id>/draft", methods=["POST"])
 @role_required(["candidate"])
