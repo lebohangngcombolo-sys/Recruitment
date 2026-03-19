@@ -8,7 +8,8 @@ import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/admin_service.dart';
 import '../../widgets/custom_button.dart';
-import 'analytics_export_stub.dart' if (dart.library.html) 'analytics_export_web.dart' as analytics_export;
+import 'analytics_export_stub.dart'
+    if (dart.library.html) 'analytics_export_web.dart' as analytics_export;
 import 'candidate_detail_screen.dart';
 
 class CandidateManagementScreen extends StatefulWidget {
@@ -33,7 +34,13 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
   bool _isExportingCsv = false;
 
   static const List<String> _statusOptions = [
-    'all', 'screening', 'assessment', 'interview', 'offer', 'hired', 'rejected',
+    'all',
+    'screening',
+    'assessment',
+    'interview',
+    'offer',
+    'hired',
+    'rejected',
   ];
 
   static const List<String> _recommendationOptions = [
@@ -59,9 +66,11 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     var list = candidates;
     final query = _searchController.text.trim().toLowerCase();
     if (query.isNotEmpty) {
-      final words = query.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+      final words =
+          query.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
       list = list.where((c) {
-        final name = (c['full_name'] ?? c['name'] ?? '').toString().toLowerCase();
+        final name =
+            (c['full_name'] ?? c['name'] ?? '').toString().toLowerCase();
         final email = (c['email'] ?? '').toString().toLowerCase();
         final job = (c['job_title'] ?? '').toString().toLowerCase();
         final s = '$name $email $job';
@@ -69,10 +78,15 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
       }).toList();
     }
     if (_statusFilter != 'all') {
-      list = list.where((c) => (c['status'] ?? '').toString().toLowerCase() == _statusFilter).toList();
+      list = list
+          .where((c) =>
+              (c['status'] ?? '').toString().toLowerCase() == _statusFilter)
+          .toList();
     }
     if (_jobFilter != null && _jobFilter!.isNotEmpty) {
-      list = list.where((c) => (c['job_title'] ?? '').toString() == _jobFilter).toList();
+      list = list
+          .where((c) => (c['job_title'] ?? '').toString() == _jobFilter)
+          .toList();
     }
     return list;
   }
@@ -100,7 +114,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
         rawApplications = await admin.shortlistCandidates(widget.jobId);
       }
 
-      final fetched = (rawApplications).map<Map<String, dynamic>>((dynamic app) {
+      final fetched =
+          (rawApplications).map<Map<String, dynamic>>((dynamic app) {
         final map = Map<String, dynamic>.from(app as Map);
         final candidateData = (map['candidate'] is Map)
             ? Map<String, dynamic>.from(map['candidate'] as Map)
@@ -159,8 +174,12 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     Uint8List headerBytes;
     Uint8List footerBytes;
     try {
-      headerBytes = (await rootBundle.load('assets/images/logo2.png')).buffer.asUint8List();
-      footerBytes = (await rootBundle.load('assets/images/logo.png')).buffer.asUint8List();
+      headerBytes = (await rootBundle.load('assets/images/logo2.png'))
+          .buffer
+          .asUint8List();
+      footerBytes = (await rootBundle.load('assets/images/logo.png'))
+          .buffer
+          .asUint8List();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -174,11 +193,18 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
 
     pw.ThemeData pdfTheme;
     try {
-      final poppinsRegular = await rootBundle.load('assets/fonts/Poppins-Regular.ttf');
-      final poppinsBold = await rootBundle.load('assets/fonts/Poppins-Bold.ttf');
+      final poppinsRegular =
+          await rootBundle.load('assets/fonts/Poppins-Regular.ttf');
+      final poppinsBold =
+          await rootBundle.load('assets/fonts/Poppins-Bold.ttf');
       pdfTheme = pw.ThemeData.withFont(
-        base: pw.Font.ttf(Uint8List.fromList(poppinsRegular.buffer.asUint8List()).buffer.asByteData()),
-        bold: pw.Font.ttf(Uint8List.fromList(poppinsBold.buffer.asUint8List()).buffer.asByteData()),
+        base: pw.Font.ttf(
+            Uint8List.fromList(poppinsRegular.buffer.asUint8List())
+                .buffer
+                .asByteData()),
+        bold: pw.Font.ttf(Uint8List.fromList(poppinsBold.buffer.asUint8List())
+            .buffer
+            .asByteData()),
       );
     } catch (e) {
       if (mounted) {
@@ -189,7 +215,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
       return null;
     }
 
-    final generatedOn = DateFormat('EEEE, d MMMM yyyy · HH:mm').format(DateTime.now());
+    final generatedOn =
+        DateFormat('EEEE, d MMMM yyyy · HH:mm').format(DateTime.now());
     final title = widget.jobId <= 0 ? 'Candidates (all jobs)' : 'Candidates';
     final doc = pw.Document(theme: pdfTheme);
     doc.addPage(
@@ -215,24 +242,52 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
           ),
         ),
         build: (pw.Context context) {
-          final reportFor = widget.jobId <= 0 ? 'Hiring Committee (all jobs)' : 'Hiring Committee';
+          final reportFor = widget.jobId <= 0
+              ? 'Hiring Committee (all jobs)'
+              : 'Hiring Committee';
           final rows = <pw.Widget>[
-            pw.Header(level: 0, text: 'Shortlist / Candidates Report', textStyle: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.Header(
+                level: 0,
+                text: 'Shortlist / Candidates Report',
+                textStyle:
+                    pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 6),
-            pw.Paragraph(text: 'Report generated for: $reportFor · $title', style: const pw.TextStyle(fontSize: 10)),
-            pw.Paragraph(text: 'Generated on: $generatedOn', style: const pw.TextStyle(fontSize: 10)),
+            pw.Paragraph(
+                text: 'Report generated for: $reportFor · $title',
+                style: const pw.TextStyle(fontSize: 10)),
+            pw.Paragraph(
+                text: 'Generated on: $generatedOn',
+                style: const pw.TextStyle(fontSize: 10)),
             pw.SizedBox(height: 12),
           ];
           if (list.isEmpty) {
-            rows.add(pw.Paragraph(text: 'No candidates to export. Apply filters or refresh.', style: const pw.TextStyle(fontSize: 10)));
+            rows.add(pw.Paragraph(
+                text: 'No candidates to export. Apply filters or refresh.',
+                style: const pw.TextStyle(fontSize: 10)));
           } else {
             rows.add(pw.Table.fromTextArray(
               context: context,
               data: [
-                ['Candidate', 'Email', 'Job applied', 'CV Score', 'Overall', 'Status', 'Recommendation'],
+                [
+                  'Candidate',
+                  'Email',
+                  'Job applied',
+                  'CV Score',
+                  'Overall',
+                  'Status',
+                  'Recommendation'
+                ],
                 ...list.map((c) {
-                  final cv = c['cv_score'] != null ? (c['cv_score'] is num ? (c['cv_score'] as num).toStringAsFixed(0) : c['cv_score'].toString()) : '—';
-                  final ov = c['overall_score'] != null ? (c['overall_score'] is num ? (c['overall_score'] as num).toStringAsFixed(0) : c['overall_score'].toString()) : '—';
+                  final cv = c['cv_score'] != null
+                      ? (c['cv_score'] is num
+                          ? (c['cv_score'] as num).toStringAsFixed(0)
+                          : c['cv_score'].toString())
+                      : '—';
+                  final ov = c['overall_score'] != null
+                      ? (c['overall_score'] is num
+                          ? (c['overall_score'] as num).toStringAsFixed(0)
+                          : c['overall_score'].toString())
+                      : '—';
                   return [
                     (c['full_name'] ?? c['name'] ?? '—').toString(),
                     (c['email'] ?? '—').toString(),
@@ -244,7 +299,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                   ];
                 }),
               ],
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+              headerStyle:
+                  pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
               cellStyle: const pw.TextStyle(fontSize: 9),
             ));
           }
@@ -265,22 +321,38 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     final list = _filteredCandidates();
     if (list.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No candidates to export. Apply filters or refresh.')),
+        const SnackBar(
+            content:
+                Text('No candidates to export. Apply filters or refresh.')),
       );
       return;
     }
     if (!mounted) return;
     setState(() => _isExportingCsv = true);
     try {
-      const header = 'Candidate,Email,Job applied,CV Score,Assessment Score,Overall,Status,Recommendation';
+      const header =
+          'Candidate,Email,Job applied,CV Score,Assessment Score,Overall,Status,Recommendation';
       final rows = list.map((c) {
-        final cv = c['cv_score'] != null ? (c['cv_score'] is num ? (c['cv_score'] as num).toString() : c['cv_score'].toString()) : '';
-        final assess = c['assessment_score'] != null ? (c['assessment_score'] is num ? (c['assessment_score'] as num).toString() : c['assessment_score'].toString()) : '';
-        final ov = c['overall_score'] != null ? (c['overall_score'] is num ? (c['overall_score'] as num).toString() : c['overall_score'].toString()) : '';
+        final cv = c['cv_score'] != null
+            ? (c['cv_score'] is num
+                ? (c['cv_score'] as num).toString()
+                : c['cv_score'].toString())
+            : '';
+        final assess = c['assessment_score'] != null
+            ? (c['assessment_score'] is num
+                ? (c['assessment_score'] as num).toString()
+                : c['assessment_score'].toString())
+            : '';
+        final ov = c['overall_score'] != null
+            ? (c['overall_score'] is num
+                ? (c['overall_score'] as num).toString()
+                : c['overall_score'].toString())
+            : '';
         return '${_csvEscape((c['full_name'] ?? c['name'] ?? '').toString())},${_csvEscape((c['email'] ?? '').toString())},${_csvEscape((c['job_title'] ?? '').toString())},$cv,$assess,$ov,${_csvEscape((c['status'] ?? '').toString())},${_csvEscape((c['recommendation'] ?? '').toString())}';
       });
       final csv = '$header\n${rows.join('\n')}';
-      final filename = 'shortlist_export_${DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first}.csv';
+      final filename =
+          'shortlist_export_${DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first}.csv';
       await analytics_export.downloadShortlistCsv(context, csv, filename);
     } catch (e) {
       if (mounted) {
@@ -297,7 +369,9 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     final list = _filteredCandidates();
     if (list.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No candidates to export. Apply filters or refresh.')),
+        const SnackBar(
+            content:
+                Text('No candidates to export. Apply filters or refresh.')),
       );
       return;
     }
@@ -306,7 +380,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     try {
       final bytes = await _buildShortlistPdf();
       if (bytes == null || !mounted) return;
-      final filename = 'shortlist_export_${DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first}.pdf';
+      final filename =
+          'shortlist_export_${DateTime.now().toIso8601String().replaceAll(':', '-').split('.').first}.pdf';
       analytics_export.downloadShortlistPdf(context, bytes, filename);
     } catch (e) {
       if (mounted) {
@@ -326,28 +401,35 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
       await admin.updateApplicationRecommendation(applicationId as int, value);
       if (!mounted) return;
       setState(() {
-        final idx = candidates.indexWhere((x) =>
-            (x['application_id'] ?? x['id']) == applicationId);
+        final idx = candidates.indexWhere(
+            (x) => (x['application_id'] ?? x['id']) == applicationId);
         if (idx >= 0) candidates[idx]['recommendation'] = value;
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Recommendation set to $value', style: const TextStyle(fontFamily: 'Poppins'))),
+          SnackBar(
+              content: Text('Recommendation set to $value',
+                  style: const TextStyle(fontFamily: 'Poppins'))),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to set recommendation: $e', style: const TextStyle(fontFamily: 'Poppins')), backgroundColor: Colors.redAccent),
+          SnackBar(
+              content: Text('Failed to set recommendation: $e',
+                  style: const TextStyle(fontFamily: 'Poppins')),
+              backgroundColor: Colors.redAccent),
         );
       }
     }
   }
 
   static Color _recommendationColor(String? rec, ThemeProvider themeProvider) {
-    if (rec == null || rec.isEmpty) return themeProvider.isDarkMode ? Colors.grey : Colors.grey.shade700;
+    if (rec == null || rec.isEmpty)
+      return themeProvider.isDarkMode ? Colors.grey : Colors.grey.shade700;
     final lower = rec.toLowerCase();
-    if (lower.contains('proceed') || lower.contains('final interview')) return Colors.green;
+    if (lower.contains('proceed') || lower.contains('final interview'))
+      return Colors.green;
     if (lower.contains('hold')) return Colors.orange;
     if (lower.contains('reject')) return Colors.red;
     return themeProvider.isDarkMode ? Colors.grey : Colors.grey.shade700;
@@ -370,7 +452,8 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Candidate ID not found", style: const TextStyle(fontFamily: 'Poppins')),
+          content: Text("Candidate ID not found",
+              style: const TextStyle(fontFamily: 'Poppins')),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -383,18 +466,22 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     final parts = fullName.trim().split(' ');
     if (parts.isEmpty) return "?";
     if (parts.length == 1) return parts[0].substring(0, 1).toUpperCase();
-    return '${parts[0].substring(0, 1)}${parts[parts.length - 1].substring(0, 1)}'.toUpperCase();
+    return '${parts[0].substring(0, 1)}${parts[parts.length - 1].substring(0, 1)}'
+        .toUpperCase();
   }
 
   Widget _buildCandidatesTable(ThemeProvider themeProvider) {
     final list = _filteredCandidates();
     final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
-    final borderColor = themeProvider.isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300;
+    final borderColor =
+        themeProvider.isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white).withValues(alpha: 0.95),
+        color:
+            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
+                .withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: borderColor),
       ),
@@ -403,19 +490,99 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(
-              color: themeProvider.isDarkMode ? Colors.grey.shade900 : Colors.grey.shade200,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              color: themeProvider.isDarkMode
+                  ? Colors.grey.shade900
+                  : Colors.grey.shade200,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
             ),
-            child: Row(
+            child: Table(
+              columnWidths: const {
+                0: FlexColumnWidth(2), // Candidate
+                1: FlexColumnWidth(2), // Email
+                2: FlexColumnWidth(2), // Job applied
+                3: FlexColumnWidth(1), // CV
+                4: FlexColumnWidth(1), // Overall
+                5: FlexColumnWidth(1), // Status
+                6: FlexColumnWidth(2), // Recommendation
+                7: FixedColumnWidth(80), // Actions
+              },
               children: [
-                Expanded(flex: 2, child: Text('Candidate', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold, fontSize: 14, color: textColor))),
-                Expanded(flex: 2, child: Text('Email', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold, fontSize: 14, color: textColor))),
-                Expanded(flex: 2, child: Text('Job applied', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold, fontSize: 14, color: textColor))),
-                Expanded(flex: 1, child: Text('CV', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold, fontSize: 12, color: textColor))),
-                Expanded(flex: 1, child: Text('Overall', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold, fontSize: 12, color: textColor))),
-                Expanded(flex: 1, child: Text('Status', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold, fontSize: 14, color: textColor))),
-                Expanded(flex: 2, child: Text('Recommendation', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold, fontSize: 12, color: textColor))),
-                const SizedBox(width: 120),
+                TableRow(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Text('Candidate',
+                          style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: textColor)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Text('Email',
+                          style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: textColor)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Text('Job applied',
+                          style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: textColor)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Text('CV',
+                          style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: textColor)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Text('Overall',
+                          style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: textColor)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Text('Status',
+                          style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: textColor)),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      child: Text('Recommendation',
+                          style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: textColor)),
+                    ),
+                    const SizedBox(width: 80),
+                  ],
+                ),
               ],
             ),
           ),
@@ -432,67 +599,172 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                 } else if (status == 'rejected') {
                   statusColor = Colors.red;
                 } else {
-                  statusColor = themeProvider.isDarkMode ? Colors.blue.shade200 : Colors.blue.shade800;
+                  statusColor = themeProvider.isDarkMode
+                      ? Colors.blue.shade200
+                      : Colors.blue.shade800;
                 }
                 final rec = (c['recommendation'] ?? '').toString();
-                final recColor = _recommendationColor(rec.isEmpty ? null : rec, themeProvider);
-                final cvScore = c['cv_score'] != null ? (c['cv_score'] is num ? (c['cv_score'] as num).toDouble() : double.tryParse(c['cv_score'].toString()) ?? 0.0) : 0.0;
-                final overallScore = c['overall_score'] != null ? (c['overall_score'] is num ? (c['overall_score'] as num).toDouble() : double.tryParse(c['overall_score'].toString()) ?? 0.0) : 0.0;
+                final recColor = _recommendationColor(
+                    rec.isEmpty ? null : rec, themeProvider);
+                final cvScore = c['cv_score'] != null
+                    ? (c['cv_score'] is num
+                        ? (c['cv_score'] as num).toDouble()
+                        : double.tryParse(c['cv_score'].toString()) ?? 0.0)
+                    : 0.0;
+                final overallScore = c['overall_score'] != null
+                    ? (c['overall_score'] is num
+                        ? (c['overall_score'] as num).toDouble()
+                        : double.tryParse(c['overall_score'].toString()) ?? 0.0)
+                    : 0.0;
                 return InkWell(
                   onTap: () => openCandidateDetails(c),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     decoration: BoxDecoration(
                       border: Border(bottom: BorderSide(color: borderColor)),
                     ),
-                    child: Row(
+                    child: Table(
+                      columnWidths: const {
+                        0: FlexColumnWidth(2), // Candidate
+                        1: FlexColumnWidth(2), // Email
+                        2: FlexColumnWidth(2), // Job applied
+                        3: FlexColumnWidth(1), // CV
+                        4: FlexColumnWidth(1), // Overall
+                        5: FlexColumnWidth(1), // Status
+                        6: FlexColumnWidth(2), // Recommendation
+                        7: FixedColumnWidth(80), // Actions
+                      },
                       children: [
-                        Expanded(flex: 2, child: Text(c['full_name'] ?? c['name'] ?? '—', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: textColor), overflow: TextOverflow.ellipsis)),
-                        Expanded(flex: 2, child: Text((c['email'] ?? '—').toString(), style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: textColor), overflow: TextOverflow.ellipsis)),
-                        Expanded(flex: 2, child: Text((c['job_title'] ?? '—').toString(), style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: textColor), overflow: TextOverflow.ellipsis)),
-                        Expanded(flex: 1, child: Text(cvScore.toStringAsFixed(0), style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: textColor))),
-                        Expanded(flex: 1, child: Text(overallScore.toStringAsFixed(0), style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: textColor))),
-                        Expanded(
-                          flex: 1,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
+                        TableRow(
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 12),
+                              child: Text(c['full_name'] ?? c['name'] ?? '—',
+                                  style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 13,
+                                      color: textColor),
+                                  overflow: TextOverflow.ellipsis),
                             ),
-                            child: Text(status, style: TextStyle(fontFamily: 'Poppins', fontSize: 11, fontWeight: FontWeight.w600, color: statusColor), overflow: TextOverflow.ellipsis, maxLines: 1),
-                          ),
-                        ),
-                        Expanded(
-                          flex: 2,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Expanded(
-                                child: rec.isNotEmpty
-                                    ? Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: recColor.withValues(alpha: 0.15),
-                                          borderRadius: BorderRadius.circular(6),
-                                        ),
-                                        child: Text(rec, style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w500, color: recColor), overflow: TextOverflow.ellipsis, maxLines: 1),
-                                      )
-                                    : const SizedBox.shrink(),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 12),
+                              child: Text((c['email'] ?? '—').toString(),
+                                  style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 12,
+                                      color: textColor),
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 12),
+                              child: Text((c['job_title'] ?? '—').toString(),
+                                  style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 12,
+                                      color: textColor),
+                                  overflow: TextOverflow.ellipsis),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 12),
+                              child: Text(cvScore.toStringAsFixed(0),
+                                  style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 12,
+                                      color: textColor)),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 12),
+                              child: Text(overallScore.toStringAsFixed(0),
+                                  style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 12,
+                                      color: textColor)),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: statusColor.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(status,
+                                    style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: statusColor),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1),
                               ),
-                              PopupMenuButton<String>(
-                                padding: EdgeInsets.zero,
-                                icon: Icon(Icons.more_vert, size: 18, color: textColor),
-                                onSelected: (value) => _setRecommendation(c, value),
-                                itemBuilder: (context) => _recommendationOptions
-                                    .map((opt) => PopupMenuItem(value: opt, child: Text(opt, style: const TextStyle(fontFamily: 'Poppins', fontSize: 12))))
-                                    .toList(),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 12),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Expanded(
+                                    child: rec.isNotEmpty
+                                        ? Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 6, vertical: 4),
+                                            decoration: BoxDecoration(
+                                              color: recColor.withValues(
+                                                  alpha: 0.15),
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                            ),
+                                            child: Text(rec,
+                                                style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w500,
+                                                    color: recColor),
+                                                overflow: TextOverflow.ellipsis,
+                                                maxLines: 1),
+                                          )
+                                        : const SizedBox.shrink(),
+                                  ),
+                                  PopupMenuButton<String>(
+                                    padding: EdgeInsets.zero,
+                                    icon: Icon(Icons.more_vert,
+                                        size: 18, color: textColor),
+                                    onSelected: (value) =>
+                                        _setRecommendation(c, value),
+                                    itemBuilder: (context) =>
+                                        _recommendationOptions
+                                            .map((opt) => PopupMenuItem(
+                                                value: opt,
+                                                child: Text(
+                                                    opt,
+                                                    style: const TextStyle(
+                                                        fontFamily: 'Poppins',
+                                                        fontSize: 12))))
+                                            .toList(),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 12),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.arrow_forward_ios,
+                                      size: 14, color: Colors.grey),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
                       ],
                     ),
                   ),
@@ -515,207 +787,299 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
         color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
       ),
       child: Scaffold(
-      // 🌆 Dynamic background implementation
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage(themeProvider.backgroundImage),
-            fit: BoxFit.cover,
+        // 🌆 Dynamic background implementation
+        body: Container(
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage(themeProvider.backgroundImage),
+              fit: BoxFit.cover,
+            ),
           ),
-        ),
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: SafeArea(
-            child: Column(
-              children: [
-                // Sticky header
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                  color: (themeProvider.isDarkMode
-                          ? const Color(0xFF14131E)
-                          : Colors.white)
-                      .withValues(alpha: 0.9),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            widget.jobId <= 0 ? "All Candidates" : "Candidates",
-                            style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87),
-                          ),
-                          if (widget.jobId > 0)
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  // Sticky header
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 16),
+                    color: (themeProvider.isDarkMode
+                            ? const Color(0xFF14131E)
+                            : Colors.white)
+                        .withValues(alpha: 0.9),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
                             Text(
-                              'Ranked shortlist',
+                              widget.jobId <= 0
+                                  ? "All Candidates"
+                                  : "Candidates",
                               style: TextStyle(
-                                fontFamily: 'Poppins',
-                                fontSize: 12,
-                                color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.black54,
+                                  fontFamily: 'Poppins',
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: themeProvider.isDarkMode
+                                      ? Colors.white
+                                      : Colors.black87),
+                            ),
+                            if (widget.jobId > 0)
+                              Text(
+                                'Ranked shortlist',
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 12,
+                                  color: themeProvider.isDarkMode
+                                      ? Colors.grey.shade400
+                                      : Colors.black54,
+                                ),
+                              ),
+                          ],
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            OutlinedButton.icon(
+                              onPressed:
+                                  _isExportingCsv ? null : _exportShortlistCsv,
+                              icon: _isExportingCsv
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2))
+                                  : const Icon(Icons.table_chart_outlined,
+                                      size: 20),
+                              label: Text(_isExportingCsv
+                                  ? 'Exporting…'
+                                  : 'Export CSV'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: themeProvider.isDarkMode
+                                    ? Colors.white70
+                                    : Colors.black87,
+                                side: BorderSide(
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade600
+                                        : Colors.grey),
                               ),
                             ),
-                        ],
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: _isExportingCsv ? null : _exportShortlistCsv,
-                            icon: _isExportingCsv
-                                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                                : const Icon(Icons.table_chart_outlined, size: 20),
-                            label: Text(_isExportingCsv ? 'Exporting…' : 'Export CSV'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: themeProvider.isDarkMode ? Colors.white70 : Colors.black87,
-                              side: BorderSide(color: themeProvider.isDarkMode ? Colors.grey.shade600 : Colors.grey),
+                            const SizedBox(width: 12),
+                            OutlinedButton.icon(
+                              onPressed: _isExportingShortlist
+                                  ? null
+                                  : _exportShortlistPdf,
+                              icon: _isExportingShortlist
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2))
+                                  : const Icon(Icons.picture_as_pdf_outlined,
+                                      size: 20),
+                              label: Text(_isExportingShortlist
+                                  ? 'Exporting…'
+                                  : 'Export PDF'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: themeProvider.isDarkMode
+                                    ? Colors.white70
+                                    : Colors.black87,
+                                side: BorderSide(
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade600
+                                        : Colors.grey),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          OutlinedButton.icon(
-                            onPressed: _isExportingShortlist ? null : _exportShortlistPdf,
-                            icon: _isExportingShortlist
-                                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                                : const Icon(Icons.picture_as_pdf_outlined, size: 20),
-                            label: Text(_isExportingShortlist ? 'Exporting…' : 'Export PDF'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: themeProvider.isDarkMode ? Colors.white70 : Colors.black87,
-                              side: BorderSide(color: themeProvider.isDarkMode ? Colors.grey.shade600 : Colors.grey),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          CustomButton(
-                            text: "Refresh",
-                            onPressed: fetchShortlist,
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Divider(
-                    height: 1,
-                    color: themeProvider.isDarkMode
-                        ? Colors.grey.shade800
-                        : Colors.grey),
-
-                // Search and filters
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      TextField(
-                        controller: _searchController,
-                        style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
-                          fontSize: 14,
-                        ),
-                        decoration: InputDecoration(
-                          hintText: 'Search by name, email, or job title...',
-                          hintStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode ? Colors.grey.shade500 : Colors.grey.shade600,
-                          ),
-                          prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: themeProvider.isDarkMode ? Colors.grey.shade700 : Colors.grey.shade400,
-                            ),
-                          ),
-                          filled: true,
-                          fillColor: themeProvider.isDarkMode
-                              ? Colors.grey.shade900.withValues(alpha: 0.5)
-                              : Colors.grey.shade50,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Text('Status: ', style: TextStyle(fontFamily: 'Poppins', fontSize: 14, color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.black54)),
-                          DropdownButton<String>(
-                            value: _statusFilter,
-                            underline: const SizedBox(),
-                            borderRadius: BorderRadius.circular(8),
-                            dropdownColor: themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
-                            style: TextStyle(fontFamily: 'Poppins', color: themeProvider.isDarkMode ? Colors.white : Colors.black87, fontSize: 14),
-                            items: _statusOptions.map((s) => DropdownMenuItem(
-                              value: s,
-                              child: Text(s == 'all' ? 'All' : s[0].toUpperCase() + s.substring(1), style: TextStyle(fontFamily: 'Poppins', color: themeProvider.isDarkMode ? Colors.white : Colors.black87)),
-                            )).toList(),
-                            onChanged: (v) => setState(() => _statusFilter = v ?? 'all'),
-                          ),
-                          if (widget.jobId <= 0 && _jobTitleOptions.length > 1) ...[
-                            const SizedBox(width: 24),
-                            Text('Job: ', style: TextStyle(fontFamily: 'Poppins', fontSize: 14, color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.black54)),
-                            DropdownButton<String?>(
-                              value: _jobFilter,
-                              underline: const SizedBox(),
-                              borderRadius: BorderRadius.circular(8),
-                              dropdownColor: themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
-                              style: TextStyle(fontFamily: 'Poppins', color: themeProvider.isDarkMode ? Colors.white : Colors.black87, fontSize: 14),
-                              items: _jobTitleOptions.map((t) => DropdownMenuItem(
-                                value: t == 'All jobs' ? null : t,
-                                child: Text(t, style: TextStyle(fontFamily: 'Poppins', color: themeProvider.isDarkMode ? Colors.white : Colors.black87), overflow: TextOverflow.ellipsis),
-                              )).toList(),
-                              onChanged: (v) => setState(() => _jobFilter = (v == 'All jobs' || v == null) ? null : v),
+                            const SizedBox(width: 12),
+                            CustomButton(
+                              text: "Refresh",
+                              onPressed: fetchShortlist,
                             ),
                           ],
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                  Divider(
+                      height: 1,
+                      color: themeProvider.isDarkMode
+                          ? Colors.grey.shade800
+                          : Colors.grey),
 
-                // Table: loading / message / empty / list
-                Expanded(
-                  child: loading
-                      ? const Center(
-                          child: CircularProgressIndicator(color: Colors.redAccent),
-                        )
-                      : statusMessage != null
-                          ? Center(
-                              child: Text(
-                                statusMessage!,
-                                textAlign: TextAlign.center,
+                  // Search and filters
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                          controller: _searchController,
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: themeProvider.isDarkMode
+                                ? Colors.white
+                                : Colors.black87,
+                            fontSize: 14,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Search by name, email, or job title...',
+                            hintStyle: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: themeProvider.isDarkMode
+                                  ? Colors.grey.shade500
+                                  : Colors.grey.shade600,
+                            ),
+                            prefixIcon:
+                                const Icon(Icons.search, color: Colors.grey),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.grey.shade700
+                                    : Colors.grey.shade400,
+                              ),
+                            ),
+                            filled: true,
+                            fillColor: themeProvider.isDarkMode
+                                ? Colors.grey.shade900.withValues(alpha: 0.5)
+                                : Colors.grey.shade50,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Text('Status: ',
+                                style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 14,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade400
+                                        : Colors.black54)),
+                            DropdownButton<String>(
+                              value: _statusFilter,
+                              underline: const SizedBox(),
+                              borderRadius: BorderRadius.circular(8),
+                              dropdownColor: themeProvider.isDarkMode
+                                  ? const Color(0xFF14131E)
+                                  : Colors.white,
+                              style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: themeProvider.isDarkMode
+                                      ? Colors.white
+                                      : Colors.black87,
+                                  fontSize: 14),
+                              items: _statusOptions
+                                  .map((s) => DropdownMenuItem(
+                                        value: s,
+                                        child: Text(
+                                            s == 'all'
+                                                ? 'All'
+                                                : s[0].toUpperCase() +
+                                                    s.substring(1),
+                                            style: TextStyle(
+                                                fontFamily: 'Poppins',
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.white
+                                                    : Colors.black87)),
+                                      ))
+                                  .toList(),
+                              onChanged: (v) =>
+                                  setState(() => _statusFilter = v ?? 'all'),
+                            ),
+                            if (widget.jobId <= 0 &&
+                                _jobTitleOptions.length > 1) ...[
+                              const SizedBox(width: 24),
+                              Text('Job: ',
+                                  style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 14,
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.grey.shade400
+                                          : Colors.black54)),
+                              DropdownButton<String?>(
+                                value: _jobFilter,
+                                underline: const SizedBox(),
+                                borderRadius: BorderRadius.circular(8),
+                                dropdownColor: themeProvider.isDarkMode
+                                    ? const Color(0xFF14131E)
+                                    : Colors.white,
                                 style: TextStyle(
                                     fontFamily: 'Poppins',
                                     color: themeProvider.isDarkMode
-                                        ? Colors.grey.shade300
-                                        : Colors.black54,
-                                    fontSize: 16),
+                                        ? Colors.white
+                                        : Colors.black87,
+                                    fontSize: 14),
+                                items: _jobTitleOptions
+                                    .map((t) => DropdownMenuItem(
+                                          value: t == 'All jobs' ? null : t,
+                                          child: Text(t,
+                                              style: TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  color:
+                                                      themeProvider.isDarkMode
+                                                          ? Colors.white
+                                                          : Colors.black87),
+                                              overflow: TextOverflow.ellipsis),
+                                        ))
+                                    .toList(),
+                                onChanged: (v) => setState(() => _jobFilter =
+                                    (v == 'All jobs' || v == null) ? null : v),
                               ),
-                            )
-                          : _filteredCandidates().isEmpty
-                              ? Center(
-                                  child: Text(
-                                    candidates.isEmpty ? "No candidates found" : "No candidates match your search or filter",
-                                    style: TextStyle(
-                                        fontFamily: 'Poppins',
-                                        color: themeProvider.isDarkMode
-                                            ? Colors.grey.shade400
-                                            : Colors.black54,
-                                        fontSize: 16),
-                                  ),
-                                )
-                              : _buildCandidatesTable(themeProvider),
-                ),
-              ],
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Table: loading / message / empty / list
+                  Expanded(
+                    child: loading
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                                color: Colors.redAccent),
+                          )
+                        : statusMessage != null
+                            ? Center(
+                                child: Text(
+                                  statusMessage!,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.grey.shade300
+                                          : Colors.black54,
+                                      fontSize: 16),
+                                ),
+                              )
+                            : _filteredCandidates().isEmpty
+                                ? Center(
+                                    child: Text(
+                                      candidates.isEmpty
+                                          ? "No candidates found"
+                                          : "No candidates match your search or filter",
+                                      style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.grey.shade400
+                                              : Colors.black54,
+                                          fontSize: 16),
+                                    ),
+                                  )
+                                : _buildCandidatesTable(themeProvider),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
 }
