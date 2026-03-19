@@ -515,6 +515,8 @@ class ApiEndpoints {
   static const deactivateCandidateAccount =
       "$candidateBase/settings/deactivate";
   static const getCandidateNotifications = "$candidateBase/notifications";
+  static String markCandidateNotificationRead(int notificationId) =>
+      "$candidateBase/notifications/$notificationId/read";
 
   // ==================== HELPER METHODS ====================
 
