@@ -255,7 +255,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
               icon: const Icon(Icons.arrow_back, color: Colors.white),
               onPressed: () => Navigator.pop(context),
             ),
-            title: Text(candidateData?['full_name'] ?? "Candidate Details"),
+            title: null,
             backgroundColor: Colors.black87.withValues(alpha: 0.8),
             elevation: 0,
           ),
@@ -280,8 +280,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
     final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
     final bgColor =
         themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white;
-    final accentColor =
-        themeProvider.isDarkMode ? Colors.blue.shade300 : Colors.blue.shade700;
+    final accentColor = const Color(0xFFC10D00);
 
     return Column(
       children: [
@@ -311,9 +310,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
                     padding:
                         const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? accentColor.withValues(alpha: 0.2)
-                          : Colors.transparent,
+                      color: isSelected ? accentColor : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -324,7 +321,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
                           _tabIcons[index],
                           size: 16,
                           color: isSelected
-                              ? accentColor
+                              ? Colors.white
                               : textColor.withValues(alpha: 0.6),
                         ),
                         const SizedBox(width: 6),
@@ -337,7 +334,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
                                   ? FontWeight.w600
                                   : FontWeight.normal,
                               color: isSelected
-                                  ? accentColor
+                                  ? Colors.white
                                   : textColor.withValues(alpha: 0.7),
                               fontFamily: 'Poppins',
                             ),
