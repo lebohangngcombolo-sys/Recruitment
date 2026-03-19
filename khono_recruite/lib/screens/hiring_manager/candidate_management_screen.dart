@@ -141,6 +141,29 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
         };
       }).toList();
 
+      // Fetch profile data for candidates missing full_name
+      for (int i = 0; i < fetched.length; i++) {
+        final candidate = fetched[i];
+        final fullName = candidate['full_name'];
+        if (fullName == null || fullName.toString().isEmpty) {
+          final candidateId = candidate['candidate_id'];
+          if (candidateId != null) {
+            try {
+              final profile = await admin.getCandidateProfile(candidateId);
+              final firstName = profile['first_name'] ?? '';
+              final lastName = profile['last_name'] ?? '';
+              final constructedName = '$firstName $lastName'.trim();
+              if (constructedName.isNotEmpty) {
+                fetched[i]['full_name'] = constructedName;
+              }
+            } catch (e) {
+              debugPrint(
+                  'Failed to fetch profile for candidate $candidateId: $e');
+            }
+          }
+        }
+      }
+
       fetched.sort((a, b) {
         final aScore = (a['overall_score'] ?? 0).toDouble();
         final bScore = (b['overall_score'] ?? 0).toDouble();
