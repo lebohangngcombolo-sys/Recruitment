@@ -68,6 +68,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
 
   Future<void> _fetchRolesFromBackend() async {
     await Future.delayed(const Duration(seconds: 1));
+    if (!mounted) return;
     setState(() {
       roles = ["Admin", "HR", "Recruiter", "Viewer", "Manager"];
     });
@@ -81,6 +82,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
 
     if (!hasMore) return;
 
+    if (!mounted) return;
     setState(() => loading = true);
 
     try {
@@ -105,9 +107,22 @@ class _UserManagementScreenState extends State<UserManagementScreen>
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final newUsers = List<Map<String, dynamic>>.from(data['users'] ?? data);
+        final decoded = jsonDecode(response.body);
+        final dynamic rawUsers = (decoded is Map<String, dynamic>)
+            ? (decoded['users'] ?? decoded['data'] ?? decoded['results'])
+            : decoded;
 
+        final List<Map<String, dynamic>> newUsers;
+        if (rawUsers is List) {
+          newUsers = rawUsers
+              .whereType<dynamic>()
+              .map((e) => e is Map<String, dynamic> ? e : <String, dynamic>{})
+              .toList();
+        } else {
+          newUsers = <Map<String, dynamic>>[];
+        }
+
+        if (!mounted) return;
         setState(() {
           if (refresh) {
             users = newUsers;
@@ -115,7 +130,11 @@ class _UserManagementScreenState extends State<UserManagementScreen>
             users.addAll(newUsers);
           }
 
-          totalPages = data['total_pages'] ?? 1;
+          if (decoded is Map<String, dynamic>) {
+            totalPages = decoded['total_pages'] ?? 1;
+          } else {
+            totalPages = 1;
+          }
           hasMore = currentPage < totalPages;
           currentPage++;
         });
@@ -128,6 +147,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
         );
       }
     } finally {
+      if (!mounted) return;
       setState(() => loading = false);
     }
   }

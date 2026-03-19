@@ -30,6 +30,7 @@ class _JobManagementState extends State<JobManagement> {
   String searchQuery = '';
   String selectedCategory = 'all';
   String selectedStatus = 'active';
+  String selectedApprovalStatus = 'all';
   String sortBy = 'created_at';
   String sortOrder = 'desc';
   int currentPage = 1;
@@ -38,6 +39,12 @@ class _JobManagementState extends State<JobManagement> {
 
   // Filter options
   final List<String> statusFilters = ['active', 'inactive', 'all'];
+  final List<String> approvalFilters = [
+    'all',
+    'pending',
+    'approved',
+    'rejected'
+  ];
   final List<String> sortOptions = [
     'created_at',
     'updated_at',
@@ -94,6 +101,8 @@ class _JobManagementState extends State<JobManagement> {
         page: currentPage,
         category: selectedCategory == 'all' ? null : selectedCategory,
         status: selectedStatus,
+        approvalStatus:
+            selectedApprovalStatus == 'all' ? null : selectedApprovalStatus,
         sortBy: sortBy,
         sortOrder: sortOrder,
         search: searchQuery.isNotEmpty ? searchQuery : null,
@@ -161,6 +170,82 @@ class _JobManagementState extends State<JobManagement> {
     }
   }
 
+  Future<void> _approveJob(Map<String, dynamic> job) async {
+    try {
+      await admin.approveJob(job['id'] as int);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text("Job approved"), backgroundColor: Colors.green),
+        );
+        fetchJobs();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error approving job: $e")),
+        );
+      }
+    }
+  }
+
+  void _showRejectDialog(Map<String, dynamic> job) {
+    final reasonController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Reject Job"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+                "Reject \"${job['title'] ?? 'Job'}\"? Provide a reason (optional):"),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              decoration: const InputDecoration(
+                hintText: "Reason for rejection",
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () async {
+              final reason = reasonController.text.trim();
+              Navigator.pop(ctx);
+              try {
+                await admin.rejectJob(job['id'] as int, reason);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text("Job rejected"),
+                        backgroundColor: Colors.orange),
+                  );
+                  fetchJobs();
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Error rejecting job: $e")),
+                  );
+                }
+              }
+            },
+            child: const Text("Reject"),
+          ),
+        ],
+      ),
+    );
+  }
+
   void showJobDetails(Map<String, dynamic> job) async {
     try {
       final detailedJob = await admin.getJobDetailed(job['id']);
@@ -201,6 +286,55 @@ class _JobManagementState extends State<JobManagement> {
                     detailedJob['qualifications'].isNotEmpty)
                   _buildListSection(
                       "Qualifications", detailedJob['qualifications']),
+
+                // Approval status
+                const SizedBox(height: 20),
+                const Text("Approval",
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    _buildStatChip(
+                      "Approval",
+                      (detailedJob['approval_status'] ?? 'pending').toString(),
+                      color: detailedJob['approval_status'] == 'approved'
+                          ? Colors.green
+                          : detailedJob['approval_status'] == 'rejected'
+                              ? Colors.red
+                              : Colors.orange,
+                    ),
+                    if (detailedJob['approval_status'] == 'approved' &&
+                        detailedJob['approved_at'] != null)
+                      _buildStatChip(
+                          "Approved at",
+                          detailedJob['approved_at']
+                              .toString()
+                              .split('.')
+                              .first),
+                    if (detailedJob['approved_by_user'] != null)
+                      _buildStatChip(
+                          "Approved by",
+                          detailedJob['approved_by_user']['name'] ??
+                              detailedJob['approved_by_user']['email'] ??
+                              '—'),
+                  ],
+                ),
+                if (detailedJob['approval_status'] == 'rejected' &&
+                    (detailedJob['rejection_reason'] ?? '')
+                        .toString()
+                        .isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      "Reason: ${detailedJob['rejection_reason']}",
+                      style:
+                          TextStyle(color: Colors.red.shade700, fontSize: 14),
+                    ),
+                  ),
+
+                // Job Stats
                 const SizedBox(height: 20),
                 const Text("Job Statistics",
                     style:
@@ -422,6 +556,24 @@ class _JobManagementState extends State<JobManagement> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+              const SizedBox(height: 8),
+              Text(
+                "Approval: ${(job['approval_status'] ?? 'pending').toString()}",
+                style: TextStyle(
+                  color: job['approval_status'] == 'approved'
+                      ? Colors.green
+                      : job['approval_status'] == 'rejected'
+                          ? Colors.red
+                          : Colors.orange,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (job['approval_status'] == 'rejected' &&
+                  (job['rejection_reason'] ?? '').toString().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text("Reason: ${job['rejection_reason']}"),
+                ),
             ],
           ),
         ),
@@ -477,6 +629,38 @@ class _JobManagementState extends State<JobManagement> {
       label: Text("$label: $value"),
       backgroundColor: color?.withOpacity(0.1) ?? Colors.blue.withOpacity(0.1),
       side: BorderSide(color: color ?? Colors.blue),
+    );
+  }
+
+  Widget _approvalStatusChip(Map<String, dynamic> job) {
+    final status = (job['approval_status'] ?? 'pending').toString();
+    Color color;
+    String label;
+    switch (status) {
+      case 'approved':
+        color = Colors.green;
+        label = 'Approved';
+        break;
+      case 'rejected':
+        color = Colors.red;
+        label = 'Rejected';
+        break;
+      default:
+        color = Colors.orange;
+        label = 'Pending';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color, width: 1),
+      ),
+      child: Text(
+        label,
+        style:
+            TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+      ),
     );
   }
 
@@ -726,30 +910,51 @@ class _JobManagementState extends State<JobManagement> {
                       ],
                     ),
                   ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: isActive
-                          ? Colors.green.withOpacity(0.1)
-                          : Colors.red.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(
-                        color: isActive ? Colors.green : Colors.red,
-                        width: 1,
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isActive
+                              ? Colors.green.withOpacity(0.1)
+                              : Colors.red.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                              color: isActive ? Colors.green : Colors.red,
+                              width: 1),
+                        ),
+                        child: Text(
+                          isActive ? 'Active' : 'Inactive',
+                          style: TextStyle(
+                            color: isActive ? Colors.green : Colors.red,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      isActive ? 'Active' : 'Inactive',
-                      style: TextStyle(
-                        color: isActive ? Colors.green : Colors.red,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                      const SizedBox(width: 8),
+                      _approvalStatusChip(job),
+                    ],
                   ),
                 ],
               ),
+              if ((job['approval_status'] ?? '') == 'rejected' &&
+                  (job['rejection_reason'] ?? '').toString().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Rejection: ${job['rejection_reason']}',
+                    style: TextStyle(
+                      color: Colors.red.shade700,
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               if (job['created_by_user'] != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
@@ -897,6 +1102,21 @@ class _JobManagementState extends State<JobManagement> {
                           tooltip: "Restore",
                           onPressed: () => restoreJob(job),
                         ),
+                      if ((job['approval_status'] ?? '') == 'pending') ...[
+                        IconButton(
+                          icon:
+                              const Icon(Icons.check_circle_outline, size: 20),
+                          color: Colors.green,
+                          tooltip: "Approve",
+                          onPressed: () => _approveJob(job),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.cancel_outlined, size: 20),
+                          color: Colors.red,
+                          tooltip: "Reject",
+                          onPressed: () => _showRejectDialog(job),
+                        ),
+                      ],
                       if (widget.onJobSelected != null)
                         IconButton(
                           icon: const Icon(Icons.check_circle, size: 20),
@@ -1083,6 +1303,32 @@ class _JobManagementState extends State<JobManagement> {
 
                                       const SizedBox(width: 16),
 
+                                      // Approval Status Filter
+                                      ...approvalFilters.map((approval) {
+                                        return Padding(
+                                          padding:
+                                              const EdgeInsets.only(right: 8),
+                                          child: FilterChip(
+                                            label: approval == 'all'
+                                                ? 'All'
+                                                : approval[0].toUpperCase() +
+                                                    approval.substring(1),
+                                            selected: selectedApprovalStatus ==
+                                                approval,
+                                            onSelected: (_) {
+                                              setState(() {
+                                                selectedApprovalStatus =
+                                                    approval;
+                                                currentPage = 1;
+                                              });
+                                              fetchJobs();
+                                            },
+                                          ),
+                                        );
+                                      }).toList(),
+
+                                      const SizedBox(width: 16),
+
                                       // Category Filter
                                       Container(
                                         padding: const EdgeInsets.symmetric(
@@ -1219,13 +1465,15 @@ class _JobManagementState extends State<JobManagement> {
                           ),
                           if (searchQuery.isNotEmpty ||
                               selectedCategory != 'all' ||
-                              selectedStatus != 'active')
+                              selectedStatus != 'active' ||
+                              selectedApprovalStatus != 'all')
                             TextButton(
                               onPressed: () {
                                 setState(() {
                                   searchQuery = '';
                                   selectedCategory = 'all';
                                   selectedStatus = 'active';
+                                  selectedApprovalStatus = 'all';
                                   sortBy = 'created_at';
                                   sortOrder = 'desc';
                                   currentPage = 1;
@@ -1393,6 +1641,47 @@ class _JobFormDialogState extends State<JobFormDialog>
     }
 
     _tabController = TabController(length: 2, vsync: this);
+  }
+
+  Widget _jobFormApprovalBanner(Map<String, dynamic> job,
+      {bool isAdminDialog = false}) {
+    final status = (job['approval_status'] ?? 'pending').toString();
+    final reason = (job['rejection_reason'] ?? '').toString();
+    Color color = status == 'approved'
+        ? Colors.green
+        : status == 'rejected'
+            ? Colors.red
+            : Colors.orange;
+    String label = status == 'approved'
+        ? 'Approved'
+        : status == 'rejected'
+            ? 'Rejected'
+            : 'Pending approval';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color),
+      ),
+      child: Row(
+        children: [
+          Text('Approval: ',
+              style: TextStyle(fontWeight: FontWeight.w600, color: color)),
+          Text(label,
+              style: TextStyle(fontWeight: FontWeight.w600, color: color)),
+          if (status == 'rejected' && reason.isNotEmpty)
+            Expanded(
+                child: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Text('Reason: $reason',
+                        style:
+                            TextStyle(fontSize: 12, color: Colors.red.shade800),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis))),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1610,7 +1899,40 @@ class _JobFormDialogState extends State<JobFormDialog>
                       key: _formKey,
                       child: SingleChildScrollView(
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            if (widget.job != null &&
+                                (widget.job!['approval_status'] ?? '')
+                                    .toString()
+                                    .isNotEmpty) ...[
+                              _jobFormApprovalBanner(widget.job!,
+                                  isAdminDialog: true),
+                              const SizedBox(height: 16),
+                            ] else if (widget.job == null) ...[
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.blue),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.info_outline,
+                                        color: Colors.blue, size: 20),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                        child: Text(
+                                            'This job will be submitted for approval after creation.',
+                                            style: TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.blue))),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
                             CustomTextField(
                               label: "Title",
                               initialValue: title,
