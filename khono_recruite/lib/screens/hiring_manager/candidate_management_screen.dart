@@ -146,10 +146,10 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
         final candidate = fetched[i];
         final fullName = candidate['full_name'];
         if (fullName == null || fullName.toString().isEmpty) {
-          final candidateId = candidate['candidate_id'];
-          if (candidateId != null) {
+          final userId = candidate['user_id'] ?? candidate['candidate_id'];
+          if (userId != null) {
             try {
-              final profile = await admin.getCandidateProfile(candidateId);
+              final profile = await admin.getCandidateProfile(userId);
               final firstName = profile['first_name'] ?? '';
               final lastName = profile['last_name'] ?? '';
               final constructedName = '$firstName $lastName'.trim();
@@ -157,8 +157,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
                 fetched[i]['full_name'] = constructedName;
               }
             } catch (e) {
-              debugPrint(
-                  'Failed to fetch profile for candidate $candidateId: $e');
+              debugPrint('Failed to fetch profile for user $userId: $e');
             }
           }
         }
