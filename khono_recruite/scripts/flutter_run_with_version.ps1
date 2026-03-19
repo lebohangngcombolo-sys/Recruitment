@@ -14,6 +14,15 @@ $publicBase = if ($env:PUBLIC_API_BASE) { $env:PUBLIC_API_BASE } else { $apiBase
 & powershell -ExecutionPolicy Bypass -File "$khonoRoot\scripts\update_version_file.ps1" | Out-Null
 $appVersion = & python "scripts\generate_version.py" 2>$null
 if (-not $appVersion) { $appVersion = "Ver.0.0.0.LOCAL" }
+# Use a clean Chrome profile to avoid DDS/Debugger attach failures (DartDevelopmentServiceException).
+$chromeProfileDir = Join-Path $env:TEMP "flutter_chrome_profile"
+if (-not (Test-Path $chromeProfileDir)) { New-Item -ItemType Directory -Path $chromeProfileDir -Force | Out-Null }
 Write-Host "Running Flutter web with API_BASE=$apiBase APP_VERSION=$appVersion"
+Write-Host "Chrome profile: $chromeProfileDir (avoids DDS attach timeout)"
 
-flutter run -d chrome --dart-define=API_BASE="$apiBase" --dart-define=PUBLIC_API_BASE="$publicBase" --dart-define=APP_VERSION="$appVersion"
+flutter run -d chrome --web-port=3000 `
+  --web-browser-flag="--user-data-dir=$chromeProfileDir" `
+  --web-browser-flag="--disable-extensions" `
+  --dart-define=API_BASE="$apiBase" `
+  --dart-define=PUBLIC_API_BASE="$publicBase" `
+  --dart-define=APP_VERSION="$appVersion"
