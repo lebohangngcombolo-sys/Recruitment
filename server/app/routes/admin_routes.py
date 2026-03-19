@@ -802,14 +802,19 @@ def list_candidates():
         query = Candidate.query
         if current_user and current_user.role == "hiring_manager":
             # Restrict to candidates who have at least one application to this HM's jobs (or unowned jobs)
-            query = query.join(Application, Application.candidate_id == Candidate.id).join(
+            # Use subquery to avoid DISTINCT on JSON columns (PostgreSQL limitation)
+            candidate_ids_subquery = db.session.query(Candidate.id).join(
+                Application, Application.candidate_id == Candidate.id
+            ).join(
                 Requisition, Application.requisition_id == Requisition.id
             ).filter(
                 or_(
                     Requisition.created_by == current_user_id,
                     Requisition.created_by.is_(None),
                 )
-            ).distinct()
+            ).distinct().subquery()
+            
+            query = Candidate.query.filter(Candidate.id.in_(candidate_ids_subquery))
         
         # Apply search filter
         if search:
@@ -825,8 +830,7 @@ def list_candidates():
         
         # Apply status filter (based on applications)
         if status_filter:
-            if not (current_user and current_user.role == "hiring_manager"):
-                query = query.join(Application, Application.candidate_id == Candidate.id)
+            query = query.join(Application, Application.candidate_id == Candidate.id)
             query = query.filter(Application.status == status_filter)
         
         # Paginate
@@ -5738,3 +5742,31 @@ def search_all():
     except Exception as e:
         current_app.logger.error(f"Search error: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
+
+
+# ----------------- USER PROFILE ROUTES -----------------
+@admin_bp.route('/users/<int:user_id>/profile', methods=['GET'])
+@cross_origin()
+@jwt_required()
+@role_required(["admin", "hiring_manager"])
+def get_user_profile(user_id):
+    """Get user profile details including first_name and last_name from profile column"""
+    try:
+        user = User.query.get_or_404(user_id)
+        
+        # Get profile data from the user's profile column (JSON)
+        profile = user.profile if user.profile else {}
+        
+        return jsonify({
+            "user_id": user.id,
+            "email": user.email,
+            "role": user.role,
+            "first_name": profile.get("first_name", ""),
+            "last_name": profile.get("last_name", ""),
+            "profile": profile,
+            "created_at": user.created_at.isoformat() if user.created_at else None
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching user profile: {e}", exc_info=True)
+        return jsonify({"error": "Failed to fetch user profile"}), 500
