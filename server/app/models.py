@@ -257,8 +257,15 @@ class Requisition(db.Model):
     # Must-have certifications (e.g. ["AWS Certified", "PMP"])
     required_certifications = db.Column(JSON, default=list)
 
+    # Job approval workflow: pending | approved | rejected
+    approval_status = db.Column(db.String(20), default='pending', nullable=False)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    rejection_reason = db.Column(db.Text, nullable=True)
+
     applications = db.relationship('Application', back_populates='requisition', lazy=True)
     creator = db.relationship('User', foreign_keys=[created_by], lazy=True)
+    approver = db.relationship('User', foreign_keys=[approved_by], lazy=True)
 
     def to_dict(self):
         creator = self.creator
@@ -308,6 +315,15 @@ class Requisition(db.Model):
             "start_date_to": self.start_date_to.isoformat() if self.start_date_to else None,
             "min_years_per_skill": self.min_years_per_skill if isinstance(self.min_years_per_skill, dict) else ({}),
             "required_certifications": self.required_certifications if isinstance(self.required_certifications, list) else [],
+            "approval_status": getattr(self, "approval_status", "pending"),
+            "approved_at": self.approved_at.isoformat() if getattr(self, "approved_at", None) else None,
+            "approved_by": getattr(self, "approved_by", None),
+            "rejection_reason": getattr(self, "rejection_reason", None),
+            "approved_by_user": {
+                "id": self.approver.id,
+                "name": self.approver.full_name,
+                "email": self.approver.email,
+            } if getattr(self, "approver", None) else None,
         }
     
     def to_dict_with_stats(self):

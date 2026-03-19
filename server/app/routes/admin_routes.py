@@ -307,20 +307,22 @@ def create_job():
             }), 400
         
         current_user_id = get_jwt_identity()
-        
-        # Use service to create job
-        job, error = JobService.create_job(validated_data, current_user_id)
-        
+        current_user = User.query.get(current_user_id)
+        role = current_user.role if current_user else None
+
+        # Use service to create job (role sets approval_status: admin=approved, others=pending)
+        job, error = JobService.create_job(validated_data, current_user_id, role=role)
+
         if error:
             return jsonify(error), error.get('status_code', 400)
-        
+
         # Return response
         return jsonify({
             "message": "Job created successfully",
             "job": job_response_schema.dump(job),
             "job_id": job.id
         }), 201
-        
+
     except Exception as e:
         current_app.logger.error(f"Create job route error: {str(e)}", exc_info=True)
         return jsonify({
@@ -461,11 +463,12 @@ def list_jobs():
             'per_page': request.args.get('per_page', 20, type=int),
             'category': request.args.get('category'),
             'status': request.args.get('status', 'active'),
+            'approval_status': request.args.get('approval_status', 'all'),
             'sort_by': request.args.get('sort_by', 'created_at'),
             'sort_order': request.args.get('sort_order', 'desc'),
             'search': request.args.get('search')
         }
-        
+
         # Use service to list jobs
         jobs_data, error = JobService.list_jobs(filters)
         
@@ -480,6 +483,106 @@ def list_jobs():
             "error": "Internal server error",
             "message": str(e)
         }), 500
+
+
+@admin_bp.route("/jobs/<int:job_id>/approve", methods=["POST"])
+@jwt_required()
+@role_required(["admin"])
+def approve_job(job_id):
+    """Approve a pending job (admin only)."""
+    try:
+        current_user_id = get_jwt_identity()
+        data = request.get_json(silent=True) or {}
+        note = (data.get("note") or "").strip() or None
+        job, error = JobService.approve_job(job_id, current_user_id, note=note)
+        if error:
+            return jsonify(error), error.get("status_code", 400)
+        return jsonify({"message": "Job approved", "job": job_response_schema.dump(job)}), 200
+    except Exception as e:
+        current_app.logger.error(f"Approve job route error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
+
+
+@admin_bp.route("/jobs/<int:job_id>/reject", methods=["POST"])
+@jwt_required()
+@role_required(["admin"])
+def reject_job(job_id):
+    """Reject a pending job with reason (admin only)."""
+    try:
+        data = request.get_json() or {}
+        reason = (data.get("reason") or "").strip()
+        note = (data.get("note") or "").strip() or None
+        if not reason:
+            return jsonify({"error": "Rejection reason is required", "status_code": 400}), 400
+        current_user_id = get_jwt_identity()
+        job, error = JobService.reject_job(job_id, current_user_id, reason, note=note)
+        if error:
+            return jsonify(error), error.get("status_code", 400)
+        return jsonify({"message": "Job rejected", "job": job_response_schema.dump(job)}), 200
+    except Exception as e:
+        current_app.logger.error(f"Reject job route error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
+
+
+@admin_bp.route("/jobs/bulk-approve", methods=["POST"])
+@jwt_required()
+@role_required(["admin"])
+def bulk_approve_jobs():
+    """Bulk approve pending jobs (partial success)."""
+    try:
+        data = request.get_json() or {}
+        job_ids = data.get("job_ids") or []
+        note = (data.get("note") or "").strip() or None
+        if not isinstance(job_ids, list) or not job_ids:
+            return jsonify({"error": "job_ids must be a non-empty list", "status_code": 400}), 400
+        current_user_id = get_jwt_identity()
+        result, error = JobService.bulk_approve_jobs([int(x) for x in job_ids], current_user_id, note=note)
+        if error:
+            return jsonify(error), error.get("status_code", 400)
+        return jsonify({"message": "Bulk approve completed", **result}), 200
+    except Exception as e:
+        current_app.logger.error(f"Bulk approve jobs route error: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
+
+
+@admin_bp.route("/jobs/bulk-reject", methods=["POST"])
+@jwt_required()
+@role_required(["admin"])
+def bulk_reject_jobs():
+    """Bulk reject pending jobs (partial success)."""
+    try:
+        data = request.get_json() or {}
+        job_ids = data.get("job_ids") or []
+        reason = (data.get("reason") or "").strip()
+        note = (data.get("note") or "").strip() or None
+        if not isinstance(job_ids, list) or not job_ids:
+            return jsonify({"error": "job_ids must be a non-empty list", "status_code": 400}), 400
+        if not reason:
+            return jsonify({"error": "Rejection reason is required", "status_code": 400}), 400
+        current_user_id = get_jwt_identity()
+        result, error = JobService.bulk_reject_jobs([int(x) for x in job_ids], current_user_id, reason, note=note)
+        if error:
+            return jsonify(error), error.get("status_code", 400)
+        return jsonify({"message": "Bulk reject completed", **result}), 200
+    except Exception as e:
+        current_app.logger.error(f"Bulk reject jobs route error: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
+
+
+@admin_bp.route("/jobs/<int:job_id>/resubmit", methods=["POST"])
+@jwt_required()
+@role_required(["admin", "hiring_manager"])
+def resubmit_job(job_id):
+    """Resubmit a rejected job for approval (HM or admin)."""
+    try:
+        current_user_id = get_jwt_identity()
+        job, error = JobService.resubmit_job(job_id, current_user_id)
+        if error:
+            return jsonify(error), error.get("status_code", 400)
+        return jsonify({"message": "Job resubmitted for approval", "job": job_response_schema.dump(job)}), 200
+    except Exception as e:
+        current_app.logger.error(f"Resubmit job route error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
 
 
 @admin_bp.route("/jobs/<int:job_id>/restore", methods=["POST"])
@@ -762,10 +865,12 @@ def list_candidates():
         # Apply search filter
         if search:
             search_term = f"%{search}%"
+            # Join User so we can safely filter by email without causing SQL errors.
+            query = query.outerjoin(User, Candidate.user_id == User.id)
             query = query.filter(
                 or_(
                     Candidate.full_name.ilike(search_term),
-                    User.email.ilike(search_term) if User else False,
+                    User.email.ilike(search_term),
                     Candidate.title.ilike(search_term)
                 )
             )
@@ -1186,10 +1291,36 @@ def get_notification_preferences():
 @admin_bp.route("/notification-preferences", methods=["PUT"])
 @jwt_required()
 @role_required(["admin", "hiring_manager", "hr"])
+def update_notification_preferences():
+    """Update current user's notification preferences."""
+    try:
+        data = request.get_json(silent=True) or {}
+        preferences = data.get("preferences") or {}
+        current_user_id = get_jwt_identity()
+        user = User.query.get_or_404(current_user_id)
+        settings = user.settings or {}
+        notifications = settings.get("notifications") or {}
+        if "status_changes" in preferences:
+            notifications["status_changes"] = bool(preferences.get("status_changes"))
+        if "upcoming_interviews" in preferences:
+            notifications["upcoming_interviews"] = bool(preferences.get("upcoming_interviews"))
+        settings["notifications"] = notifications
+        user.settings = settings
+        db.session.commit()
+        return jsonify({"message": "Preferences updated", "preferences": notifications}), 200
+    except Exception as e:
+        current_app.logger.error(f"Update notification preferences error: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@admin_bp.route("/cv-reviews", methods=["GET", "OPTIONS"])
+@jwt_required(optional=True)
+@role_required(["admin", "hiring_manager", "hr"])
 @cross_origin()
 def list_cv_reviews():
     if request.method == "OPTIONS":
-        return '', 200
+        return "", 200
 
     refresh_count = 0  # counter for lazy refreshes per request
 
