@@ -2122,6 +2122,199 @@ class AdminService {
     throw Exception('Failed to check scheduling conflicts: ${res.body}');
   }
 
+  // ---------- HM WORKFLOW METHODS ----------
+
+  /// Record HM decision with confidence and rationale
+  Future<Map<String, dynamic>> recordHMDecision({
+    required int applicationId,
+    required String recommendation,
+    required int confidenceScore,
+    String? rationale,
+    String? bulkOperationId,
+  }) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.post(
+      Uri.parse(
+          '${ApiEndpoints.adminBase}/candidates/$applicationId/hm-decision'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: json.encode({
+        'recommendation': recommendation,
+        'confidence_score': confidenceScore,
+        'rationale': rationale,
+        'bulk_operation_id': bulkOperationId,
+      }),
+    );
+
+    if (res.statusCode == 201) {
+      return Map<String, dynamic>.from(json.decode(res.body));
+    }
+    throw Exception('Failed to record HM decision: ${res.body}');
+  }
+
+  /// Bulk update recommendations for multiple candidates
+  Future<Map<String, dynamic>> bulkUpdateRecommendations({
+    required List<int> applicationIds,
+    required String recommendation,
+    int confidenceScore = 3,
+    String? rationale,
+  }) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.adminBase}/candidates/bulk-recommendation'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: json.encode({
+        'application_ids': applicationIds,
+        'recommendation': recommendation,
+        'confidence_score': confidenceScore,
+        'rationale': rationale,
+      }),
+    );
+
+    if (res.statusCode == 200) {
+      return Map<String, dynamic>.from(json.decode(res.body));
+    }
+    throw Exception('Failed to bulk update recommendations: ${res.body}');
+  }
+
+  /// Get HM-specific dashboard statistics
+  Future<Map<String, dynamic>> getHMDashboardStats() async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.get(
+      Uri.parse('${ApiEndpoints.adminBase}/hm/dashboard-stats'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return Map<String, dynamic>.from(json.decode(res.body));
+    }
+    throw Exception('Failed to get HM dashboard stats: ${res.body}');
+  }
+
+  /// Get candidates awaiting HM review with priority scoring
+  Future<Map<String, dynamic>> getHMPendingDecisions({
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    final token = await AuthService.getAccessToken();
+    final uri = Uri.parse('${ApiEndpoints.adminBase}/hm/pending-decisions')
+        .replace(queryParameters: {
+      'page': page.toString(),
+      'per_page': perPage.toString(),
+    });
+
+    final res = await http.get(
+      uri,
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return Map<String, dynamic>.from(json.decode(res.body));
+    }
+    throw Exception('Failed to get HM pending decisions: ${res.body}');
+  }
+
+  /// Set HM availability slot for interview scheduling
+  Future<Map<String, dynamic>> setHMAvailability({
+    required DateTime startTime,
+    required DateTime endTime,
+    String status = 'available',
+    bool isRecurring = false,
+    Map<String, dynamic>? recurringPattern,
+  }) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.adminBase}/hm/availability'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: json.encode({
+        'start_time': startTime.toIso8601String(),
+        'end_time': endTime.toIso8601String(),
+        'status': status,
+        'is_recurring': isRecurring,
+        'recurring_pattern': recurringPattern,
+      }),
+    );
+
+    if (res.statusCode == 201) {
+      return Map<String, dynamic>.from(json.decode(res.body));
+    }
+    throw Exception('Failed to set HM availability: ${res.body}');
+  }
+
+  /// Get HM availability calendar with optional date filtering
+  Future<Map<String, dynamic>> getHMAvailability({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final token = await AuthService.getAccessToken();
+    final queryParams = <String, String>{};
+
+    if (startDate != null) {
+      queryParams['start_date'] = startDate.toIso8601String().split('T')[0];
+    }
+    if (endDate != null) {
+      queryParams['end_date'] = endDate.toIso8601String().split('T')[0];
+    }
+
+    final uri = Uri.parse('${ApiEndpoints.adminBase}/hm/availability')
+        .replace(queryParameters: queryParams);
+
+    final res = await http.get(
+      uri,
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return Map<String, dynamic>.from(json.decode(res.body));
+    }
+    throw Exception('Failed to get HM availability: ${res.body}');
+  }
+
+  /// Generate self-service interview booking link
+  Future<Map<String, dynamic>> generateInterviewBookingLink({
+    required int applicationId,
+    required String candidateEmail,
+    DateTime? expiresAt,
+  }) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.adminBase}/interviews/generate-booking-link'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: json.encode({
+        'application_id': applicationId,
+        'candidate_email': candidateEmail,
+        'expires_at': expiresAt?.toIso8601String(),
+      }),
+    );
+
+    if (res.statusCode == 201) {
+      return Map<String, dynamic>.from(json.decode(res.body));
+    }
+    throw Exception('Failed to generate interview booking link: ${res.body}');
+  }
+
+  /// Smart interview scheduling with AI optimization
+  Future<Map<String, dynamic>> smartScheduleInterview({
+    required int applicationId,
+    required int hmUserId,
+    Map<String, dynamic>? preferences,
+  }) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.post(
+      Uri.parse(
+          '${ApiEndpoints.adminBase}/interviews/smart-schedule/$applicationId'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: jsonEncode({
+        'hm_user_id': hmUserId,
+        'preferences': preferences,
+      }),
+    );
+
+    if (res.statusCode == 201) {
+      return Map<String, dynamic>.from(json.decode(res.body));
+    }
+    throw Exception('Failed to smart schedule interview: ${res.body}');
+  }
+
   // ---------- INTERVIEW DASHBOARD ----------
   /// Get today's interviews
   Future<List<Map<String, dynamic>>> getTodaysInterviews() async {
@@ -2211,7 +2404,6 @@ class AdminService {
     throw Exception('Failed to fetch interviews requiring action: ${res.body}');
   }
 
-  // ========== ADD THE NEW METHOD HERE ==========
   /// Get candidates ready for job offers (optimized database query)
   Future<Map<String, dynamic>> getCandidatesReadyForOffer({
     int minInterviews = 2,
