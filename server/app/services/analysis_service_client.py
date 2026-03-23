@@ -10,31 +10,42 @@ logger = logging.getLogger(__name__)
 
 class AnalysisServiceClient:
     """Client for communicating with the external FastAPI CV analysis service."""
+
+    @staticmethod
+    def _base_url() -> str:
+        return (current_app.config.get("ANALYSIS_SERVICE_URL") or "").rstrip("/")
+
+    @staticmethod
+    def _auth_headers() -> dict:
+        api_key = current_app.config.get("ANALYSIS_SERVICE_API_KEY")
+        if api_key:
+            return {"Authorization": f"Bearer {api_key}"}
+        return {}
+
+    @staticmethod
+    def _join(base: str, path: str) -> str:
+        base = (base or "").rstrip("/")
+        path = (path or "").lstrip("/")
+        return f"{base}/{path}" if base else f"/{path}"
     
     @staticmethod
-    def submit_cv(file_storage, filename: str, job_description: str | None = None):
-        """Submit CV to external analysis service.
+    def submit_cv_text(cv_text: str, job_description: str | None = None):
+        """Submit extracted CV text to external analysis service.
 
-        Expects the FastAPI service contract:
-        POST /upload (multipart)
-          - files: file
-          - form: job_description (optional)
+        Contract (new decoupled analyser):
+        POST /analyze (JSON)
+          {"cv_text": "...", "job_description": "..."}
+
+        Returns JSON like: {"analysis_id": "...", "status": "pending"}
         """
-        url = f"{current_app.config['ANALYSIS_SERVICE_URL']}/upload"
-        headers = {
-            'Authorization': f"Bearer {current_app.config['ANALYSIS_SERVICE_API_KEY']}",
-        }
-
-        content_type = getattr(file_storage, "mimetype", None) or "application/octet-stream"
-        files = {
-            "file": (filename, file_storage.stream, content_type),
-        }
-        data = {}
+        url = AnalysisServiceClient._join(AnalysisServiceClient._base_url(), "analyze")
+        headers = {**AnalysisServiceClient._auth_headers()}
+        payload = {"cv_text": cv_text or ""}
         if job_description:
-            data["job_description"] = job_description
+            payload["job_description"] = job_description
 
         try:
-            response = requests.post(url, headers=headers, files=files, data=data, timeout=30)
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
             if response.status_code != 202:
                 logger.error(
                     "Unexpected analysis service response: status=%s body=%s",
@@ -44,16 +55,17 @@ class AnalysisServiceClient:
                 response.raise_for_status()
             return response.json() if response.content else {}
         except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to submit CV to analysis service: {e}")
+            logger.error(f"Failed to submit CV text to analysis service: {e}")
             raise
     
     @staticmethod
     def get_analysis_status(external_analysis_id: str):
         """Get analysis status from external service."""
-        url = f"{current_app.config['ANALYSIS_SERVICE_URL']}/analyses/{external_analysis_id}/status"
-        headers = {
-            'Authorization': f"Bearer {current_app.config['ANALYSIS_SERVICE_API_KEY']}"
-        }
+        url = AnalysisServiceClient._join(
+            AnalysisServiceClient._base_url(),
+            f"analyses/{external_analysis_id}/status",
+        )
+        headers = {**AnalysisServiceClient._auth_headers()}
         
         try:
             response = requests.get(url, headers=headers, timeout=10)
@@ -66,10 +78,11 @@ class AnalysisServiceClient:
     @staticmethod
     def get_analysis_result(external_analysis_id: str):
         """Get analysis result from external service."""
-        url = f"{current_app.config['ANALYSIS_SERVICE_URL']}/analyses/{external_analysis_id}/result"
-        headers = {
-            'Authorization': f"Bearer {current_app.config['ANALYSIS_SERVICE_API_KEY']}"
-        }
+        url = AnalysisServiceClient._join(
+            AnalysisServiceClient._base_url(),
+            f"analyses/{external_analysis_id}/result",
+        )
+        headers = {**AnalysisServiceClient._auth_headers()}
         
         try:
             response = requests.get(url, headers=headers, timeout=30)

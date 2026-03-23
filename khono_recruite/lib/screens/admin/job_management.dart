@@ -26,6 +26,9 @@ class _JobManagementState extends State<JobManagement> {
   List<Map<String, dynamic>> jobs = [];
   bool loading = true;
 
+  final Set<int> _selectedPendingJobIds = {};
+  bool _selectionMode = false;
+
   // New state variables for enhanced features
   String searchQuery = '';
   String selectedCategory = 'all';
@@ -92,6 +95,92 @@ class _JobManagementState extends State<JobManagement> {
       );
     }
     setState(() => loading = false);
+  }
+
+  void _toggleSelectionMode(bool enabled) {
+    setState(() {
+      _selectionMode = enabled;
+      if (!enabled) _selectedPendingJobIds.clear();
+    });
+  }
+
+  void _toggleJobSelected(int jobId, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedPendingJobIds.add(jobId);
+      } else {
+        _selectedPendingJobIds.remove(jobId);
+      }
+    });
+  }
+
+  Future<void> _bulkApproveSelected() async {
+    final ids = _selectedPendingJobIds.toList();
+    if (ids.isEmpty) return;
+    try {
+      await admin.bulkApproveJobs(ids);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Bulk approve completed'),
+            backgroundColor: Colors.green),
+      );
+      _toggleSelectionMode(false);
+      fetchJobs();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Bulk approve failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _bulkRejectSelected() async {
+    final ids = _selectedPendingJobIds.toList();
+    if (ids.isEmpty) return;
+
+    final reasonController = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reject selected jobs'),
+        content: TextField(
+          controller: reasonController,
+          decoration: const InputDecoration(labelText: 'Reason'),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final reason = reasonController.text.trim();
+              Navigator.pop(ctx);
+              if (reason.isEmpty) return;
+              try {
+                await admin.bulkRejectJobs(ids, reason);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('Bulk reject completed'),
+                      backgroundColor: Colors.orange),
+                );
+                _toggleSelectionMode(false);
+                fetchJobs();
+              } catch (e) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Bulk reject failed: $e')),
+                );
+              }
+            },
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<Map<String, dynamic>> _fetchJobsEnhanced() async {
@@ -249,14 +338,21 @@ class _JobManagementState extends State<JobManagement> {
   void showJobDetails(Map<String, dynamic> job) async {
     try {
       final detailedJob = await admin.getJobDetailed(job['id']);
-      _showJobDetailsDialog(detailedJob);
+      List<dynamic> activities = [];
+      try {
+        activities = await admin.getJobActivity(job['id']);
+      } catch (_) {
+        activities = [];
+      }
+      _showJobDetailsDialog(detailedJob, activities: activities);
     } catch (e) {
       // Fallback to basic details
       _showBasicJobDetails(job);
     }
   }
 
-  void _showJobDetailsDialog(Map<String, dynamic> detailedJob) {
+  void _showJobDetailsDialog(Map<String, dynamic> detailedJob,
+      {List<dynamic> activities = const []}) {
     showDialog(
       context: context,
       builder: (_) => ThemedDialog(
@@ -362,6 +458,78 @@ class _JobManagementState extends State<JobManagement> {
                 ),
                 if (detailedJob['statistics'] != null)
                   _buildAdvancedStatistics(detailedJob['statistics']),
+
+                if (activities.isNotEmpty) ...[
+                  const SizedBox(height: 20),
+                  const Text("Timeline",
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  ...activities.take(25).map((a) {
+                    final m = a is Map
+                        ? Map<String, dynamic>.from(a)
+                        : <String, dynamic>{};
+                    final action = (m['action'] ?? '').toString();
+                    final user = m['user'] is Map
+                        ? Map<String, dynamic>.from(m['user'])
+                        : <String, dynamic>{};
+                    final userLabel =
+                        (user['name'] ?? user['email'] ?? 'Unknown').toString();
+                    final ts = (m['timestamp'] ?? '').toString();
+                    final details = m['details'] is Map
+                        ? Map<String, dynamic>.from(m['details'])
+                        : <String, dynamic>{};
+                    final reason = (details['reason'] ?? '').toString();
+                    final note = (details['note'] ?? '').toString();
+
+                    String subtitle = '';
+                    if (reason.isNotEmpty) subtitle = 'Reason: $reason';
+                    if (note.isNotEmpty) {
+                      subtitle = subtitle.isEmpty
+                          ? 'Note: $note'
+                          : '$subtitle\nNote: $note';
+                    }
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: ThemedSurfaceCard(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              action.isEmpty ? 'Activity' : action,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$userLabel • ${ts.isEmpty ? '—' : ts}',
+                              style: TextStyle(
+                                  fontSize: 12, color: Colors.grey.shade600),
+                            ),
+                            if (subtitle.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                subtitle,
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade700,
+                                    height: 1.3),
+                              ),
+                            ]
+                          ],
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                  if (activities.length > 25)
+                    Text(
+                      'Showing latest 25 activities',
+                      style:
+                          TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                    ),
+                ],
               ],
             ),
           ),
@@ -850,6 +1018,12 @@ class _JobManagementState extends State<JobManagement> {
 
   Widget _buildJobCard(Map<String, dynamic> job, ThemeProvider themeProvider) {
     final bool isActive = job['is_active'] ?? true;
+    final int? jobId =
+        job['id'] is int ? job['id'] as int : int.tryParse('${job['id']}');
+    final bool isPending = (job['approval_status'] ?? '') == 'pending';
+    final bool canSelect = _selectionMode && isPending && jobId != null;
+    final bool selected =
+        jobId != null && _selectedPendingJobIds.contains(jobId);
 
     return Card(
       color: (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -864,7 +1038,13 @@ class _JobManagementState extends State<JobManagement> {
         ),
       ),
       child: InkWell(
-        onTap: () => showJobDetails(job),
+        onTap: () {
+          if (canSelect) {
+            _toggleJobSelected(jobId, !selected);
+          } else {
+            showJobDetails(job);
+          }
+        },
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -874,6 +1054,16 @@ class _JobManagementState extends State<JobManagement> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
+                  if (canSelect)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Checkbox(
+                        value: selected,
+                        onChanged: (v) {
+                          _toggleJobSelected(jobId, v == true);
+                        },
+                      ),
+                    ),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1244,6 +1434,15 @@ class _JobManagementState extends State<JobManagement> {
                                   ),
                                   const SizedBox(width: 12),
                                   CustomButton(
+                                    text: _selectionMode
+                                        ? "Cancel selection"
+                                        : "Bulk select",
+                                    onPressed: () =>
+                                        _toggleSelectionMode(!_selectionMode),
+                                    outlined: true,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  CustomButton(
                                     text: "Add Job",
                                     onPressed: () => openJobForm(),
                                     icon: Icons.add,
@@ -1282,6 +1481,23 @@ class _JobManagementState extends State<JobManagement> {
                                   scrollDirection: Axis.horizontal,
                                   child: Row(
                                     children: [
+                                      Padding(
+                                        padding:
+                                            const EdgeInsets.only(right: 8),
+                                        child: FilterChip(
+                                          label: 'Pending approvals',
+                                          selected: selectedApprovalStatus ==
+                                              'pending',
+                                          onSelected: (_) {
+                                            setState(() {
+                                              selectedApprovalStatus =
+                                                  'pending';
+                                              currentPage = 1;
+                                            });
+                                            fetchJobs();
+                                          },
+                                        ),
+                                      ),
                                       // Status Filter
                                       ...statusFilters.map((status) {
                                         return Padding(
@@ -1485,10 +1701,6 @@ class _JobManagementState extends State<JobManagement> {
                         ],
                       ),
                     ),
-
-                    const SizedBox(height: 8),
-
-                    // Jobs List
                     Expanded(
                       child: jobs.isEmpty
                           ? Center(
@@ -1535,14 +1747,56 @@ class _JobManagementState extends State<JobManagement> {
                                 ],
                               ),
                             )
-                          : ListView.builder(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 24),
-                              itemCount: jobs.length,
-                              itemBuilder: (_, index) {
-                                final job = jobs[index];
-                                return _buildJobCard(job, themeProvider);
-                              },
+                          : Column(
+                              children: [
+                                if (_selectionMode &&
+                                    _selectedPendingJobIds.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 24, vertical: 8),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            '${_selectedPendingJobIds.length} selected',
+                                            style: TextStyle(
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.grey.shade300
+                                                  : Colors.grey.shade800,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                        TextButton.icon(
+                                          onPressed: _bulkApproveSelected,
+                                          icon: const Icon(
+                                              Icons.check_circle_outline,
+                                              color: Colors.green),
+                                          label: const Text('Approve'),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        TextButton.icon(
+                                          onPressed: _bulkRejectSelected,
+                                          icon: const Icon(
+                                              Icons.cancel_outlined,
+                                              color: Colors.red),
+                                          label: const Text('Reject'),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                Expanded(
+                                  child: ListView.builder(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 24),
+                                    itemCount: jobs.length,
+                                    itemBuilder: (_, index) {
+                                      final job = jobs[index];
+                                      return _buildJobCard(job, themeProvider);
+                                    },
+                                  ),
+                                ),
+                              ],
                             ),
                     ),
 

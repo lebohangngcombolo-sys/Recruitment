@@ -76,7 +76,8 @@ class AdminService {
     };
 
     if (category != null) queryParams['category'] = category;
-    if (approvalStatus != null && approvalStatus != 'all') queryParams['approval_status'] = approvalStatus;
+    if (approvalStatus != null && approvalStatus != 'all')
+      queryParams['approval_status'] = approvalStatus;
     if (search != null && search.isNotEmpty) queryParams['search'] = search;
 
     final uri =
@@ -125,11 +126,14 @@ class AdminService {
   }
 
   /// Approve a pending job (admin only).
-  Future<void> approveJob(int jobId) async {
+  Future<void> approveJob(int jobId, {String? note}) async {
     final authHeaders = await _getAuthHeaders();
     final res = await http.post(
       Uri.parse('${ApiEndpoints.adminJobs}/$jobId/approve'),
       headers: authHeaders,
+      body: note != null && note.trim().isNotEmpty
+          ? json.encode({'note': note.trim()})
+          : null,
     );
     if (res.statusCode != 200) {
       final body = json.decode(res.body);
@@ -138,17 +142,59 @@ class AdminService {
   }
 
   /// Reject a pending job with reason (admin only).
-  Future<void> rejectJob(int jobId, String reason) async {
+  Future<void> rejectJob(int jobId, String reason, {String? note}) async {
     final authHeaders = await _getAuthHeaders();
     final res = await http.post(
       Uri.parse('${ApiEndpoints.adminJobs}/$jobId/reject'),
       headers: authHeaders,
-      body: json.encode({'reason': reason}),
+      body: json.encode({
+        'reason': reason,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      }),
     );
     if (res.statusCode != 200) {
       final body = json.decode(res.body);
       throw Exception(body['error'] ?? 'Failed to reject job');
     }
+  }
+
+  /// Bulk approve pending jobs (admin only). Partial success.
+  Future<Map<String, dynamic>> bulkApproveJobs(List<int> jobIds,
+      {String? note}) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse(ApiEndpoints.bulkApproveJobs),
+      headers: authHeaders,
+      body: json.encode({
+        'job_ids': jobIds,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      }),
+    );
+    if (res.statusCode == 200) {
+      return json.decode(res.body) as Map<String, dynamic>;
+    }
+    final body = json.decode(res.body);
+    throw Exception(body is Map ? (body['error'] ?? res.body) : res.body);
+  }
+
+  /// Bulk reject pending jobs (admin only). Partial success.
+  Future<Map<String, dynamic>> bulkRejectJobs(List<int> jobIds, String reason,
+      {String? note}) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse(ApiEndpoints.bulkRejectJobs),
+      headers: authHeaders,
+      body: json.encode({
+        'job_ids': jobIds,
+        'reason': reason,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      }),
+    );
+    if (res.statusCode == 200) {
+      return json.decode(res.body) as Map<String, dynamic>;
+    }
+    final body = json.decode(res.body);
+    throw Exception(body is Map ? (body['error'] ?? res.body) : res.body);
   }
 
   /// Resubmit a rejected job for approval (HM or admin).

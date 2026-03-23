@@ -994,8 +994,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
 
   Widget _buildHoverWrapper({required Widget child}) {
     return MouseRegion(
-      onEnter: (_) => kIsWeb ? _hoverController.forward() : null,
-      onExit: (_) => kIsWeb ? _hoverController.reverse() : null,
+      onEnter: kIsWeb ? (_) => _hoverController.forward() : null,
+      onExit: kIsWeb ? (_) => _hoverController.reverse() : null,
       child: AnimatedBuilder(
         animation: _hoverAnimation,
         builder: (context, _) {

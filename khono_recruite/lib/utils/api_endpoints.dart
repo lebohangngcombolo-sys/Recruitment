@@ -177,6 +177,8 @@ class ApiEndpoints {
   static String getJobActivity(int id) => "$adminBase/jobs/$id/activity";
   static String getJobApplications(int id) =>
       "$adminBase/jobs/$id/applications";
+  static const bulkApproveJobs = "$adminBase/jobs/bulk-approve";
+  static const bulkRejectJobs = "$adminBase/jobs/bulk-reject";
   static const getApplicationsForMyJobs =
       "$adminBase/jobs/applications/for-my-jobs";
   static String getJobStats = "$adminBase/jobs/stats";

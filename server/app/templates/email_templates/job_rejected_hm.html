@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+  <body style="font-family: Arial, sans-serif; line-height: 1.5;">
+    <h2>Job rejected</h2>
+    <p>Your job submission was rejected.</p>
+    <p>
+      <strong>Title:</strong> {{ job_title }}<br/>
+      <strong>Company:</strong> {{ company }}<br/>
+      <strong>Rejected by:</strong> {{ rejected_by_name }} ({{ rejected_by_email }})<br/>
+      <strong>Reason:</strong> {{ reason }}
+    </p>
+    {% if note %}
+    <p><strong>Note:</strong> {{ note }}</p>
+    {% endif %}
+  </body>
+</html>
