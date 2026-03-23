@@ -159,6 +159,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   // Notifications for dashboard widget (status changes + upcoming interviews)
   List<Map<String, dynamic>> dashboardNotifications = [];
   bool loadingNotifications = false;
+  int unreadNotificationCount = 0;
 
   // ---------- Profile image state ----------
   XFile? _profileImage;
@@ -181,6 +182,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     fetchAudits(page: 1);
     fetchPipelineActivity();
     fetchDashboardNotifications();
+    _fetchUnreadNotificationCount();
     fetchProfileImage();
     _loadUserName();
     _loadCalendarData();
@@ -562,8 +564,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       // Fetch gender diversity data if available
       try {
         final genderRes = await http.get(
-          Uri.parse(
-              ApiEndpoints.getGenderDistribution),
+          Uri.parse(ApiEndpoints.getGenderDistribution),
           headers: headers,
         );
         if (genderRes.statusCode == 200) {
@@ -577,8 +578,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         } else {
           // Fallback to conversion rate if gender endpoint not available
           final conversionRes = await http.get(
-            Uri.parse(
-                ApiEndpoints.getApplicationToInterviewConversion),
+            Uri.parse(ApiEndpoints.getApplicationToInterviewConversion),
             headers: headers,
           );
           if (conversionRes.statusCode == 200) {
@@ -592,8 +592,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       } catch (e) {
         // Use fallback data
         final conversionRes = await http.get(
-          Uri.parse(
-              ApiEndpoints.getApplicationToInterviewConversion),
+          Uri.parse(ApiEndpoints.getApplicationToInterviewConversion),
           headers: headers,
         );
         if (conversionRes.statusCode == 200) {
@@ -608,8 +607,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       // Fetch ethnicity diversity data if available
       try {
         final ethnicityRes = await http.get(
-          Uri.parse(
-              ApiEndpoints.getEthnicityDistribution),
+          Uri.parse(ApiEndpoints.getEthnicityDistribution),
           headers: headers,
         );
         if (ethnicityRes.statusCode == 200) {
@@ -671,8 +669,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       try {
         // Skills frequency data (API returns Map<String, int>: skill name -> count)
         final skillsRes = await http.get(
-          Uri.parse(
-              ApiEndpoints.getSkillsFrequency),
+          Uri.parse(ApiEndpoints.getSkillsFrequency),
           headers: headers,
         );
         if (skillsRes.statusCode == 200) {
@@ -704,8 +701,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       try {
         // Experience distribution (API returns Map: years/key -> count)
         final experienceRes = await http.get(
-          Uri.parse(
-              ApiEndpoints.getExperienceDistribution),
+          Uri.parse(ApiEndpoints.getExperienceDistribution),
           headers: headers,
         );
         if (experienceRes.statusCode == 200) {
@@ -761,8 +757,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       try {
         // Assessment pass rates
         final assessmentRes = await http.get(
-          Uri.parse(
-              ApiEndpoints.getAssessmentPassRate),
+          Uri.parse(ApiEndpoints.getAssessmentPassRate),
           headers: headers,
         );
         if (assessmentRes.statusCode == 200) {
@@ -1039,32 +1034,36 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                             children: [
                               _sidebarEntry(
                                   'assets/images/Home_Remote_Work_Red_Badge_White.png',
-                                  'Home', 'dashboard'),
+                                  'Home',
+                                  'dashboard'),
                               _sidebarEntry(
-                                  Icons.person_outline,
-                                  'Profile', 'profile'),
+                                  Icons.person_outline, 'Profile', 'profile'),
                               _sidebarEntry(
                                   'assets/images/Approval_Red_Badge_White.png',
-                                  'Jobs', 'jobs'),
+                                  'Jobs',
+                                  'jobs'),
                               _candidateSidebarGroup(),
                               _sidebarEntry(
                                   'assets/images/red_Management_Red_Badge_White.png',
-                                  'Interviews', 'interviews'),
+                                  'Interviews',
+                                  'interviews'),
                               _sidebarEntry(
                                   'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
-                                  'CV Reviews', 'cv_reviews'),
-                              _sidebarEntry(
-                                  'assets/icons/data-analytics.png',
+                                  'CV Reviews',
+                                  'cv_reviews'),
+                              _sidebarEntry('assets/icons/data-analytics.png',
                                   'Analytics', 'analytics'),
-                              _sidebarEntry(
-                                  'assets/icons/teamC.png',
+                              _sidebarEntry('assets/icons/teamC.png',
                                   'Team Collaboration', 'team_collaboration'),
-                              _sidebarEntry(
+                              _sidebarEntryWithBadge(
                                   'assets/images/Notification_Red_White.png',
-                                  'Notifications', 'notifications'),
+                                  'Notifications',
+                                  'notifications',
+                                  badgeCount: unreadNotificationCount),
                               _sidebarEntry(
                                   'assets/images/innovation_brainstorm_red_badge_white.png',
-                                  'Settings', 'settings'),
+                                  'Settings',
+                                  'settings'),
                             ],
                           ),
                         ),
@@ -1168,7 +1167,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                     contentPadding: const EdgeInsets.symmetric(
                                         vertical: 14, horizontal: 10),
                                   ),
-                                    onSubmitted: (query) {
+                                  onSubmitted: (query) {
                                     final q = query.toLowerCase();
                                     setState(() {
                                       if (q.contains('job')) {
@@ -1585,6 +1584,100 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         ),
       ),
     );
+  }
+
+  Widget _sidebarEntryWithBadge(dynamic icon, String label, String screenKey,
+      {int badgeCount = 0, VoidCallback? onTapOverride}) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final selected = currentScreen == screenKey;
+    final iconColor = selected
+        ? const Color.fromRGBO(151, 18, 8, 1)
+        : themeProvider.isDarkMode
+            ? Colors.grey.shade400
+            : Colors.grey.shade800;
+    return InkWell(
+      onTap: onTapOverride ??
+          () => setState(() {
+                currentScreen = screenKey;
+                // Clear badge when navigating to notifications
+                if (screenKey == 'notifications') {
+                  setState(() => unreadNotificationCount = 0);
+                }
+              }),
+      child: Container(
+        color: selected ? const Color(0xFFC10D00) : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Stack(
+          children: [
+            Row(
+              children: [
+                _buildSidebarIcon(icon, selected, iconColor, themeProvider),
+                const SizedBox(width: 12),
+                if (!sidebarCollapsed)
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: selected
+                            ? Colors.white
+                            : themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade800,
+                        fontWeight:
+                            selected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                if (!sidebarCollapsed && badgeCount > 0)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      badgeCount > 99 ? '99+' : '$badgeCount',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            if (sidebarCollapsed && badgeCount > 0)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _fetchUnreadNotificationCount() async {
+    try {
+      final response = await NotificationService.getNotifications();
+      if (!mounted) return;
+      setState(() {
+        unreadNotificationCount = response.unreadCount;
+      });
+    } catch (e) {
+      debugPrint('Failed to fetch unread notification count: $e');
+    }
   }
 
   Widget getCurrentScreen() {
@@ -2500,6 +2593,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 colors: [
                   Colors.blue.shade900.withValues(alpha: 0.3),
                   Colors.purple.shade900.withValues(alpha: 0.3),
+                  Colors.indigo.shade900.withValues(alpha: 0.2),
                 ],
               )
             : LinearGradient(
@@ -2508,6 +2602,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 colors: [
                   Colors.blue.shade50,
                   Colors.purple.shade50,
+                  Colors.indigo.shade50,
                 ],
               ),
       ),
@@ -2541,27 +2636,38 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   ),
                 ],
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.blueAccent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: StreamBuilder(
-                  stream: Stream.periodic(const Duration(seconds: 1)),
-                  builder: (context, snapshot) {
-                    return Text(
-                      DateFormat('hh:mm a').format(DateTime.now()),
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600,
-                        color: Colors.blueAccent,
-                        fontSize: 12,
-                      ),
-                    );
-                  },
-                ),
+              Row(
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.blueAccent.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: StreamBuilder(
+                      stream: Stream.periodic(const Duration(seconds: 1)),
+                      builder: (context, snapshot) {
+                        return Text(
+                          DateFormat('hh:mm a').format(DateTime.now()),
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blueAccent,
+                            fontSize: 12,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.analytics_outlined,
+                        color: Colors.blueAccent),
+                    onPressed: () => _showCalendarAnalytics(),
+                    tooltip: "View calendar analytics",
+                  ),
+                ],
               ),
             ],
           ),
@@ -2599,6 +2705,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                           _loadCalendarData();
                         }
                       },
+                      onTap: (CalendarTapDetails details) {
+                        if (details.targetElement ==
+                            CalendarElement.calendarCell) {
+                          _showDayEventsDialog(details.date!);
+                        }
+                      },
+                      onLongPress: (CalendarLongPressDetails details) {
+                        if (details.targetElement ==
+                            CalendarElement.calendarCell) {
+                          _showQuickEventCreationMenu(details.date!);
+                        }
+                      },
                       monthViewSettings: MonthViewSettings(
                         appointmentDisplayMode:
                             MonthAppointmentDisplayMode.appointment,
@@ -2613,9 +2731,16 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                           ),
                         ),
                       ),
+                      todayHighlightColor: Colors.blueAccent,
+                      selectionDecoration: BoxDecoration(
+                        color: Colors.blueAccent.withValues(alpha: 0.2),
+                        border: Border.all(color: Colors.blueAccent, width: 2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
             ),
           ),
+          _buildDailyEventSummary(themeProvider),
         ],
       ),
     );
@@ -2731,7 +2856,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             ? (applicationStatusBreakdown['recommended'] as num).toInt()
             : 0);
     final total = inInterview + recommended;
-    final bg = (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white).withValues(alpha: 0.9);
+    final bg =
+        (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
+            .withValues(alpha: 0.9);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2757,7 +2884,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   fontFamily: 'Poppins',
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                  color:
+                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
               if (total > 0)
@@ -2786,7 +2914,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 12,
-                  color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                  color: themeProvider.isDarkMode
+                      ? Colors.grey.shade400
+                      : Colors.grey.shade600,
                 ),
               ),
             ),
@@ -2830,19 +2960,21 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
   // ---------------- Notifications: status changes & upcoming interviews ----------------
   Widget _buildNotificationsFocusCard(ThemeProvider themeProvider) {
-    final notificationPreview = dashboardNotifications
-        .where((n) => n['is_read'] != true)
+    final notificationPreview =
+        dashboardNotifications.where((n) => n['is_read'] != true).toList();
+    final recentNotifications = (notificationPreview.isNotEmpty
+            ? notificationPreview
+            : dashboardNotifications)
+        .take(5)
         .toList();
-    final recentNotifications =
-        (notificationPreview.isNotEmpty ? notificationPreview : dashboardNotifications)
-            .take(5)
-            .toList();
     final upcomingFromCalendar = _calendarAppointments
         .where((a) => a.startTime.isAfter(DateTime.now()))
         .toList()
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
     final upcomingList = upcomingFromCalendar.take(3).toList();
-    final bg = (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white).withValues(alpha: 0.9);
+    final bg =
+        (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
+            .withValues(alpha: 0.9);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2868,11 +3000,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   fontFamily: 'Poppins',
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                  color:
+                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
               TextButton(
-                onPressed: () => setState(() => currentScreen = "notifications"),
+                onPressed: () =>
+                    setState(() => currentScreen = "notifications"),
                 child: const Text("View all", style: TextStyle(fontSize: 12)),
                 style: TextButton.styleFrom(
                   foregroundColor: const Color.fromARGB(255, 193, 13, 0),
@@ -2897,7 +3031,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 11,
-                color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade400
+                    : Colors.grey.shade600,
               ),
             )
           else
@@ -2908,7 +3044,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontSize: 11,
-                      color: themeProvider.isDarkMode ? Colors.white70 : Colors.black87,
+                      color: themeProvider.isDarkMode
+                          ? Colors.white70
+                          : Colors.black87,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -2931,7 +3069,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 11,
-                color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade400
+                    : Colors.grey.shade600,
               ),
             )
           else
@@ -2972,7 +3112,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
   // ---------------- Activity trail: who advanced/declined and when ----------------
   Widget _buildActivityTrailCard(ThemeProvider themeProvider) {
-    final bg = (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white).withValues(alpha: 0.9);
+    final bg =
+        (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
+            .withValues(alpha: 0.9);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2998,7 +3140,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   fontFamily: 'Poppins',
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                  color:
+                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
               Text(
@@ -3006,7 +3149,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 style: TextStyle(
                   fontFamily: 'Poppins',
                   fontSize: 11,
-                  color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                  color: themeProvider.isDarkMode
+                      ? Colors.grey.shade400
+                      : Colors.grey.shade600,
                 ),
               ),
             ],
@@ -3019,7 +3164,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 child: SizedBox(
                   width: 24,
                   height: 24,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent),
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.redAccent),
                 ),
               ),
             )
@@ -3029,7 +3175,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               style: TextStyle(
                 fontFamily: 'Poppins',
                 fontSize: 12,
-                color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade400
+                    : Colors.grey.shade600,
               ),
             )
           else
@@ -3045,7 +3193,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.arrow_forward, size: 14, color: Colors.orange.shade700),
+                    Icon(Icons.arrow_forward,
+                        size: 14, color: Colors.orange.shade700),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -3055,7 +3204,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                         style: TextStyle(
                           fontFamily: 'Poppins',
                           fontSize: 11,
-                          color: themeProvider.isDarkMode ? Colors.white70 : Colors.black87,
+                          color: themeProvider.isDarkMode
+                              ? Colors.white70
+                              : Colors.black87,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -3711,6 +3862,220 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         ),
       ),
     );
+  }
+
+  // New method for showing day events in a dialog
+  void _showDayEventsDialog(DateTime selectedDate) {
+    final dayEvents = _calendarAppointments.where((appointment) {
+      return appointment.startTime.year == selectedDate.year &&
+          appointment.startTime.month == selectedDate.month &&
+          appointment.startTime.day == selectedDate.day;
+    }).toList();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            DateFormat('EEEE, MMMM d, y').format(selectedDate),
+            style: const TextStyle(
+                fontFamily: 'Poppins', fontWeight: FontWeight.bold),
+          ),
+          content: SizedBox(
+            width: MediaQuery.of(context).size.width *
+                0.4, // Constrain width to 40% of screen width
+            child: dayEvents.isEmpty
+                ? const Text("No events scheduled for this day.",
+                    style: TextStyle(fontFamily: 'Poppins'))
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: dayEvents.length,
+                    itemBuilder: (context, index) {
+                      final event = dayEvents[index];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        child: ListTile(
+                          leading: Icon(
+                            event.color == Colors.deepOrange
+                                ? Icons.video_call
+                                : Icons.event,
+                            color: event.color,
+                          ),
+                          title: Text(event.subject,
+                              style: const TextStyle(fontFamily: 'Poppins')),
+                          subtitle: Text(
+                            '${DateFormat.jm().format(event.startTime)} - ${DateFormat.jm().format(event.endTime)}',
+                            style: const TextStyle(
+                                fontFamily: 'Poppins', fontSize: 12),
+                          ),
+                          trailing: PopupMenuButton<String>(
+                            onSelected: (value) {
+                              if (value == 'reschedule') {
+                                // Implement reschedule logic
+                              } else if (value == 'cancel') {
+                                // Implement cancel logic
+                              }
+                            },
+                            itemBuilder: (BuildContext context) => [
+                              const PopupMenuItem<String>(
+                                value: 'reschedule',
+                                child: Text('Reschedule'),
+                              ),
+                              const PopupMenuItem<String>(
+                                value: 'cancel',
+                                child: Text('Cancel'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Close"),
+            ),
+            ElevatedButton(
+              onPressed: () => _showQuickEventCreationMenu(selectedDate),
+              child: const Text("Add Event"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // New method for quick event creation menu
+  void _showQuickEventCreationMenu(DateTime selectedDate) {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Create Event on ${DateFormat('MMM d, y').format(selectedDate)}",
+                style: const TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _eventTypeButton("Interview", Icons.video_call,
+                      Colors.deepOrange, selectedDate),
+                  _eventTypeButton(
+                      "Meeting", Icons.event, Colors.blue, selectedDate),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _eventTypeButton(
+      String type, IconData icon, Color color, DateTime date) {
+    return ElevatedButton.icon(
+      onPressed: () {
+        Navigator.of(context).pop();
+        if (type == "Interview") {
+          // Navigate to interview creation screen
+          setState(() => currentScreen = "interviews");
+        } else if (type == "Meeting") {
+          // Navigate to meeting creation screen
+          setState(() => currentScreen = "meetings");
+        }
+      },
+      icon: Icon(icon, color: Colors.white),
+      label: Text(type, style: const TextStyle(fontFamily: 'Poppins')),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+    );
+  }
+
+  // New method for daily event summary
+  Widget _buildDailyEventSummary(ThemeProvider themeProvider) {
+    final todayEvents = _calendarAppointments.where((appointment) {
+      final now = DateTime.now();
+      return appointment.startTime.year == now.year &&
+          appointment.startTime.month == now.month &&
+          appointment.startTime.day == now.day;
+    }).toList();
+
+    return ExpansionTile(
+      title: Text(
+        "Today's Events (${todayEvents.length})",
+        style:
+            const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
+      ),
+      children: todayEvents.isEmpty
+          ? [
+              const ListTile(
+                  title: Text("No events today",
+                      style: TextStyle(fontFamily: 'Poppins')))
+            ]
+          : todayEvents
+              .map((event) => ListTile(
+                    leading: Icon(
+                      event.color == Colors.deepOrange
+                          ? Icons.video_call
+                          : Icons.event,
+                      color: event.color,
+                    ),
+                    title: Text(event.subject,
+                        style: const TextStyle(fontFamily: 'Poppins')),
+                    subtitle: Text(
+                      DateFormat.jm().format(event.startTime),
+                      style:
+                          const TextStyle(fontFamily: 'Poppins', fontSize: 12),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.more_vert),
+                      onPressed: () => _showEventActions(event),
+                    ),
+                  ))
+              .toList(),
+    );
+  }
+
+  // New method for calendar analytics
+  void _showCalendarAnalytics() {
+    // Implement analytics dialog showing metrics
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Calendar Analytics",
+              style: TextStyle(fontFamily: 'Poppins')),
+          content: const SizedBox(
+            width: double.maxFinite,
+            child: Text(
+                "Analytics implementation pending - integrate with server API for metrics."),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Close"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // New method for event actions
+  void _showEventActions(Appointment event) {
+    // Implement quick actions menu
   }
 
   Color _getChartColor(int index) {
