@@ -52,6 +52,14 @@ class _AdminDashboardState extends State<AdminDashboard>
   int cvReviewsCount = 0;
   int auditsCount = 0;
 
+  // Enhanced metrics
+  int activeJobs = 0;
+  int candidatesWithCV = 0;
+  int upcomingInterviews = 0;
+  int newApplicationsWeek = 0;
+  int offeredApplications = 0;
+  int acceptedOffers = 0;
+
   int? selectedJobId;
 
   // Calendar state
@@ -252,6 +260,16 @@ class _AdminDashboardState extends State<AdminDashboard>
           interviewsCount = counts["interviews"] ?? 0;
           cvReviewsCount = counts["cv_reviews"] ?? 0;
           auditsCount = counts["audits"] ?? 0;
+
+          // Enhanced metrics
+          activeJobs = counts["active_jobs"] ?? 0;
+          candidatesWithCV = counts["candidates_with_cv"] ?? 0;
+          upcomingInterviews = counts["upcoming_interviews"] ?? 0;
+          newApplicationsWeek =
+              (counts["recent_activity"]?["new_applications"] ?? 0) as int;
+          offeredApplications = counts["offered_applications"] ?? 0;
+          acceptedOffers = counts["accepted_offers"] ?? 0;
+
           recentActivities = activities;
           loadingStats = false;
         });
@@ -776,6 +794,44 @@ class _AdminDashboardState extends State<AdminDashboard>
                         ),
                       ),
                     ),
+                    // ---------- Top Tabs Bar ----------
+                    Container(
+                      height: 56,
+                      color: themeProvider.isDarkMode
+                          ? const Color(0xFF14131E).withValues(alpha: 0.6)
+                          : Colors.white.withValues(alpha: 0.6),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: Row(
+                            children: [
+                              _buildTab('Dashboard', 'dashboard',
+                                  Icons.dashboard_outlined),
+                              _buildTab('Jobs', 'jobs', Icons.work_outline),
+                              _buildTab('Pipeline', 'pipeline',
+                                  Icons.account_tree_outlined),
+                              _buildTab('Offers', 'offers',
+                                  Icons.card_giftcard_outlined),
+                              _buildTab('Interviews', 'interviews',
+                                  Icons.calendar_today_outlined),
+                              _buildTab('CV Reviews', 'cv_reviews',
+                                  Icons.rate_review_outlined),
+                              _buildTab('Candidates', 'all_candidates',
+                                  Icons.people_outline),
+                              _buildTab('Users', 'users',
+                                  Icons.manage_accounts_outlined),
+                              _buildTab(
+                                  'Audits', 'audits', Icons.analytics_outlined),
+                              _buildTab('Analytics', 'analytics',
+                                  Icons.analytics_outlined),
+                              _buildTab('Settings', 'settings',
+                                  Icons.settings_outlined),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                     Expanded(child: getCurrentScreen()),
                   ],
                 ),
@@ -802,20 +858,6 @@ class _AdminDashboardState extends State<AdminDashboard>
         _sidebarAnimController.reverse();
       }
     });
-  }
-
-  IconData? _getIconFromString(String iconPath) {
-    // Map asset paths to IconData for ThemedStatCard
-    final iconMap = {
-      'assets/images/Approval_Red_Badge_White.png': Icons.work_outline,
-      'assets/images/candidates.png': Icons.people_outline,
-      'assets/images/red_Management_Red_Badge_White.png':
-          Icons.event_note_outlined,
-      'assets/images/Goal_Target_White_Badge_Red_Badge_White.png':
-          Icons.assignment_outlined,
-      'assets/images/deadline.png': Icons.analytics_outlined,
-    };
-    return iconMap[iconPath];
   }
 
   Widget _sidebarEntry(dynamic icon, String label, String screenKey) {
@@ -919,6 +961,8 @@ class _AdminDashboardState extends State<AdminDashboard>
       case "audits":
         return auditsScreen();
       case "roles":
+        return const UserManagementScreen();
+      case "users":
         return const UserManagementScreen();
       default:
         return dashboardOverview();
@@ -1248,32 +1292,37 @@ class _AdminDashboardState extends State<AdminDashboard>
 
     final stats = [
       {
-        "title": "Jobs",
+        "title": "Total Jobs",
         "count": jobsCount,
+        "subtitle": "$activeJobs active",
         "color": const Color.fromARGB(255, 193, 13, 0),
         "icon": "assets/images/Approval_Red_Badge_White.png"
       },
       {
         "title": "Candidates",
         "count": candidatesCount,
+        "subtitle": "${candidatesWithCV} with CV",
         "color": const Color.fromARGB(255, 193, 13, 0),
         "icon": "assets/images/candidates.png"
       },
       {
         "title": "Interviews",
         "count": interviewsCount,
+        "subtitle": "$upcomingInterviews upcoming",
         "color": const Color.fromARGB(255, 193, 13, 0),
         "icon": "assets/images/red_Management_Red_Badge_White.png"
       },
       {
-        "title": "CV Reviews",
+        "title": "Applications",
         "count": cvReviewsCount,
+        "subtitle": "$newApplicationsWeek this week",
         "color": const Color.fromARGB(255, 193, 13, 0),
         "icon": "assets/images/Goal_Target_White_Badge_Red_Badge_White.png"
       },
       {
-        "title": "Audits",
-        "count": auditsCount,
+        "title": "Offers",
+        "count": offeredApplications,
+        "subtitle": "$acceptedOffers accepted",
         "color": const Color.fromARGB(255, 193, 13, 0),
         "icon": "assets/images/deadline.png"
       },
@@ -1326,23 +1375,38 @@ class _AdminDashboardState extends State<AdminDashboard>
             const SizedBox(height: 12),
 
             // KPI Cards
-            // Instead of SizedBox with fixed height, use:
             ConstrainedBox(
-              constraints: const BoxConstraints(
-                minHeight: 160,
-                maxHeight: 180,
-              ),
+              constraints: const BoxConstraints(minHeight: 160, maxHeight: 180),
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: stats.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 16),
                 itemBuilder: (_, index) {
                   final item = stats[index];
-                  return ThemedStatCard(
-                    title: item["title"].toString(),
-                    value: (item["count"] as int).toString(),
-                    icon: _getIconFromString(item["icon"] as String),
-                    iconColor: item["color"] as Color,
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: (themeProvider.isDarkMode
+                              ? const Color(0xFF14131E)
+                              : Colors.white)
+                          .withValues(alpha: 0.9),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (item["color"] as Color).withValues(
+                            alpha: 0.1,
+                          ),
+                          blurRadius: 15,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: kpiCard(
+                      item["title"].toString(),
+                      item["count"] as int,
+                      item["color"] as Color,
+                      item["icon"] as String,
+                      subtitle: item["subtitle"] as String?,
+                    ),
                   );
                 },
               ),
@@ -2035,7 +2099,65 @@ class _AdminDashboardState extends State<AdminDashboard>
     );
   }
 
-  Widget kpiCard(String title, int count, Color color, String iconPath) {
+  Widget _buildTab(String title, String screenKey, IconData icon) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isSelected = currentScreen == screenKey;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        onTap: () => setState(() => currentScreen = screenKey),
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? BrandTokens.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: isSelected ? BrandTokens.primary : Colors.grey.shade300,
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: isSelected
+                    ? Colors.white
+                    : themeProvider.isDarkMode
+                        ? Colors.grey.shade400
+                        : Colors.grey.shade600,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                title,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: isSelected
+                      ? Colors.white
+                      : themeProvider.isDarkMode
+                          ? Colors.grey.shade300
+                          : Colors.grey.shade700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget kpiCard(
+    String title,
+    int count,
+    Color color,
+    String iconPath, {
+    String? subtitle,
+  }) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
@@ -2053,10 +2175,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.grey.shade200,
-                    width: 1,
-                  ),
+                  border: Border.all(color: Colors.grey.shade200, width: 1),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.08),
@@ -2112,6 +2231,20 @@ class _AdminDashboardState extends State<AdminDashboard>
               fontWeight: FontWeight.w500,
             ),
           ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade500
+                    : Colors.grey.shade500,
+                fontSize: 11,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ],
         ],
       ),
     );

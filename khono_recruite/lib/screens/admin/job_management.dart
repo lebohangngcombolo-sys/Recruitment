@@ -884,7 +884,7 @@ class _JobManagementState extends State<JobManagement> {
 
   void showJobStatistics() async {
     try {
-      final stats = await admin.getJobStatistics();
+      final stats = await admin.getAllJobStatistics();
       _showStatisticsDialog(stats);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

@@ -20,7 +20,6 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
   final List<Meeting> _meetings = [];
   bool _isLoading = true;
   int _selectedTab = 0; // 0: Upcoming, 1: Past, 2: All
-  String _searchQuery = '';
   bool _notifyStatusChanges = true;
   bool _notifyUpcomingInterviews = true;
   bool _prefsLoading = false;
@@ -89,21 +88,21 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
         status = null; // All meetings
       }
 
-      final meetingsResponse = await _apiService.getMeetings(
+      final meetingsData = await _apiService.getMeetings(
         page: 1,
-        perPage: 50,
+        perPage: 10,
         status: status,
-        search: _searchQuery.isEmpty ? null : _searchQuery,
       );
 
-      if (kDebugMode) debugPrint("Meetings response: $meetingsResponse");
-      final meetingsData = meetingsResponse['meetings'] as List<dynamic>? ?? [];
+      if (kDebugMode) debugPrint("Meetings response: $meetingsData");
       if (kDebugMode)
         debugPrint("Fetched ${meetingsData.length} meetings from API");
 
       // Convert to Meeting objects
-      final loadedMeetings =
-          meetingsData.map((meeting) => Meeting.fromJson(meeting)).toList();
+      final List<Meeting> loadedMeetings = [];
+      for (final meeting in meetingsData as List<Map<String, dynamic>>) {
+        loadedMeetings.add(Meeting.fromJson(meeting));
+      }
 
       // Optional: filter manually by start/end time to ensure upcoming/past correctness
       List<Meeting> filteredMeetings;
@@ -353,7 +352,6 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                 width: 250,
                 child: TextField(
                   onChanged: (value) {
-                    setState(() => _searchQuery = value);
                     _loadMeetings();
                   },
                   decoration: InputDecoration(

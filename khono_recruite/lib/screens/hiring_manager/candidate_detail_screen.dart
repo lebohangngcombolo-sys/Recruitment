@@ -51,6 +51,19 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
     'Reject',
   ];
 
+  static const List<String> _classificationOptions = [
+    'applied',
+    'screening',
+    'shortlisted',
+    'interview_scheduled',
+    'interview_completed',
+    'final_interview',
+    'offered',
+    'accepted',
+    'rejected',
+    'withdrawn',
+  ];
+
   static const List<String> _tabLabels = [
     'Overview',
     'CV & Skills',
@@ -1529,7 +1542,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
                     trailing: CustomButton(
                       text: "Cancel",
                       color: Colors.black87,
-                      onPressed: () => cancelInterview(i['id'] as int),
+                      onPressed: () => admin.cancelInterview(i['id'] as int),
                     ),
                   ),
                 ),
@@ -2023,51 +2036,6 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen>
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Error deleting interview: $e")));
-    }
-  }
-
-  Future<void> _showDeleteInterviewDialog(int interviewId) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Interview?'),
-        content: const Text(
-            'This action cannot be undone. The interview will be permanently removed.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      await _deleteInterview(interviewId);
-    }
-  }
-
-  Future<void> _deleteInterview(int interviewId) async {
-    try {
-      await admin.cancelInterview(interviewId);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text("Interview cancelled")));
-
-      final interviewData =
-          await admin.getCandidateInterviews(widget.candidateId);
-      setState(
-          () => interviews = List<Map<String, dynamic>>.from(interviewData));
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error cancelling interview: $e")));
     }
   }
 }
