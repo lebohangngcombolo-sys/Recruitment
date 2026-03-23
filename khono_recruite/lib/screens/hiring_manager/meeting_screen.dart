@@ -49,10 +49,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
     }
   }
 
-  Future<void> _updateNotificationPrefs({
-    bool? statusChanges,
-    bool? upcomingInterviews,
-  }) async {
+  Future<void> _updateNotificationPrefs(
+      {bool? statusChanges, bool? upcomingInterviews}) async {
     try {
       await _apiService.updateNotificationPreferences(
         statusChanges: statusChanges ?? _notifyStatusChanges,
@@ -71,9 +69,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to save: $e'),
-          backgroundColor: AppColors.primaryRed,
-        ),
+            content: Text('Failed to save: $e'),
+            backgroundColor: AppColors.primaryRed),
       );
     }
   }
@@ -105,9 +102,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
         debugPrint("Fetched ${meetingsData.length} meetings from API");
 
       // Convert to Meeting objects
-      final loadedMeetings = meetingsData
-          .map((meeting) => Meeting.fromJson(meeting))
-          .toList();
+      final loadedMeetings =
+          meetingsData.map((meeting) => Meeting.fromJson(meeting)).toList();
 
       // Optional: filter manually by start/end time to ensure upcoming/past correctness
       List<Meeting> filteredMeetings;
@@ -216,11 +212,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
       runSpacing: 8,
       children: [
         ActionChip(
-          avatar: const Icon(
-            Icons.schedule,
-            size: 18,
-            color: AppColors.primaryRed,
-          ),
+          avatar:
+              const Icon(Icons.schedule, size: 18, color: AppColors.primaryRed),
           label: Text('Interview slots', style: GoogleFonts.inter()),
           onPressed: () => Navigator.push(
             context,
@@ -228,11 +221,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
           ),
         ),
         ActionChip(
-          avatar: const Icon(
-            Icons.book_online,
-            size: 18,
-            color: AppColors.primaryRed,
-          ),
+          avatar: const Icon(Icons.book_online,
+              size: 18, color: AppColors.primaryRed),
           label: Text('Self-service booking', style: GoogleFonts.inter()),
           onPressed: () => showDialog(
             context: context,
@@ -259,16 +249,13 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
   Widget _buildNotificationPreferences(ThemeProvider themeProvider) {
     if (_prefsLoading) {
       return const SizedBox(
-        height: 32,
-        child: Center(child: CircularProgressIndicator()),
-      );
+          height: 32, child: Center(child: CircularProgressIndicator()));
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: themeProvider.isDarkMode
-            ? const Color(0xFF14131E)
-            : Colors.white,
+        color:
+            themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: themeProvider.isDarkMode
@@ -284,9 +271,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
             'Notifications',
             style: GoogleFonts.inter(
               fontWeight: FontWeight.w600,
-              color: themeProvider.isDarkMode
-                  ? Colors.white
-                  : AppColors.textDark,
+              color:
+                  themeProvider.isDarkMode ? Colors.white : AppColors.textDark,
             ),
           ),
           const SizedBox(height: 8),
@@ -340,9 +326,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: themeProvider.isDarkMode
-            ? const Color(0xFF14131E)
-            : Colors.white,
+        color:
+            themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -396,19 +381,19 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _meetings.isEmpty
-                ? Center(
-                    child: Text(
-                      'No meetings found',
-                      style: GoogleFonts.inter(),
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: _meetings.length,
-                    itemBuilder: (context, index) {
-                      final meeting = _meetings[index];
-                      return _buildMeetingCard(meeting, themeProvider);
-                    },
-                  ),
+                    ? Center(
+                        child: Text(
+                          'No meetings found',
+                          style: GoogleFonts.inter(),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _meetings.length,
+                        itemBuilder: (context, index) {
+                          final meeting = _meetings[index];
+                          return _buildMeetingCard(meeting, themeProvider);
+                        },
+                      ),
           ),
         ],
       ),
@@ -434,8 +419,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
             color: isSelected
                 ? Colors.white
                 : themeProvider.isDarkMode
-                ? Colors.grey.shade400
-                : AppColors.textGrey,
+                    ? Colors.grey.shade400
+                    : AppColors.textGrey,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -694,6 +679,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                       'end_time': endTime!.toIso8601String(),
                       'meeting_link': linkController.text.trim(),
                       'location': locationController.text.trim(),
+                      'participants':
+                          [], // Empty participants list for HM meetings
                     });
                   } else {
                     await _apiService.updateMeeting(meeting.id, {
@@ -703,6 +690,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                       'end_time': endTime!.toIso8601String(),
                       'meeting_link': linkController.text.trim(),
                       'location': locationController.text.trim(),
+                      'participants':
+                          [], // Empty participants list for HM meetings
                     });
                   }
                   Navigator.pop(context);
@@ -837,9 +826,8 @@ class Meeting {
       final organizer = json['organizer'];
       if (organizer is Map<String, dynamic>) {
         final profile = organizer['profile'] as Map<String, dynamic>? ?? {};
-        final fullName = (profile['full_name'] ?? profile['name'])
-            ?.toString()
-            .trim();
+        final fullName =
+            (profile['full_name'] ?? profile['name'])?.toString().trim();
         final email = (organizer['email'] ?? '').toString().trim();
         if (fullName != null && fullName.isNotEmpty) {
           organizerName = fullName;
