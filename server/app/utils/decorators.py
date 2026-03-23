@@ -89,7 +89,11 @@ def role_required(*roles):
                 raise
             except Exception as e:
                 logging.error(f"Role decorator exception: {e}", exc_info=True)
-                return jsonify({"error": "Invalid or expired token", "details": str(e)}), 401
+                # DO NOT return 401 for server errors. Return 500 so it can be debugged.
+                return jsonify({
+                    "error": "Internal server error in role decorator", 
+                    "message": str(e)
+                }), 500
 
         return decorator
     return wrapper

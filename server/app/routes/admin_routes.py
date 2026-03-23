@@ -762,6 +762,52 @@ def get_applications_for_my_jobs():
         return jsonify({"error": "Internal server error", "message": str(e)}), 500
 
 
+@admin_bp.route("/applications/my-jobs/all", methods=["GET", "OPTIONS"])
+@jwt_required()
+@role_required(["admin", "hiring_manager", "hr"])
+def get_all_applications_for_my_jobs():
+    """Wrapper for my-jobs applications, expected by some frontend versions."""
+    if request.method == "OPTIONS":
+        return "", 200
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        if not current_user:
+            return jsonify({"error": "User not found"}), 404
+
+        scope = (request.args.get("scope") or "").strip().lower() or "my_jobs"
+
+        query = Application.query.join(Requisition, Application.requisition_id == Requisition.id)
+        if current_user.role == "hiring_manager" and scope != "all":
+            query = query.filter(Requisition.created_by == current_user_id)
+
+        query = query.order_by(Application.created_at.desc())
+        applications = query.all()
+
+        enriched = []
+        for app in applications:
+            app_dict = app.to_dict()
+            app_dict["job_id"] = app.requisition_id
+            app_dict["job_title"] = app.requisition.title if app.requisition else None
+            cand = Candidate.query.get(app.candidate_id) if app.candidate_id else None
+            user = User.query.get(cand.user_id) if cand and cand.user_id else None
+            app_dict["candidate"] = {
+                "id": cand.id if cand else None,
+                "full_name": cand.full_name if cand else "Unknown",
+                "email": user.email if user else "",
+                "phone": (cand.phone or "") if cand else "",
+            } if cand else {"full_name": "Unknown", "email": "", "phone": ""}
+            enriched.append(app_dict)
+
+        return jsonify({
+            "applications": enriched,
+            "total": len(enriched)
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Get all applications for my jobs error: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
+
+
 @admin_bp.route("/jobs/stats", methods=["GET"])
 @jwt_required()
 @role_required(["admin", "hiring_manager", "hr"])
@@ -854,6 +900,7 @@ def list_candidates():
         if current_user and current_user.role == "hiring_manager":
             # Restrict to candidates who have at least one application to this HM's jobs (or unowned jobs)
             # Use subquery to avoid DISTINCT on JSON columns (PostgreSQL limitation)
+            from sqlalchemy import select
             candidate_ids_subquery = db.session.query(Candidate.id).join(
                 Application, Application.candidate_id == Candidate.id
             ).join(
@@ -865,7 +912,7 @@ def list_candidates():
                 )
             ).distinct().subquery()
             
-            query = Candidate.query.filter(Candidate.id.in_(candidate_ids_subquery))
+            query = Candidate.query.filter(Candidate.id.in_(select(candidate_ids_subquery.c.id)))
         
         # Apply search filter
         if search:
@@ -998,6 +1045,7 @@ def list_all_candidates():
         if current_user and current_user.role == "hiring_manager":
             # Restrict to candidates who have at least one application to this HM's jobs (or unowned jobs)
             # Use subquery to avoid DISTINCT on JSON columns (PostgreSQL limitation)
+            from sqlalchemy import select
             candidate_ids_subquery = db.session.query(Candidate.id).join(
                 Application, Application.candidate_id == Candidate.id
             ).join(
@@ -1009,7 +1057,7 @@ def list_all_candidates():
                 )
             ).distinct().subquery()
             
-            query = Candidate.query.filter(Candidate.id.in_(candidate_ids_subquery))
+            query = Candidate.query.filter(Candidate.id.in_(select(candidate_ids_subquery.c.id)))
         
         # Get all candidates (no pagination for the 'all' endpoint)
         all_candidates = query.all()
@@ -1459,10 +1507,26 @@ def list_cv_reviews():
                     refresh_count += 1
 
             result = cv_analysis.result or {}
-            # Handle both new FastAPI service format and legacy format
-            if 'match_analysis' in result:
-                # New FastAPI service format
+            # Handle new FastAPI service format (canonical schema), transitional format, and legacy format
+            if 'match_analysis' in result or 'structured_data' in result:
+                # New FastAPI service format (canonical schema)
                 match = result.get('match_analysis', {})
+                structured = result.get('structured_data', {})
+                
+                # overall_score might be at root (canonical) or inside match_analysis
+                overall_score = result.get('overall_score')
+                if overall_score is None:
+                    overall_score = match.get('overall_score', 0)
+                
+                # Skills might be in structured_data (canonical) or match_analysis.evidence
+                skills = structured.get('skills', [])
+                if not skills:
+                    skills = match.get("evidence", {}).get("skills", [])
+                
+                # Summary/Recommendation from match.suggestions
+                suggestions = match.get("suggestions", [])
+                recommendation = suggestions[0] if suggestions else ''
+                
                 cv_analysis_data = {
                     "id": cv_analysis.id,
                     "status": cv_analysis.status,
@@ -1470,13 +1534,13 @@ def list_cv_reviews():
                     "finished_at": cv_analysis.finished_at.isoformat() if cv_analysis.finished_at else None,
                     "created_at": cv_analysis.created_at.isoformat() if cv_analysis.created_at else None,
                     "updated_at": cv_analysis.updated_at.isoformat() if cv_analysis.updated_at else None,
-                    "summary": match.get("suggestions", [''])[0] if match.get("suggestions") else None,
-                    "strengths": [item.get('skill') if isinstance(item, dict) else item for item in match.get("evidence", {}).get("skills", [])],
+                    "summary": recommendation or None,
+                    "strengths": [item.get('skill') if isinstance(item, dict) else item for item in skills],
                     "weaknesses": match.get("missing_skills", []),
-                    "extracted_skills": [item.get('skill') if isinstance(item, dict) else item for item in match.get("evidence", {}).get("skills", [])],
-                    "match_score": match.get("overall_score"),
-                    "raw_score": match.get("overall_score"),  # Use same value for compatibility
-                    "recommendation": match.get("suggestions", [''])[0] if match.get("suggestions") else '',
+                    "extracted_skills": [item.get('skill') if isinstance(item, dict) else item for item in skills],
+                    "match_score": overall_score,
+                    "raw_score": overall_score,  # Use same value for compatibility
+                    "recommendation": recommendation,
                 }
             else:
                 # Legacy format (fallback)

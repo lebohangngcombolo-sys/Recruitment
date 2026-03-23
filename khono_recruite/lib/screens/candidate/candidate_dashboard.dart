@@ -64,6 +64,22 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   @override
   void initState() {
     super.initState();
+    _checkRoleAndInitialize();
+  }
+
+  Future<void> _checkRoleAndInitialize() async {
+    final role = await AuthService.getRole();
+    if (role != 'candidate') {
+      // If not a candidate, don't fetch candidate-specific data
+      if (mounted) {
+        setState(() {
+          _loadingJobs = false;
+          _dashboardCountsLoaded = true;
+        });
+      }
+      return;
+    }
+
     WidgetsBinding.instance.addObserver(this);
     // Persist token so Jobs Applied and other routes can use AuthService.getAccessToken()
     if (widget.token.trim().isNotEmpty) {

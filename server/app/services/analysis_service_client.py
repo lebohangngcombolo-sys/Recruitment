@@ -29,20 +29,22 @@ class AnalysisServiceClient:
         return f"{base}/{path}" if base else f"/{path}"
     
     @staticmethod
-    def submit_cv_text(cv_text: str, job_description: str | None = None):
+    def submit_cv_text(cv_text: str, job_description: str | None = None, industry: str | None = None):
         """Submit extracted CV text to external analysis service.
 
         Contract (new decoupled analyser):
-        POST /analyze (JSON)
-          {"cv_text": "...", "job_description": "..."}
+        POST /api/v1/analyze (JSON)
+          {"cv_text": "...", "job_description": "...", "industry": "..."}
 
         Returns JSON like: {"analysis_id": "...", "status": "pending"}
         """
-        url = AnalysisServiceClient._join(AnalysisServiceClient._base_url(), "analyze")
+        url = AnalysisServiceClient._join(AnalysisServiceClient._base_url(), "api/v1/analyze")
         headers = {**AnalysisServiceClient._auth_headers()}
         payload = {"cv_text": cv_text or ""}
         if job_description:
             payload["job_description"] = job_description
+        if industry:
+            payload["industry"] = industry
 
         try:
             response = requests.post(url, headers=headers, json=payload, timeout=30)
@@ -63,7 +65,7 @@ class AnalysisServiceClient:
         """Get analysis status from external service."""
         url = AnalysisServiceClient._join(
             AnalysisServiceClient._base_url(),
-            f"analyses/{external_analysis_id}/status",
+            f"api/v1/analyze/{external_analysis_id}/status",
         )
         headers = {**AnalysisServiceClient._auth_headers()}
         
@@ -80,7 +82,7 @@ class AnalysisServiceClient:
         """Get analysis result from external service."""
         url = AnalysisServiceClient._join(
             AnalysisServiceClient._base_url(),
-            f"analyses/{external_analysis_id}/result",
+            f"api/v1/analyze/{external_analysis_id}/result",
         )
         headers = {**AnalysisServiceClient._auth_headers()}
         
