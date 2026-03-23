@@ -85,7 +85,16 @@ class Config:
     MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER')
     _mt = (os.getenv('MAIL_TIMEOUT') or '60').strip()
     MAIL_TIMEOUT = int(_mt) if _mt else 60
-    SENDGRID_API_KEY = (os.getenv('SENDGRID_API_KEY') or '').strip() or None
+    _sg = (os.getenv('SENDGRID_API_KEY') or '').strip() or None
+    if not _sg:
+        try:
+            if (MAIL_SERVER or '').strip().lower() == 'smtp.sendgrid.net' and (MAIL_USERNAME or '').strip().lower() == 'apikey':
+                candidate = (MAIL_PASSWORD or '').strip()
+                if candidate:
+                    _sg = candidate
+        except Exception:
+            _sg = None
+    SENDGRID_API_KEY = _sg
     SENDGRID_API_URL = (os.getenv('SENDGRID_API_URL') or 'https://api.sendgrid.com/v3/mail/send').strip()
     
     # OAuth Configuration

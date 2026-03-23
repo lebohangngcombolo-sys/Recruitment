@@ -379,14 +379,8 @@ def upload_resume(application_id):
         try:
             # Send to external analysis service
             from app.services.analysis_service_client import AnalysisServiceClient
-            # Ensure stream is reset for the external service upload
-            try:
-                file.stream.seek(0)
-            except Exception:
-                pass
-            external_result = AnalysisServiceClient.submit_cv(
-                file_storage=file,
-                filename=filename,
+            external_result = AnalysisServiceClient.submit_cv_text(
+                cv_text=resume_text or "",
                 job_description=JobService.build_job_spec_for_cv(job),
             )
             cv_analysis.external_analysis_id = external_result.get('analysis_id')

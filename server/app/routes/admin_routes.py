@@ -1224,6 +1224,7 @@ def shortlist_export(job_id):
 
 # ----------------- NOTIFICATIONS -----------------
 @admin_bp.route("/notifications/<int:user_id>", methods=["GET"])
+@jwt_required()
 @role_required(["admin", "hiring_manager"])
 def get_notifications(user_id):
     """Get notifications for a user. Hiring managers can only request their own."""
@@ -1253,6 +1254,7 @@ def get_notifications(user_id):
 
 
 @admin_bp.route("/notifications/<int:notification_id>/read", methods=["PATCH", "POST"])
+@jwt_required()
 @role_required(["admin", "hiring_manager"])
 def mark_notification_read(notification_id):
     """Mark a notification as read. User can only mark their own."""

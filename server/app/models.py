@@ -673,6 +673,7 @@ class InterviewSlot(db.Model):
 # ------------------- CV ANALYSIS -------------------
 class CVAnalysis(db.Model):
     __tablename__ = "cv_analyses"
+    __table_args__ = {'schema': 'cv_analyser'}
     id = db.Column(db.Integer, primary_key=True)
     candidate_id = db.Column(db.Integer, db.ForeignKey('candidates.id'), nullable=False)
     application_id = db.Column(db.Integer, db.ForeignKey('applications.id'), nullable=True)

@@ -1105,8 +1105,71 @@ def init_auth_routes(app):
 
             cv_file = request.files["cv"]
 
-            # Use hybrid parser (Gemini + offline fallback)
+            # Extract text locally (Recruitment app owns OCR/text extraction)
+            try:
+                cv_text = AIParser.read_cv_file(cv_file) or ""
+            except Exception:
+                cv_text = ""
+
+            # Submit text to decoupled analyser and wait briefly for structured_data
+            try:
+                from app.services.analysis_service_client import AnalysisServiceClient
+                submit = AnalysisServiceClient.submit_cv_text(cv_text=cv_text)
+                external_id = submit.get("analysis_id")
+                if external_id:
+                    import time
+                    max_attempts = int(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_ATTEMPTS", "6") or "6")
+                    sleep_seconds = float(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_SLEEP", "0.8") or "0.8")
+                    for _ in range(max_attempts):
+                        status = AnalysisServiceClient.get_analysis_status(external_id)
+                        if (status or {}).get("status") == "completed":
+                            result = AnalysisServiceClient.get_analysis_result(external_id) or {}
+                            structured = result.get("structured_data") if isinstance(result, dict) else None
+
+                            # Map analyser structured_data -> enrollment autofill keys
+                            if isinstance(structured, dict):
+                                personal = structured.get("personal_details") or {}
+                                education = structured.get("education_details") or {}
+                                professional = structured.get("professional_details") or {}
+
+                                extracted_data = {
+                                    "full_name": personal.get("full_name") or "",
+                                    "email": personal.get("email") or "",
+                                    "phone": personal.get("phone") or "",
+                                    "address": personal.get("address") or "",
+                                    "dob": personal.get("dob") or "",
+                                    "linkedin": personal.get("linkedin") or "",
+                                    "github": personal.get("github") or "",
+                                    "portfolio": personal.get("portfolio") or "",
+                                    "education": education.get("education") or [],
+                                    "skills": professional.get("skills") or [],
+                                    "certifications": education.get("certifications") or [],
+                                    "languages": education.get("languages") or [],
+                                    "experience": professional.get("experience") or "",
+                                    "position": professional.get("position") or "",
+                                    "previous_companies": professional.get("previous_companies") or [],
+                                    "bio": professional.get("bio") or "",
+                                    "cv_text": cv_text,
+                                }
+
+                                return jsonify(extracted_data), 200
+
+                            break
+
+                        if (status or {}).get("status") == "failed":
+                            break
+                        time.sleep(sleep_seconds)
+            except Exception:
+                # Analyzer integration is best-effort for autofill; fall back below.
+                pass
+
+            # Fallback: Use local hybrid parser (LLM + offline regex) for autofill.
             extracted_data = AIParser.extract_cv_data(cv_file)
+            try:
+                if isinstance(extracted_data, dict) and cv_text and not extracted_data.get("cv_text"):
+                    extracted_data["cv_text"] = cv_text
+            except Exception:
+                pass
 
             return jsonify(extracted_data), 200
 
