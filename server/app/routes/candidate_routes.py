@@ -913,7 +913,11 @@ def get_my_interviews():
         if not candidate:
             return jsonify({"interviews": [], "scheduled_count": 0}), 200
 
-        interviews = Interview.query.filter_by(candidate_id=candidate.id).order_by(Interview.scheduled_time.desc()).all()
+        interviews = (
+            Interview.query.filter_by(candidate_id=candidate.id, approval_status="approved")
+            .order_by(Interview.scheduled_time.desc())
+            .all()
+        )
         now = datetime.utcnow()
         scheduled_count = sum(
             1 for i in interviews
@@ -928,6 +932,7 @@ def get_my_interviews():
                 "interview_type": i.interview_type,
                 "meeting_link": i.meeting_link,
                 "status": i.status or "scheduled",
+                "approval_status": getattr(i, "approval_status", "approved"),
                 "job_title": i.application.requisition.title if i.application and i.application.requisition else None,
             })
         return jsonify({"interviews": out, "scheduled_count": scheduled_count}), 200

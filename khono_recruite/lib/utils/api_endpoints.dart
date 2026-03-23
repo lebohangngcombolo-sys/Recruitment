@@ -133,6 +133,10 @@ class ApiEndpoints {
   static String rescheduleInterview(int id) =>
       "$adminBase/interviews/reschedule/$id";
   static String cancelInterview(int id) => "$adminBase/interviews/cancel/$id";
+  static String approveInterview(int interviewId) =>
+      "$adminBase/interviews/$interviewId/approve";
+  static String rejectInterview(int interviewId) =>
+      "$adminBase/interviews/$interviewId/reject";
 
   // ------------------- Test packs -------------------
   static const getTestPacks = "$adminBase/test-packs";
