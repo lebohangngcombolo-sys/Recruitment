@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
+import '../../services/auth_service.dart';
 import '../../services/candidate_service.dart';
 import 'job_details_page.dart';
 
@@ -36,6 +37,11 @@ class _BrowseAllJobsPageState extends State<BrowseAllJobsPage> {
 
   Future<void> _load() async {
     setState(() => _loading = true);
+    final role = await AuthService.getRole();
+    if (role != 'candidate') {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
     try {
       final results = await Future.wait([
         CandidateService.getAvailableJobs(widget.token)
@@ -44,9 +50,15 @@ class _BrowseAllJobsPageState extends State<BrowseAllJobsPage> {
             .timeout(const Duration(seconds: 5), onTimeout: () => <dynamic>[]),
       ]);
       if (!mounted) return;
-      final jobList = (results[0] as Iterable).map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e is Map ? e : {})).toList();
+      final jobList = (results[0] as Iterable)
+          .map<Map<String, dynamic>>(
+              (e) => Map<String, dynamic>.from(e is Map ? e : {}))
+          .toList();
       final appList = results[1] as Iterable;
-      final appMaps = appList.whereType<Map>().map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e)).toList();
+      final appMaps = appList
+          .whereType<Map>()
+          .map<Map<String, dynamic>>((e) => Map<String, dynamic>.from(e))
+          .toList();
       setState(() {
         _jobs = jobList;
         _applications = appMaps;
@@ -54,11 +66,12 @@ class _BrowseAllJobsPageState extends State<BrowseAllJobsPage> {
         _page = 0;
       });
     } catch (_) {
-      if (mounted) setState(() {
-        _jobs = [];
-        _applications = [];
-        _loading = false;
-      });
+      if (mounted)
+        setState(() {
+          _jobs = [];
+          _applications = [];
+          _loading = false;
+        });
     }
   }
 
@@ -76,11 +89,15 @@ class _BrowseAllJobsPageState extends State<BrowseAllJobsPage> {
     var list = _jobs.where((j) => !_hasApplicationForJob(j)).toList();
     if (typeFilter != 'Featured') {
       list = list.where((j) {
-        final t = (j['type'] ?? j['employment_type'] ?? '').toString().toLowerCase();
+        final t =
+            (j['type'] ?? j['employment_type'] ?? '').toString().toLowerCase();
         final loc = (j['location'] ?? '').toString().toLowerCase();
-        if (typeFilter == 'Full Time') return t.contains('full') || t == 'full_time';
-        if (typeFilter == 'Part Time') return t.contains('part') || t == 'part_time';
-        if (typeFilter == 'Remote') return loc.contains('remote') || t.contains('remote');
+        if (typeFilter == 'Full Time')
+          return t.contains('full') || t == 'full_time';
+        if (typeFilter == 'Part Time')
+          return t.contains('part') || t == 'part_time';
+        if (typeFilter == 'Remote')
+          return loc.contains('remote') || t.contains('remote');
         return true;
       }).toList();
     }
@@ -125,7 +142,10 @@ class _BrowseAllJobsPageState extends State<BrowseAllJobsPage> {
                     children: [
                       IconButton(
                         icon: Icon(Icons.arrow_back, color: Colors.white),
-                        onPressed: () => context.canPop() ? context.pop() : context.go('/candidate-dashboard?token=${Uri.encodeComponent(widget.token)}'),
+                        onPressed: () => context.canPop()
+                            ? context.pop()
+                            : context.go(
+                                '/candidate-dashboard?token=${Uri.encodeComponent(widget.token)}'),
                       ),
                       SizedBox(width: 8),
                       Text(
@@ -152,11 +172,14 @@ class _BrowseAllJobsPageState extends State<BrowseAllJobsPage> {
                               _page = 0;
                             }),
                             child: Container(
-                              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              padding: EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 12),
                               decoration: BoxDecoration(
                                 border: Border(
                                   bottom: BorderSide(
-                                    color: isSelected ? primaryColor : Colors.transparent,
+                                    color: isSelected
+                                        ? primaryColor
+                                        : Colors.transparent,
                                     width: 3,
                                   ),
                                 ),
@@ -165,8 +188,12 @@ class _BrowseAllJobsPageState extends State<BrowseAllJobsPage> {
                                 _jobTypes[i],
                                 style: GoogleFonts.poppins(
                                   fontSize: 15,
-                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                                  color: isSelected ? Colors.white : Colors.white70,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : Colors.white70,
                                 ),
                               ),
                             ),
@@ -230,7 +257,9 @@ class _BrowseAllJobsPageState extends State<BrowseAllJobsPage> {
                   _buildTableHeader(),
                   ...paginated.map((job) {
                     final j = Map<String, dynamic>.from(job);
-                    if (!j.containsKey('type') && j.containsKey('employment_type')) j['type'] = j['employment_type'];
+                    if (!j.containsKey('type') &&
+                        j.containsKey('employment_type'))
+                      j['type'] = j['employment_type'];
                     return _buildTableRow(j);
                   }),
                 ],
@@ -250,18 +279,28 @@ class _BrowseAllJobsPageState extends State<BrowseAllJobsPage> {
               children: [
                 Text(
                   'Showing $start to $end of $total',
-                  style: GoogleFonts.poppins(color: Colors.white70, fontSize: 13),
+                  style:
+                      GoogleFonts.poppins(color: Colors.white70, fontSize: 13),
                 ),
                 Row(
                   children: [
                     TextButton(
-                      onPressed: _page > 0 ? () => setState(() => _page--) : null,
-                      child: Text('Previous', style: GoogleFonts.poppins(color: _page > 0 ? strokeColor : Colors.white38)),
+                      onPressed:
+                          _page > 0 ? () => setState(() => _page--) : null,
+                      child: Text('Previous',
+                          style: GoogleFonts.poppins(
+                              color: _page > 0 ? strokeColor : Colors.white38)),
                     ),
                     SizedBox(width: 8),
                     TextButton(
-                      onPressed: (_page + 1) * _pageSize < total ? () => setState(() => _page++) : null,
-                      child: Text('Next', style: GoogleFonts.poppins(color: (_page + 1) * _pageSize < total ? strokeColor : Colors.white38)),
+                      onPressed: (_page + 1) * _pageSize < total
+                          ? () => setState(() => _page++)
+                          : null,
+                      child: Text('Next',
+                          style: GoogleFonts.poppins(
+                              color: (_page + 1) * _pageSize < total
+                                  ? strokeColor
+                                  : Colors.white38)),
                     ),
                   ],
                 ),
@@ -294,18 +333,25 @@ class _BrowseAllJobsPageState extends State<BrowseAllJobsPage> {
   Widget _headerCell(String label) {
     return Text(
       label,
-      style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
+      style: GoogleFonts.poppins(
+          fontSize: 13, fontWeight: FontWeight.w600, color: Colors.white70),
     );
   }
 
   Widget _buildTableRow(Map<String, dynamic> job) {
-    final company = (job['company']?.toString().trim().isNotEmpty == true) ? (job['company'] ?? '') : '—';
-    final location = (job['location']?.toString().trim().isNotEmpty == true) ? (job['location'] ?? '') : '—';
+    final company = (job['company']?.toString().trim().isNotEmpty == true)
+        ? (job['company'] ?? '')
+        : '—';
+    final location = (job['location']?.toString().trim().isNotEmpty == true)
+        ? (job['location'] ?? '')
+        : '—';
     final jobType = _formatJobType(job['type'] ?? job['employment_type']);
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.08), width: 1)),
+        border: Border(
+            bottom: BorderSide(
+                color: Colors.white.withValues(alpha: 0.08), width: 1)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -314,7 +360,10 @@ class _BrowseAllJobsPageState extends State<BrowseAllJobsPage> {
             flex: 2,
             child: Text(
               job['title'] ?? 'Job Title',
-              style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white),
+              style: GoogleFonts.poppins(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white),
             ),
           ),
           Expanded(
@@ -323,15 +372,23 @@ class _BrowseAllJobsPageState extends State<BrowseAllJobsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(company, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)),
+                Text(company,
+                    style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white)),
                 SizedBox(height: 2),
-                Text(jobType, style: GoogleFonts.poppins(fontSize: 13, color: Colors.white60)),
+                Text(jobType,
+                    style: GoogleFonts.poppins(
+                        fontSize: 13, color: Colors.white60)),
               ],
             ),
           ),
           Expanded(
             flex: 1,
-            child: Text(location, style: GoogleFonts.poppins(fontSize: 14, color: Colors.white70)),
+            child: Text(location,
+                style:
+                    GoogleFonts.poppins(fontSize: 14, color: Colors.white70)),
           ),
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -346,10 +403,13 @@ class _BrowseAllJobsPageState extends State<BrowseAllJobsPage> {
                 style: OutlinedButton.styleFrom(
                   backgroundColor: Color(0xFF3A3A3A),
                   side: BorderSide(color: Colors.white38),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
                   padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 ),
-                child: Text('View Details', style: GoogleFonts.poppins(fontSize: 13, color: Colors.white)),
+                child: Text('View Details',
+                    style:
+                        GoogleFonts.poppins(fontSize: 13, color: Colors.white)),
               ),
               SizedBox(width: 10),
               ElevatedButton(
@@ -361,10 +421,13 @@ class _BrowseAllJobsPageState extends State<BrowseAllJobsPage> {
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: strokeColor,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6)),
                   padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 ),
-                child: Text('Apply', style: GoogleFonts.poppins(fontSize: 13, color: Colors.white)),
+                child: Text('Apply',
+                    style:
+                        GoogleFonts.poppins(fontSize: 13, color: Colors.white)),
               ),
             ],
           ),

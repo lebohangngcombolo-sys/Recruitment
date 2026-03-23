@@ -367,8 +367,13 @@ class WebSocketService {
       return;
     }
 
-    debugPrint('📨 Joining thread $threadId');
-    _socket!.emit('join_thread', {'thread_id': threadId});
+    try {
+      debugPrint('📨 Joining thread $threadId');
+      _socket!.emit('join_thread', {'thread_id': threadId});
+    } catch (e) {
+      debugPrint('❌ Error joining thread: $e');
+      onError?.call('Failed to join thread: $e');
+    }
   }
 
   /// Leave a chat thread

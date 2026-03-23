@@ -99,14 +99,18 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
       final uid = _webSocketService?.userId;
       if (uid != null) _cachedUserId = uid;
-      setState(() => _isConnected = true);
+      if (mounted) {
+        setState(() => _isConnected = true);
+      }
       // Ensure user ID is cached (in case onConnected hasn't fired yet)
       await _loadUserId();
     } catch (e) {
       debugPrint("Error initializing chat: $e");
-      setState(() {
-        _isConnected = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isConnected = false;
+        });
+      }
     }
   }
 
@@ -116,13 +120,17 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
     _webSocketService!.onConnected = () {
       final uid = _webSocketService?.userId;
       if (uid != null) _cachedUserId = uid;
-      setState(() => _isConnected = true);
+      if (mounted) {
+        setState(() => _isConnected = true);
+      }
     };
 
     _webSocketService!.onDisconnected = () {
-      setState(() {
-        _isConnected = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isConnected = false;
+        });
+      }
     };
 
     _webSocketService!.onError = (error) {
@@ -292,9 +300,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         ),
       );
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 

@@ -217,7 +217,7 @@ def _job_list_item(job):
 
 # ----------------- GET AVAILABLE JOBS -----------------
 @candidate_bp.route("/jobs", methods=["GET"])
-@role_required(["candidate"])
+@role_required(["candidate", "admin", "hiring_manager"])
 def get_available_jobs():
     try:
         user_id = get_jwt_identity()
@@ -382,6 +382,7 @@ def upload_resume(application_id):
             external_result = AnalysisServiceClient.submit_cv_text(
                 cv_text=resume_text or "",
                 job_description=JobService.build_job_spec_for_cv(job),
+                industry=job.category or None
             )
             cv_analysis.external_analysis_id = external_result.get('analysis_id')
             cv_analysis.status = 'submitted'
@@ -488,7 +489,7 @@ def get_cv_analysis_status(analysis_id):
 
 # ----------------- CANDIDATE APPLICATIONS -----------------
 @candidate_bp.route("/applications", methods=["GET"])
-@role_required(["candidate"])
+@role_required(["candidate", "admin", "hiring_manager"])
 def get_applications():
     try:
         user_id = get_jwt_identity()
