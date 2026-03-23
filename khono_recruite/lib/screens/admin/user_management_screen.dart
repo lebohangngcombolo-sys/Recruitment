@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
+import '../../services/admin_service.dart';
 import '../../providers/theme_provider.dart';
 import '../../utils/api_endpoints.dart';
 import '../../constants/brand_tokens.dart';
@@ -29,6 +30,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   Timer? _searchDebounce;
+  final AdminService _adminService = AdminService();
 
   @override
   bool get wantKeepAlive => true;
@@ -651,43 +653,29 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                           });
 
                           try {
-                            final token = await AuthService.getAccessToken();
-                            if (token == null)
-                              throw Exception("Token not found");
-
-                            final userId = users[index]["user_id"];
+                            final userId =
+                                users[index]["user_id"] ?? users[index]["id"];
                             if (userId == null)
                               throw Exception("User ID not found");
 
-                            final response = await http.put(
-                              Uri.parse(
-                                  "${ApiEndpoints.adminBase}/users/$userId"),
-                              headers: {
-                                "Content-Type": "application/json",
-                                "Authorization": "Bearer $token",
-                              },
-                              body: jsonEncode({"role": role.toLowerCase()}),
-                            );
+                            await _adminService.updateUserRole(userId, role);
 
-                            if (response.statusCode == 200) {
-                              setState(() {
-                                users[index]["role"] = role;
-                              });
-                              Navigator.pop(ctx);
-                            } else {
-                              final data = jsonDecode(response.body);
-                              setState(() {
-                                errorMessage =
-                                    data["error"] ?? "Failed to update role";
-                              });
-                            }
+                            if (!mounted) return;
+                            setState(() {
+                              users[index]["role"] = role;
+                              isLoading = false;
+                            });
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text("Role updated successfully"),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
                           } catch (e) {
                             setState(() {
-                              errorMessage = "Error: $e";
-                            });
-                          } finally {
-                            setState(() {
                               isLoading = false;
+                              errorMessage = e.toString();
                             });
                           }
                         },
@@ -722,6 +710,94 @@ class _UserManagementScreenState extends State<UserManagementScreen>
         );
       },
     );
+  }
+
+  void _toggleUserStatus(int index) async {
+    final user = users[index];
+    final userId = user["user_id"] ?? user["id"];
+    final isCurrentlyActive = user["is_active"] ?? true;
+
+    if (userId == null) return;
+
+    try {
+      if (isCurrentlyActive) {
+        await _adminService.deactivateUser(userId);
+      } else {
+        await _adminService.activateUser(userId);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        users[index]["is_active"] = !isCurrentlyActive;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text(isCurrentlyActive ? "User deactivated" : "User activated"),
+          backgroundColor: isCurrentlyActive ? Colors.orange : Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _deleteUser(int index) async {
+    final user = users[index];
+    final userId = user["user_id"] ?? user["id"];
+
+    if (userId == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete User"),
+        content: Text(
+            "Are you sure you want to delete ${user["name"] ?? "this user"}? This action cannot be undone."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await _adminService.deleteUser(userId);
+
+        if (!mounted) return;
+        setState(() {
+          users.removeAt(index);
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("User deleted successfully"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error deleting user: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // ------------------ UI ------------------
@@ -837,6 +913,35 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                       ),
                     ),
                   ),
+                  const SizedBox(width: 4),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: (user["is_active"] == false
+                              ? Colors.red
+                              : Colors.green)
+                          .withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: (user["is_active"] == false
+                                ? Colors.red
+                                : Colors.green)
+                            .withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      user["is_active"] == false ? "Inactive" : "Active",
+                      style: GoogleFonts.inter(
+                        color: user["is_active"] == false
+                            ? Colors.red
+                            : Colors.green,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -872,6 +977,41 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                   borderRadius: BorderRadius.circular(8),
                   boxShadow: [
                     BoxShadow(
+                      color: (user["is_active"] == false
+                              ? Colors.green
+                              : Colors.orange)
+                          .withValues(alpha: 0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  onPressed: () => _toggleUserStatus(index),
+                  icon: Icon(
+                    user["is_active"] == false
+                        ? Icons.check_circle
+                        : Icons.block,
+                    color: user["is_active"] == false
+                        ? Colors.green
+                        : Colors.orange,
+                    size: 20,
+                  ),
+                  style: IconButton.styleFrom(
+                    backgroundColor: (themeProvider.isDarkMode
+                            ? const Color(0xFF14131E)
+                            : Colors.white)
+                        .withValues(alpha: 0.9),
+                    padding: const EdgeInsets.all(8),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
                       color: Colors.red.withValues(alpha: 0.2),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
@@ -879,11 +1019,7 @@ class _UserManagementScreenState extends State<UserManagementScreen>
                   ],
                 ),
                 child: IconButton(
-                  onPressed: () {
-                    setState(() {
-                      users.removeAt(index);
-                    });
-                  },
+                  onPressed: () => _deleteUser(index),
                   icon: Icon(Icons.delete, color: Colors.red, size: 20),
                   style: IconButton.styleFrom(
                     backgroundColor: (themeProvider.isDarkMode
