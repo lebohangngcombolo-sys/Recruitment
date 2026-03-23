@@ -408,9 +408,65 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     }
   }
 
+  /// Treat missing [is_read] as unread (older API responses).
+  bool _isNotificationUnread(Map<String, dynamic> n) {
+    final r = n['is_read'];
+    if (r == null) return true;
+    if (r is bool) return !r;
+    if (r is int) return r == 0;
+    final s = r.toString().toLowerCase();
+    return s != 'true' && s != '1';
+  }
+
+  int _unreadNotificationCount() =>
+      notifications.where(_isNotificationUnread).length;
+
+  int _compareCreatedAtDesc(
+    Map<String, dynamic> a,
+    Map<String, dynamic> b,
+  ) {
+    final da = DateTime.tryParse(a['created_at']?.toString() ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    final db = DateTime.tryParse(b['created_at']?.toString() ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    return db.compareTo(da);
+  }
+
+  Future<void> _markNotificationSeen(Map<String, dynamic> n) async {
+    if (!_isNotificationUnread(n)) return;
+    final rawId = n['id'];
+    if (rawId == null) return;
+    final id = int.tryParse(rawId.toString());
+    if (id == null) return;
+    try {
+      await UnifiedApiService.markNotificationRead(id);
+      if (!mounted) return;
+      _safeSetState(() {
+        final i = notifications.indexWhere(
+          (e) => e['id'].toString() == rawId.toString(),
+        );
+        if (i >= 0) {
+          notifications[i] = {...notifications[i], 'is_read': true};
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not update notification: $e',
+              style: GoogleFonts.poppins(fontSize: 13),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   void _showNotificationsDialog() {
     const double panelWidth = 360;
-    const double maxPanelHeight = 420;
+    const double maxPanelHeight = 480;
+    bool showUnreadTab = true;
     showDialog(
       context: context,
       barrierColor: Colors.black26,
@@ -500,48 +556,230 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                             ),
                           ),
                         )
-                      : ListView.builder(
-                          shrinkWrap: true,
-                          padding: EdgeInsets.symmetric(vertical: 4),
-                          itemCount: notifications.length,
-                          itemBuilder: (context, index) {
-                            final notification = notifications[index];
-                            final messageText = _getNotificationMessage(
-                              notification,
-                            );
-                            final dateText = _formatDate(
-                              notification['created_at']?.toString(),
-                            );
-                            return ListTile(
-                              dense: true,
-                              contentPadding: EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 4,
-                              ),
-                              leading: Icon(
-                                Icons.notifications_outlined,
-                                color: primaryColor,
-                                size: 22,
-                              ),
-                              title: Text(
-                                messageText,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  color: Colors.black87,
+                      : StatefulBuilder(
+                          builder: (context, setDialogState) {
+                            final unread = notifications
+                                .where(_isNotificationUnread)
+                                .toList()
+                              ..sort(_compareCreatedAtDesc);
+                            final read = notifications
+                                .where((n) => !_isNotificationUnread(n))
+                                .toList()
+                              ..sort(_compareCreatedAtDesc);
+
+                            Widget emptyHint(String text) {
+                              return Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 20,
                                 ),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Padding(
-                                padding: EdgeInsets.only(top: 2),
                                 child: Text(
-                                  dateText,
+                                  text,
                                   style: GoogleFonts.poppins(
-                                    fontSize: 11,
-                                    color: Colors.black54,
+                                    fontSize: 12,
+                                    color: Colors.black45,
                                   ),
                                 ),
-                              ),
+                              );
+                            }
+
+                            Widget tile(Map<String, dynamic> notification,
+                                {required bool unreadStyle}) {
+                              final messageText =
+                                  _getNotificationMessage(notification);
+                              final dateText = _formatDate(
+                                notification['created_at']?.toString(),
+                              );
+                              return Material(
+                                color: unreadStyle
+                                    ? primaryColor.withValues(alpha: 0.06)
+                                    : Colors.transparent,
+                                child: InkWell(
+                                  onTap: () async {
+                                    await _markNotificationSeen(notification);
+                                    setDialogState(() {
+                                      if (showUnreadTab && unread.length == 1) {
+                                        showUnreadTab = false;
+                                      }
+                                    });
+                                  },
+                                  child: Container(
+                                    decoration: unreadStyle
+                                        ? BoxDecoration(
+                                            border: Border(
+                                              left: BorderSide(
+                                                color: strokeColor,
+                                                width: 3,
+                                              ),
+                                            ),
+                                          )
+                                        : null,
+                                    child: ListTile(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 6,
+                                      ),
+                                      leading: Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          Icon(
+                                            Icons.notifications_outlined,
+                                            color: primaryColor,
+                                            size: 22,
+                                          ),
+                                          if (unreadStyle)
+                                            Positioned(
+                                              right: -2,
+                                              top: -2,
+                                              child: Container(
+                                                width: 8,
+                                                height: 8,
+                                                decoration: BoxDecoration(
+                                                  color: strokeColor,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      title: Text(
+                                        messageText,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          color: Colors.black87,
+                                          fontWeight: unreadStyle
+                                              ? FontWeight.w600
+                                              : FontWeight.w400,
+                                        ),
+                                        maxLines: 4,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      subtitle: Padding(
+                                        padding: EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          dateText,
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 11,
+                                            color: Colors.black54,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            Widget tabButton({
+                              required String label,
+                              required int count,
+                              required bool active,
+                              required VoidCallback onTap,
+                            }) {
+                              return Expanded(
+                                child: GestureDetector(
+                                  onTap: onTap,
+                                  child: AnimatedContainer(
+                                    duration: Duration(milliseconds: 180),
+                                    padding: EdgeInsets.symmetric(vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: active
+                                          ? primaryColor.withValues(alpha: 0.09)
+                                          : Colors.transparent,
+                                      border: Border(
+                                        bottom: BorderSide(
+                                          color:
+                                              active ? strokeColor : Colors.black12,
+                                          width: active ? 2 : 1,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          label,
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: active
+                                                ? strokeColor
+                                                : Colors.black54,
+                                          ),
+                                        ),
+                                        SizedBox(width: 6),
+                                        Container(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: active
+                                                ? strokeColor
+                                                : Colors.black12,
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Text(
+                                            '$count',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: active
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final activeList = showUnreadTab ? unread : read;
+
+                            return Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    tabButton(
+                                      label: 'Unread',
+                                      count: unread.length,
+                                      active: showUnreadTab,
+                                      onTap: () =>
+                                          setDialogState(() => showUnreadTab = true),
+                                    ),
+                                    tabButton(
+                                      label: 'Read',
+                                      count: read.length,
+                                      active: !showUnreadTab,
+                                      onTap: () => setDialogState(
+                                          () => showUnreadTab = false),
+                                    ),
+                                  ],
+                                ),
+                                Expanded(
+                                  child: activeList.isEmpty
+                                      ? emptyHint(
+                                          showUnreadTab
+                                              ? "You're all caught up — no new alerts."
+                                              : 'Opened notifications appear here.',
+                                        )
+                                      : ListView(
+                                          padding: EdgeInsets.only(bottom: 12),
+                                          children: activeList
+                                              .map(
+                                                (n) => tile(
+                                                  n,
+                                                  unreadStyle: showUnreadTab,
+                                                ),
+                                              )
+                                              .toList(),
+                                        ),
+                                ),
+                              ],
                             );
                           },
                         ),
@@ -2042,7 +2280,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                             ),
                             onPressed: () => _showNotificationsDialog(),
                           ),
-                          if (notifications.isNotEmpty)
+                          if (_unreadNotificationCount() > 0)
                             Positioned(
                               right: 6,
                               top: 6,
@@ -2056,9 +2294,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
-                                  notifications.length > 99
+                                  _unreadNotificationCount() > 99
                                       ? '99+'
-                                      : notifications.length.toString(),
+                                      : _unreadNotificationCount().toString(),
                                   style: GoogleFonts.poppins(
                                     color: Colors.white,
                                     fontSize: 10,
