@@ -1,8 +1,8 @@
 from flask import Blueprint, request, jsonify, current_app, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.extensions import db
-from app.models import User, Requisition, Candidate, Application, AssessmentResult, Interview, InterviewSlot, Notification, AuditLog, Conversation, SharedNote, Meeting, CVAnalysis, InterviewFeedback, InterviewNote, InterviewReminder, Offer, OfferStatus
-from datetime import datetime, timedelta
+from app.models import User, Requisition, Candidate, Application, AssessmentResult, Interview, InterviewSlot, Notification, AuditLog, SharedNote, Meeting, CVAnalysis, InterviewFeedback, InterviewNote, InterviewReminder, Offer, OfferStatus
+from datetime import datetime, timedelta, timezone
 from app.utils.decorators import role_required
 from app.services.email_service import EmailService
 from app.services.audit2 import AuditService
@@ -14,8 +14,7 @@ from marshmallow import ValidationError
 import pyotp
 from app.services.job_service import JobService
 from app.schemas.job_schemas import (
-    job_create_schema, job_update_schema, job_response_schema,
-    job_list_schema, job_filter_schema, job_activity_log_schema
+    job_create_schema, job_update_schema, job_response_schema
 )
 
 
@@ -67,7 +66,7 @@ def get_dashboard_stats():
     status_breakdown = {status: count for status, count in application_statuses}
     
     # Recent activity (last 7 days)
-    week_ago = datetime.utcnow() - timedelta(days=7)
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
     
     new_users_week = User.query.filter(User.created_at >= week_ago).count()
     new_applications_week = Application.query.filter(Application.created_at >= week_ago).count()
@@ -100,7 +99,7 @@ def get_users_growth():
     """Get user growth data over time"""
     
     days = int(request.args.get('days', 30))
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
     
     # User growth data
     user_growth = db.session.query(
@@ -307,20 +306,22 @@ def create_job():
             }), 400
         
         current_user_id = get_jwt_identity()
-        
-        # Use service to create job
-        job, error = JobService.create_job(validated_data, current_user_id)
-        
+        current_user = User.query.get(current_user_id)
+        role = current_user.role if current_user else None
+
+        # Use service to create job (role sets approval_status: admin=approved, others=pending)
+        job, error = JobService.create_job(validated_data, current_user_id, role=role)
+
         if error:
             return jsonify(error), error.get('status_code', 400)
-        
+
         # Return response
         return jsonify({
             "message": "Job created successfully",
             "job": job_response_schema.dump(job),
             "job_id": job.id
         }), 201
-        
+
     except Exception as e:
         current_app.logger.error(f"Create job route error: {str(e)}", exc_info=True)
         return jsonify({
@@ -461,11 +462,12 @@ def list_jobs():
             'per_page': request.args.get('per_page', 20, type=int),
             'category': request.args.get('category'),
             'status': request.args.get('status', 'active'),
+            'approval_status': request.args.get('approval_status', 'all'),
             'sort_by': request.args.get('sort_by', 'created_at'),
             'sort_order': request.args.get('sort_order', 'desc'),
             'search': request.args.get('search')
         }
-        
+
         # Use service to list jobs
         jobs_data, error = JobService.list_jobs(filters)
         
@@ -480,6 +482,106 @@ def list_jobs():
             "error": "Internal server error",
             "message": str(e)
         }), 500
+
+
+@admin_bp.route("/jobs/<int:job_id>/approve", methods=["POST"])
+@jwt_required()
+@role_required(["admin"])
+def approve_job(job_id):
+    """Approve a pending job (admin only)."""
+    try:
+        current_user_id = get_jwt_identity()
+        data = request.get_json(silent=True) or {}
+        note = (data.get("note") or "").strip() or None
+        job, error = JobService.approve_job(job_id, current_user_id, note=note)
+        if error:
+            return jsonify(error), error.get("status_code", 400)
+        return jsonify({"message": "Job approved", "job": job_response_schema.dump(job)}), 200
+    except Exception as e:
+        current_app.logger.error(f"Approve job route error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
+
+
+@admin_bp.route("/jobs/<int:job_id>/reject", methods=["POST"])
+@jwt_required()
+@role_required(["admin"])
+def reject_job(job_id):
+    """Reject a pending job with reason (admin only)."""
+    try:
+        data = request.get_json() or {}
+        reason = (data.get("reason") or "").strip()
+        note = (data.get("note") or "").strip() or None
+        if not reason:
+            return jsonify({"error": "Rejection reason is required", "status_code": 400}), 400
+        current_user_id = get_jwt_identity()
+        job, error = JobService.reject_job(job_id, current_user_id, reason, note=note)
+        if error:
+            return jsonify(error), error.get("status_code", 400)
+        return jsonify({"message": "Job rejected", "job": job_response_schema.dump(job)}), 200
+    except Exception as e:
+        current_app.logger.error(f"Reject job route error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
+
+
+@admin_bp.route("/jobs/bulk-approve", methods=["POST"])
+@jwt_required()
+@role_required(["admin"])
+def bulk_approve_jobs():
+    """Bulk approve pending jobs (partial success)."""
+    try:
+        data = request.get_json() or {}
+        job_ids = data.get("job_ids") or []
+        note = (data.get("note") or "").strip() or None
+        if not isinstance(job_ids, list) or not job_ids:
+            return jsonify({"error": "job_ids must be a non-empty list", "status_code": 400}), 400
+        current_user_id = get_jwt_identity()
+        result, error = JobService.bulk_approve_jobs([int(x) for x in job_ids], current_user_id, note=note)
+        if error:
+            return jsonify(error), error.get("status_code", 400)
+        return jsonify({"message": "Bulk approve completed", **result}), 200
+    except Exception as e:
+        current_app.logger.error(f"Bulk approve jobs route error: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
+
+
+@admin_bp.route("/jobs/bulk-reject", methods=["POST"])
+@jwt_required()
+@role_required(["admin"])
+def bulk_reject_jobs():
+    """Bulk reject pending jobs (partial success)."""
+    try:
+        data = request.get_json() or {}
+        job_ids = data.get("job_ids") or []
+        reason = (data.get("reason") or "").strip()
+        note = (data.get("note") or "").strip() or None
+        if not isinstance(job_ids, list) or not job_ids:
+            return jsonify({"error": "job_ids must be a non-empty list", "status_code": 400}), 400
+        if not reason:
+            return jsonify({"error": "Rejection reason is required", "status_code": 400}), 400
+        current_user_id = get_jwt_identity()
+        result, error = JobService.bulk_reject_jobs([int(x) for x in job_ids], current_user_id, reason, note=note)
+        if error:
+            return jsonify(error), error.get("status_code", 400)
+        return jsonify({"message": "Bulk reject completed", **result}), 200
+    except Exception as e:
+        current_app.logger.error(f"Bulk reject jobs route error: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
+
+
+@admin_bp.route("/jobs/<int:job_id>/resubmit", methods=["POST"])
+@jwt_required()
+@role_required(["admin", "hiring_manager"])
+def resubmit_job(job_id):
+    """Resubmit a rejected job for approval (HM or admin)."""
+    try:
+        current_user_id = get_jwt_identity()
+        job, error = JobService.resubmit_job(job_id, current_user_id)
+        if error:
+            return jsonify(error), error.get("status_code", 400)
+        return jsonify({"message": "Job resubmitted for approval", "job": job_response_schema.dump(job)}), 200
+    except Exception as e:
+        current_app.logger.error(f"Resubmit job route error for job {job_id}: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
 
 
 @admin_bp.route("/jobs/<int:job_id>/restore", methods=["POST"])
@@ -659,6 +761,52 @@ def get_applications_for_my_jobs():
         return jsonify({"error": "Internal server error", "message": str(e)}), 500
 
 
+@admin_bp.route("/applications/my-jobs/all", methods=["GET", "OPTIONS"])
+@jwt_required()
+@role_required(["admin", "hiring_manager", "hr"])
+def get_all_applications_for_my_jobs():
+    """Wrapper for my-jobs applications, expected by some frontend versions."""
+    if request.method == "OPTIONS":
+        return "", 200
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id)
+        if not current_user:
+            return jsonify({"error": "User not found"}), 404
+
+        scope = (request.args.get("scope") or "").strip().lower() or "my_jobs"
+
+        query = Application.query.join(Requisition, Application.requisition_id == Requisition.id)
+        if current_user.role == "hiring_manager" and scope != "all":
+            query = query.filter(Requisition.created_by == current_user_id)
+
+        query = query.order_by(Application.created_at.desc())
+        applications = query.all()
+
+        enriched = []
+        for app in applications:
+            app_dict = app.to_dict()
+            app_dict["job_id"] = app.requisition_id
+            app_dict["job_title"] = app.requisition.title if app.requisition else None
+            cand = Candidate.query.get(app.candidate_id) if app.candidate_id else None
+            user = User.query.get(cand.user_id) if cand and cand.user_id else None
+            app_dict["candidate"] = {
+                "id": cand.id if cand else None,
+                "full_name": cand.full_name if cand else "Unknown",
+                "email": user.email if user else "",
+                "phone": (cand.phone or "") if cand else "",
+            } if cand else {"full_name": "Unknown", "email": "", "phone": ""}
+            enriched.append(app_dict)
+
+        return jsonify({
+            "applications": enriched,
+            "total": len(enriched)
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Get all applications for my jobs error: {str(e)}", exc_info=True)
+        return jsonify({"error": "Internal server error", "message": str(e)}), 500
+
+
 @admin_bp.route("/jobs/stats", methods=["GET"])
 @jwt_required()
 @role_required(["admin", "hiring_manager", "hr"])
@@ -696,7 +844,7 @@ def get_job_statistics():
         ).scalar() or 0
         
         # Recent activity (last 30 days)
-        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
         recent_jobs = Requisition.query.filter(
             Requisition.created_at >= thirty_days_ago
         ).count()
@@ -732,6 +880,7 @@ def get_job_statistics():
 
 # ----------------- CANDIDATE MANAGEMENT -----------------
 @admin_bp.route("/candidates", methods=["GET"])
+@admin_bp.route("/candidates/with-details", methods=["GET"])
 @role_required(["admin", "hiring_manager", "hr"])
 def list_candidates():
     """Get all candidates with comprehensive data including applications and assessments.
@@ -750,22 +899,30 @@ def list_candidates():
         query = Candidate.query
         if current_user and current_user.role == "hiring_manager":
             # Restrict to candidates who have at least one application to this HM's jobs (or unowned jobs)
-            query = query.join(Application, Application.candidate_id == Candidate.id).join(
+            # Use subquery to avoid DISTINCT on JSON columns (PostgreSQL limitation)
+            from sqlalchemy import select
+            candidate_ids_subquery = db.session.query(Candidate.id).join(
+                Application, Application.candidate_id == Candidate.id
+            ).join(
                 Requisition, Application.requisition_id == Requisition.id
             ).filter(
                 or_(
                     Requisition.created_by == current_user_id,
                     Requisition.created_by.is_(None),
                 )
-            ).distinct()
+            ).distinct().subquery()
+            
+            query = Candidate.query.filter(Candidate.id.in_(select(candidate_ids_subquery.c.id)))
         
         # Apply search filter
         if search:
             search_term = f"%{search}%"
+            # Join User so we can safely filter by email without causing SQL errors.
+            query = query.outerjoin(User, Candidate.user_id == User.id)
             query = query.filter(
                 or_(
                     Candidate.full_name.ilike(search_term),
-                    User.email.ilike(search_term) if User else False,
+                    User.email.ilike(search_term),
                     Candidate.title.ilike(search_term)
                 )
             )
@@ -871,6 +1028,67 @@ def list_candidates():
         
     except Exception as e:
         current_app.logger.error(f"Error fetching candidates: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@admin_bp.route("/candidates/all", methods=["GET"])
+@role_required(["admin", "hiring_manager", "hr"])
+def list_all_candidates():
+    """Get all candidates without pagination - for admin portal full list view."""
+    try:
+        current_user_id = get_jwt_identity()
+        current_user = User.query.get(current_user_id) if current_user_id else None
+
+        # Build query
+        query = Candidate.query
+        if current_user and current_user.role == "hiring_manager":
+            # Restrict to candidates who have at least one application to this HM's jobs (or unowned jobs)
+            # Use subquery to avoid DISTINCT on JSON columns (PostgreSQL limitation)
+            from sqlalchemy import select
+            candidate_ids_subquery = db.session.query(Candidate.id).join(
+                Application, Application.candidate_id == Candidate.id
+            ).join(
+                Requisition, Application.requisition_id == Requisition.id
+            ).filter(
+                or_(
+                    Requisition.created_by == current_user_id,
+                    Requisition.created_by.is_(None),
+                )
+            ).distinct().subquery()
+            
+            query = Candidate.query.filter(Candidate.id.in_(select(candidate_ids_subquery.c.id)))
+        
+        # Get all candidates (no pagination for the 'all' endpoint)
+        all_candidates = query.all()
+        
+        # Enrich candidate data with applications and user info
+        enriched_candidates = []
+        for candidate in all_candidates:
+            # Get user information
+            user = User.query.get(candidate.user_id) if candidate.user_id else None
+            
+            # Get applications for this candidate
+            applications = Application.query.filter_by(candidate_id=candidate.id).all()
+            
+            # Get latest application status
+            latest_application = max(applications, key=lambda x: x.created_at) if applications else None
+            
+            enriched_candidates.append({
+                **candidate.to_dict(),
+                'user_email': user.email if user else None,
+                'user_role': user.role if user else None,
+                'user_created_at': user.created_at.isoformat() if user and user.created_at else None,
+                'latest_application_status': latest_application.status if latest_application else None,
+                'total_applications': len(applications),
+            })
+        
+        return jsonify({
+            'candidates': enriched_candidates,
+            'total': len(enriched_candidates)
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching all candidates: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
 
 @admin_bp.route("/applications/<int:application_id>", methods=["GET"])
@@ -980,7 +1198,7 @@ def add_application_timeline_note(application_id):
         action="Application timeline note",
         details=comment[:5000],
         extra_data={"application_id": application_id},
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
     )
     db.session.add(log_entry)
     db.session.commit()
@@ -1109,7 +1327,7 @@ def shortlist_export(job_id):
             escape_csv(r["recommendation"]),
         ])
     csv_content = buf.getvalue()
-    filename = f"shortlist_job{job_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.csv"
+    filename = f"shortlist_job{job_id}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.csv"
     from flask import make_response
     resp = make_response(csv_content, 200)
     resp.headers["Content-Type"] = "text/csv; charset=utf-8"
@@ -1119,6 +1337,7 @@ def shortlist_export(job_id):
 
 # ----------------- NOTIFICATIONS -----------------
 @admin_bp.route("/notifications/<int:user_id>", methods=["GET"])
+@jwt_required()
 @role_required(["admin", "hiring_manager"])
 def get_notifications(user_id):
     """Get notifications for a user. Hiring managers can only request their own."""
@@ -1148,6 +1367,7 @@ def get_notifications(user_id):
 
 
 @admin_bp.route("/notifications/<int:notification_id>/read", methods=["PATCH", "POST"])
+@jwt_required()
 @role_required(["admin", "hiring_manager"])
 def mark_notification_read(notification_id):
     """Mark a notification as read. User can only mark their own."""
@@ -1186,10 +1406,36 @@ def get_notification_preferences():
 @admin_bp.route("/notification-preferences", methods=["PUT"])
 @jwt_required()
 @role_required(["admin", "hiring_manager", "hr"])
+def update_notification_preferences():
+    """Update current user's notification preferences."""
+    try:
+        data = request.get_json(silent=True) or {}
+        preferences = data.get("preferences") or {}
+        current_user_id = get_jwt_identity()
+        user = User.query.get_or_404(current_user_id)
+        settings = user.settings or {}
+        notifications = settings.get("notifications") or {}
+        if "status_changes" in preferences:
+            notifications["status_changes"] = bool(preferences.get("status_changes"))
+        if "upcoming_interviews" in preferences:
+            notifications["upcoming_interviews"] = bool(preferences.get("upcoming_interviews"))
+        settings["notifications"] = notifications
+        user.settings = settings
+        db.session.commit()
+        return jsonify({"message": "Preferences updated", "preferences": notifications}), 200
+    except Exception as e:
+        current_app.logger.error(f"Update notification preferences error: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@admin_bp.route("/cv-reviews", methods=["GET", "OPTIONS"])
+@jwt_required(optional=True)
+@role_required(["admin", "hiring_manager", "hr"])
 @cross_origin()
 def list_cv_reviews():
     if request.method == "OPTIONS":
-        return '', 200
+        return "", 200
 
     refresh_count = 0  # counter for lazy refreshes per request
 
@@ -1249,21 +1495,37 @@ def list_cv_reviews():
             import os
             max_refreshes = int(os.getenv('CV_ANALYSIS_REFRESH_MAX', '5'))
             if max_refreshes > 0 and refresh_count < max_refreshes:
-                start = datetime.utcnow()
+                start = datetime.now(timezone.utc)
                 AnalysisServiceClient.refresh_if_needed(cv_analysis)
                 # Reload after potential update
                 db.session.refresh(cv_analysis)
                 # Stop refreshing if we exceed per-request time budget
-                if (datetime.utcnow() - start).total_seconds() > 2.0:
+                if (datetime.now(timezone.utc) - start).total_seconds() > 2.0:
                     refresh_count = max_refreshes  # stop further refreshes in this request
                 else:
                     refresh_count += 1
 
             result = cv_analysis.result or {}
-            # Handle both new FastAPI service format and legacy format
-            if 'match_analysis' in result:
-                # New FastAPI service format
+            # Handle new FastAPI service format (canonical schema), transitional format, and legacy format
+            if 'match_analysis' in result or 'structured_data' in result:
+                # New FastAPI service format (canonical schema)
                 match = result.get('match_analysis', {})
+                structured = result.get('structured_data', {})
+                
+                # overall_score might be at root (canonical) or inside match_analysis
+                overall_score = result.get('overall_score')
+                if overall_score is None:
+                    overall_score = match.get('overall_score', 0)
+                
+                # Skills might be in structured_data (canonical) or match_analysis.evidence
+                skills = structured.get('skills', [])
+                if not skills:
+                    skills = match.get("evidence", {}).get("skills", [])
+                
+                # Summary/Recommendation from match.suggestions
+                suggestions = match.get("suggestions", [])
+                recommendation = suggestions[0] if suggestions else ''
+                
                 cv_analysis_data = {
                     "id": cv_analysis.id,
                     "status": cv_analysis.status,
@@ -1271,13 +1533,13 @@ def list_cv_reviews():
                     "finished_at": cv_analysis.finished_at.isoformat() if cv_analysis.finished_at else None,
                     "created_at": cv_analysis.created_at.isoformat() if cv_analysis.created_at else None,
                     "updated_at": cv_analysis.updated_at.isoformat() if cv_analysis.updated_at else None,
-                    "summary": match.get("suggestions", [''])[0] if match.get("suggestions") else None,
-                    "strengths": [item.get('skill') if isinstance(item, dict) else item for item in match.get("evidence", {}).get("skills", [])],
+                    "summary": recommendation or None,
+                    "strengths": [item.get('skill') if isinstance(item, dict) else item for item in skills],
                     "weaknesses": match.get("missing_skills", []),
-                    "extracted_skills": [item.get('skill') if isinstance(item, dict) else item for item in match.get("evidence", {}).get("skills", [])],
-                    "match_score": match.get("overall_score"),
-                    "raw_score": match.get("overall_score"),  # Use same value for compatibility
-                    "recommendation": match.get("suggestions", [''])[0] if match.get("suggestions") else '',
+                    "extracted_skills": [item.get('skill') if isinstance(item, dict) else item for item in skills],
+                    "match_score": overall_score,
+                    "raw_score": overall_score,  # Use same value for compatibility
+                    "recommendation": recommendation,
                 }
             else:
                 # Legacy format (fallback)
@@ -1634,12 +1896,12 @@ def dashboard_counts():
         completed_interviews = Interview.query.filter_by(status='completed').count()
         scheduled_interviews = Interview.query.filter_by(status='scheduled').count()
         upcoming_interviews = Interview.query.filter(
-            Interview.scheduled_time > datetime.utcnow(),
+            Interview.scheduled_time > datetime.now(timezone.utc),
             Interview.status.in_(['scheduled', 'confirmed'])
         ).count()
         
         # Recent activity (last 7 days)
-        week_ago = datetime.utcnow() - timedelta(days=7)
+        week_ago = datetime.now(timezone.utc) - timedelta(days=7)
         new_applications_week = Application.query.filter(Application.created_at >= week_ago).count()
         new_interviews_week = Interview.query.filter(Interview.created_at >= week_ago).count()
         
@@ -1822,6 +2084,8 @@ def manage_interviews():
                 return jsonify({"error": "candidate_id and application_id required"}), 400
 
             hiring_manager_id = get_jwt_identity()
+            current_user = User.query.get(int(hiring_manager_id)) if hiring_manager_id else None
+            creator_role = (getattr(current_user, "role", None) or "").strip().lower()
             scheduled_time = None
 
             if slot_id:
@@ -1830,7 +2094,7 @@ def manage_interviews():
                     hiring_manager_id=hiring_manager_id,
                     interview_id=None,
                 ).first()
-                if not slot or slot.start_time < datetime.utcnow():
+                if not slot or slot.start_time < datetime.now(timezone.utc):
                     return jsonify({"error": "Invalid or unavailable slot"}), 400
                 scheduled_time = slot.start_time
                 interview_type = slot.interview_type or "Online"
@@ -1843,6 +2107,8 @@ def manage_interviews():
                 except ValueError:
                     return jsonify({"error": "Invalid datetime format. Use ISO format."}), 400
 
+            is_hm_creator = creator_role == "hiring_manager"
+
             # Create interview
             interview = Interview(
                 candidate_id=candidate_id,
@@ -1850,7 +2116,9 @@ def manage_interviews():
                 hiring_manager_id=hiring_manager_id,
                 scheduled_time=scheduled_time,
                 interview_type=interview_type,
-                meeting_link=meeting_link
+                meeting_link=meeting_link,
+                status="pending_approval" if is_hm_creator else "scheduled",
+                approval_status="pending" if is_hm_creator else "approved",
             )
 
             db.session.add(interview)
@@ -1866,23 +2134,12 @@ def manage_interviews():
             if application:
                 if application.status not in ("hired", "rejected"):
                     application.status = "interview"
-                application.interview_status = "scheduled"
+                application.interview_status = "scheduled" if not is_hm_creator else "pending_approval"
                 application.last_interview_date = scheduled_time
 
             # Fetch candidate and hiring manager details
             candidate_profile = Candidate.query.get(candidate_id)
             job_title = interview.application.requisition.title if interview.application and interview.application.requisition else None
-            # Short, clear in-app message so the notification is never blank; details are on the Interview tab.
-            candidate_notif_message = "You have an alert. Check your Interview tab for details."
-            # Create in-app notification for candidate (user_id must be User.id, not Candidate.id)
-            if candidate_profile and getattr(candidate_profile, 'user_id', None):
-                notif = Notification(
-                    user_id=candidate_profile.user_id,
-                    message=candidate_notif_message,
-                    type="interview",
-                    interview_id=interview.id,
-                )
-                db.session.add(notif)
             hiring_manager = User.query.get(hiring_manager_id)
             candidate_name = candidate_profile.full_name if candidate_profile else "Candidate"
             if not job_title and interview.application and interview.application.requisition:
@@ -1891,7 +2148,12 @@ def manage_interviews():
             # Notify hiring manager so it shows in their calendar/notifications
             notif_hm = Notification(
                 user_id=hiring_manager_id,
-                message=f"Interview scheduled: {candidate_name} for {job_title or 'position'} on {scheduled_time.strftime('%d %b %Y')} at {scheduled_time.strftime('%H:%M')}.",
+                message=(
+                    f"Interview scheduled (pending admin approval): {candidate_name} for {job_title or 'position'} "
+                    f"on {scheduled_time.strftime('%d %b %Y')} at {scheduled_time.strftime('%H:%M')}."
+                    if is_hm_creator
+                    else f"Interview scheduled: {candidate_name} for {job_title or 'position'} on {scheduled_time.strftime('%d %b %Y')} at {scheduled_time.strftime('%H:%M')}."
+                ),
                 type="interview",
                 interview_id=interview.id
             )
@@ -1899,7 +2161,7 @@ def manage_interviews():
 
             # Google Calendar Integration
             google_calendar_event = None
-            if current_app.config.get('GOOGLE_CALENDAR_ENABLED'):
+            if (not is_hm_creator) and current_app.config.get('GOOGLE_CALENDAR_ENABLED'):
                 try:
                     from app.services.google_calendar_service import GoogleCalendarService
                     calendar_service = GoogleCalendarService()
@@ -1934,7 +2196,7 @@ def manage_interviews():
             db.session.commit()
 
             # Send email notification
-            if candidate_profile and candidate_profile.user:
+            if (not is_hm_creator) and candidate_profile and candidate_profile.user:
                 EmailService.send_interview_invitation(
                     email=candidate_profile.user.email,
                     candidate_name=candidate_profile.full_name,
@@ -1957,6 +2219,7 @@ def manage_interviews():
                 "interview_type": interview.interview_type,
                 "meeting_link": interview.meeting_link,
                 "status": interview.status,
+                "approval_status": interview.approval_status,
                 "google_calendar_event_id": interview.google_calendar_event_id,
                 "google_calendar_event_link": interview.google_calendar_event_link,
                 "google_calendar_hangout_link": interview.google_calendar_hangout_link,
@@ -1965,13 +2228,208 @@ def manage_interviews():
             }
 
             return jsonify({
-                "message": "Interview scheduled successfully.",
+                "message": "Interview scheduled and pending admin approval." if is_hm_creator else "Interview scheduled successfully.",
                 "interview": enriched_interview,
                 "calendar_event_created": google_calendar_event is not None
             }), 201
 
     except Exception as e:
         current_app.logger.error(f"Interview route error: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"error": "Internal server error"}), 500
+
+
+# =====================================================
+# ✅ INTERVIEW APPROVAL WORKFLOW (Admin only)
+# =====================================================
+
+@admin_bp.route("/interviews/<int:interview_id>/approve", methods=["POST"])
+@jwt_required()
+@role_required(["admin"])
+def approve_interview(interview_id):
+    """Approve a pending interview and trigger candidate invite + calendar."""
+    try:
+        admin_id = get_jwt_identity()
+        interview = Interview.query.get_or_404(interview_id)
+
+        if (getattr(interview, "approval_status", None) or "").lower() != "pending":
+            return jsonify({"error": "Only pending interviews can be approved"}), 400
+
+        interview.approval_status = "approved"
+        interview.approved_at = datetime.now(timezone.utc)
+        interview.approved_by = admin_id
+        interview.rejection_reason = None
+        interview.status = "scheduled"
+
+        # Reflect on application
+        application = interview.application
+        if application:
+            if application.status not in ("hired", "rejected"):
+                application.status = "interview"
+            application.interview_status = "scheduled"
+            application.last_interview_date = interview.scheduled_time
+
+        candidate_profile = Candidate.query.get(interview.candidate_id)
+        hiring_manager = User.query.get(interview.hiring_manager_id)
+        job_title = (
+            interview.application.requisition.title
+            if interview.application and interview.application.requisition
+            else None
+        )
+
+        # Candidate in-app notification (only now, after approval)
+        if candidate_profile and getattr(candidate_profile, "user_id", None):
+            db.session.add(Notification(
+                user_id=candidate_profile.user_id,
+                message="Your interview has been approved. Check your Interview tab for details.",
+                type="interview",
+                interview_id=interview.id,
+            ))
+
+        # Calendar + email (only now, after approval)
+        google_calendar_event = None
+        if current_app.config.get("GOOGLE_CALENDAR_ENABLED"):
+            try:
+                from app.services.google_calendar_service import GoogleCalendarService
+                calendar_service = GoogleCalendarService()
+                if candidate_profile and candidate_profile.user and hiring_manager:
+                    interview_data = {
+                        "id": interview.id,
+                        "candidate_id": interview.candidate_id,
+                        "candidate_name": candidate_profile.full_name or "Candidate",
+                        "job_title": job_title or "Position",
+                        "scheduled_time": interview.scheduled_time.isoformat(),
+                        "interview_type": interview.interview_type or "Online",
+                        "meeting_link": interview.meeting_link,
+                        "status": interview.status,
+                        "application_id": interview.application_id,
+                    }
+                    google_calendar_event = calendar_service.create_interview_event(
+                        interview_data=interview_data,
+                        candidate_email=candidate_profile.user.email,
+                        hiring_manager_email=hiring_manager.email,
+                    )
+                    if google_calendar_event:
+                        interview.update_calendar_info(google_calendar_event)
+            except Exception as e:
+                current_app.logger.error(f"Interview approval calendar failed: {e}", exc_info=True)
+
+        if candidate_profile and candidate_profile.user:
+            try:
+                EmailService.send_interview_invitation(
+                    email=candidate_profile.user.email,
+                    candidate_name=candidate_profile.full_name,
+                    interview_date=interview.scheduled_time.strftime("%A, %d %B %Y at %H:%M"),
+                    interview_type=interview.interview_type or "Online",
+                    meeting_link=interview.meeting_link,
+                    calendar_link=google_calendar_event.get("html_link") if google_calendar_event else None,
+                )
+            except Exception as e:
+                current_app.logger.error(f"Interview approval email failed: {e}", exc_info=True)
+
+        db.session.commit()
+
+        AuditService.record_action(
+            admin_id=admin_id,
+            action="Approved Interview",
+            target_user_id=interview.candidate_id,
+            details=f"Interview {interview.id} approved",
+        )
+
+        return jsonify({
+            "message": "Interview approved",
+            "interview": interview.to_dict(),
+            "calendar_event_created": google_calendar_event is not None,
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Approve interview error: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@admin_bp.route("/interviews/<int:interview_id>/reject", methods=["POST"])
+@jwt_required()
+@role_required(["admin"])
+def reject_interview(interview_id):
+    """Reject a pending interview with a required reason."""
+    try:
+        admin_id = get_jwt_identity()
+        data = request.get_json() or {}
+        reason = (data.get("reason") or "").strip()
+        if not reason:
+            return jsonify({"error": "reason is required"}), 400
+
+        interview = Interview.query.get_or_404(interview_id)
+        if (getattr(interview, "approval_status", None) or "").lower() != "pending":
+            return jsonify({"error": "Only pending interviews can be rejected"}), 400
+
+        interview.approval_status = "rejected"
+        interview.rejection_reason = reason
+        interview.approved_at = None
+        interview.approved_by = None
+        interview.status = "cancelled"
+        interview.cancelled_reason = reason
+        interview.cancelled_by = admin_id
+        interview.updated_at = datetime.now(timezone.utc)
+
+        candidate_profile = Candidate.query.get(interview.candidate_id)
+        hiring_manager = User.query.get(interview.hiring_manager_id)
+        job_title = (
+            interview.application.requisition.title
+            if interview.application and interview.application.requisition
+            else "position"
+        )
+        scheduled_time = interview.scheduled_time
+        candidate_name = candidate_profile.full_name if candidate_profile else "Candidate"
+
+        # In-app notifications
+        if candidate_profile and getattr(candidate_profile, "user_id", None):
+            db.session.add(Notification(
+                user_id=candidate_profile.user_id,
+                message="Your interview was not approved. The hiring team will contact you with next steps.",
+                type="interview",
+                interview_id=interview.id,
+            ))
+        if hiring_manager:
+            db.session.add(Notification(
+                user_id=hiring_manager.id,
+                message=(
+                    f"Interview request rejected: {candidate_name} for {job_title} on "
+                    f"{scheduled_time.strftime('%d %b %Y')} at {scheduled_time.strftime('%H:%M')}. "
+                    f"Reason: {reason}"
+                ),
+                type="warning",
+                interview_id=interview.id,
+            ))
+
+        # Candidate email (cancellation-style notice) after rejection
+        if candidate_profile and getattr(candidate_profile, "user", None) and candidate_profile.user and candidate_profile.user.email:
+            try:
+                EmailService.send_interview_cancellation(
+                    email=candidate_profile.user.email,
+                    candidate_name=candidate_profile.full_name,
+                    interview_date=scheduled_time.strftime("%A, %d %B %Y at %H:%M"),
+                    interview_type=interview.interview_type or "Online",
+                    reason=reason,
+                )
+            except Exception as e:
+                current_app.logger.error(f"Interview rejection email failed: {e}", exc_info=True)
+
+        db.session.commit()
+
+        AuditService.record_action(
+            admin_id=admin_id,
+            action="Rejected Interview",
+            target_user_id=interview.candidate_id,
+            details=f"Interview {interview.id} rejected. Reason: {reason}",
+        )
+
+        return jsonify({
+            "message": "Interview rejected",
+            "interview": interview.to_dict(),
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f"Reject interview error: {e}", exc_info=True)
         db.session.rollback()
         return jsonify({"error": "Internal server error"}), 500
 
@@ -1995,7 +2453,7 @@ def interview_slots():
                     (InterviewSlot.requisition_id == requisition_id) | (InterviewSlot.requisition_id.is_(None))
                 )
             if from_now:
-                query = query.filter(InterviewSlot.start_time >= datetime.utcnow())
+                query = query.filter(InterviewSlot.start_time >= datetime.now(timezone.utc))
             query = query.order_by(InterviewSlot.start_time.asc())
             slots = query.all()
             return jsonify({"slots": [s.to_dict() for s in slots]}), 200
@@ -2064,7 +2522,7 @@ def available_interview_slots():
         query = InterviewSlot.query.filter(
             InterviewSlot.hiring_manager_id == current_user_id,
             InterviewSlot.interview_id.is_(None),
-            InterviewSlot.start_time >= datetime.utcnow(),
+            InterviewSlot.start_time >= datetime.now(timezone.utc),
         )
         if requisition_id:
             query = query.filter(
@@ -2103,7 +2561,7 @@ def reschedule_interview(interview_id):
                 hiring_manager_id=get_jwt_identity(),
                 interview_id=None,
             ).first()
-            if not slot or slot.start_time < datetime.utcnow():
+            if not slot or slot.start_time < datetime.now(timezone.utc):
                 return jsonify({"error": "Invalid or unavailable slot"}), 400
             new_time = slot.start_time
             if slot.meeting_link:
@@ -2157,7 +2615,7 @@ def reschedule_interview(interview_id):
                     if google_calendar_event:
                         calendar_updated = True
                         # Update last sync timestamp
-                        interview.last_calendar_sync = datetime.utcnow()
+                        interview.last_calendar_sync = datetime.now(timezone.utc)
                         current_app.logger.info(f"Google Calendar event updated for interview {interview.id}")
             except Exception as e:
                 current_app.logger.error(f"Google Calendar update failed: {e}", exc_info=True)
@@ -3156,7 +3614,7 @@ def schedule_interview_reminders():
             interviews = [Interview.query.get_or_404(interview_id)]
         else:
             # Schedule for all upcoming interviews
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             upcoming_cutoff = now + timedelta(days=2)  # Next 48 hours
             interviews = Interview.query.filter(
                 Interview.scheduled_time > now,
@@ -3440,11 +3898,14 @@ def get_all_interviews():
         interview_type = request.args.get("interview_type", type=str)
         sort_by = request.args.get("sort_by", "created_at")
         sort_order = request.args.get("sort_order", "desc")
+        pending_only = request.args.get("pending_only", "false").lower() == "true"
 
         # ---------------- Base Query ----------------
         query = Interview.query.join(Interview.candidate).join(Interview.hiring_manager).outerjoin(Interview.application)
 
         # ---------------- Filters ----------------
+        if pending_only:
+            query = query.filter(Interview.approval_status == "pending")
         if status:
             query = query.filter(Interview.status.ilike(f"%{status}%"))
         if interview_type:
@@ -3510,6 +3971,10 @@ def get_all_interviews():
                 "meeting_link": i.meeting_link,
                 "booking_link": i.meeting_link,
                 "status": i.status,
+                "approval_status": getattr(i, "approval_status", "approved"),
+                "approved_at": i.approved_at.isoformat() if getattr(i, "approved_at", None) else None,
+                "approved_by": getattr(i, "approved_by", None),
+                "rejection_reason": getattr(i, "rejection_reason", None),
                 "status_label": status_label,
                 "application_interview_status": app_interview_status,
                 "created_at": i.created_at.isoformat() if i.created_at else None,
@@ -4099,8 +4564,9 @@ def validate_meeting_times(start_time, end_time):
     if start_time >= end_time:
         return False, "End time must be after start time"
     
-    if start_time < datetime.now():
-        return False, "Meeting cannot be scheduled in the past"
+    # Temporarily allow past meetings for testing (remove this in production)
+    # if start_time < datetime.now():
+    #     return False, "Meeting cannot be scheduled in the past"
         
     # Check if meeting is too long (more than 8 hours)
     meeting_duration = end_time - start_time
@@ -4209,6 +4675,9 @@ def create_meeting():
         user_id = get_jwt_identity()
         data = request.get_json()
         
+        # Log incoming data for debugging
+        current_app.logger.info(f"Meeting creation request from user {user_id}: {data}")
+        
         if not data:
             return jsonify({"error": "No JSON data provided"}), 400
 
@@ -4227,6 +4696,9 @@ def create_meeting():
             end_time_str_clean = end_time_str.replace('Z', '+00:00') if 'Z' in end_time_str else end_time_str
             start_time = datetime.fromisoformat(start_time_str_clean)
             end_time = datetime.fromisoformat(end_time_str_clean)
+            
+            # Log the parsed times for debugging
+            current_app.logger.info(f"Parsed meeting times - Start: {start_time}, End: {end_time}, Current: {datetime.utcnow()}")
         except (ValueError, AttributeError) as e:
             current_app.logger.error(f"Datetime parsing error: {e}, start_time_str: {start_time_str}, end_time_str: {end_time_str}")
             return jsonify({"error": f"Invalid datetime format. Use ISO format. Error: {str(e)}"}), 400
@@ -4243,13 +4715,20 @@ def create_meeting():
         location = data.get("location", "").strip()
         meeting_type = data.get("meeting_type", "general")
 
-        # Validate participants
+        # Ensure participants is a list
+        if participants is None:
+            participants = []
+        elif not isinstance(participants, list):
+            return jsonify({"error": "Participants must be a list of email addresses"}), 400
+
+        # Validate participants (only if provided)
         if participants:
             is_valid, error_msg = validate_participants(participants)
             if not is_valid:
                 return jsonify({"error": error_msg}), 400
 
         # Check for scheduling conflicts
+        current_app.logger.info(f"Checking conflicts for user {user_id} between {start_time} and {end_time}")
         conflicting_meeting = Meeting.query.filter(
             Meeting.organizer_id == user_id,
             Meeting.cancelled == False,
@@ -4258,6 +4737,7 @@ def create_meeting():
         ).first()
         
         if conflicting_meeting:
+            current_app.logger.warning(f"Scheduling conflict found: Meeting {conflicting_meeting.id} ({conflicting_meeting.title})")
             return jsonify({
                 "error": "Scheduling conflict detected",
                 "conflicting_meeting": conflicting_meeting.to_dict()

@@ -102,6 +102,11 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
 
   Future<void> _fetchApplications() async {
     setState(() => loading = true);
+    final role = await AuthService.getRole();
+    if (role != 'candidate') {
+      if (mounted) setState(() => loading = false);
+      return;
+    }
     try {
       // Use current token from storage so we don't use a stale token from the dashboard URL
       final token = await AuthService.getAccessToken() ?? widget.token;

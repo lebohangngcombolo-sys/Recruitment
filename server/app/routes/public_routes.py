@@ -46,7 +46,8 @@ def get_public_jobs():
     try:
         jobs = Requisition.query.filter(
             Requisition.is_active == True,
-            Requisition.deleted_at == None
+            Requisition.deleted_at == None,
+            Requisition.approval_status == "approved",
         ).order_by(Requisition.published_on.desc()).all()
 
         result = [_job_list_item(job) for job in jobs]

@@ -43,7 +43,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
 
   Future<void> _loadInitialData() async {
     try {
-      setState(() => _isLoading = true);
+      if (mounted) setState(() => _isLoading = true);
 
       final pipelineData = await _recruitmentService.loadPipelineData(
         filter: _selectedFilter == 'all' ? null : _selectedFilter,
@@ -52,36 +52,38 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
       final requisitionsData = await _recruitmentService.loadRequisitionsData();
       final analyticsData = await _recruitmentService.loadAnalyticsData();
 
-      setState(() {
-        _quickStats = pipelineData['quickStats'] ?? {};
-        _pipelineStages = List<Map<String, dynamic>>.from(
-          pipelineData['stages'] ?? [],
-        );
-        _applications = List<Map<String, dynamic>>.from(
-          pipelineData['applications']?['applications'] ?? [],
-        );
-        _totalApplications =
-            pipelineData['applications']?['total'] ?? _applications.length;
-        _interviews = List<Map<String, dynamic>>.from(
-          pipelineData['interviews'] ?? [],
-        );
-        _offers = List<Map<String, dynamic>>.from(pipelineData['offers'] ?? []);
+      if (mounted) {
+        setState(() {
+          _quickStats = pipelineData['quickStats'] ?? {};
+          _pipelineStages = List<Map<String, dynamic>>.from(
+            pipelineData['stages'] ?? [],
+          );
+          _applications = List<Map<String, dynamic>>.from(
+            pipelineData['applications']?['applications'] ?? [],
+          );
+          _totalApplications =
+              pipelineData['applications']?['total'] ?? _applications.length;
+          _interviews = List<Map<String, dynamic>>.from(
+            pipelineData['interviews'] ?? [],
+          );
+          _offers = List<Map<String, dynamic>>.from(pipelineData['offers'] ?? []);
 
-        _requisitions = List<Map<String, dynamic>>.from(
-          requisitionsData['jobs'] ?? [],
-        );
-        _activeJobs =
-            _requisitions.where((r) => r['status'] == 'active').length;
-        _offersSent = _offers.length;
+          _requisitions = List<Map<String, dynamic>>.from(
+            requisitionsData['jobs'] ?? [],
+          );
+          _activeJobs =
+              _requisitions.where((r) => r['status'] == 'active').length;
+          _offersSent = _offers.length;
 
-        _analytics = analyticsData;
+          _analytics = analyticsData;
 
-        _isLoading = false;
-      });
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error loading initial data: $e');
       _showErrorSnackbar('Failed to load data. Please try again.');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -273,15 +275,19 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   void _showErrorSnackbar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    }
   }
 
   void _showSuccessSnackbar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.green),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.green),
+      );
+    }
   }
 
   List<Map<String, dynamic>> _getFilteredApplications() {

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../constants/app_colors.dart';
-import '../../../providers/theme_provider.dart';
-import '../../../services/websocket_service.dart';
+import 'package:khono_recruite/constants/app_colors.dart';
+import 'package:khono_recruite/providers/theme_provider.dart';
+import 'package:khono_recruite/services/websocket_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/admin_service.dart';
 import '../../widgets/themed_dialog.dart';
@@ -99,14 +99,18 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
       final uid = _webSocketService?.userId;
       if (uid != null) _cachedUserId = uid;
-      setState(() => _isConnected = true);
+      if (mounted) {
+        setState(() => _isConnected = true);
+      }
       // Ensure user ID is cached (in case onConnected hasn't fired yet)
       await _loadUserId();
     } catch (e) {
       debugPrint("Error initializing chat: $e");
-      setState(() {
-        _isConnected = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isConnected = false;
+        });
+      }
     }
   }
 
@@ -116,20 +120,24 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
     _webSocketService!.onConnected = () {
       final uid = _webSocketService?.userId;
       if (uid != null) _cachedUserId = uid;
-      setState(() => _isConnected = true);
+      if (mounted) {
+        setState(() => _isConnected = true);
+      }
     };
 
     _webSocketService!.onDisconnected = () {
-      setState(() {
-        _isConnected = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isConnected = false;
+        });
+      }
     };
 
     _webSocketService!.onError = (error) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Chat error: $error', style: GoogleFonts.inter()),
-          backgroundColor: AppColors.primaryRed,
+          backgroundColor: AppColors.khonoRed,
         ),
       );
     };
@@ -176,7 +184,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           });
 
           // Clear typing indicator after 3 seconds
-          Future.delayed(Duration(seconds: 3), () {
+          Future.delayed(const Duration(seconds: 3), () {
             if (mounted && _typingUsers[threadId] != null) {
               setState(() {
                 _typingUsers.remove(threadId);
@@ -275,7 +283,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         _teamMembers.clear();
         _teamMembers.addAll(usersData
             .map((user) => TeamMember(
-                  name: user['full_name'] ?? 'Unknown User',
+                  name: user['full_name'] ?? user['name'] ?? 'Unknown User',
                   role: user['role'] ?? 'Team Member',
                   isOnline: user['is_online'] ?? false,
                   userId: user['id'] ?? 0,
@@ -286,15 +294,17 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to load data: $e', style: GoogleFonts.inter()),
-          backgroundColor: AppColors.primaryRed,
+          backgroundColor: AppColors.khonoRed,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -332,14 +342,14 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            AppColors.primaryRed.withValues(alpha: 0.9),
-            const Color(0xFFEF4444),
+            AppColors.khonoRed,
+            AppColors.khonoRedDark,
           ],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryRed.withValues(alpha: 0.3),
+            color: AppColors.khonoRed.withOpacity(0.3),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -351,7 +361,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
+              color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Center(
@@ -375,7 +385,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                 Text(
                   'Connect, communicate, and collaborate in real-time',
                   style: GoogleFonts.inter(
-                    color: Colors.white.withValues(alpha: 0.9),
+                    color: Colors.white.withOpacity(0.9),
                     fontSize: 13,
                   ),
                 ),
@@ -385,7 +395,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
+              color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
@@ -425,14 +435,14 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
             height: 80,
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [AppColors.primaryRed, const Color(0xFFEF4444)],
+                colors: [AppColors.khonoRed, AppColors.khonoRedDark],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withValues(alpha: 0.3),
+                  color: AppColors.khonoRed.withOpacity(0.3),
                   blurRadius: 20,
                 ),
               ],
@@ -490,7 +500,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -506,7 +516,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                 height: 36,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [AppColors.primaryRed, const Color(0xFFEF4444)],
+                    colors: [AppColors.khonoRed, AppColors.khonoRedDark],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -529,7 +539,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               Text(
                 '${_teamMembers.where((m) => m.isOnline).length}/${_teamMembers.length}',
                 style: GoogleFonts.inter(
-                  color: AppColors.primaryRed,
+                  color: AppColors.khonoRed,
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                 ),
@@ -579,8 +589,8 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        AppColors.primaryRed.withValues(alpha: 0.8),
-                        const Color(0xFFEF4444),
+                        AppColors.khonoRed.withOpacity(0.8),
+                        AppColors.khonoRedDark,
                       ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -654,13 +664,13 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                 width: 32,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: AppColors.primaryRed.withValues(alpha: 0.1),
+                  color: AppColors.khonoRed.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
                   Icons.chat_bubble_outline,
                   size: 16,
-                  color: AppColors.primaryRed,
+                  color: AppColors.khonoRed,
                 ),
               ),
               splashRadius: 20,
@@ -705,7 +715,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -771,9 +781,9 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           width: 110, // Fixed width to prevent overflow
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.1),
+            color: color.withOpacity(0.1),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withValues(alpha: 0.2)),
+            border: Border.all(color: color.withOpacity(0.2)),
           ),
           child: Center(
             child: Text(
@@ -803,7 +813,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
+              color: Colors.black.withOpacity(0.05),
               blurRadius: 20,
               offset: const Offset(0, 4),
             ),
@@ -846,7 +856,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: Colors.blue.withValues(alpha: 0.1),
+                      color: Colors.blue.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
@@ -922,7 +932,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.1),
+                        color: Colors.blue.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -1034,7 +1044,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -1068,7 +1078,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   height: 40,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [AppColors.primaryRed, const Color(0xFFEF4444)],
+                      colors: [AppColors.khonoRed, AppColors.khonoRedDark],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
@@ -1097,7 +1107,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                         Text(
                           _typingUsers[_currentThreadId]!,
                           style: GoogleFonts.inter(
-                            color: AppColors.primaryRed,
+                            color: AppColors.khonoRed,
                             fontSize: 12,
                             fontStyle: FontStyle.italic,
                           ),
@@ -1317,28 +1327,31 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: isCurrentUser
-                        ? AppColors.primaryRed
+                        ? AppColors.khonoRed
                         : (themeProvider.isDarkMode
                             ? const Color(0xFF252433)
                             : const Color(0xFFF8F9FA)),
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
+                        color: Colors.black.withOpacity(0.05),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
                     ],
                   ),
-                  child: Text(
-                    message.content,
-                    style: GoogleFonts.inter(
-                      color: isCurrentUser
-                          ? Colors.white
-                          : (themeProvider.isDarkMode
-                              ? Colors.white
-                              : Colors.black),
-                      fontSize: 14,
+                  child: RichText(
+                    text: TextSpan(
+                      style: GoogleFonts.inter(
+                        color: isCurrentUser
+                            ? Colors.white
+                            : (themeProvider.isDarkMode
+                                ? Colors.white
+                                : Colors.black),
+                        fontSize: 14,
+                      ),
+                      children:
+                          _buildMessageSpans(message.content, themeProvider),
                     ),
                   ),
                 ),
@@ -1361,7 +1374,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               width: 32,
               height: 32,
               decoration: const BoxDecoration(
-                color: AppColors.primaryRed,
+                color: AppColors.khonoRed,
                 shape: BoxShape.circle,
               ),
               child: const Center(
@@ -1378,6 +1391,35 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         ],
       ),
     );
+  }
+
+  List<TextSpan> _buildMessageSpans(
+      String content, ThemeProvider themeProvider) {
+    final List<TextSpan> spans = [];
+    final RegExp mentionRegex = RegExp(r'@(\w+)');
+
+    content.splitMapJoin(
+      mentionRegex,
+      onMatch: (Match match) {
+        final mention = match.group(0)!;
+        spans.add(
+          TextSpan(
+            text: mention,
+            style: const TextStyle(
+              color: AppColors.khonoRed,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        );
+        return '';
+      },
+      onNonMatch: (String text) {
+        spans.add(TextSpan(text: text));
+        return '';
+      },
+    );
+
+    return spans;
   }
 
   Widget _buildMessageInput(ThemeProvider themeProvider) {
@@ -1445,14 +1487,14 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [AppColors.primaryRed, const Color(0xFFEF4444)],
+                colors: [AppColors.khonoRed, AppColors.khonoRedDark],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(25),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withValues(alpha: 0.3),
+                  color: AppColors.khonoRed.withOpacity(0.3),
                   blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
@@ -1480,7 +1522,6 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
     );
   }
 
-  // All other methods remain exactly the same (unchanged)
   Future<void> _sendMessage() async {
     if (_messageController.text.trim().isEmpty) return;
 
@@ -1529,7 +1570,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         SnackBar(
           content:
               Text('Failed to send message: $e', style: GoogleFonts.inter()),
-          backgroundColor: AppColors.primaryRed,
+          backgroundColor: AppColors.khonoRed,
         ),
       );
     } finally {
@@ -1558,7 +1599,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Failed to start chat: $e', style: GoogleFonts.inter()),
-          backgroundColor: AppColors.primaryRed,
+          backgroundColor: AppColors.khonoRed,
         ),
       );
     }
@@ -1573,8 +1614,8 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
       builder: (context) => ThemedDialog(
         title: 'New Chat Thread',
         subtitle: 'Create a new thread for your team',
-        icon: Icon(Icons.chat_bubble_outline, color: AppColors.primaryRed),
-        iconColor: AppColors.primaryRed,
+        icon: Icon(Icons.chat_bubble_outline, color: AppColors.khonoRed),
+        iconColor: AppColors.khonoRed,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1612,7 +1653,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   SnackBar(
                     content: Text('Please enter a title',
                         style: GoogleFonts.inter()),
-                    backgroundColor: AppColors.primaryRed,
+                    backgroundColor: AppColors.khonoRed,
                   ),
                 );
                 return;
@@ -1641,13 +1682,13 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   SnackBar(
                     content: Text('Failed to create chat: $e',
                         style: GoogleFonts.inter()),
-                    backgroundColor: AppColors.primaryRed,
+                    backgroundColor: AppColors.khonoRed,
                   ),
                 );
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryRed,
+              backgroundColor: AppColors.khonoRed,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
@@ -1669,8 +1710,8 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
       builder: (context) => ThemedDialog(
         title: 'Create Shared Note',
         subtitle: 'Share a note with your team',
-        icon: Icon(Icons.note_add_outlined, color: AppColors.primaryRed),
-        iconColor: AppColors.primaryRed,
+        icon: Icon(Icons.note_add_outlined, color: AppColors.khonoRed),
+        iconColor: AppColors.khonoRed,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1727,7 +1768,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   SnackBar(
                     content: Text('Please fill in both title and content',
                         style: GoogleFonts.inter()),
-                    backgroundColor: AppColors.primaryRed,
+                    backgroundColor: AppColors.khonoRed,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
@@ -1760,7 +1801,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   SnackBar(
                     content: Text('Failed to create note: $e',
                         style: GoogleFonts.inter()),
-                    backgroundColor: AppColors.primaryRed,
+                    backgroundColor: AppColors.khonoRed,
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8)),
@@ -1769,7 +1810,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryRed,
+              backgroundColor: AppColors.khonoRed,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             ),
@@ -1789,8 +1830,8 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
       builder: (context) => ThemedDialog(
         title: note.title,
         subtitle: 'Shared note',
-        icon: Icon(Icons.description_outlined, color: AppColors.primaryRed),
-        iconColor: AppColors.primaryRed,
+        icon: Icon(Icons.description_outlined, color: AppColors.khonoRed),
+        iconColor: AppColors.khonoRed,
         content: SingleChildScrollView(
           child: Text(
             note.content,
@@ -1804,7 +1845,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text('Close',
-                style: GoogleFonts.inter(color: AppColors.primaryRed)),
+                style: GoogleFonts.inter(color: AppColors.khonoRed)),
           ),
         ],
       ),

@@ -213,8 +213,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final id = n['id'];
     if (id != null && (n['is_read'] != true)) {
       await NotificationService.markAsRead(
-        id is int ? id : int.tryParse(id.toString()) ?? 0,
-      );
+          id is int ? id : int.tryParse(id.toString()) ?? 0);
       if (mounted) {
         setState(() {
           final idx = _notifications.indexWhere((e) => e['id'] == id);
@@ -225,6 +224,76 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
     }
     widget.onNotificationTap?.call(n);
+  }
+
+  Future<void> _markAllAsRead() async {
+    if (_unreadCount == 0) return;
+
+    try {
+      final markedCount = await NotificationService.markAllAsRead();
+      if (mounted) {
+        setState(() {
+          _notifications =
+              _notifications.map((n) => {...n, 'is_read': true}).toList();
+          _unreadCount = 0;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Marked $markedCount notifications as read')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to mark all as read: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteAll() async {
+    if (_notifications.isEmpty) return;
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete All Notifications'),
+        content: const Text(
+            'Are you sure you want to delete all notifications? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      final deletedCount = await NotificationService.deleteAll();
+      if (mounted) {
+        setState(() {
+          _notifications.clear();
+          _unreadCount = 0;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Deleted $deletedCount notifications')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete all: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -302,6 +371,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               iconTheme: IconThemeData(
                 color: themeProvider.isDarkMode ? Colors.white : Colors.black,
               ),
+              actions: [
+                // Mark All as Read button
+                if (_unreadCount > 0)
+                  IconButton(
+                    onPressed: _markAllAsRead,
+                    icon: const Icon(Icons.done_all),
+                    tooltip: 'Mark all as read',
+                    color:
+                        themeProvider.isDarkMode ? Colors.white : Colors.black,
+                  ),
+                // Delete All button
+                if (_notifications.isNotEmpty)
+                  IconButton(
+                    onPressed: _deleteAll,
+                    icon: const Icon(Icons.delete_sweep),
+                    tooltip: 'Delete all',
+                    color: Colors.red,
+                  ),
+              ],
             ),
             body: _loading
                 ? Center(

@@ -25,7 +25,7 @@ def create_notification(user_id, message):
 # Notify all admins
 def notify_admins(message):
     try:
-        admin_users = User.query.filter_by(role="admin").all()
+        admin_users = User.query.filter_by(role="admin", is_active=True).all()
         notifications = []
         for admin in admin_users:
             notification = Notification(user_id=admin.id, message=message)

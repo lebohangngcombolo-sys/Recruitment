@@ -257,8 +257,15 @@ class Requisition(db.Model):
     # Must-have certifications (e.g. ["AWS Certified", "PMP"])
     required_certifications = db.Column(JSON, default=list)
 
+    # Job approval workflow: pending | approved | rejected
+    approval_status = db.Column(db.String(20), default='pending', nullable=False)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    rejection_reason = db.Column(db.Text, nullable=True)
+
     applications = db.relationship('Application', back_populates='requisition', lazy=True)
     creator = db.relationship('User', foreign_keys=[created_by], lazy=True)
+    approver = db.relationship('User', foreign_keys=[approved_by], lazy=True)
 
     def to_dict(self):
         creator = self.creator
@@ -308,6 +315,15 @@ class Requisition(db.Model):
             "start_date_to": self.start_date_to.isoformat() if self.start_date_to else None,
             "min_years_per_skill": self.min_years_per_skill if isinstance(self.min_years_per_skill, dict) else ({}),
             "required_certifications": self.required_certifications if isinstance(self.required_certifications, list) else [],
+            "approval_status": getattr(self, "approval_status", "pending"),
+            "approved_at": self.approved_at.isoformat() if getattr(self, "approved_at", None) else None,
+            "approved_by": getattr(self, "approved_by", None),
+            "rejection_reason": getattr(self, "rejection_reason", None),
+            "approved_by_user": {
+                "id": self.approver.id,
+                "name": self.approver.full_name,
+                "email": self.approver.email,
+            } if getattr(self, "approver", None) else None,
         }
     
     def to_dict_with_stats(self):
@@ -519,6 +535,12 @@ class Interview(db.Model):
     interview_type = db.Column(db.String(50), nullable=True)
     meeting_link = db.Column(db.String(255), nullable=True)
     status = db.Column(db.String(50), default='scheduled')  # Add this line if not present
+    # Admin approval workflow: pending | approved | rejected
+    # Default to approved for backward compatibility with existing rows/clients.
+    approval_status = db.Column(db.String(20), default='approved', nullable=False)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    rejection_reason = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # Add this
     
@@ -540,6 +562,7 @@ class Interview(db.Model):
     hiring_manager = db.relationship('User', foreign_keys=[hiring_manager_id], back_populates='managed_interviews')
 
     cancelled_by_user = db.relationship('User', foreign_keys=[cancelled_by], back_populates='cancelled_interviews')
+    approver = db.relationship('User', foreign_keys=[approved_by], lazy=True)
 
 
     def to_dict(self):
@@ -552,6 +575,17 @@ class Interview(db.Model):
             "interview_type": self.interview_type,
             "meeting_link": self.meeting_link,
             "status": self.status,
+            "approval_status": self.approval_status,
+            "approved_at": self.approved_at.isoformat() if getattr(self, "approved_at", None) else None,
+            "approved_by": getattr(self, "approved_by", None),
+            "rejection_reason": getattr(self, "rejection_reason", None),
+            "approved_by_user": {
+                "id": self.approver.id,
+                "name": getattr(self.approver, "full_name", None)
+                or f"{(self.approver.profile or {}).get('first_name', '')} {(self.approver.profile or {}).get('last_name', '')}".strip()
+                or self.approver.email,
+                "email": self.approver.email,
+            } if getattr(self, "approver", None) else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "google_calendar_event_id": self.google_calendar_event_id,
@@ -657,6 +691,7 @@ class InterviewSlot(db.Model):
 # ------------------- CV ANALYSIS -------------------
 class CVAnalysis(db.Model):
     __tablename__ = "cv_analyses"
+    __table_args__ = {'schema': 'cv_analyser'}
     id = db.Column(db.Integer, primary_key=True)
     candidate_id = db.Column(db.Integer, db.ForeignKey('candidates.id'), nullable=False)
     application_id = db.Column(db.Integer, db.ForeignKey('applications.id'), nullable=True)
@@ -818,7 +853,7 @@ class Meeting(db.Model):
     description = db.Column(db.Text)
     start_time = db.Column(db.DateTime, nullable=False)
     end_time = db.Column(db.DateTime, nullable=False)
-    organizer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    organizer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     participants = db.Column(JSONB, nullable=False, default=[])  # list of user emails or IDs
     meeting_link = db.Column(db.String(500))
     location = db.Column(db.String(500))
@@ -829,7 +864,7 @@ class Meeting(db.Model):
     cancelled_at = db.Column(db.DateTime, nullable=True)
     cancelled_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
 
-    organizer = db.relationship("User", backref=db.backref("organized_meetings", lazy=True), foreign_keys=[organizer_id])
+    organizer = db.relationship("User", backref=db.backref("organized_meetings", lazy=True, cascade="all, delete-orphan"), foreign_keys=[organizer_id])
 
     def to_dict(self):
         return {

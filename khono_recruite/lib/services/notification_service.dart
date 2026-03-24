@@ -42,7 +42,9 @@ class NotificationService {
     }
     if (res.statusCode != 200) {
       final body = _tryDecode(res.body);
-      final msg = body is Map ? (body['error'] ?? body['message'] ?? res.body) : res.body;
+      final msg = body is Map
+          ? (body['error'] ?? body['message'] ?? res.body)
+          : res.body;
       throw Exception(msg.toString());
     }
 
@@ -51,9 +53,8 @@ class NotificationService {
     final notifications = list is List
         ? list.map((e) => Map<String, dynamic>.from(e as Map)).toList()
         : <Map<String, dynamic>>[];
-    final unreadCount = (body['unread_count'] is int)
-        ? body['unread_count'] as int
-        : 0;
+    final unreadCount =
+        (body['unread_count'] is int) ? body['unread_count'] as int : 0;
 
     return NotificationsResponse(
       userId: (body['user_id'] is int) ? body['user_id'] as int : userId,
@@ -83,6 +84,66 @@ class NotificationService {
       // Don't throw; best-effort mark as read
       return;
     }
+  }
+
+  /// Marks all notifications as read for the current user.
+  static Future<int> markAllAsRead() async {
+    final token = await AuthService.getAccessToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Authentication required');
+    }
+
+    final res = await http.patch(
+      Uri.parse('${ApiEndpoints.adminBase}/notifications/mark-all-read'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (res.statusCode == 403) {
+      throw Exception('Forbidden: you can only mark your own notifications');
+    }
+    if (res.statusCode != 200) {
+      final body = _tryDecode(res.body);
+      final msg = body is Map
+          ? (body['error'] ?? body['message'] ?? res.body)
+          : res.body;
+      throw Exception(msg.toString());
+    }
+
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return body['marked_count'] ?? 0;
+  }
+
+  /// Deletes all notifications for the current user.
+  static Future<int> deleteAll() async {
+    final token = await AuthService.getAccessToken();
+    if (token == null || token.isEmpty) {
+      throw Exception('Authentication required');
+    }
+
+    final res = await http.delete(
+      Uri.parse('${ApiEndpoints.adminBase}/notifications/delete-all'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (res.statusCode == 403) {
+      throw Exception('Forbidden: you can only delete your own notifications');
+    }
+    if (res.statusCode != 200) {
+      final body = _tryDecode(res.body);
+      final msg = body is Map
+          ? (body['error'] ?? body['message'] ?? res.body)
+          : res.body;
+      throw Exception(msg.toString());
+    }
+
+    final body = jsonDecode(res.body) as Map<String, dynamic>;
+    return body['deleted_count'] ?? 0;
   }
 
   static dynamic _tryDecode(String raw) {

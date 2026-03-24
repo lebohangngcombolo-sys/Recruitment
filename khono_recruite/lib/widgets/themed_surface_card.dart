@@ -64,7 +64,10 @@ class ThemedSurfaceCard extends StatelessWidget {
                 ),
               ),
             ),
-            Expanded(child: child),
+            Flexible(
+              fit: FlexFit.loose,
+              child: child,
+            ),
           ],
         ),
       );
@@ -123,6 +126,7 @@ class ThemedStatCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               if (icon != null) ...[
                 Container(
@@ -142,6 +146,7 @@ class ThemedStatCard extends StatelessWidget {
                 const SizedBox(width: 12),
               ],
               Flexible(
+                fit: FlexFit.loose,
                 child: Text(
                   title,
                   style: TextStyle(
