@@ -23,7 +23,12 @@ class DataMerger:
             # Update Application with scores and recommendation
             if application:
                 match_analysis = external_result.get('match_analysis', {})
-                application.cv_score = match_analysis.get('overall_score', 0)
+                # NEW: overall_score might be at root or inside match_analysis
+                overall_score = external_result.get('overall_score')
+                if overall_score is None:
+                    overall_score = match_analysis.get('overall_score', 0)
+                
+                application.cv_score = overall_score
                 application.cv_parser_result = external_result
                 application.recommendation = match_analysis.get('suggestions', [''])[0] if match_analysis.get('suggestions') else ''
                 db.session.add(application)
@@ -50,65 +55,166 @@ class DataMerger:
     @staticmethod
     def _merge_candidate_profile(candidate: Candidate, external_result: dict):
         """Intelligently merge external analysis data into candidate profile."""
+        # NEW: Canonical schema uses 'structured_data' directly
+        structured = external_result.get('structured_data', {})
+        
+        # LEGACY: Old service used 'match_analysis.evidence'
         match_analysis = external_result.get('match_analysis', {})
         evidence = match_analysis.get('evidence', {})
+
+        def _as_list(value):
+            if value is None:
+                return []
+            if isinstance(value, list):
+                return value
+            return [value]
+
+        def _norm_skill(item):
+            if item is None:
+                return None, 0.0
+            if isinstance(item, dict):
+                return (item.get('skill') or item.get('name') or item.get('value')), float(item.get('confidence', 1.0) or 1.0)
+            return str(item), 1.0
+
+        def _merge_unique_list(existing, new_items, *, key_fn=lambda x: str(x).strip().lower()):
+            existing_list = list(existing) if isinstance(existing, list) else []
+            seen = {key_fn(x) for x in existing_list if x is not None and str(x).strip()}
+            for x in new_items:
+                if x is None:
+                    continue
+                k = key_fn(x)
+                if not k:
+                    continue
+                if k not in seen:
+                    existing_list.append(x)
+                    seen.add(k)
+            return existing_list
+
+        # --- Personal Details ---
+        personal = structured.get('personal_details', {})
+        if personal:
+            if personal.get('full_name') and not candidate.full_name:
+                candidate.full_name = personal['full_name']
+            if personal.get('phone') and not candidate.phone:
+                candidate.phone = personal['phone']
+            if personal.get('linkedin') and not candidate.linkedin:
+                candidate.linkedin = personal['linkedin']
+            if personal.get('portfolio') and not candidate.portfolio:
+                candidate.portfolio = personal['portfolio']
         
-        # Merge skills with confidence threshold
-        external_skills = evidence.get('skills', [])
+        # --- Skills ---
+        external_skills = structured.get('skills') or evidence.get('skills', [])
         if external_skills:
-            existing_skills = set(skill.strip().lower() for skill in (candidate.skills or '').split(',')) if candidate.skills else set()
+            existing = candidate.skills if isinstance(candidate.skills, list) else []
             new_skills = []
-            for item in external_skills:
-                if isinstance(item, dict):
-                    skill = item.get('skill')
-                    confidence = item.get('confidence', 1.0)
-                else:
-                    skill = item
-                    confidence = 1.0
-                
-                if skill and confidence > 0.9 and skill.lower() not in existing_skills:
-                    new_skills.append(skill)
-                    existing_skills.add(skill.lower())
-            
+            for item in _as_list(external_skills):
+                skill, confidence = _norm_skill(item)
+                if skill and confidence > 0.8: # Lowered threshold slightly for AI parser
+                    new_skills.append(str(skill).strip())
             if new_skills:
-                candidate.skills = ((candidate.skills or '') + ', ' + ', '.join(new_skills)).strip(', ')
+                candidate.skills = _merge_unique_list(existing, new_skills)
         
-        # Merge education
-        external_education = evidence.get('education', [])
+        # --- Education ---
+        external_education = structured.get('education') or evidence.get('education', [])
         if external_education:
-            existing_education = candidate.education or ''
-            for edu in external_education:
-                if isinstance(edu, dict) and edu.get('confidence', 1.0) > 0.9:
-                    edu_str = f"{edu.get('degree', '')} at {edu.get('institution', '')}"
-                    if edu_str and edu_str not in existing_education:
-                        candidate.education = existing_education + '\n' + edu_str if existing_education else edu_str
+            existing = candidate.education if isinstance(candidate.education, list) else []
+            new_items = []
+            for edu in _as_list(external_education):
+                if isinstance(edu, dict):
+                    if float(edu.get('confidence', 1.0) or 1.0) <= 0.8:
+                        continue
+                    degree = (edu.get('degree') or '').strip()
+                    institution = (edu.get('institution') or '').strip()
+                    if degree or institution:
+                        new_items.append({
+                            "degree": degree or None, 
+                            "institution": institution or None,
+                            "start_date": edu.get('start_date'),
+                            "end_date": edu.get('end_date')
+                        })
+                else:
+                    s = str(edu).strip()
+                    if s:
+                        new_items.append({"value": s})
+            if new_items:
+                candidate.education = _merge_unique_list(
+                    existing,
+                    new_items,
+                    key_fn=lambda x: (
+                        f"{(x.get('degree') or x.get('value') or '').strip().lower()}|{(x.get('institution') or '').strip().lower()}"
+                        if isinstance(x, dict)
+                        else str(x).strip().lower()
+                    ),
+                )
         
-        # Merge experience
-        external_experience = evidence.get('experience', [])
+        # --- Experience ---
+        external_experience = structured.get('work_experience') or evidence.get('experience', [])
         if external_experience:
-            existing_experience = candidate.experience or ''
-            for exp in external_experience:
-                if isinstance(exp, dict) and exp.get('confidence', 1.0) > 0.9:
-                    exp_str = f"{exp.get('position', '')} at {exp.get('company', '')}"
-                    if exp_str and exp_str not in existing_experience:
-                        candidate.experience = existing_experience + '\n' + exp_str if existing_experience else exp_str
+            existing = candidate.work_experience if isinstance(candidate.work_experience, list) else []
+            new_items = []
+            for exp in _as_list(external_experience):
+                if isinstance(exp, dict):
+                    if float(exp.get('confidence', 1.0) or 1.0) <= 0.8:
+                        continue
+                    position = (exp.get('position') or exp.get('title') or '').strip()
+                    company = (exp.get('company') or '').strip()
+                    if position or company:
+                        new_items.append({
+                            "title": position or None, 
+                            "company": company or None,
+                            "start_date": exp.get('start_date'),
+                            "end_date": exp.get('end_date'),
+                            "description": exp.get('description')
+                        })
+                else:
+                    s = str(exp).strip()
+                    if s:
+                        new_items.append({"value": s})
+            if new_items:
+                candidate.work_experience = _merge_unique_list(
+                    existing,
+                    new_items,
+                    key_fn=lambda x: (
+                        f"{(x.get('title') or x.get('value') or '').strip().lower()}|{(x.get('company') or '').strip().lower()}"
+                        if isinstance(x, dict)
+                        else str(x).strip().lower()
+                    ),
+                )
         
         # Merge certifications
         external_certifications = evidence.get('certifications', [])
         if external_certifications:
-            existing_certs = candidate.certifications or ''
-            for cert in external_certifications:
-                if isinstance(cert, dict) and cert.get('confidence', 1.0) > 0.9:
-                    cert_name = cert.get('name') or cert.get('certification', '')
-                    if cert_name and cert_name not in existing_certs:
-                        candidate.certifications = existing_certs + '\n' + cert_name if existing_certs else cert_name
+            existing = candidate.certifications if isinstance(candidate.certifications, list) else []
+            new_items = []
+            for cert in _as_list(external_certifications):
+                if isinstance(cert, dict):
+                    if float(cert.get('confidence', 1.0) or 0.0) <= 0.9:
+                        continue
+                    name = (cert.get('name') or cert.get('certification') or '').strip()
+                    if name:
+                        new_items.append(name)
+                else:
+                    s = str(cert).strip()
+                    if s:
+                        new_items.append(s)
+            if new_items:
+                candidate.certifications = _merge_unique_list(existing, new_items)
         
         # Merge languages
         external_languages = evidence.get('languages', [])
         if external_languages:
-            existing_langs = candidate.languages or ''
-            for lang in external_languages:
-                if isinstance(lang, dict) and lang.get('confidence', 1.0) > 0.9:
-                    lang_name = lang.get('language') or lang.get('name', '')
-                    if lang_name and lang_name not in existing_langs:
-                        candidate.languages = existing_langs + '\n' + lang_name if existing_langs else lang_name
+            existing = candidate.languages if isinstance(candidate.languages, list) else []
+            new_items = []
+            for lang in _as_list(external_languages):
+                if isinstance(lang, dict):
+                    if float(lang.get('confidence', 1.0) or 0.0) <= 0.9:
+                        continue
+                    name = (lang.get('language') or lang.get('name') or '').strip()
+                    if name:
+                        new_items.append(name)
+                else:
+                    s = str(lang).strip()
+                    if s:
+                        new_items.append(s)
+            if new_items:
+                candidate.languages = _merge_unique_list(existing, new_items)

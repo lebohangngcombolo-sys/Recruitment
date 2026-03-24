@@ -1,5 +1,6 @@
 import 'dart:convert';
-import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart' show File;
+import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart'
+    show File;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
@@ -65,7 +66,8 @@ class AuthService {
   }
 
   // ----------------- RESEND VERIFICATION CODE -----------------
-  static Future<Map<String, dynamic>> resendVerificationCode(String email) async {
+  static Future<Map<String, dynamic>> resendVerificationCode(
+      String email) async {
     try {
       final response = await http.post(
         Uri.parse(ApiEndpoints.resendVerification),
@@ -76,7 +78,10 @@ class AuthService {
       if (response.statusCode == 200) {
         return Map<String, dynamic>.from(decoded as Map);
       }
-      return {'error': decoded['error'] ?? decoded['message'] ?? 'Failed to resend code'};
+      return {
+        'error':
+            decoded['error'] ?? decoded['message'] ?? 'Failed to resend code'
+      };
     } catch (e) {
       return {'error': e.toString()};
     }
@@ -106,7 +111,11 @@ class AuthService {
   static Future<int> getUserId() async {
     final user = await getUserInfo();
     if (user != null) {
-      return user['id'] as int;
+      final raw = user['id'];
+      if (raw is int) return raw;
+      if (raw is double) return raw.toInt();
+      final parsed = int.tryParse(raw?.toString() ?? '');
+      if (parsed != null) return parsed;
     }
     throw Exception('User not logged in');
   }
@@ -141,9 +150,10 @@ class AuthService {
 
       // Clear any previous user's session so this login is a fresh session.
       await clearAuthState();
-      await saveTokens(
+      await storeTokens(
         data['access_token'].toString(),
         data['refresh_token']?.toString(),
+        data['user']['role'].toString(),
       );
       await saveUserInfo(data['user'] ?? {});
 
@@ -175,9 +185,10 @@ class AuthService {
 
     if (response.statusCode == 200) {
       await clearAuthState();
-      await saveTokens(
+      await storeTokens(
         data['access_token'].toString(),
         data['refresh_token']?.toString(),
+        data['user']['role'].toString(),
       );
       await saveUserInfo(data['user'] ?? {});
 
@@ -208,7 +219,8 @@ class AuthService {
         Uri.parse(ApiEndpoints.logout),
         headers: {
           'Content-Type': 'application/json',
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+          if (token != null && token.isNotEmpty)
+            'Authorization': 'Bearer $token',
         },
       ).timeout(const Duration(seconds: 10));
       await clearAuthState();
@@ -265,7 +277,7 @@ class AuthService {
 
     if (accessToken != null) {
       await clearAuthState();
-      await saveTokens(accessToken, refreshToken);
+      await storeTokens(accessToken, refreshToken, role ?? 'candidate');
     }
 
     return {
@@ -320,11 +332,16 @@ class AuthService {
         final body = jsonDecode(response.body);
         if (body is Map<String, dynamic>) {
           body['unauthorized'] = true;
-          body['error'] = body['msg'] ?? body['error'] ?? 'Session expired. Please log in again.';
+          body['error'] = body['msg'] ??
+              body['error'] ??
+              'Session expired. Please log in again.';
           return body;
         }
       } catch (_) {}
-      return {'error': 'Session expired. Please log in again.', 'unauthorized': true};
+      return {
+        'error': 'Session expired. Please log in again.',
+        'unauthorized': true
+      };
     }
 
     final data = jsonDecode(response.body);
@@ -342,7 +359,9 @@ class AuthService {
         return getCurrentUser(token: newToken);
       }
       data['unauthorized'] = true;
-      data['error'] = data['msg'] ?? data['error'] ?? 'Session expired. Please log in again.';
+      data['error'] = data['msg'] ??
+          data['error'] ??
+          'Session expired. Please log in again.';
       return data;
     }
 
@@ -391,7 +410,9 @@ class AuthService {
       if (response.statusCode == 401) {
         try {
           final body = jsonDecode(response.body) as Map<String, dynamic>?;
-          final msg = body?['error'] ?? body?['message'] ?? 'Session expired or invalid.';
+          final msg = body?['error'] ??
+              body?['message'] ??
+              'Session expired or invalid.';
           return {'error': '$msg Please log in again.', 'unauthorized': true};
         } catch (_) {
           return {
@@ -403,10 +424,14 @@ class AuthService {
       if (response.statusCode == 403) {
         try {
           final body = jsonDecode(response.body) as Map<String, dynamic>?;
-          final msg = body?['error'] ?? 'You do not have permission to use this feature.';
+          final msg = body?['error'] ??
+              'You do not have permission to use this feature.';
           return {'error': msg, 'forbidden': true};
         } catch (_) {
-          return {'error': 'You do not have permission to parse CV.', 'forbidden': true};
+          return {
+            'error': 'You do not have permission to parse CV.',
+            'forbidden': true
+          };
         }
       }
       return {
@@ -465,7 +490,8 @@ class AuthService {
             ? (decoded['error'] ?? decoded['message']?.toString())
             : null;
         return {
-          'error': serverMessage ?? 'Enrollment failed (${streamedResponse.statusCode})',
+          'error': serverMessage ??
+              'Enrollment failed (${streamedResponse.statusCode})',
           'details': decoded,
         };
       }
@@ -636,10 +662,12 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyDisplayName, name);
   }
+
   static Future<String?> getPersistedDisplayName() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_keyDisplayName);
   }
+
   static Future<void> clearPersistedDisplayName() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyDisplayName);
@@ -736,6 +764,7 @@ class AuthService {
     if (job['id'] == null) return;
     await prefs.setString(_keyPendingApplyJob, jsonEncode(job));
   }
+
   static Future<Map<String, dynamic>?> getPendingApplyJob() async {
     final prefs = await SharedPreferences.getInstance();
     final s = prefs.getString(_keyPendingApplyJob);
@@ -746,6 +775,7 @@ class AuthService {
       return null;
     }
   }
+
   static Future<void> clearPendingApplyJob() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyPendingApplyJob);

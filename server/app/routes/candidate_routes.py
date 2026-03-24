@@ -217,15 +217,15 @@ def _job_list_item(job):
 
 # ----------------- GET AVAILABLE JOBS -----------------
 @candidate_bp.route("/jobs", methods=["GET"])
-@role_required(["candidate"])
+@role_required(["candidate", "admin", "hiring_manager"])
 def get_available_jobs():
     try:
         user_id = get_jwt_identity()
 
-        jobs = Requisition.query.filter_by(is_active=True)\
-                                .filter(Requisition.deleted_at.is_(None))\
-                                .order_by(Requisition.created_at.desc())\
-                                .all()
+        query = Requisition.query.filter_by(is_active=True).filter(Requisition.deleted_at.is_(None))
+        if hasattr(Requisition, "approval_status"):
+            query = query.filter(Requisition.approval_status == "approved")
+        jobs = query.order_by(Requisition.created_at.desc()).all()
         result = []
 
         for job in jobs:
@@ -379,15 +379,10 @@ def upload_resume(application_id):
         try:
             # Send to external analysis service
             from app.services.analysis_service_client import AnalysisServiceClient
-            # Ensure stream is reset for the external service upload
-            try:
-                file.stream.seek(0)
-            except Exception:
-                pass
-            external_result = AnalysisServiceClient.submit_cv(
-                file_storage=file,
-                filename=filename,
+            external_result = AnalysisServiceClient.submit_cv_text(
+                cv_text=resume_text or "",
                 job_description=JobService.build_job_spec_for_cv(job),
+                industry=job.category or None
             )
             cv_analysis.external_analysis_id = external_result.get('analysis_id')
             cv_analysis.status = 'submitted'
@@ -494,7 +489,7 @@ def get_cv_analysis_status(analysis_id):
 
 # ----------------- CANDIDATE APPLICATIONS -----------------
 @candidate_bp.route("/applications", methods=["GET"])
-@role_required(["candidate"])
+@role_required(["candidate", "admin", "hiring_manager"])
 def get_applications():
     try:
         user_id = get_jwt_identity()
@@ -919,7 +914,11 @@ def get_my_interviews():
         if not candidate:
             return jsonify({"interviews": [], "scheduled_count": 0}), 200
 
-        interviews = Interview.query.filter_by(candidate_id=candidate.id).order_by(Interview.scheduled_time.desc()).all()
+        interviews = (
+            Interview.query.filter_by(candidate_id=candidate.id, approval_status="approved")
+            .order_by(Interview.scheduled_time.desc())
+            .all()
+        )
         now = datetime.utcnow()
         scheduled_count = sum(
             1 for i in interviews
@@ -934,6 +933,7 @@ def get_my_interviews():
                 "interview_type": i.interview_type,
                 "meeting_link": i.meeting_link,
                 "status": i.status or "scheduled",
+                "approval_status": getattr(i, "approval_status", "approved"),
                 "job_title": i.application.requisition.title if i.application and i.application.requisition else None,
             })
         return jsonify({"interviews": out, "scheduled_count": scheduled_count}), 200
@@ -1551,6 +1551,37 @@ def get_candidate_notifications():
     except Exception as e:
         current_app.logger.error("Get notifications error: %s", e, exc_info=True)
         return jsonify({'error': 'Failed to fetch notifications', 'notifications': []}), 500
+
+
+@candidate_bp.route("/notifications/<int:notification_id>/read", methods=["PATCH", "POST", "OPTIONS"])
+@role_required(["candidate"])
+def mark_candidate_notification_read(notification_id):
+    """Mark a notification as read. Candidate can only mark their own."""
+    if request.method == "OPTIONS":
+        return "", 204
+    try:
+        current_user_id = get_jwt_identity()
+        current_user_id = int(current_user_id) if current_user_id is not None else None
+        if current_user_id is None:
+            return jsonify({"error": "Unauthorized"}), 401
+
+        notification = Notification.query.get(notification_id)
+        if not notification:
+            return jsonify({"error": "Notification not found"}), 404
+        if int(notification.user_id) != int(current_user_id):
+            return jsonify({"error": "Forbidden: you can only mark your own notifications"}), 403
+
+        notification.is_read = True
+        db.session.commit()
+        return jsonify(
+            {"message": "Marked as read", "notification": notification.to_dict()}
+        ), 200
+    except Exception as e:
+        current_app.logger.error(
+            "Mark candidate notification read error: %s", e, exc_info=True
+        )
+        db.session.rollback()
+        return jsonify({"error": "Failed to mark notification as read"}), 500
 
 
 # ----------------- SAVE APPLICATION DRAFT -----------------

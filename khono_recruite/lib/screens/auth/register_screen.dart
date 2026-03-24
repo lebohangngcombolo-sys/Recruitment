@@ -125,10 +125,13 @@ class _RegisterScreenState extends State<RegisterScreen>
       final errorMsg = body['error'];
       String errorMessage;
       if (status == 409) {
-        errorMessage = 'An account with this email already exists. Please log in or use a different email.';
+        errorMessage =
+            'An account with this email already exists. Please log in or use a different email.';
       } else {
         errorMessage = errors is List
-            ? (errors.isNotEmpty ? errors.join('\n') : (errorMsg is String ? errorMsg : 'Registration failed.'))
+            ? (errors.isNotEmpty
+                ? errors.join('\n')
+                : (errorMsg is String ? errorMsg : 'Registration failed.'))
             : (errorMsg is String ? errorMsg : 'Registration failed.');
       }
 
@@ -159,7 +162,8 @@ class _RegisterScreenState extends State<RegisterScreen>
         }
         if (!context.mounted) return;
         final dashboardPath = body['dashboard'] as String? ?? '/enrollment';
-        final safePath = dashboardPath.startsWith('/') ? dashboardPath : '/$dashboardPath';
+        final safePath =
+            dashboardPath.startsWith('/') ? dashboardPath : '/$dashboardPath';
         context.go('$safePath?token=${Uri.encodeComponent(accessToken)}');
         return;
       }
@@ -173,7 +177,8 @@ class _RegisterScreenState extends State<RegisterScreen>
         verifyUrl += '&code=${Uri.encodeComponent(codeFromServer)}';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Email could not be sent. Use the code shown on the next screen to verify.'),
+            content: Text(
+                'Email could not be sent. Use the code shown on the next screen to verify.'),
             duration: const Duration(seconds: 6),
           ),
         );
@@ -184,7 +189,9 @@ class _RegisterScreenState extends State<RegisterScreen>
       if (context.mounted) {
         debugPrint('Register post-201 error: $e $st');
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Registration succeeded. Please check your email for the verification code.')),
+          const SnackBar(
+              content: Text(
+                  'Registration succeeded. Please check your email for the verification code.')),
         );
         context.go(
           '/verify-email?email=${Uri.encodeComponent(emailController.text.trim())}',
@@ -219,8 +226,10 @@ class _RegisterScreenState extends State<RegisterScreen>
                 child: SingleChildScrollView(
                   child: Center(
                     child: MouseRegion(
-                      onEnter: (_) => kIsWeb ? _animationController.forward() : null,
-                      onExit: (_) => kIsWeb ? _animationController.reverse() : null,
+                      onEnter:
+                          kIsWeb ? (_) => _animationController.forward() : null,
+                      onExit:
+                          kIsWeb ? (_) => _animationController.reverse() : null,
                       child: ScaleTransition(
                         scale: _scaleAnimation,
                         child: Container(
@@ -233,170 +242,171 @@ class _RegisterScreenState extends State<RegisterScreen>
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 const SizedBox(height: 16),
-                          Text(
-                            "GET STARTED",
-                            style: GoogleFonts.poppins(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              shadows: [
-                                Shadow(
-                                  color: Colors.black26,
-                                  blurRadius: 4,
-                                  offset: Offset(2, 2),
-                                )
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            "Register Account",
-                            style: GoogleFonts.poppins(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          // Text fields: same style as login (white background, grey border)
-                          CustomTextField(
-                            label: "First Name",
-                            controller: firstNameController,
-                            backgroundColor: Colors.white,
-                            textColor: Colors.black,
-                            borderColor: Colors.grey.shade300,
-                            labelColor: Colors.white,
-                            margin: EdgeInsets.zero,
-                            textInputAction: TextInputAction.next,
-                          ),
-                          const SizedBox(height: 12),
-                          CustomTextField(
-                            label: "Last Name",
-                            controller: lastNameController,
-                            backgroundColor: Colors.white,
-                            textColor: Colors.black,
-                            borderColor: Colors.grey.shade300,
-                            labelColor: Colors.white,
-                            margin: EdgeInsets.zero,
-                            textInputAction: TextInputAction.next,
-                          ),
-                          const SizedBox(height: 12),
-                          CustomTextField(
-                            label: "Email",
-                            controller: emailController,
-                            inputType: TextInputType.emailAddress,
-                            backgroundColor: Colors.white,
-                            textColor: Colors.black,
-                            borderColor: Colors.grey.shade300,
-                            labelColor: Colors.white,
-                            margin: EdgeInsets.zero,
-                            textInputAction: TextInputAction.next,
-                          ),
-                          const SizedBox(height: 12),
+                                Text(
+                                  "GET STARTED",
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    shadows: [
+                                      Shadow(
+                                        color: Colors.black26,
+                                        blurRadius: 4,
+                                        offset: Offset(2, 2),
+                                      )
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                Text(
+                                  "Register Account",
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
+                                // Text fields: same style as login (white background, grey border)
+                                CustomTextField(
+                                  label: "First Name",
+                                  controller: firstNameController,
+                                  backgroundColor: Colors.white,
+                                  textColor: Colors.black,
+                                  borderColor: Colors.grey.shade300,
+                                  labelColor: Colors.white,
+                                  margin: EdgeInsets.zero,
+                                  textInputAction: TextInputAction.next,
+                                ),
+                                const SizedBox(height: 12),
+                                CustomTextField(
+                                  label: "Last Name",
+                                  controller: lastNameController,
+                                  backgroundColor: Colors.white,
+                                  textColor: Colors.black,
+                                  borderColor: Colors.grey.shade300,
+                                  labelColor: Colors.white,
+                                  margin: EdgeInsets.zero,
+                                  textInputAction: TextInputAction.next,
+                                ),
+                                const SizedBox(height: 12),
+                                CustomTextField(
+                                  label: "Email",
+                                  controller: emailController,
+                                  inputType: TextInputType.emailAddress,
+                                  backgroundColor: Colors.white,
+                                  textColor: Colors.black,
+                                  borderColor: Colors.grey.shade300,
+                                  labelColor: Colors.white,
+                                  margin: EdgeInsets.zero,
+                                  textInputAction: TextInputAction.next,
+                                ),
+                                const SizedBox(height: 12),
 
-                          // Password
-                          CustomTextField(
-                            label: "Password",
-                            controller: passwordController,
-                            inputType: TextInputType.visiblePassword,
-                            obscureText: _obscurePassword,
-                            backgroundColor: Colors.white,
-                            textColor: Colors.black,
-                            borderColor: Colors.grey.shade300,
-                            labelColor: Colors.white,
-                            margin: EdgeInsets.zero,
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => register(),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                                color: Colors.grey.shade600,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  _obscurePassword = !_obscurePassword;
-                                });
-                              },
-                            ),
-                            onChanged: checkPasswordStrength,
-                          ),
+                                // Password
+                                CustomTextField(
+                                  label: "Password",
+                                  controller: passwordController,
+                                  inputType: TextInputType.visiblePassword,
+                                  obscureText: _obscurePassword,
+                                  backgroundColor: Colors.white,
+                                  textColor: Colors.black,
+                                  borderColor: Colors.grey.shade300,
+                                  labelColor: Colors.white,
+                                  margin: EdgeInsets.zero,
+                                  textInputAction: TextInputAction.done,
+                                  onSubmitted: (_) => register(),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_off
+                                          : Icons.visibility,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _obscurePassword = !_obscurePassword;
+                                      });
+                                    },
+                                  ),
+                                  onChanged: checkPasswordStrength,
+                                ),
 
-                          // Password strength indicator
-                          if (passwordStrength.isNotEmpty)
-                            Padding(
-                              padding:
-                                  const EdgeInsets.only(top: 4.0, bottom: 12),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Container(
-                                      height: 6,
-                                      decoration: BoxDecoration(
-                                        color: passwordStrengthColor,
-                                        borderRadius: BorderRadius.circular(3),
-                                      ),
+                                // Password strength indicator
+                                if (passwordStrength.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(
+                                        top: 4.0, bottom: 12),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Container(
+                                            height: 6,
+                                            decoration: BoxDecoration(
+                                              color: passwordStrengthColor,
+                                              borderRadius:
+                                                  BorderRadius.circular(3),
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          passwordStrength,
+                                          style: GoogleFonts.poppins(
+                                              color: passwordStrengthColor,
+                                              fontSize: 12),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    passwordStrength,
-                                    style: GoogleFonts.poppins(
-                                        color: passwordStrengthColor,
-                                        fontSize: 12),
+
+                                const SizedBox(height: 20),
+
+                                // Register Button
+                                SizedBox(
+                                  width: 200,
+                                  height: 44,
+                                  child: CustomButton(
+                                    text: "Register",
+                                    onPressed: loading ? null : register,
                                   ),
-                                ],
-                              ),
-                            ),
-
-                          const SizedBox(height: 20),
-
-                          // Register Button
-                          SizedBox(
-                            width: 200,
-                            height: 44,
-                            child: CustomButton(
-                              text: "Register",
-                              onPressed: loading ? null : register,
-                            ),
-                          ),
-
-                          const SizedBox(height: 24),
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                "Already have an account? ",
-                                style: GoogleFonts.poppins(
-                                  color: Colors.white70,
                                 ),
-                              ),
-                              GestureDetector(
-                                onTap: () => context.go('/login'),
-                                child: Text(
-                                  "Login",
-                                  style: GoogleFonts.poppins(
+
+                                const SizedBox(height: 24),
+
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      "Already have an account? ",
+                                      style: GoogleFonts.poppins(
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      onTap: () => context.go('/login'),
+                                      child: Text(
+                                        "Login",
+                                        style: GoogleFonts.poppins(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 12),
+
+                                IconButton(
+                                  icon: Icon(
+                                    themeProvider.isDarkMode
+                                        ? Icons.light_mode
+                                        : Icons.dark_mode,
                                     color: Colors.white,
-                                    fontWeight: FontWeight.w600,
                                   ),
+                                  onPressed: () => themeProvider.toggleTheme(),
                                 ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 12),
-
-                          IconButton(
-                            icon: Icon(
-                              themeProvider.isDarkMode
-                                  ? Icons.light_mode
-                                  : Icons.dark_mode,
-                              color: Colors.white,
-                            ),
-                            onPressed: () => themeProvider.toggleTheme(),
-                          ),
 
                                 const SizedBox(height: 16),
                               ],
@@ -416,7 +426,8 @@ class _RegisterScreenState extends State<RegisterScreen>
             child: Align(
               alignment: Alignment.topCenter,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                 child: Row(
                   children: [
                     IconButton(

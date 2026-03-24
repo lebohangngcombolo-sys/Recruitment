@@ -34,6 +34,10 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
   List<dynamic> get filteredInterviews {
     final now = DateTime.now();
     switch (_selectedFilter) {
+      case 'pending_approval':
+        return interviews
+            .where((i) => (i['approval_status'] ?? '').toString() == 'pending')
+            .toList();
       case 'today':
         return interviews.where((i) {
           if (i['scheduled_time'] == null) return false;
@@ -64,6 +68,76 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
         }).toList();
       default:
         return interviews;
+    }
+  }
+
+  int get _pendingApprovalCount => interviews
+      .where((i) => (i['approval_status'] ?? '').toString() == 'pending')
+      .length;
+
+  Future<void> _approveInterview(int id) async {
+    try {
+      await _adminService.approveInterview(id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Interview approved')),
+        );
+      }
+      fetchInterviews();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to approve interview: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _rejectInterview(int id) async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reject interview'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Rejection reason (required)',
+          ),
+          autofocus: true,
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final r = controller.text.trim();
+              if (r.isEmpty) return;
+              Navigator.of(ctx).pop(r);
+            },
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+    if (reason == null || reason.trim().isEmpty) return;
+    try {
+      await _adminService.rejectInterview(id, reason.trim());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Interview rejected')),
+        );
+      }
+      fetchInterviews();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to reject interview: $e')),
+        );
+      }
     }
   }
 
@@ -345,15 +419,13 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
               style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
             ),
             centerTitle: true,
-            backgroundColor:
-                (themeProvider.isDarkMode
-                        ? const Color(0xFF14131E)
-                        : Colors.white)
-                    .withValues(alpha: 0.9),
+            backgroundColor: (themeProvider.isDarkMode
+                    ? const Color(0xFF14131E)
+                    : Colors.white)
+                .withValues(alpha: 0.9),
             elevation: 0,
-            foregroundColor: themeProvider.isDarkMode
-                ? Colors.white
-                : Colors.black87,
+            foregroundColor:
+                themeProvider.isDarkMode ? Colors.white : Colors.black87,
             iconTheme: IconThemeData(
               color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
             ),
@@ -382,591 +454,665 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                   ),
                 )
               : interviews.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.calendar_today_outlined,
-                        size: 80,
-                        color: themeProvider.isDarkMode
-                            ? Colors.grey.shade600
-                            : Colors.grey.shade300,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        "No Interviews Scheduled",
-                        style: GoogleFonts.inter(
-                          color: themeProvider.isDarkMode
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade600,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        "Interviews will appear here once scheduled",
-                        style: GoogleFonts.inter(
-                          color: themeProvider.isDarkMode
-                              ? Colors.grey.shade500
-                              : Colors.grey.shade500,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : Column(
-                  children: [
-                    // NEW: Filter tabs
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
-                      ),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _buildFilterChip('All', 'all', themeProvider),
-                            const SizedBox(width: 8),
-                            _buildFilterChip('Today', 'today', themeProvider),
-                            const SizedBox(width: 8),
-                            _buildFilterChip(
-                              'Upcoming',
-                              'upcoming',
-                              themeProvider,
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.calendar_today_outlined,
+                            size: 80,
+                            color: themeProvider.isDarkMode
+                                ? Colors.grey.shade600
+                                : Colors.grey.shade300,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            "No Interviews Scheduled",
+                            style: GoogleFonts.inter(
+                              color: themeProvider.isDarkMode
+                                  ? Colors.grey.shade400
+                                  : Colors.grey.shade600,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
                             ),
-                            const SizedBox(width: 8),
-                            _buildFilterChip('Past', 'past', themeProvider),
-                            const SizedBox(width: 8),
-                            _buildFilterChip(
-                              'Action Required',
-                              'action_required',
-                              themeProvider,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            "Interviews will appear here once scheduled",
+                            style: GoogleFonts.inter(
+                              color: themeProvider.isDarkMode
+                                  ? Colors.grey.shade500
+                                  : Colors.grey.shade500,
+                              fontSize: 14,
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ),
+                    )
+                  : Column(
+                      children: [
+                        // NEW: Filter tabs
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 10),
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                _buildFilterChip('All', 'all', themeProvider),
+                                const SizedBox(width: 8),
+                                _buildFilterChip(
+                                    'Today', 'today', themeProvider),
+                                const SizedBox(width: 8),
+                                _buildFilterChip(
+                                    'Upcoming', 'upcoming', themeProvider),
+                                const SizedBox(width: 8),
+                                _buildFilterChip('Past', 'past', themeProvider),
+                                const SizedBox(width: 8),
+                                _buildFilterChip('Pending Approval',
+                                    'pending_approval', themeProvider),
+                                const SizedBox(width: 8),
+                                _buildFilterChip('Action Required',
+                                    'action_required', themeProvider),
+                              ],
+                            ),
+                          ),
+                        ),
 
-                    // Header with stats
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      margin: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color:
-                            (themeProvider.isDarkMode
+                        // Header with stats
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          margin: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: (themeProvider.isDarkMode
                                     ? const Color(0xFF14131E)
                                     : Colors.white)
                                 .withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.05),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: redColor.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              Icons.calendar_today,
-                              color: redColor,
-                              size: 28,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Interview Schedule",
-                                style: GoogleFonts.poppins(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w600,
-                                  color: themeProvider.isDarkMode
-                                      ? Colors.white
-                                      : Colors.black87,
-                                ),
-                              ),
-                              Text(
-                                "${filteredInterviews.length} interviews (${interviews.length} total)",
-                                style: GoogleFonts.inter(
-                                  color: themeProvider.isDarkMode
-                                      ? Colors.grey.shade400
-                                      : Colors.grey.shade600,
-                                  fontSize: 14,
-                                ),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.05),
+                                blurRadius: 20,
+                                offset: const Offset(0, 8),
                               ),
                             ],
                           ),
-                          const Spacer(),
-                          // NEW: Status summary
-                          Wrap(
-                            spacing: 8,
+                          child: Row(
                             children: [
-                              _buildStatusBadge(
-                                'Scheduled',
-                                Colors.blue,
-                                themeProvider,
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: redColor.withValues(alpha: 0.1),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  Icons.calendar_today,
+                                  color: redColor,
+                                  size: 28,
+                                ),
                               ),
-                              _buildStatusBadge(
-                                'Pending',
-                                Colors.amber,
-                                themeProvider,
+                              const SizedBox(width: 16),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "Interview Schedule",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w600,
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                  Text(
+                                    "${filteredInterviews.length} interviews (${interviews.length} total)",
+                                    style: GoogleFonts.inter(
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.grey.shade400
+                                          : Colors.grey.shade600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
                               ),
-                              _buildStatusBadge(
-                                'Completed',
-                                Colors.green,
-                                themeProvider,
+                              const Spacer(),
+                              // NEW: Status summary
+                              Wrap(
+                                spacing: 8,
+                                children: [
+                                  _buildStatusBadge(
+                                      'Scheduled', Colors.blue, themeProvider),
+                                  _buildStatusBadge(
+                                      'Pending Approval ($_pendingApprovalCount)',
+                                      Colors.amber,
+                                      themeProvider),
+                                  _buildStatusBadge(
+                                      'Completed', Colors.green, themeProvider),
+                                ],
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    ),
-                    // Interviews Grid
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Wrap(
-                          spacing: 20,
-                          runSpacing: 20,
-                          children: filteredInterviews.map((i) {
-                            final scheduled = i['scheduled_time'] != null
-                                ? DateFormat(
-                                    'MMM dd, yyyy • HH:mm',
-                                  ).format(DateTime.parse(i['scheduled_time']))
-                                : 'Not Scheduled';
+                        ),
+                        // Interviews Grid
+                        Expanded(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Wrap(
+                              spacing: 20,
+                              runSpacing: 20,
+                              children: filteredInterviews.map((i) {
+                                final scheduled = i['scheduled_time'] != null
+                                    ? DateFormat('MMM dd, yyyy • HH:mm').format(
+                                        DateTime.parse(i['scheduled_time']))
+                                    : 'Not Scheduled';
 
-                            final status = i['status'] ?? 'Scheduled';
-                            final statusColor = getStatusColor(status);
-                            final statusIcon = getStatusIcon(status);
+                                final status = i['status'] ?? 'Scheduled';
+                                final statusColor = getStatusColor(status);
+                                final statusIcon = getStatusIcon(status);
+                                final approvalStatus =
+                                    (i['approval_status'] ?? '')
+                                        .toString()
+                                        .toLowerCase();
+                                final isPendingApproval =
+                                    approvalStatus == 'pending';
 
-                            return Container(
-                              width: width < 600 ? double.infinity : 400,
-                              decoration: BoxDecoration(
-                                color:
-                                    (themeProvider.isDarkMode
+                                return Container(
+                                  width: width < 600 ? double.infinity : 400,
+                                  decoration: BoxDecoration(
+                                    color: (themeProvider.isDarkMode
                                             ? const Color(0xFF14131E)
                                             : Colors.white)
                                         .withValues(alpha: 0.9),
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.08),
-                                    blurRadius: 15,
-                                    offset: const Offset(0, 6),
-                                  ),
-                                ],
-                                border: Border.all(
-                                  color: themeProvider.isDarkMode
-                                      ? Colors.grey.shade800
-                                      : Colors.grey.withValues(alpha: 0.1),
-                                ),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  // Header with status
-                                  Container(
-                                    padding: const EdgeInsets.all(20),
-                                    decoration: BoxDecoration(
-                                      color: statusColor.withValues(alpha: 0.1),
-                                      borderRadius: const BorderRadius.only(
-                                        topLeft: Radius.circular(20),
-                                        topRight: Radius.circular(20),
+                                    borderRadius: BorderRadius.circular(20),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black
+                                            .withValues(alpha: 0.08),
+                                        blurRadius: 15,
+                                        offset: const Offset(0, 6),
                                       ),
+                                    ],
+                                    border: Border.all(
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.grey.shade800
+                                          : Colors.grey.withValues(alpha: 0.1),
                                     ),
-                                    child: Row(
-                                      children: [
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 12,
-                                            vertical: 6,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // Header with status
+                                      Container(
+                                        padding: const EdgeInsets.all(20),
+                                        decoration: BoxDecoration(
+                                          color: statusColor.withValues(
+                                              alpha: 0.1),
+                                          borderRadius: const BorderRadius.only(
+                                            topLeft: Radius.circular(20),
+                                            topRight: Radius.circular(20),
                                           ),
-                                          decoration: BoxDecoration(
-                                            color: statusColor.withValues(
-                                              alpha: 0.2,
-                                            ),
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Text(
-                                                statusIcon,
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: statusColor.withValues(
+                                                    alpha: 0.2),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
                                               ),
-                                              const SizedBox(width: 4),
-                                              Text(
-                                                status.toUpperCase(),
-                                                style: GoogleFonts.inter(
-                                                  color: statusColor,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w600,
+                                              child: Row(
+                                                children: [
+                                                  Text(
+                                                    statusIcon,
+                                                    style: const TextStyle(
+                                                        fontSize: 12),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    status.toUpperCase(),
+                                                    style: GoogleFonts.inter(
+                                                      color: statusColor,
+                                                      fontSize: 10,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            if (isPendingApproval) ...[
+                                              const SizedBox(width: 10),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 6),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.amber
+                                                      .withValues(alpha: 0.18),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  border: Border.all(
+                                                      color: Colors.amber
+                                                          .withValues(
+                                                              alpha: 0.35)),
+                                                ),
+                                                child: Text(
+                                                  'PENDING APPROVAL',
+                                                  style: GoogleFonts.inter(
+                                                    color:
+                                                        Colors.amber.shade800,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
                                                 ),
                                               ),
                                             ],
-                                          ),
-                                        ),
-                                        const Spacer(),
-                                        Icon(
-                                          Icons.calendar_today,
-                                          color: statusColor,
-                                          size: 16,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          scheduled,
-                                          style: GoogleFonts.inter(
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.grey.shade400
-                                                : Colors.grey.shade600,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  // Content
-                                  Padding(
-                                    padding: const EdgeInsets.all(20),
-                                    child: Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        // Candidate Avatar
-                                        Stack(
-                                          children: [
-                                            Container(
-                                              width: 60,
-                                              height: 60,
-                                              decoration: BoxDecoration(
-                                                color: redColor.withValues(
-                                                  alpha: 0.1,
-                                                ),
-                                                shape: BoxShape.circle,
-                                                border: Border.all(
-                                                  color: redColor.withValues(
-                                                    alpha: 0.2,
-                                                  ),
-                                                  width: 2,
-                                                ),
-                                              ),
-                                              child:
-                                                  i['candidate_picture'] != null
-                                                  ? ClipOval(
-                                                      child: Image.network(
-                                                        i['candidate_picture'],
-                                                        width: 60,
-                                                        height: 60,
-                                                        fit: BoxFit.cover,
-                                                      ),
-                                                    )
-                                                  : Icon(
-                                                      Icons.person,
-                                                      size: 30,
-                                                      color: redColor
-                                                          .withValues(
-                                                            alpha: 0.6,
-                                                          ),
-                                                    ),
+                                            const Spacer(),
+                                            Icon(
+                                              Icons.calendar_today,
+                                              color: statusColor,
+                                              size: 16,
                                             ),
-                                            Positioned(
-                                              bottom: 0,
-                                              right: 0,
-                                              child: Container(
-                                                width: 16,
-                                                height: 16,
-                                                decoration: BoxDecoration(
-                                                  color: statusColor,
-                                                  shape: BoxShape.circle,
-                                                  border: Border.all(
-                                                    color: Colors.white,
-                                                    width: 2,
-                                                  ),
-                                                ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              scheduled,
+                                              style: GoogleFonts.inter(
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.grey.shade400
+                                                    : Colors.grey.shade600,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w500,
                                               ),
                                             ),
                                           ],
                                         ),
-                                        const SizedBox(width: 16),
-                                        // Candidate Details
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                i['job_title'] ??
-                                                    'No Job Title',
-                                                style: GoogleFonts.inter(
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w600,
-                                                  color:
-                                                      themeProvider.isDarkMode
-                                                      ? Colors.white
-                                                      : Colors.black87,
+                                      ),
+                                      // Content
+                                      Padding(
+                                        padding: const EdgeInsets.all(20),
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            // Candidate Avatar
+                                            Stack(
+                                              children: [
+                                                Container(
+                                                  width: 60,
+                                                  height: 60,
+                                                  decoration: BoxDecoration(
+                                                    color: redColor.withValues(
+                                                        alpha: 0.1),
+                                                    shape: BoxShape.circle,
+                                                    border: Border.all(
+                                                      color:
+                                                          redColor.withValues(
+                                                              alpha: 0.2),
+                                                      width: 2,
+                                                    ),
+                                                  ),
+                                                  child:
+                                                      i['candidate_picture'] !=
+                                                              null
+                                                          ? ClipOval(
+                                                              child:
+                                                                  Image.network(
+                                                                i['candidate_picture'],
+                                                                width: 60,
+                                                                height: 60,
+                                                                fit: BoxFit
+                                                                    .cover,
+                                                              ),
+                                                            )
+                                                          : Icon(
+                                                              Icons.person,
+                                                              size: 30,
+                                                              color: redColor
+                                                                  .withValues(
+                                                                      alpha:
+                                                                          0.6),
+                                                            ),
                                                 ),
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                              const SizedBox(height: 8),
-                                              _buildDetailRow(
-                                                icon: Icons.person,
-                                                text:
-                                                    i['candidate_name'] ??
-                                                    'Unknown Candidate',
-                                                themeProvider: themeProvider,
-                                              ),
-                                              const SizedBox(height: 4),
-                                              _buildDetailRow(
-                                                icon: Icons.video_call,
-                                                text:
-                                                    "Type: ${i['interview_type'] ?? 'N/A'}",
-                                                themeProvider: themeProvider,
-                                              ),
-                                              // NEW: Feedback info
-                                              if (i['feedback_submitted_at'] !=
-                                                  null)
-                                                Padding(
-                                                  padding:
-                                                      const EdgeInsets.only(
-                                                        top: 4,
+                                                Positioned(
+                                                  bottom: 0,
+                                                  right: 0,
+                                                  child: Container(
+                                                    width: 16,
+                                                    height: 16,
+                                                    decoration: BoxDecoration(
+                                                      color: statusColor,
+                                                      shape: BoxShape.circle,
+                                                      border: Border.all(
+                                                        color: Colors.white,
+                                                        width: 2,
                                                       ),
-                                                  child: _buildDetailRow(
-                                                    icon: Icons.feedback,
-                                                    text:
-                                                        "Feedback submitted: ${DateFormat('MMM dd').format(DateTime.parse(i['feedback_submitted_at']))}",
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(width: 16),
+                                            // Candidate Details
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    i['job_title'] ??
+                                                        'No Job Title',
+                                                    style: GoogleFonts.inter(
+                                                      fontSize: 16,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: themeProvider
+                                                              .isDarkMode
+                                                          ? Colors.white
+                                                          : Colors.black87,
+                                                    ),
+                                                    maxLines: 2,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  _buildDetailRow(
+                                                    icon: Icons.person,
+                                                    text: i['candidate_name'] ??
+                                                        'Unknown Candidate',
                                                     themeProvider:
                                                         themeProvider,
                                                   ),
-                                                ),
-                                              const SizedBox(height: 16),
-                                              // Action Buttons
-                                              Column(
-                                                children: [
-                                                  // NEW: Status-specific buttons
-                                                  if (status ==
-                                                      'scheduled') ...[
-                                                    Row(
-                                                      children: [
-                                                        Expanded(
-                                                          child: _buildActionButton(
-                                                            icon: Icons
-                                                                .check_circle,
-                                                            label:
-                                                                "Mark Complete",
-                                                            color: Colors.green,
-                                                            onPressed: () =>
-                                                                updateInterviewStatus(
-                                                                  i['id'],
-                                                                  'completed',
-                                                                ),
-                                                          ),
+                                                  const SizedBox(height: 4),
+                                                  _buildDetailRow(
+                                                    icon: Icons.video_call,
+                                                    text:
+                                                        "Type: ${i['interview_type'] ?? 'N/A'}",
+                                                    themeProvider:
+                                                        themeProvider,
+                                                  ),
+                                                  // NEW: Feedback info
+                                                  if (i['feedback_submitted_at'] !=
+                                                      null)
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                              top: 4),
+                                                      child: _buildDetailRow(
+                                                        icon: Icons.feedback,
+                                                        text:
+                                                            "Feedback submitted: ${DateFormat('MMM dd').format(DateTime.parse(i['feedback_submitted_at']))}",
+                                                        themeProvider:
+                                                            themeProvider,
+                                                      ),
+                                                    ),
+                                                  const SizedBox(height: 16),
+                                                  // Action Buttons
+                                                  Column(
+                                                    children: [
+                                                      if (isPendingApproval) ...[
+                                                        Row(
+                                                          children: [
+                                                            Expanded(
+                                                              child:
+                                                                  _buildActionButton(
+                                                                icon: Icons
+                                                                    .check_circle_outline,
+                                                                label:
+                                                                    "Approve",
+                                                                color: Colors
+                                                                    .green,
+                                                                onPressed: () =>
+                                                                    _approveInterview(
+                                                                        i['id']),
+                                                              ),
+                                                            ),
+                                                            const SizedBox(
+                                                                width: 8),
+                                                            Expanded(
+                                                              child:
+                                                                  _buildActionButton(
+                                                                icon: Icons
+                                                                    .cancel_outlined,
+                                                                label: "Reject",
+                                                                color:
+                                                                    Colors.red,
+                                                                onPressed: () =>
+                                                                    _rejectInterview(
+                                                                        i['id']),
+                                                              ),
+                                                            ),
+                                                          ],
                                                         ),
                                                         const SizedBox(
-                                                          width: 8,
-                                                        ),
-                                                        Expanded(
-                                                          child: _buildActionButton(
-                                                            icon: Icons
-                                                                .no_accounts,
-                                                            label: "No Show",
-                                                            color:
-                                                                Colors.orange,
-                                                            onPressed: () =>
-                                                                updateInterviewStatus(
-                                                                  i['id'],
-                                                                  'no_show',
-                                                                ),
-                                                          ),
-                                                        ),
+                                                            height: 12),
                                                       ],
-                                                    ),
-                                                    const SizedBox(height: 8),
-                                                  ],
-                                                  if (status == 'completed' ||
-                                                      status ==
-                                                          'feedback_pending') ...[
-                                                    Row(
-                                                      children: [
-                                                        Expanded(
-                                                          child: _buildActionButton(
-                                                            icon:
-                                                                Icons.feedback,
-                                                            label:
-                                                                status ==
-                                                                    'completed'
-                                                                ? "Submit Feedback"
-                                                                : "View Feedback",
-                                                            color: Colors.blue,
-                                                            onPressed: () =>
-                                                                status ==
-                                                                    'completed'
-                                                                ? submitFeedback(
-                                                                    context,
-                                                                    i['id'],
-                                                                  )
-                                                                : viewFeedbackSummary(
-                                                                    i['id'],
-                                                                  ),
-                                                          ),
+                                                      // NEW: Status-specific buttons
+                                                      if (status ==
+                                                          'scheduled') ...[
+                                                        Row(
+                                                          children: [
+                                                            Expanded(
+                                                              child:
+                                                                  _buildActionButton(
+                                                                icon: Icons
+                                                                    .check_circle,
+                                                                label:
+                                                                    "Mark Complete",
+                                                                color: Colors
+                                                                    .green,
+                                                                onPressed: () =>
+                                                                    updateInterviewStatus(
+                                                                        i['id'],
+                                                                        'completed'),
+                                                              ),
+                                                            ),
+                                                            const SizedBox(
+                                                                width: 8),
+                                                            Expanded(
+                                                              child:
+                                                                  _buildActionButton(
+                                                                icon: Icons
+                                                                    .no_accounts,
+                                                                label:
+                                                                    "No Show",
+                                                                color: Colors
+                                                                    .orange,
+                                                                onPressed: () =>
+                                                                    updateInterviewStatus(
+                                                                        i['id'],
+                                                                        'no_show'),
+                                                              ),
+                                                            ),
+                                                          ],
                                                         ),
-                                                        if (status ==
-                                                            'completed') ...[
-                                                          const SizedBox(
-                                                            width: 8,
-                                                          ),
+                                                        const SizedBox(
+                                                            height: 8),
+                                                      ],
+                                                      if (status ==
+                                                              'completed' ||
+                                                          status ==
+                                                              'feedback_pending') ...[
+                                                        Row(
+                                                          children: [
+                                                            Expanded(
+                                                              child:
+                                                                  _buildActionButton(
+                                                                icon: Icons
+                                                                    .feedback,
+                                                                label: status ==
+                                                                        'completed'
+                                                                    ? "Submit Feedback"
+                                                                    : "View Feedback",
+                                                                color:
+                                                                    Colors.blue,
+                                                                onPressed: () => status ==
+                                                                        'completed'
+                                                                    ? submitFeedback(
+                                                                        context,
+                                                                        i['id'])
+                                                                    : viewFeedbackSummary(
+                                                                        i['id']),
+                                                              ),
+                                                            ),
+                                                            if (status ==
+                                                                'completed') ...[
+                                                              const SizedBox(
+                                                                  width: 8),
+                                                              Expanded(
+                                                                child:
+                                                                    _buildActionButton(
+                                                                  icon: Icons
+                                                                      .schedule,
+                                                                  label:
+                                                                      "Pending",
+                                                                  color: Colors
+                                                                      .amber,
+                                                                  onPressed: () =>
+                                                                      updateInterviewStatus(
+                                                                          i['id'],
+                                                                          'feedback_pending'),
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ],
+                                                        ),
+                                                        const SizedBox(
+                                                            height: 8),
+                                                      ],
+                                                      // Original buttons
+                                                      Row(
+                                                        children: [
                                                           Expanded(
-                                                            child: _buildActionButton(
+                                                            child:
+                                                                _buildActionButton(
+                                                              icon: Icons
+                                                                  .cancel_outlined,
+                                                              label: "Cancel",
+                                                              color: Colors.red,
+                                                              onPressed: () =>
+                                                                  cancelInterview(
+                                                                      i['id']),
+                                                            ),
+                                                          ),
+                                                          const SizedBox(
+                                                              width: 8),
+                                                          Expanded(
+                                                            child:
+                                                                _buildActionButton(
                                                               icon: Icons
                                                                   .schedule,
-                                                              label: "Pending",
-                                                              color:
-                                                                  Colors.amber,
+                                                              label:
+                                                                  "Reschedule",
+                                                              color: redColor,
                                                               onPressed: () =>
-                                                                  updateInterviewStatus(
-                                                                    i['id'],
-                                                                    'feedback_pending',
-                                                                  ),
+                                                                  showRescheduleDialog(
+                                                                      i['id']),
                                                             ),
                                                           ),
                                                         ],
-                                                      ],
-                                                    ),
-                                                    const SizedBox(height: 8),
-                                                  ],
-                                                  // Original buttons
-                                                  Row(
-                                                    children: [
-                                                      Expanded(
-                                                        child: _buildActionButton(
-                                                          icon: Icons
-                                                              .cancel_outlined,
-                                                          label: "Cancel",
-                                                          color: Colors.red,
-                                                          onPressed: () =>
-                                                              cancelInterview(
-                                                                i['id'],
-                                                              ),
-                                                        ),
                                                       ),
-                                                      const SizedBox(width: 8),
-                                                      Expanded(
-                                                        child: _buildActionButton(
-                                                          icon: Icons.schedule,
-                                                          label: "Reschedule",
-                                                          color: redColor,
-                                                          onPressed: () =>
-                                                              showRescheduleDialog(
-                                                                i['id'],
+                                                      // NEW: Direct Feedback Button for feedback_pending interviews
+                                                      if (status ==
+                                                          'feedback_pending') ...[
+                                                        const SizedBox(
+                                                            height: 12),
+                                                        Container(
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        12),
+                                                            boxShadow: [
+                                                              BoxShadow(
+                                                                color: Colors
+                                                                    .amber
+                                                                    .withValues(
+                                                                        alpha:
+                                                                            0.3),
+                                                                blurRadius: 8,
+                                                                offset:
+                                                                    const Offset(
+                                                                        0, 4),
                                                               ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  // NEW: Direct Feedback Button for feedback_pending interviews
-                                                  if (status ==
-                                                      'feedback_pending') ...[
-                                                    const SizedBox(height: 12),
-                                                    Container(
-                                                      decoration: BoxDecoration(
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              12,
-                                                            ),
-                                                        boxShadow: [
-                                                          BoxShadow(
-                                                            color: Colors.amber
-                                                                .withValues(
-                                                                  alpha: 0.3,
-                                                                ),
-                                                            blurRadius: 8,
-                                                            offset:
-                                                                const Offset(
-                                                                  0,
-                                                                  4,
-                                                                ),
+                                                            ],
                                                           ),
-                                                        ],
-                                                      ),
-                                                      child: ElevatedButton.icon(
-                                                        icon: const Icon(
-                                                          Icons.feedback,
-                                                          size: 18,
-                                                        ),
-                                                        label: Text(
-                                                          "Give Feedback",
-                                                          style:
-                                                              GoogleFonts.inter(
+                                                          child: ElevatedButton
+                                                              .icon(
+                                                            icon: const Icon(
+                                                                Icons.feedback,
+                                                                size: 18),
+                                                            label: Text(
+                                                              "Give Feedback",
+                                                              style: GoogleFonts
+                                                                  .inter(
                                                                 fontSize: 14,
                                                                 fontWeight:
                                                                     FontWeight
                                                                         .w600,
                                                               ),
-                                                        ),
-                                                        onPressed: () =>
-                                                            submitFeedback(
+                                                            ),
+                                                            onPressed: () =>
+                                                                submitFeedback(
                                                               context,
                                                               i['id'],
                                                             ),
-                                                        style: ElevatedButton.styleFrom(
-                                                          backgroundColor:
-                                                              Colors.amber,
-                                                          foregroundColor:
-                                                              Colors.black87,
-                                                          padding:
-                                                              const EdgeInsets.symmetric(
+                                                            style:
+                                                                ElevatedButton
+                                                                    .styleFrom(
+                                                              backgroundColor:
+                                                                  Colors.amber,
+                                                              foregroundColor:
+                                                                  Colors
+                                                                      .black87,
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .symmetric(
                                                                 vertical: 14,
                                                                 horizontal: 20,
                                                               ),
-                                                          shape: RoundedRectangleBorder(
-                                                            borderRadius:
-                                                                BorderRadius.circular(
+                                                              shape:
+                                                                  RoundedRectangleBorder(
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
                                                                   12,
                                                                 ),
-                                                          ),
-                                                          minimumSize:
-                                                              const Size(
+                                                              ),
+                                                              minimumSize:
+                                                                  const Size(
                                                                 double.infinity,
                                                                 48,
                                                               ),
+                                                            ),
+                                                          ),
                                                         ),
-                                                      ),
-                                                    ),
-                                                  ],
+                                                      ],
+                                                    ],
+                                                  ),
                                                 ],
                                               ),
-                                            ],
-                                          ),
+                                            ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                            );
-                          }).toList(),
+                                );
+                              }).toList(),
+                            ),
+                          ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
         ),
       ),
     );
@@ -1836,9 +1982,8 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
                         additionalNotes: _additionalNotes.isNotEmpty
                             ? _additionalNotes
                             : null,
-                        privateNotes: _privateNotes.isNotEmpty
-                            ? _privateNotes
-                            : null,
+                        privateNotes:
+                            _privateNotes.isNotEmpty ? _privateNotes : null,
                       );
 
                       if (context.mounted) {
@@ -2000,9 +2145,8 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
                     backgroundColor: isSelected
                         ? _getRatingColor(ratingValue)
                         : Colors.transparent,
-                    foregroundColor: isSelected
-                        ? Colors.white
-                        : Colors.grey.shade600,
+                    foregroundColor:
+                        isSelected ? Colors.white : Colors.grey.shade600,
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(6),

@@ -9,8 +9,15 @@ class UnifiedApiService {
   // Get current user role for endpoint selection
   static Future<String> _getCurrentUserRole() async {
     try {
+      // First try to get from user info
       final userInfo = await AuthService.getUserInfo();
-      final role = userInfo?['role']?.toString();
+      String? role = userInfo?['role']?.toString();
+      
+      // If not in user info, try stored role
+      if (role == null || role.isEmpty) {
+        role = await AuthService.getRole();
+      }
+      
       return role?.isNotEmpty == true ? role! : 'candidate';
     } catch (e) {
       // Default to candidate if role cannot be determined
@@ -224,6 +231,54 @@ class UnifiedApiService {
       }
     } catch (e) {
       throw Exception('Error fetching notifications: $e');
+    }
+  }
+
+  /// Mark one notification as read (candidate vs admin/HM endpoint).
+  static Future<void> markNotificationRead(int notificationId) async {
+    try {
+      final token = await AuthService.getAccessToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('User not authenticated');
+      }
+      final role = await _getCurrentUserRole();
+      final url = role == 'candidate'
+          ? ApiEndpoints.markCandidateNotificationRead(notificationId)
+          : ApiEndpoints.markNotificationRead(notificationId);
+
+      Future<http.Response> send() async {
+        return http.patch(
+          Uri.parse(url),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        );
+      }
+
+      var response = await send();
+      if (response.statusCode == 200) return;
+
+      if (response.statusCode == 401) {
+        final newToken = await AuthService.refreshAccessToken();
+        if (newToken != null) {
+          response = await http.patch(
+            Uri.parse(url),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $newToken',
+            },
+          );
+          if (response.statusCode == 200) return;
+        }
+        throw Exception('Session expired. Please log in again.');
+      }
+      throw Exception(
+        'Failed to mark notification read: ${response.statusCode}',
+      );
+    } catch (e) {
+      if (e is Exception) rethrow;
+      throw Exception('Error marking notification read: $e');
     }
   }
 

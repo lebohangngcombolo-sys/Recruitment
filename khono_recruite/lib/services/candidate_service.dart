@@ -318,6 +318,15 @@ class CandidateService {
     if (response.statusCode == 200) {
       final data = _safeJsonDecode(response.body);
       if (data is Map<String, dynamic>) {
+        // Backend already filters to approved; keep a defensive filter for older servers.
+        final list = data['interviews'];
+        if (list is List) {
+          data['interviews'] = list.where((e) {
+            if (e is! Map) return false;
+            final approval = (e['approval_status'] ?? 'approved').toString();
+            return approval == 'approved';
+          }).toList();
+        }
         return data;
       }
       return {'interviews': [], 'scheduled_count': 0};

@@ -342,8 +342,34 @@ class AIService:
             return self._ensure_job_details_complete(parsed, job_title)
             
         except Exception as e:
-            logger.exception(f"Failed to generate job details for {job_title}")
-            return self._get_fallback_job_details(job_title)
+            logger.error(f"Error generating job details: {e}")
+            # Fallback to simple description if prompt fails
+            return {
+                "title": job_title,
+                "description": "Job description",
+                "responsibilities": [],
+                "qualifications": [],
+                "required_skills": [],
+                "category": "Technology",
+                "location": "Remote",
+                "is_active": True,
+                "is_featured": False,
+                "application_deadline": None,
+                "salary_range": None,
+                "salary_min": None,
+                "salary_max": None,
+                "salary_currency": "ZAR",
+                "experience_level": "Mid-Level",
+                "min_experience": 2,
+                "company_details": "",
+                "evaluation_weightings": {
+                    "skills": 40,
+                    "experience": 40,
+                    "education": 20
+                },
+                "job_summary": "Auto-generated summary based on provided description.",
+                "knockout_rules": []
+            }
 
     def _ensure_job_details_complete(self, job_details: Dict[str, Any], job_title: str) -> Dict[str, Any]:
         """Ensure all required fields are present and valid"""
@@ -475,39 +501,6 @@ Return the response strictly as JSON.
             if key not in parsed or not isinstance(parsed[key], list):
                 parsed[key] = []
 
-        return parsed
-
-    def generate_job_details(self, job_title: str) -> Dict[str, Any]:
-        """Generate job description, responsibilities, qualifications, etc. from job title."""
-        prompt = f'''
-Based on the job title "{job_title}", generate comprehensive job details in JSON format with the following structure:
-{{
-  "description": "Detailed job description (2-3 paragraphs) that clearly explains the role, its purpose, and what the candidate will be doing day-to-day",
-  "responsibilities": ["List of 5-7 specific, actionable key responsibilities as separate string items in the array"],
-  "qualifications": ["List of 5-7 required qualifications including education, experience, and specific skills"],
-  "company_details": "Professional company overview (2-3 sentences) that describes the company culture, mission, and what makes it an attractive workplace",
-  "category": "One of: Engineering, Marketing, Sales, HR, Finance, Operations, Customer Service, Product, Design, Data Science, Management",
-  "required_skills": ["List of 5-8 technical/professional skills that are essential for this role"],
-  "min_experience": "Minimum years of experience as a number (0-15+)"
-}}
-
-IMPORTANT: Return only valid JSON. Responsibilities and qualifications must be arrays of strings. category must be one of the listed values. min_experience must be a number.
-'''
-        out = self._call_generation(prompt, temperature=0.7, max_output_tokens=1024)
-        import re
-        try:
-            match = re.search(r"(\{.*\})", out, flags=re.DOTALL)
-            json_text = match.group(1) if match else out
-            parsed = json.loads(json_text)
-        except Exception:
-            logger.exception("Failed to parse job details JSON")
-            raise RuntimeError("AI returned invalid JSON for job details")
-        # Normalize to match Flutter expectations
-        if "min_experience" in parsed and isinstance(parsed["min_experience"], (int, float)):
-            parsed["min_experience"] = str(int(parsed["min_experience"]))
-        for key in ("responsibilities", "qualifications", "required_skills"):
-            if key not in parsed or not isinstance(parsed[key], list):
-                parsed[key] = []
         return parsed
 
     def generate_assessment_questions(

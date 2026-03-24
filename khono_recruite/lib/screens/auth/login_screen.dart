@@ -120,7 +120,10 @@ class _LoginScreenState extends State<LoginScreen>
         }
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result['error']?.toString() ?? result['message']?.toString() ?? "Login failed")),
+          SnackBar(
+              content: Text(result['error']?.toString() ??
+                  result['message']?.toString() ??
+                  "Login failed")),
         );
       }
     } catch (e) {
@@ -160,13 +163,15 @@ class _LoginScreenState extends State<LoginScreen>
         } catch (_) {}
         _navigateToDashboard(
           token: result['access_token'] as String,
-          role: (result['user']?['role'] ?? result['role']) as String? ?? 'candidate',
+          role: (result['user']?['role'] ?? result['role']) as String? ??
+              'candidate',
           dashboard: result['dashboard'] as String? ?? '/candidate-dashboard',
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(result['message']?.toString() ?? "MFA verification failed")),
+              content: Text(
+                  result['message']?.toString() ?? "MFA verification failed")),
         );
       }
     } catch (e) {
@@ -204,7 +209,8 @@ class _LoginScreenState extends State<LoginScreen>
 
         if (loginResult['access_token'] != null) {
           try {
-            await AuthService.getCurrentUser(token: loginResult['access_token']);
+            await AuthService.getCurrentUser(
+                token: loginResult['access_token']);
           } catch (_) {}
           _navigateToDashboard(
             token: loginResult['access_token'],
@@ -280,10 +286,10 @@ class _LoginScreenState extends State<LoginScreen>
                 child: SingleChildScrollView(
                   child: Center(
                     child: MouseRegion(
-                      onEnter: (_) =>
-                          kIsWeb ? _animationController.forward() : null,
-                      onExit: (_) =>
-                          kIsWeb ? _animationController.reverse() : null,
+                      onEnter:
+                          kIsWeb ? (_) => _animationController.forward() : null,
+                      onExit:
+                          kIsWeb ? (_) => _animationController.reverse() : null,
                       child: ScaleTransition(
                         scale: _scaleAnimation,
                         child: Container(

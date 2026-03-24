@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:vector_math/vector_math_64.dart' as vm;
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -177,10 +178,14 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                                     bool isHovered = hoveredIndex == index;
 
                                     return MouseRegion(
-                                      onEnter: (_) =>
-                                          setState(() => hoveredIndex = index),
-                                      onExit: (_) =>
-                                          setState(() => hoveredIndex = null),
+                                      onEnter: kIsWeb
+                                          ? (_) => setState(
+                                              () => hoveredIndex = index)
+                                          : null,
+                                      onExit: kIsWeb
+                                          ? (_) => setState(
+                                              () => hoveredIndex = null)
+                                          : null,
                                       child: AnimatedContainer(
                                         duration:
                                             const Duration(milliseconds: 200),
