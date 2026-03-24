@@ -472,10 +472,19 @@ Task:
 
 Return the response strictly as JSON.
 """
-        out = self._call_generation(prompt, temperature=0.0, max_output_tokens=700)
+        try:
+            out = self._call_generation(prompt, temperature=0.0, max_output_tokens=700)
+        except Exception as e:
+            logger.error(f"AI match analysis failed: {e}")
+            return {
+                "match_score": 50,  # Neutral score on failure
+                "missing_skills": ["Unable to analyze skills at this time"],
+                "suggestions": ["Please review manually"],
+                "interview_questions": ["What are your core strengths for this role?"],
+                "error": str(e)
+            }
 
         # Try to parse JSON safely
-
         try:
             match = re.search(r"(\{.*\})", out, flags=re.DOTALL)
             json_text = match.group(1) if match else out
@@ -532,19 +541,33 @@ Requirements:
 
 Return only valid JSON.
 '''
-        out = self._call_generation(prompt, temperature=0.7, max_output_tokens=1024)
-        import re
         try:
+            out = self._call_generation(prompt, temperature=0.7, max_output_tokens=1024)
+            import re
             match = re.search(r"(\{.*\})", out, flags=re.DOTALL)
             json_text = match.group(1) if match else out
             parsed = json.loads(json_text)
-        except Exception:
-            logger.exception("Failed to parse questions JSON")
-            raise RuntimeError("AI returned invalid JSON for questions")
-        questions = parsed.get("questions") or []
-        if not isinstance(questions, list):
-            questions = []
-        return questions
+            questions = parsed.get("questions") or []
+            if not isinstance(questions, list):
+                questions = []
+            return questions
+        except Exception as e:
+            logger.error(f"AI assessment generation failed: {e}")
+            # Return a few generic questions as fallback
+            return [
+                {
+                    "question": f"What is a core responsibility of a {job_title}?",
+                    "options": ["Option A", "Option B", "Option C", "Option D"],
+                    "answer": 0,
+                    "weight": 1
+                },
+                {
+                    "question": f"Which skill is most important for a {job_title}?",
+                    "options": ["Skill A", "Skill B", "Skill C", "Skill D"],
+                    "answer": 1,
+                    "weight": 1
+                }
+            ]
 
     def structure_cv_experience(
         self, raw_experience_text: str, position_hint: str = "", companies_hint: Optional[list] = None

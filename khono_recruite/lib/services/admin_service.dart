@@ -1348,6 +1348,23 @@ class AdminService {
     throw Exception("Failed to load users: ${res.body}");
   }
 
+  /// Get users organized by role for team collaboration
+  Future<Map<String, dynamic>> getTeamCollaborationUsers() async {
+    final token = await AuthService.getAccessToken();
+
+    final res = await http.get(
+      Uri.parse(ApiEndpoints.teamCollaboration),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      return data;
+    }
+
+    throw Exception("Failed to load team collaboration users: ${res.body}");
+  }
+
   /// Update user role
   Future<bool> updateUserRole(int userId, String newRole) async {
     final token = await AuthService.getAccessToken();

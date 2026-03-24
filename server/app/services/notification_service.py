@@ -1,3 +1,4 @@
+from datetime import datetime
 from app.models import Notification, User
 from app.extensions import db, socketio
 from flask_socketio import emit
@@ -28,20 +29,25 @@ def notify_admins(message):
         admin_users = User.query.filter_by(role="admin", is_active=True).all()
         notifications = []
         for admin in admin_users:
-            notification = Notification(user_id=admin.id, message=message)
+            notification = Notification(user_id=admin.id, message=message, created_at=datetime.utcnow())
             db.session.add(notification)
             notifications.append(notification)
+        
+        db.session.commit()
+        
+        # Emit real-time notification after commit
+        for notification in notifications:
             socketio.emit(
-                f"notification_{admin.id}",
+                f"notification_{notification.user_id}",
                 notification.to_dict(),
                 broadcast=True
             )
-        db.session.commit()
         return notifications
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Notify admins error: {str(e)}")
-        raise
+        # Don't re-raise if we want to continue other flows
+        return []
 
 # Get notifications for a user
 def get_user_notifications(user_id, unread_only=False):

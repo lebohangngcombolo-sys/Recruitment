@@ -196,6 +196,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     if (refresh) {
       setState(() {
         loadingCandidates = true;
+        candidateLoading = true;
         candidatePage = 1;
         candidates.clear();
       });
@@ -219,11 +220,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           );
         }
         candidateHasMore = data.length >= candidatePerPage;
+        loadingCandidates = false;
         candidateLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
+        loadingCandidates = false;
         candidateLoading = false;
       });
       if (!mounted) return;
@@ -3261,7 +3264,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               "Candidates Overview",
               style: TextStyle(
                 fontFamily: 'Poppins',
-                fontSize: 20,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: themeProvider.isDarkMode
                     ? Colors.white
@@ -3270,6 +3273,15 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             ),
             Row(
               children: [
+                IconButton(
+                  onPressed: () => fetchCandidates(refresh: true),
+                  icon: const Icon(Icons.refresh, size: 20),
+                  tooltip: 'Refresh candidates',
+                  color: themeProvider.isDarkMode
+                      ? Colors.white70
+                      : Colors.black54,
+                ),
+                const SizedBox(width: 8),
                 // Status Filter Dropdown
                 Container(
                   padding: const EdgeInsets.symmetric(
