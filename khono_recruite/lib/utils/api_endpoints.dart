@@ -1,28 +1,40 @@
 class ApiEndpoints {
   // ------------------- Base URLs -------------------
-  static const authBase = "http://127.0.0.1:5000/api/auth";
-  static const candidateBase = "http://127.0.0.1:5000/api/candidate";
-  static const adminBase = "http://127.0.0.1:5000/api/admin";
-  static const analyticsBase = "http://127.0.0.1:5000/api/analytics";
-  static const chatBase = "http://127.0.0.1:5000/api/chat";
-  static const aiBase = "http://127.0.0.1:5000/api/ai";
+  static const baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://127.0.0.1:5000',
+  );
+
+  static const authBase = "$baseUrl/api/auth";
+  static const candidateBase = "$baseUrl/api/candidate";
+  static const adminBase = "$baseUrl/api/admin";
+  static const hmBase = "$baseUrl/api/hm";
+  static const analyticsBase = "$baseUrl/api/analytics";
+  static const chatBase = "$baseUrl/api/chat";
+  static const aiBase = "$baseUrl/api/ai";
   static const generateJobDetails = "$aiBase/generate_job_details";
   static const generateQuestions = "$aiBase/generate_questions";
 
   // ------------------- CV Analyser (proxied via recruitment backend) -------------------
-  static const cvAnalyserUpload =
-      "http://127.0.0.1:5000/api/cv-analyser/upload";
+  static const cvAnalyserUpload = "$baseUrl/api/cv-analyser/upload";
   static String cvAnalyserStatus(String analysisId) =>
-      "http://127.0.0.1:5000/api/cv-analyser/analyses/$analysisId/status";
+      "$baseUrl/api/cv-analyser/analyses/$analysisId/status";
   static String cvAnalyserResult(String analysisId) =>
-      "http://127.0.0.1:5000/api/cv-analyser/analyses/$analysisId/result";
+      "$baseUrl/api/cv-analyser/analyses/$analysisId/result";
 
   // NEW: Offer management base URL (matches your Flask blueprint)
-  static const offerBase = "http://127.0.0.1:5000/api/offer";
+  static const offerBase = "$baseUrl/api/offer";
 
-  // WebSocket URL (for real-time chat)
-  static const webSocketUrl =
-      "ws://127.0.0.1:5000"; // Use wss:// for production with SSL
+  // Socket.IO base URL (for real-time chat)
+  // Note: socket_io_client expects http(s) here, not ws(s).
+  static const webSocketUrl = baseUrl;
+
+  static String get webSocketWsUrl {
+    final isHttps = baseUrl.toLowerCase().startsWith('https://');
+    final rest =
+        baseUrl.replaceFirst(RegExp(r'^https?://', caseSensitive: false), '');
+    return '${isHttps ? 'wss' : 'ws'}://$rest';
+  }
 
   // ------------------- Auth -------------------
   static const register = "$authBase/register";
@@ -63,7 +75,7 @@ class ApiEndpoints {
   static const String parserCV = "$authBase/cv/parse"; // POST Multipart
 
   // ------------------- Public (no auth) -------------------
-  static const publicBase = "http://127.0.0.1:5000/api/public";
+  static const publicBase = "$baseUrl/api/public";
   static const getPublicJobs = "$publicBase/jobs";
 
   // ------------------- Candidate -------------------

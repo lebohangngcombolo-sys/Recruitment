@@ -2,8 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
-import '../../services/admin_service.dart';
+import '../../services/hiring_manager_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/admin_service.dart';
 import 'candidate_management_screen.dart';
 import 'cv_reviews_screen.dart';
 import '../notifications/notifications_screen.dart';
@@ -101,6 +102,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   DateTime selectedDay = DateTime.now();
 
   final AdminService admin = AdminService();
+  final HiringManagerService hmService = HiringManagerService();
 
   List<String> recentActivities = [];
 
@@ -428,7 +430,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     if (!mounted) return;
     setState(() => loadingStats = true);
     try {
-      final data = await admin.getDashboardCounts();
+      final data = await hmService.getDashboardCounts();
 
       final List<String> activities = [];
       if (audits.isNotEmpty) {

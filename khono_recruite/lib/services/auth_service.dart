@@ -150,9 +150,10 @@ class AuthService {
 
       // Clear any previous user's session so this login is a fresh session.
       await clearAuthState();
-      await saveTokens(
+      await storeTokens(
         data['access_token'].toString(),
         data['refresh_token']?.toString(),
+        data['user']['role'].toString(),
       );
       await saveUserInfo(data['user'] ?? {});
 
@@ -184,9 +185,10 @@ class AuthService {
 
     if (response.statusCode == 200) {
       await clearAuthState();
-      await saveTokens(
+      await storeTokens(
         data['access_token'].toString(),
         data['refresh_token']?.toString(),
+        data['user']['role'].toString(),
       );
       await saveUserInfo(data['user'] ?? {});
 
@@ -275,7 +277,7 @@ class AuthService {
 
     if (accessToken != null) {
       await clearAuthState();
-      await saveTokens(accessToken, refreshToken);
+      await storeTokens(accessToken, refreshToken, role ?? 'candidate');
     }
 
     return {

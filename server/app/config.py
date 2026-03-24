@@ -75,6 +75,7 @@ class Config:
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=_parse_positive(os.getenv('JWT_REFRESH_TOKEN_DAYS', '30'), 30))
     JWT_TOKEN_LOCATION = ["headers", "query_string"]  # Allow token in headers or query string
     JWT_QUERY_STRING_NAME = "access_token"            # Query param name
+    JWT_IGNORE_OPTIONS = True                         # Ignore OPTIONS requests for JWT check
     
     # Email (SMTP and/or SendGrid HTTP API; Render typically uses SENDGRID_API_KEY)
     MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')

@@ -4,13 +4,13 @@ Send test email using SendGrid
 """
 
 import os
+import requests
+import json
 from dotenv import load_dotenv
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
 
 def send_test_email():
-    """Send a test email to dzunisanimabunda85@gmail.com"""
-    print("📧 Sending Test Email\n")
+    """Send a test email using SendGrid API with requests"""
+    print("📧 Sending Test Email via API (requests)\n")
     
     load_dotenv()
     
@@ -27,45 +27,58 @@ def send_test_email():
         print("❌ Missing required configuration")
         return False
     
-    try:
-        # Create email
-        message = Mail(
-            from_email=sender_email,
-            to_emails=recipient_email,
-            subject='✅ SendGrid Test - Recruitment System',
-            html_content='''
-            <h2>SendGrid Integration Test</h2>
-            <p>This is a test email to verify your SendGrid configuration is working correctly.</p>
-            
-            <div style="background-color: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                <h3>🎉 Test Results</h3>
+    url = "https://api.sendgrid.com/v3/mail/send"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "personalizations": [
+            {
+                "to": [{"email": recipient_email}],
+                "subject": "✅ SendGrid Test - Recruitment System"
+            }
+        ],
+        "from": {"email": sender_email},
+        "content": [
+            {
+                "type": "text/html",
+                "value": f'''
+                <h2>SendGrid Integration Test</h2>
+                <p>This is a test email to verify your SendGrid configuration is working correctly.</p>
+                
+                <div style="background-color: #f0f8ff; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3>🎉 Test Results</h3>
+                    <ul>
+                        <li>✅ SendGrid API Connection: Successful</li>
+                        <li>✅ Authentication: Successful</li>
+                        <li>✅ Email Delivery: In Progress</li>
+                    </ul>
+                </div>
+                
+                <p><strong>Configuration Details:</strong></p>
                 <ul>
-                    <li>✅ SendGrid API Connection: Successful</li>
-                    <li>✅ Authentication: Successful</li>
-                    <li>✅ Email Delivery: In Progress</li>
+                    <li>Mail Server: smtp.sendgrid.net</li>
+                    <li>Port: 587</li>
+                    <li>Sender: {sender_email}</li>
                 </ul>
-            </div>
-            
-            <p><strong>Configuration Details:</strong></p>
-            <ul>
-                <li>Mail Server: smtp.sendgrid.net</li>
-                <li>Port: 587</li>
-                <li>Sender: {sender_email}</li>
-            </ul>
-            
-            <p><em>This email was sent from the Recruitment System test suite.</em></p>
-            <p><small>If you received this email, your SendGrid integration is working perfectly! 🚀</small></p>
-            '''.format(sender_email=sender_email)
-        )
-        
+                
+                <p><em>This email was sent from the Recruitment System test suite.</em></p>
+                <p><small>If you received this email, your SendGrid integration is working perfectly! 🚀</small></p>
+                '''
+            }
+        ]
+    }
+    
+    try:
         # Send email
-        print("\n📤 Sending email...")
-        sg = SendGridAPIClient(api_key)
-        response = sg.send(message)
+        print("\n📤 Sending email via API...")
+        response = requests.post(url, headers=headers, data=json.dumps(payload))
         
         print(f"✅ Email sent successfully!")
         print(f"   Status Code: {response.status_code}")
-        print(f"   Message ID: {response.headers.get('X-Message-Id', 'N/A')}")
         
         if response.status_code == 202:
             print("✅ Email accepted for delivery by SendGrid")
@@ -73,6 +86,7 @@ def send_test_email():
             return True
         else:
             print(f"⚠️  Unexpected status code: {response.status_code}")
+            print(f"   Response Body: {response.text}")
             return False
             
     except Exception as e:

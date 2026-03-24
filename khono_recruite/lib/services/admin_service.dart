@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert' as convert;
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../utils/api_endpoints.dart';
 import 'auth_service.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 class _SafeJson {
   const _SafeJson();
@@ -2583,12 +2586,61 @@ class AdminService {
     final uri = Uri.parse('${ApiEndpoints.adminBase}/candidates/with-details')
         .replace(queryParameters: queryParams);
     final authHeaders = await _getAuthHeaders();
-    final res = await http.get(uri, headers: authHeaders);
 
-    if (res.statusCode == 200) {
-      final data = json.decode(res.body);
-      return List<Map<String, dynamic>>.from(data['candidates'] ?? []);
+    try {
+      final res = await http
+          .get(uri, headers: authHeaders)
+          .timeout(const Duration(seconds: 15));
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        return List<Map<String, dynamic>>.from(data['candidates'] ?? []);
+      } else {
+        // Log detailed error information for debugging
+        debugPrint('=== Admin Candidates Fetch Error ===');
+        debugPrint('Status Code: ${res.statusCode}');
+        debugPrint('Response Body: ${res.body}');
+        debugPrint('Headers: $authHeaders');
+        debugPrint('URI: $uri');
+        debugPrint('================================');
+
+        // Provide user-friendly error message
+        String userMessage = 'Failed to fetch candidates';
+        if (res.statusCode == 403) {
+          userMessage =
+              'Access denied: You may not have permission to view candidates';
+        } else if (res.statusCode == 401) {
+          userMessage = 'Authentication expired: Please log in again';
+        } else if (res.statusCode >= 500) {
+          userMessage = 'Server error: Please try again later';
+        }
+
+        throw Exception('$userMessage (Status: ${res.statusCode})');
+      }
+    } on SocketException catch (e) {
+      debugPrint('=== Admin Candidates Network Error ===');
+      debugPrint('Error: $e');
+      debugPrint('URI: $uri');
+      debugPrint('================================');
+      throw Exception(
+          'Network error: Unable to connect to server. Please check your connection and ensure the server is running at ${uri.host}:${uri.port}');
+    } on TimeoutException catch (e) {
+      debugPrint('=== Admin Candidates Timeout Error ===');
+      debugPrint('Error: $e');
+      debugPrint('URI: $uri');
+      debugPrint('================================');
+      throw Exception(
+          'Request timed out: The server is taking too long to respond.');
+    } catch (e) {
+      debugPrint('=== Admin Candidates Unexpected Error ===');
+      debugPrint('Error: $e');
+      debugPrint('URI: $uri');
+      debugPrint('================================');
+      if (e.toString().contains('ClientException')) {
+        throw Exception(
+            'Connection failed: The browser blocked the request or the server is unreachable. Ensure CORS is configured and the server is running at ${uri.host}:${uri.port}');
+      }
+      throw Exception('An unexpected error occurred. Please try again.');
     }
-    throw Exception('Failed to fetch candidates with details: ${res.body}');
   }
 }
