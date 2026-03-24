@@ -23,6 +23,8 @@ def socket_auth_required(f):
             token = request.args.get('token')
             if not token:
                 current_app.logger.error("❌ WebSocket: No token provided")
+                if request.event["message"] == "connect":
+                    return False
                 emit('error', {'message': 'Authentication required'})
                 disconnect()
                 return
@@ -44,6 +46,8 @@ def socket_auth_required(f):
             user_id_claim = payload.get('sub')
             if not user_id_claim:
                 current_app.logger.error("❌ WebSocket: No user ID in token")
+                if request.event["message"] == "connect":
+                    return False
                 emit('error', {'message': 'Invalid token: No user ID'})
                 disconnect()
                 return
@@ -56,6 +60,8 @@ def socket_auth_required(f):
                 )
             except (ValueError, TypeError) as e:
                 current_app.logger.error(f"❌ WebSocket: Invalid user ID format: {user_id_claim}")
+                if request.event["message"] == "connect":
+                    return False
                 emit('error', {'message': f'Invalid user ID format: {user_id_claim}'})
                 disconnect()
                 return
@@ -64,12 +70,16 @@ def socket_auth_required(f):
             user = User.query.get(request.user_id)
             if not user:
                 current_app.logger.error(f"❌ WebSocket: User {request.user_id} not found")
+                if request.event["message"] == "connect":
+                    return False
                 emit('error', {'message': 'User not found'})
                 disconnect()
                 return
             
             if not getattr(user, 'is_active', True):
                 current_app.logger.error(f"❌ WebSocket: User {request.user_id} is inactive")
+                if request.event["message"] == "connect":
+                    return False
                 emit('error', {'message': 'User account is inactive'})
                 disconnect()
                 return
@@ -79,16 +89,22 @@ def socket_auth_required(f):
             
         except jwt.ExpiredSignatureError:
             current_app.logger.error("❌ WebSocket: Token expired")
+            if request.event["message"] == "connect":
+                return False
             emit('error', {'message': 'Token expired'})
             disconnect()
             return
         except jwt.InvalidTokenError as e:
             current_app.logger.error(f"❌ WebSocket: Invalid token: {e}")
+            if request.event["message"] == "connect":
+                return False
             emit('error', {'message': f'Invalid token: {str(e)}'})
             disconnect()
             return
         except Exception as e:
             current_app.logger.error(f"❌ WebSocket: Authentication error: {e}")
+            if request.event["message"] == "connect":
+                return False
             emit('error', {'message': 'Authentication failed'})
             disconnect()
             return

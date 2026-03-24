@@ -1,4 +1,3 @@
-
 // ignore_for_file: dead_code, deprecated_member_use
 
 import 'package:flutter/material.dart';
@@ -264,10 +263,44 @@ class _JobManagementState extends State<JobManagement> {
                             color: textColor),
                         overflow: TextOverflow.ellipsis)),
                 SizedBox(
-                  width: 120,
+                  width: 200, // Increased width to accommodate more buttons
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // Show approve/decline buttons for pending jobs
+                      if (job['approval_status'] == 'pending') ...[
+                        IconButton(
+                          icon: const Icon(
+                            Icons.check_circle,
+                            color: Colors.green,
+                            size: 20,
+                          ),
+                          onPressed: () =>
+                              _approveJob(jobId, job['title'] ?? 'Job'),
+                          tooltip: 'Approve',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.cancel,
+                            color: Colors.orange,
+                            size: 20,
+                          ),
+                          onPressed: () =>
+                              _declineJob(jobId, job['title'] ?? 'Job'),
+                          tooltip: 'Decline',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
+                          ),
+                        ),
+                        const SizedBox(width: 8), // Spacer before other actions
+                      ],
                       IconButton(
                         icon: const Icon(
                           Icons.edit,
@@ -755,6 +788,95 @@ class _JobManagementState extends State<JobManagement> {
         );
       }
     }
+  }
+
+  Future<void> _approveJob(int jobId, String jobTitle) async {
+    try {
+      await admin.approveJob(jobId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$jobTitle has been approved'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        fetchJobs();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error approving job: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _declineJob(int jobId, String jobTitle) async {
+    final TextEditingController reasonController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Decline Job: $jobTitle'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Please provide a reason for declining this job:'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: reasonController,
+                decoration: const InputDecoration(
+                  labelText: 'Reason for decline',
+                  border: OutlineInputBorder(),
+                  hintText: 'Enter reason...',
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              child: const Text('Decline'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == true && reasonController.text.trim().isNotEmpty) {
+      try {
+        await admin.rejectJob(jobId, reasonController.text.trim());
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$jobTitle has been declined'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          fetchJobs();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error declining job: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+    reasonController.dispose();
   }
 
   @override

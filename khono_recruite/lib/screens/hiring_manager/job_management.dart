@@ -59,7 +59,7 @@ class _JobManagementState extends State<JobManagement> {
   }
 
   Future<void> fetchJobs() async {
-    setState(() => loading = true);
+    if (mounted) setState(() => loading = true);
     try {
       final data = await admin.listJobsEnhanced(
         page: 1,
@@ -88,7 +88,9 @@ class _JobManagementState extends State<JobManagement> {
     if (mounted) setState(() => loading = false);
   }
 
-  void _applySearch() => setState(() {});
+  void _applySearch() {
+    if (mounted) setState(() {});
+  }
 
   List<Map<String, dynamic>> _filteredJobs() {
     final query = _searchController.text.trim().toLowerCase();
@@ -113,7 +115,7 @@ class _JobManagementState extends State<JobManagement> {
 
   Future<void> _fetchApplicationsForJob(int jobId) async {
     if (_applicationsByJob.containsKey(jobId)) return;
-    setState(() => _loadingApplications.add(jobId));
+    if (mounted) setState(() => _loadingApplications.add(jobId));
     try {
       final list = await admin.getJobApplications(jobId, perPage: 100);
       if (mounted)
@@ -1343,7 +1345,7 @@ class _JobFormDialogState extends State<JobFormDialog>
   }
 
   Future<void> _loadTestPacks() async {
-    setState(() => _loadingTestPacks = true);
+    if (mounted) setState(() => _loadingTestPacks = true);
     try {
       final packs = await _testPackService.getTestPacks();
       if (mounted) setState(() => _testPacks = packs);

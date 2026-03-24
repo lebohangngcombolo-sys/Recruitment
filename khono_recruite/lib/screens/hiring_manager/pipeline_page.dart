@@ -66,7 +66,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           _interviews = List<Map<String, dynamic>>.from(
             pipelineData['interviews'] ?? [],
           );
-          _offers = List<Map<String, dynamic>>.from(pipelineData['offers'] ?? []);
+          _offers =
+              List<Map<String, dynamic>>.from(pipelineData['offers'] ?? []);
 
           _requisitions = List<Map<String, dynamic>>.from(
             requisitionsData['jobs'] ?? [],
@@ -89,101 +90,111 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
 
   Future<void> _refreshData() async {
     try {
-      setState(() => _isRefreshing = true);
+      if (mounted) setState(() => _isRefreshing = true);
 
       final refreshedData = await _recruitmentService.refreshAllData();
 
-      setState(() {
-        _applications = List<Map<String, dynamic>>.from(
-          refreshedData['applications'] ?? [],
-        );
-        _interviews = List<Map<String, dynamic>>.from(
-          refreshedData['interviews'] ?? [],
-        );
-        _offers = List<Map<String, dynamic>>.from(
-          refreshedData['offers'] ?? [],
-        );
-        _requisitions = List<Map<String, dynamic>>.from(
-          refreshedData['jobs'] ?? [],
-        );
+      if (mounted) {
+        setState(() {
+          _applications = List<Map<String, dynamic>>.from(
+            refreshedData['applications'] ?? [],
+          );
+          _interviews = List<Map<String, dynamic>>.from(
+            refreshedData['interviews'] ?? [],
+          );
+          _offers = List<Map<String, dynamic>>.from(
+            refreshedData['offers'] ?? [],
+          );
+          _requisitions = List<Map<String, dynamic>>.from(
+            refreshedData['jobs'] ?? [],
+          );
 
-        _activeJobs =
-            _requisitions.where((r) => r['status'] == 'active').length;
-        _offersSent = _offers.length;
-        _totalApplications = _applications.length;
+          _activeJobs =
+              _requisitions.where((r) => r['status'] == 'active').length;
+          _offersSent = _offers.length;
+          _totalApplications = _applications.length;
 
-        _isRefreshing = false;
-      });
+          _isRefreshing = false;
+        });
+      }
 
       _showSuccessSnackbar('Data refreshed successfully');
     } catch (e) {
       debugPrint('Error refreshing data: $e');
       _showErrorSnackbar('Failed to refresh data');
-      setState(() => _isRefreshing = false);
+      if (mounted) setState(() => _isRefreshing = false);
     }
   }
 
   Future<void> _loadTabData(int tabIndex) async {
     try {
-      setState(() => _isLoading = true);
+      if (mounted) setState(() => _isLoading = true);
 
       switch (tabIndex) {
         case 0: // Pipeline
           final pipelineData = await _recruitmentService.loadPipelineData(
             filter: _selectedFilter == 'all' ? null : _selectedFilter,
           );
-          setState(() {
-            _quickStats = pipelineData['quickStats'] ?? {};
-            _pipelineStages = List<Map<String, dynamic>>.from(
-              pipelineData['stages'] ?? [],
-            );
-            _applications = List<Map<String, dynamic>>.from(
-              pipelineData['applications']?['applications'] ?? [],
-            );
-            _interviews = List<Map<String, dynamic>>.from(
-              pipelineData['interviews'] ?? [],
-            );
-            _offers = List<Map<String, dynamic>>.from(
-              pipelineData['offers'] ?? [],
-            );
-          });
+          if (mounted) {
+            setState(() {
+              _quickStats = pipelineData['quickStats'] ?? {};
+              _pipelineStages = List<Map<String, dynamic>>.from(
+                pipelineData['stages'] ?? [],
+              );
+              _applications = List<Map<String, dynamic>>.from(
+                pipelineData['applications']?['applications'] ?? [],
+              );
+              _interviews = List<Map<String, dynamic>>.from(
+                pipelineData['interviews'] ?? [],
+              );
+              _offers = List<Map<String, dynamic>>.from(
+                pipelineData['offers'] ?? [],
+              );
+            });
+          }
           break;
 
         case 1: // Requisitions
           final requisitionsData =
               await _recruitmentService.loadRequisitionsData();
-          setState(() {
-            _requisitions = List<Map<String, dynamic>>.from(
-              requisitionsData['jobs'] ?? [],
-            );
-            _activeJobs =
-                _requisitions.where((r) => r['status'] == 'active').length;
-          });
+          if (mounted) {
+            setState(() {
+              _requisitions = List<Map<String, dynamic>>.from(
+                requisitionsData['jobs'] ?? [],
+              );
+              _activeJobs =
+                  _requisitions.where((r) => r['status'] == 'active').length;
+            });
+          }
           break;
 
         case 2: // Calendar
           final calendarData = await _recruitmentService.loadCalendarData();
-          setState(() {
-            _interviews = List<Map<String, dynamic>>.from(
-              calendarData['todayInterviews'] ?? [],
-            );
-            // Note: You might want to load upcoming and past interviews separately
-          });
+          if (mounted) {
+            setState(() {
+              _interviews = List<Map<String, dynamic>>.from(
+                calendarData['todayInterviews'] ?? [],
+              );
+              // Note: You might want to load upcoming and past interviews separately
+            });
+          }
           break;
 
         case 3: // Analytics
           final analyticsData = await _recruitmentService.loadAnalyticsData();
-          setState(() {
-            _analytics = analyticsData;
-          });
+          if (mounted) {
+            setState(() {
+              _analytics = analyticsData;
+            });
+          }
           break;
       }
 
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     } catch (e) {
       debugPrint('Error loading tab data: $e');
       _showErrorSnackbar('Failed to load data');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -203,9 +214,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           (app) => app['id'] == applicationId,
         );
         if (index != -1) {
-          setState(() {
-            _applications[index]['status'] = status;
-          });
+          if (mounted) {
+            setState(() {
+              _applications[index]['status'] = status;
+            });
+          }
         }
       } else {
         _showErrorSnackbar('Failed to update status');
@@ -263,10 +276,12 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         (app) => app['id'] == applicationId,
       );
       if (index != -1) {
-        setState(() {
-          _applications[index]['recommendation'] = recommendation;
-          if (newStatus != null) _applications[index]['status'] = newStatus;
-        });
+        if (mounted) {
+          setState(() {
+            _applications[index]['recommendation'] = recommendation;
+            if (newStatus != null) _applications[index]['status'] = newStatus;
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error in recommendation action: $e');

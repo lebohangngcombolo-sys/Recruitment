@@ -595,13 +595,35 @@ class AuthService {
     if (token == null || token.isEmpty) {
       return _missingTokenResponse();
     }
-    return http.get(
-      Uri.parse(url),
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer $token",
-      },
-    );
+
+    try {
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token",
+        },
+      ).timeout(const Duration(seconds: 30));
+
+      // If token expired, try refresh and retry once
+      if (response.statusCode == 401) {
+        final newToken = await refreshAccessToken();
+        if (newToken != null && newToken.isNotEmpty) {
+          return await http.get(
+            Uri.parse(url),
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer $newToken",
+            },
+          ).timeout(const Duration(seconds: 30));
+        }
+      }
+
+      return response;
+    } catch (e) {
+      // Return error response for timeout/network issues
+      return http.Response('{"error": "Network error: ${e.toString()}"}', 500);
+    }
   }
 
   static Future<http.Response> authorizedPost(

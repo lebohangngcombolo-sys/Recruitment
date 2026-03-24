@@ -91,12 +91,19 @@ class ApiEndpoints {
 
   // ------------------- Admin & Hiring Manager -------------------
   static const adminJobs = "$adminBase/jobs";
-  static const createJob = "$adminBase/jobs";
-  static const viewCandidates = "$adminBase/candidates";
+  static const teamCollaboration = "$adminBase/team-collaboration";
+  static const adminUsers = "$adminBase/users";
   static const getUsers = "$adminBase/users";
+  static const candidates = "$adminBase/candidates";
+  static const viewCandidates = "$adminBase/candidates";
   static const auditLogs = "$adminBase/audits";
   static const getNotifications = "$adminBase/notifications";
   static const cvReviews = "$adminBase/cv-reviews";
+  static const createJob = "$adminBase/jobs";
+
+  // Job approval endpoints
+  static String approveJob(int jobId) => "$adminBase/jobs/$jobId/approve";
+  static String rejectJob(int jobId) => "$adminBase/jobs/$jobId/reject";
   static const getRecentActivities = "$adminBase/recent-activities";
   static const getPowerBIStatus = "$adminBase/powerbi/status";
   static const getDashboardCounts = "$adminBase/dashboard-counts";
@@ -245,12 +252,14 @@ class ApiEndpoints {
   static String deleteTestPack(int id) => "$adminBase/test-packs/$id";
 
   // ------------------- Shared Notes -------------------
-  static const createNote = "$adminBase/notes";
-  static const getNotes = "$adminBase/notes";
+  static const createNote = "$adminBase/shared-notes";
+  static const getNotes = "$adminBase/shared-notes";
   static const getNoteById =
-      "$adminBase/notes"; // Used as base: $getNoteById/$id
-  static const updateNote = "$adminBase/notes"; // Used as base: $updateNote/$id
-  static const deleteNote = "$adminBase/notes"; // Used as base: $deleteNote/$id
+      "$adminBase/shared-notes"; // Used as base: $getNoteById/$id
+  static const updateNote =
+      "$adminBase/shared-notes"; // Used as base: $updateNote/$id
+  static const deleteNote =
+      "$adminBase/shared-notes"; // Used as base: $deleteNote/$id
 
   // ------------------- Meetings -------------------
   static const createMeeting = "$adminBase/meetings";

@@ -231,29 +231,28 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
   }
 
   Future<void> _loadTeamData() async {
-    setState(() {
-      _isLoading = true;
-    });
+    if (mounted) setState(() => _isLoading = true);
 
     try {
       // Load shared notes from API
       final notesResponse = await _apiService.getNotes(page: 1, perPage: 10);
       final notesData = (notesResponse['notes'] as List<dynamic>? ?? []);
 
-      if (!mounted) return;
-      setState(() {
-        _sharedNotes.clear();
-        _sharedNotes.addAll(notesData
-            .whereType<Map<String, dynamic>>()
-            .map((note) => SharedNote(
-                  id: note['id'] is int ? note['id'] as int : 0,
-                  title: (note['title'] ?? 'Untitled').toString(),
-                  content: (note['content'] ?? '').toString(),
-                  author: _extractAuthorName(note),
-                  lastModified: _parseNoteTimestamp(note),
-                ))
-            .toList());
-      });
+      if (mounted) {
+        setState(() {
+          _sharedNotes.clear();
+          _sharedNotes.addAll(notesData
+              .whereType<Map<String, dynamic>>()
+              .map((note) => SharedNote(
+                    id: note['id'] is int ? note['id'] as int : 0,
+                    title: (note['title'] ?? 'Untitled').toString(),
+                    content: (note['content'] ?? '').toString(),
+                    author: _extractAuthorName(note),
+                    lastModified: _parseNoteTimestamp(note),
+                  ))
+              .toList());
+        });
+      }
 
       // Load applications for my jobs (for entity selector and timeline dropdown)
       try {
@@ -291,20 +290,20 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
       await _ensureThreadForSelectedEntity();
       await _loadMessages();
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to load data: $e', style: GoogleFonts.inter()),
-          backgroundColor: AppColors.primaryRed,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Failed to load data: $e', style: GoogleFonts.inter()),
+            backgroundColor: AppColors.primaryRed,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
     } finally {
-      if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -409,7 +408,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
   Future<void> _loadTimeline() async {
     if (_selectedTimelineApplicationId == null) return;
-    setState(() => _timelineLoading = true);
+    if (mounted) setState(() => _timelineLoading = true);
     try {
       final list = await _apiService
           .getApplicationTimeline(_selectedTimelineApplicationId!);
@@ -430,7 +429,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
   Future<void> _addTimelineComment() async {
     final comment = _timelineCommentController.text.trim();
     if (comment.isEmpty || _selectedTimelineApplicationId == null) return;
-    setState(() => _timelineSending = true);
+    if (mounted) setState(() => _timelineSending = true);
     try {
       await _apiService.addApplicationTimelineNote(
           _selectedTimelineApplicationId!, comment);
@@ -1611,9 +1610,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
     Future<void>.microtask(() async {
       // Optimistic update
-      setState(() {
-        _messages.insert(0, message);
-      });
+      if (mounted) {
+        setState(() {
+          _messages.insert(0, message);
+        });
+      }
       _messageController.clear();
 
       try {
@@ -1629,15 +1630,18 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         }
       } catch (e) {
         debugPrint('Failed to send chat message: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to send message', style: GoogleFonts.inter()),
-            backgroundColor: AppColors.primaryRed,
-            behavior: SnackBarBehavior.floating,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text('Failed to send message', style: GoogleFonts.inter()),
+              backgroundColor: AppColors.primaryRed,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+          );
+        }
       }
     });
   }
@@ -1646,10 +1650,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final titleController = TextEditingController();
     final contentController = TextEditingController();
+    final parentContext = context;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor:
             themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
         title: Text('Create Shared Note',
@@ -1698,7 +1703,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text('Cancel',
                 style: GoogleFonts.inter(
                     color: themeProvider.isDarkMode
@@ -1720,7 +1725,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               onPressed: () async {
                 if (titleController.text.trim().isEmpty ||
                     contentController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: Text('Please fill in both title and content',
                           style: GoogleFonts.inter()),
@@ -1739,11 +1744,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     'content': contentController.text.trim(),
                   });
 
-                  Navigator.pop(context);
+                  Navigator.pop(dialogContext);
                   await _loadTeamData(); // Refresh the notes list
 
                   if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(parentContext).showSnackBar(
                     SnackBar(
                       content: Text('Shared note created successfully',
                           style: GoogleFonts.inter()),
@@ -1755,7 +1760,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   );
                 } catch (e) {
                   if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: Text('Failed to create note: $e',
                           style: GoogleFonts.inter()),
@@ -1862,10 +1867,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final titleController = TextEditingController(text: note.title);
     final contentController = TextEditingController(text: note.content);
+    final parentContext = context;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor:
             themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
         title: Text('Edit Shared Note',
@@ -1914,7 +1920,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text('Cancel',
                 style: GoogleFonts.inter(
                     color: themeProvider.isDarkMode
@@ -1936,7 +1942,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               onPressed: () async {
                 if (titleController.text.trim().isEmpty ||
                     contentController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: Text('Please fill in both title and content',
                           style: GoogleFonts.inter()),
@@ -1955,10 +1961,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     'content': contentController.text.trim(),
                   });
 
-                  Navigator.pop(context);
+                  Navigator.pop(dialogContext);
                   await _loadTeamData(); // Refresh the notes list
 
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(parentContext).showSnackBar(
                     SnackBar(
                       content: Text('Shared note updated successfully',
                           style: GoogleFonts.inter()),
@@ -1969,7 +1976,8 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     ),
                   );
                 } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: Text('Failed to update note: $e',
                           style: GoogleFonts.inter()),
@@ -1998,10 +2006,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
   void _deleteSharedNote(SharedNote note) {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final parentContext = context;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor:
             themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
         title: Text('Delete Note',
@@ -2015,7 +2024,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
             )),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text('Cancel',
                 style: GoogleFonts.inter(
                     color: themeProvider.isDarkMode
@@ -2037,10 +2046,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               onPressed: () async {
                 try {
                   await _apiService.deleteNote(note.id);
-                  Navigator.pop(context);
+                  Navigator.pop(dialogContext);
                   await _loadTeamData(); // Refresh the notes list
 
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(parentContext).showSnackBar(
                     SnackBar(
                       content: Text('Note deleted successfully',
                           style: GoogleFonts.inter()),
@@ -2051,8 +2061,9 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     ),
                   );
                 } catch (e) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  Navigator.pop(dialogContext);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(parentContext).showSnackBar(
                     SnackBar(
                       content: Text('Failed to delete note: $e',
                           style: GoogleFonts.inter()),

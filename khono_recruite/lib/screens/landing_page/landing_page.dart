@@ -276,8 +276,11 @@ class _LandingPageState extends State<LandingPage>
 
     _safeSetState(() => loadingJobs = true);
     try {
+      final role = await AuthService.getRole();
+      final isCandidate = role == 'candidate';
+
       final List<Map<String, dynamic>> jobs =
-          _hasToken && _effectiveToken != null
+          _hasToken && _effectiveToken != null && isCandidate
               ? await CandidateService.getAvailableJobs(_effectiveToken!)
               : await CandidateService.getPublicJobs();
       if (!mounted) return;
@@ -313,6 +316,12 @@ class _LandingPageState extends State<LandingPage>
   Future<void> fetchApplications() async {
     if (!mounted || !_hasToken) return;
 
+    final role = await AuthService.getRole();
+    if (role != 'candidate') {
+      _safeSetState(() => loadingApplications = false);
+      return;
+    }
+
     _safeSetState(() => loadingApplications = true);
     try {
       final data = await CandidateService.getApplications(_effectiveToken!);
@@ -339,6 +348,12 @@ class _LandingPageState extends State<LandingPage>
 
   Future<void> fetchNotifications() async {
     if (!mounted || !_hasToken) return;
+
+    final role = await AuthService.getRole();
+    if (role != 'candidate') {
+      _safeSetState(() => loadingNotifications = false);
+      return;
+    }
 
     _safeSetState(() => loadingNotifications = true);
     try {

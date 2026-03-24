@@ -271,6 +271,7 @@ class _JobFormState extends State<JobForm> with SingleTickerProviderStateMixin {
         await _jobService.createJob(jobData);
       }
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(_isEditMode
@@ -283,6 +284,7 @@ class _JobFormState extends State<JobForm> with SingleTickerProviderStateMixin {
       widget.onSaved();
       Navigator.pop(context);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: ${e.toString()}'),
@@ -290,7 +292,7 @@ class _JobFormState extends State<JobForm> with SingleTickerProviderStateMixin {
         ),
       );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

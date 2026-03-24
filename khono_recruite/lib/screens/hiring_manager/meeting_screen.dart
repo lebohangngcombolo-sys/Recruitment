@@ -118,10 +118,12 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
         filteredMeetings = loadedMeetings;
       }
 
-      setState(() {
-        _meetings.clear();
-        _meetings.addAll(filteredMeetings);
-      });
+      if (mounted) {
+        setState(() {
+          _meetings.clear();
+          _meetings.addAll(filteredMeetings);
+        });
+      }
       if (kDebugMode)
         debugPrint("Displayed meetings count: ${_meetings.length}");
     } catch (e) {
@@ -136,8 +138,7 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
         ),
       );
     } finally {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 

@@ -762,12 +762,11 @@ def get_applications_for_my_jobs():
 
 
 @admin_bp.route("/applications/my-jobs/all", methods=["GET", "OPTIONS"])
+@cross_origin()
 @jwt_required()
 @role_required(["admin", "hiring_manager", "hr"])
 def get_all_applications_for_my_jobs():
     """Wrapper for my-jobs applications, expected by some frontend versions."""
-    if request.method == "OPTIONS":
-        return "", 200
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id)
@@ -814,8 +813,8 @@ def get_job_statistics():
     """Get overall job statistics"""
     try:
         # Get date range
-        start_date = request.args.get('start_date')
-        end_date = request.args.get('end_date')
+        # start_date = request.args.get('start_date')
+        # end_date = request.args.get('end_date')
         
         # Base queries
         total_jobs = Requisition.query.count()
@@ -884,7 +883,7 @@ def get_job_statistics():
 @role_required(["admin", "hiring_manager", "hr"])
 def list_candidates():
     """Get all candidates with comprehensive data including applications and assessments.
-    For hiring_manager, only candidates who have applied to jobs they own (or unowned jobs)."""
+    For hiring_manager, shows all candidates (with and without applications)."""
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id) if current_user_id else None
@@ -895,24 +894,11 @@ def list_candidates():
         search = request.args.get('search', type=str)
         status_filter = request.args.get('status', type=str)
         
-        # Build query
+        # Build query - allow hiring managers to see all candidates
         query = Candidate.query
-        if current_user and current_user.role == "hiring_manager":
-            # Restrict to candidates who have at least one application to this HM's jobs (or unowned jobs)
-            # Use subquery to avoid DISTINCT on JSON columns (PostgreSQL limitation)
-            from sqlalchemy import select
-            candidate_ids_subquery = db.session.query(Candidate.id).join(
-                Application, Application.candidate_id == Candidate.id
-            ).join(
-                Requisition, Application.requisition_id == Requisition.id
-            ).filter(
-                or_(
-                    Requisition.created_by == current_user_id,
-                    Requisition.created_by.is_(None),
-                )
-            ).distinct().subquery()
-            
-            query = Candidate.query.filter(Candidate.id.in_(select(candidate_ids_subquery.c.id)))
+        
+        # Note: Removed the restriction that only showed candidates with applications
+        # Hiring managers can now see all candidates to make better hiring decisions
         
         # Apply search filter
         if search:
@@ -939,20 +925,51 @@ def list_candidates():
             error_out=False
         )
         
-        # Enrich candidate data with applications and assessments
+        # Get all candidate IDs for batch loading
+        candidate_ids = [c.id for c in candidates.items]
+        
+        # Batch load all related data
+        users = {u.id: u for u in User.query.filter(User.id.in_([c.user_id for c in candidates.items if c.user_id])).all()}
+        applications_by_candidate = {}
+        assessments_by_candidate = {}
+        interviews_by_candidate = {}
+        
+        if candidate_ids:
+            # Batch load applications
+            applications = Application.query.filter(Application.candidate_id.in_(candidate_ids)).all()
+            for app in applications:
+                if app.candidate_id not in applications_by_candidate:
+                    applications_by_candidate[app.candidate_id] = []
+                applications_by_candidate[app.candidate_id].append(app)
+            
+            # Batch load assessments
+            assessments = AssessmentResult.query.filter(AssessmentResult.candidate_id.in_(candidate_ids)).all()
+            for ass in assessments:
+                if ass.candidate_id not in assessments_by_candidate:
+                    assessments_by_candidate[ass.candidate_id] = []
+                assessments_by_candidate[ass.candidate_id].append(ass)
+            
+            # Batch load interviews
+            interviews = Interview.query.filter(Interview.candidate_id.in_(candidate_ids)).all()
+            for interview in interviews:
+                if interview.candidate_id not in interviews_by_candidate:
+                    interviews_by_candidate[interview.candidate_id] = []
+                interviews_by_candidate[interview.candidate_id].append(interview)
+        
+        # Enrich candidate data with batch-loaded data
         enriched_candidates = []
         for candidate in candidates.items:
-            # Get user information
-            user = User.query.get(candidate.user_id) if candidate.user_id else None
+            # Get user information from batch-loaded data
+            user = users.get(candidate.user_id)
             
-            # Get applications for this candidate
-            applications = Application.query.filter_by(candidate_id=candidate.id).all()
+            # Get applications from batch-loaded data
+            applications = applications_by_candidate.get(candidate.id, [])
             
-            # Get assessments for this candidate
-            assessments = AssessmentResult.query.filter_by(candidate_id=candidate.id).all()
+            # Get assessments from batch-loaded data
+            assessments = assessments_by_candidate.get(candidate.id, [])
             
-            # Get interviews for this candidate
-            interviews = Interview.query.filter_by(candidate_id=candidate.id).all()
+            # Get interviews from batch-loaded data
+            interviews = interviews_by_candidate.get(candidate.id, [])
             
             # Calculate statistics
             total_applications = len(applications)
@@ -1042,33 +1059,37 @@ def list_all_candidates():
         # Build query
         query = Candidate.query
         if current_user and current_user.role == "hiring_manager":
-            # Restrict to candidates who have at least one application to this HM's jobs (or unowned jobs)
-            # Use subquery to avoid DISTINCT on JSON columns (PostgreSQL limitation)
+            # Restrict to candidates who have at least one application (to any job)
             from sqlalchemy import select
-            candidate_ids_subquery = db.session.query(Candidate.id).join(
-                Application, Application.candidate_id == Candidate.id
-            ).join(
-                Requisition, Application.requisition_id == Requisition.id
-            ).filter(
-                or_(
-                    Requisition.created_by == current_user_id,
-                    Requisition.created_by.is_(None),
-                )
-            ).distinct().subquery()
-            
-            query = Candidate.query.filter(Candidate.id.in_(select(candidate_ids_subquery.c.id)))
+            candidate_ids_subquery = select(Application.candidate_id).distinct()
+            query = Candidate.query.filter(Candidate.id.in_(candidate_ids_subquery))
         
         # Get all candidates (no pagination for the 'all' endpoint)
         all_candidates = query.all()
         
-        # Enrich candidate data with applications and user info
+        # Get all candidate IDs for batch loading
+        candidate_ids = [c.id for c in all_candidates]
+        
+        # Batch load all related data
+        users = {u.id: u for u in User.query.filter(User.id.in_([c.user_id for c in all_candidates if c.user_id])).all()}
+        applications_by_candidate = {}
+        
+        if candidate_ids:
+            # Batch load applications
+            applications = Application.query.filter(Application.candidate_id.in_(candidate_ids)).all()
+            for app in applications:
+                if app.candidate_id not in applications_by_candidate:
+                    applications_by_candidate[app.candidate_id] = []
+                applications_by_candidate[app.candidate_id].append(app)
+        
+        # Enrich candidate data with batch-loaded data
         enriched_candidates = []
         for candidate in all_candidates:
-            # Get user information
-            user = User.query.get(candidate.user_id) if candidate.user_id else None
+            # Get user information from batch-loaded data
+            user = users.get(candidate.user_id)
             
-            # Get applications for this candidate
-            applications = Application.query.filter_by(candidate_id=candidate.id).all()
+            # Get applications from batch-loaded data
+            applications = applications_by_candidate.get(candidate.id, [])
             
             # Get latest application status
             latest_application = max(applications, key=lambda x: x.created_at) if applications else None
@@ -1121,16 +1142,21 @@ def get_application(application_id):
 
     job_payload = None
     if job:
-        job_payload = {
-            "id": job.id,
-            "title": getattr(job, "title", None) or "",
-            "weightings": getattr(job, "weightings", None) or {"cv": 60, "assessment": 40, "interview": 0, "references": 0},
-        }
+        # job_payload = {
+        #     "id": job.id,
+        #     "title": getattr(job, "title", None) or "",
+        #     "weightings": getattr(job, "weightings", None) or {"cv": 60, "assessment": 40, "interview": 0, "references": 0},
+        # }
+        pass
 
     return jsonify({
         "application": application.to_dict(),
         "assessment": assessment.to_dict() if assessment else {},
-        "job": job_payload,
+        "job": {
+            "id": job.id,
+            "title": getattr(job, "title", None) or "",
+            "weightings": getattr(job, "weightings", None) or {"cv": 60, "assessment": 40, "interview": 0, "references": 0},
+        } if job else {},
         "reviewer_notes": reviewer_notes,
         "candidate": {
             "full_name": candidate.full_name if candidate else "Unknown Candidate",
@@ -1430,7 +1456,6 @@ def update_notification_preferences():
 
 
 @admin_bp.route("/cv-reviews", methods=["GET", "OPTIONS"])
-@jwt_required(optional=True)
 @role_required(["admin", "hiring_manager", "hr"])
 @cross_origin()
 def list_cv_reviews():
@@ -1657,17 +1682,45 @@ def cv_preview(application_id):
 @admin_bp.route("/users", methods=["GET"])
 @role_required(["admin", "hiring_manager"])
 def list_users():
-    users = User.query.all()
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id) if current_user_id else None
+    
+    # Build query based on current user's role
+    query = User.query.filter(User.is_active == True)
+    
+    # If hiring manager, show only relevant users (admins, other HMs, and candidates)
+    if current_user and current_user.role == "hiring_manager":
+        # Show admins, hiring managers, and candidates (but not other HM's candidates unless they have applications)
+        query = User.query.filter(
+            User.is_active == True,
+            User.role.in_(["admin", "hiring_manager", "candidate"])
+        )
+    
+    users = query.all()
     result = []
     for u in users:
         profile = u.profile or {}
-        full_name = profile.get("full_name") or profile.get("name") or None
+        # Try multiple name fields for better display
+        first_name = profile.get("first_name", "")
+        last_name = profile.get("last_name", "")
+        full_name = profile.get("full_name") or profile.get("name")
+        
+        # Build display name
+        if full_name:
+            display_name = full_name
+        elif first_name or last_name:
+            display_name = f"{first_name} {last_name}".strip()
+        else:
+            # Fallback to email prefix
+            display_name = u.email.split('@')[0].replace('.', ' ').title()
 
         result.append({
             "id": u.id,
             "email": u.email,
             "role": u.role,
-            "name": full_name,
+            "name": display_name,
+            "first_name": first_name,
+            "last_name": last_name,
             "is_verified": u.is_verified,
             "enrollment_completed": u.enrollment_completed,
             "dark_mode": u.dark_mode,
@@ -1675,6 +1728,81 @@ def list_users():
         })
 
     return jsonify(result), 200
+
+
+@admin_bp.route("/team-collaboration", methods=["GET"])
+@role_required(["admin", "hiring_manager"])
+def get_team_collaboration_users():
+    """Get users organized by role for team collaboration feature"""
+    current_user_id = get_jwt_identity()
+    current_user = User.query.get(current_user_id) if current_user_id else None
+    
+    try:
+        # Get all active users
+        users = User.query.filter(User.is_active == True).all()
+        
+        # Organize users by role
+        team_data = {
+            "admins": [],
+            "hiring_managers": [],
+            "candidates": [],
+            "hr": [],
+            "total_users": len(users)
+        }
+        
+        for u in users:
+            profile = u.profile or {}
+            # Try multiple name fields for better display
+            first_name = profile.get("first_name", "")
+            last_name = profile.get("last_name", "")
+            full_name = profile.get("full_name") or profile.get("name")
+            
+            # Build display name
+            if full_name:
+                display_name = full_name
+            elif first_name or last_name:
+                display_name = f"{first_name} {last_name}".strip()
+            else:
+                # Fallback to email prefix
+                display_name = u.email.split('@')[0].replace('.', ' ').title()
+            
+            user_data = {
+                "id": u.id,
+                "email": u.email,
+                "role": u.role,
+                "name": display_name,
+                "first_name": first_name,
+                "last_name": last_name,
+                "is_verified": u.is_verified,
+                "enrollment_completed": u.enrollment_completed,
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+                "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None
+            }
+            
+            # Add to appropriate role category
+            if u.role == "admin":
+                team_data["admins"].append(user_data)
+            elif u.role == "hiring_manager":
+                team_data["hiring_managers"].append(user_data)
+            elif u.role == "candidate":
+                team_data["candidates"].append(user_data)
+            elif u.role == "hr":
+                team_data["hr"].append(user_data)
+        
+        # Add current user info
+        if current_user:
+            team_data["current_user"] = {
+                "id": current_user.id,
+                "email": current_user.email,
+                "role": current_user.role,
+                "name": team_data.get(f"{current_user.role}s", [{}])[0].get("name", current_user.email)
+            }
+        
+        return jsonify(team_data), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Error fetching team collaboration users: {e}", exc_info=True)
+        return jsonify({"error": "Failed to fetch team users"}), 500
 
 
 @admin_bp.route("/users/<int:user_id>", methods=["DELETE"])
@@ -1965,13 +2093,25 @@ def dashboard_counts():
                     education_levels[level] = education_levels.get(level, 0) + 1
         candidate_demographics['education_distribution'] = education_levels
         
-        # Recent candidates with full details
+        # Recent candidates with full details (optimized with batch queries)
         recent_candidates = Candidate.query.order_by(Candidate.id.desc()).limit(10).all()
-        recent_candidates_data = []
+        recent_candidate_ids = [c.id for c in recent_candidates]
         
+        # Batch load related data
+        users = {u.id: u for u in User.query.filter(User.id.in_([c.user_id for c in recent_candidates if c.user_id])).all()}
+        applications_by_candidate = {}
+        
+        if recent_candidate_ids:
+            applications = Application.query.filter(Application.candidate_id.in_(recent_candidate_ids)).all()
+            for app in applications:
+                if app.candidate_id not in applications_by_candidate:
+                    applications_by_candidate[app.candidate_id] = []
+                applications_by_candidate[app.candidate_id].append(app)
+        
+        recent_candidates_data = []
         for candidate in recent_candidates:
-            user = User.query.get(candidate.user_id) if candidate.user_id else None
-            applications = Application.query.filter_by(candidate_id=candidate.id).all()
+            user = users.get(candidate.user_id)
+            applications = applications_by_candidate.get(candidate.id, [])
             latest_application = max(applications, key=lambda x: x.created_at) if applications else None
             
             recent_candidates_data.append({
@@ -2507,6 +2647,7 @@ def delete_interview_slot(slot_id):
         db.session.commit()
         return jsonify({"message": "Slot deleted"}), 200
     except Exception as e:
+        current_app.logger.error(f"Delete interview slot error: {e}", exc_info=True)
         db.session.rollback()
         return jsonify({"error": "Internal server error"}), 500
 
@@ -2532,6 +2673,7 @@ def available_interview_slots():
         slots = query.all()
         return jsonify({"slots": [s.to_dict() for s in slots]}), 200
     except Exception as e:
+        current_app.logger.error(f"Available interview slots error: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
 
 
@@ -5613,12 +5755,12 @@ def get_interviews_for_calendar():
         for i in interviews:
             candidate = i.candidate
             application = i.application
-            job = application.requisition if application else None
-            hiring_manager = i.hiring_manager
+            # job = application.requisition if application else None
+            # hiring_manager = i.hiring_manager
             result.append({
                 "id": i.id,
                 "candidate_name": candidate.full_name if candidate else "Unknown",
-                "job_title": job.title if job else "Unknown",
+                "job_title": i.application.requisition.title if i.application and i.application.requisition else "Unknown",
                 "interview_type": i.interview_type,
                 "scheduled_time": i.scheduled_time.isoformat() if i.scheduled_time else None,
                 "status": i.status,

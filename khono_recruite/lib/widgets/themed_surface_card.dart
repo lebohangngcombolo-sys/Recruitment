@@ -64,10 +64,7 @@ class ThemedSurfaceCard extends StatelessWidget {
                 ),
               ),
             ),
-            Flexible(
-              fit: FlexFit.loose,
-              child: child,
-            ),
+            child,
           ],
         ),
       );
@@ -145,18 +142,15 @@ class ThemedStatCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
               ],
-              Flexible(
-                fit: FlexFit.loose,
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: themeProvider.isDarkMode
-                        ? Colors.grey.shade400
-                        : Colors.grey.shade600,
-                  ),
+              Text(
+                title,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: themeProvider.isDarkMode
+                      ? Colors.grey.shade400
+                      : Colors.grey.shade600,
                 ),
               ),
             ],
