@@ -1,8 +1,8 @@
 from flask import Blueprint, request, jsonify, current_app, Response
 from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from app.extensions import db
-from app.models import User, Requisition, Candidate, Application, AssessmentResult, Interview, InterviewSlot, Notification, AuditLog, Conversation, SharedNote, Meeting, CVAnalysis, InterviewFeedback, InterviewNote, InterviewReminder, Offer, OfferStatus
-from datetime import datetime, timedelta
+from app.models import User, Requisition, Candidate, Application, AssessmentResult, Interview, InterviewSlot, Notification, AuditLog, SharedNote, Meeting, CVAnalysis, InterviewFeedback, InterviewNote, InterviewReminder, Offer, OfferStatus
+from datetime import datetime, timedelta, timezone
 from app.utils.decorators import role_required
 from app.services.email_service import EmailService
 from app.services.audit2 import AuditService
@@ -14,8 +14,7 @@ from marshmallow import ValidationError
 import pyotp
 from app.services.job_service import JobService
 from app.schemas.job_schemas import (
-    job_create_schema, job_update_schema, job_response_schema,
-    job_list_schema, job_filter_schema, job_activity_log_schema
+    job_create_schema, job_update_schema, job_response_schema
 )
 
 
@@ -67,7 +66,7 @@ def get_dashboard_stats():
     status_breakdown = {status: count for status, count in application_statuses}
     
     # Recent activity (last 7 days)
-    week_ago = datetime.utcnow() - timedelta(days=7)
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
     
     new_users_week = User.query.filter(User.created_at >= week_ago).count()
     new_applications_week = Application.query.filter(Application.created_at >= week_ago).count()
@@ -100,7 +99,7 @@ def get_users_growth():
     """Get user growth data over time"""
     
     days = int(request.args.get('days', 30))
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
     
     # User growth data
     user_growth = db.session.query(
@@ -845,7 +844,7 @@ def get_job_statistics():
         ).scalar() or 0
         
         # Recent activity (last 30 days)
-        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
         recent_jobs = Requisition.query.filter(
             Requisition.created_at >= thirty_days_ago
         ).count()
@@ -881,6 +880,7 @@ def get_job_statistics():
 
 # ----------------- CANDIDATE MANAGEMENT -----------------
 @admin_bp.route("/candidates", methods=["GET"])
+@admin_bp.route("/candidates/with-details", methods=["GET"])
 @role_required(["admin", "hiring_manager", "hr"])
 def list_candidates():
     """Get all candidates with comprehensive data including applications and assessments.
@@ -929,7 +929,6 @@ def list_candidates():
         
         # Apply status filter (based on applications)
         if status_filter:
-            query = query.join(Application, Application.candidate_id == Candidate.id)
             query = query.join(Application, Application.candidate_id == Candidate.id)
             query = query.filter(Application.status == status_filter)
         
@@ -1199,7 +1198,7 @@ def add_application_timeline_note(application_id):
         action="Application timeline note",
         details=comment[:5000],
         extra_data={"application_id": application_id},
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(timezone.utc),
     )
     db.session.add(log_entry)
     db.session.commit()
@@ -1328,7 +1327,7 @@ def shortlist_export(job_id):
             escape_csv(r["recommendation"]),
         ])
     csv_content = buf.getvalue()
-    filename = f"shortlist_job{job_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M')}.csv"
+    filename = f"shortlist_job{job_id}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M')}.csv"
     from flask import make_response
     resp = make_response(csv_content, 200)
     resp.headers["Content-Type"] = "text/csv; charset=utf-8"
@@ -1496,12 +1495,12 @@ def list_cv_reviews():
             import os
             max_refreshes = int(os.getenv('CV_ANALYSIS_REFRESH_MAX', '5'))
             if max_refreshes > 0 and refresh_count < max_refreshes:
-                start = datetime.utcnow()
+                start = datetime.now(timezone.utc)
                 AnalysisServiceClient.refresh_if_needed(cv_analysis)
                 # Reload after potential update
                 db.session.refresh(cv_analysis)
                 # Stop refreshing if we exceed per-request time budget
-                if (datetime.utcnow() - start).total_seconds() > 2.0:
+                if (datetime.now(timezone.utc) - start).total_seconds() > 2.0:
                     refresh_count = max_refreshes  # stop further refreshes in this request
                 else:
                     refresh_count += 1
@@ -1897,12 +1896,12 @@ def dashboard_counts():
         completed_interviews = Interview.query.filter_by(status='completed').count()
         scheduled_interviews = Interview.query.filter_by(status='scheduled').count()
         upcoming_interviews = Interview.query.filter(
-            Interview.scheduled_time > datetime.utcnow(),
+            Interview.scheduled_time > datetime.now(timezone.utc),
             Interview.status.in_(['scheduled', 'confirmed'])
         ).count()
         
         # Recent activity (last 7 days)
-        week_ago = datetime.utcnow() - timedelta(days=7)
+        week_ago = datetime.now(timezone.utc) - timedelta(days=7)
         new_applications_week = Application.query.filter(Application.created_at >= week_ago).count()
         new_interviews_week = Interview.query.filter(Interview.created_at >= week_ago).count()
         
@@ -2095,7 +2094,7 @@ def manage_interviews():
                     hiring_manager_id=hiring_manager_id,
                     interview_id=None,
                 ).first()
-                if not slot or slot.start_time < datetime.utcnow():
+                if not slot or slot.start_time < datetime.now(timezone.utc):
                     return jsonify({"error": "Invalid or unavailable slot"}), 400
                 scheduled_time = slot.start_time
                 interview_type = slot.interview_type or "Online"
@@ -2257,7 +2256,7 @@ def approve_interview(interview_id):
             return jsonify({"error": "Only pending interviews can be approved"}), 400
 
         interview.approval_status = "approved"
-        interview.approved_at = datetime.utcnow()
+        interview.approved_at = datetime.now(timezone.utc)
         interview.approved_by = admin_id
         interview.rejection_reason = None
         interview.status = "scheduled"
@@ -2371,7 +2370,7 @@ def reject_interview(interview_id):
         interview.status = "cancelled"
         interview.cancelled_reason = reason
         interview.cancelled_by = admin_id
-        interview.updated_at = datetime.utcnow()
+        interview.updated_at = datetime.now(timezone.utc)
 
         candidate_profile = Candidate.query.get(interview.candidate_id)
         hiring_manager = User.query.get(interview.hiring_manager_id)
@@ -2454,7 +2453,7 @@ def interview_slots():
                     (InterviewSlot.requisition_id == requisition_id) | (InterviewSlot.requisition_id.is_(None))
                 )
             if from_now:
-                query = query.filter(InterviewSlot.start_time >= datetime.utcnow())
+                query = query.filter(InterviewSlot.start_time >= datetime.now(timezone.utc))
             query = query.order_by(InterviewSlot.start_time.asc())
             slots = query.all()
             return jsonify({"slots": [s.to_dict() for s in slots]}), 200
@@ -2523,7 +2522,7 @@ def available_interview_slots():
         query = InterviewSlot.query.filter(
             InterviewSlot.hiring_manager_id == current_user_id,
             InterviewSlot.interview_id.is_(None),
-            InterviewSlot.start_time >= datetime.utcnow(),
+            InterviewSlot.start_time >= datetime.now(timezone.utc),
         )
         if requisition_id:
             query = query.filter(
@@ -2562,7 +2561,7 @@ def reschedule_interview(interview_id):
                 hiring_manager_id=get_jwt_identity(),
                 interview_id=None,
             ).first()
-            if not slot or slot.start_time < datetime.utcnow():
+            if not slot or slot.start_time < datetime.now(timezone.utc):
                 return jsonify({"error": "Invalid or unavailable slot"}), 400
             new_time = slot.start_time
             if slot.meeting_link:
@@ -2616,7 +2615,7 @@ def reschedule_interview(interview_id):
                     if google_calendar_event:
                         calendar_updated = True
                         # Update last sync timestamp
-                        interview.last_calendar_sync = datetime.utcnow()
+                        interview.last_calendar_sync = datetime.now(timezone.utc)
                         current_app.logger.info(f"Google Calendar event updated for interview {interview.id}")
             except Exception as e:
                 current_app.logger.error(f"Google Calendar update failed: {e}", exc_info=True)
@@ -3615,7 +3614,7 @@ def schedule_interview_reminders():
             interviews = [Interview.query.get_or_404(interview_id)]
         else:
             # Schedule for all upcoming interviews
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             upcoming_cutoff = now + timedelta(days=2)  # Next 48 hours
             interviews = Interview.query.filter(
                 Interview.scheduled_time > now,

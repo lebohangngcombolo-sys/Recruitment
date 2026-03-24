@@ -9,8 +9,15 @@ class UnifiedApiService {
   // Get current user role for endpoint selection
   static Future<String> _getCurrentUserRole() async {
     try {
+      // First try to get from user info
       final userInfo = await AuthService.getUserInfo();
-      final role = userInfo?['role']?.toString();
+      String? role = userInfo?['role']?.toString();
+      
+      // If not in user info, try stored role
+      if (role == null || role.isEmpty) {
+        role = await AuthService.getRole();
+      }
+      
       return role?.isNotEmpty == true ? role! : 'candidate';
     } catch (e) {
       // Default to candidate if role cannot be determined

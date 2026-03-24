@@ -46,8 +46,11 @@ def test_cloudinary_upload():
         print("\n2. Uploading test file...")
         test_content = "Cloudinary Test File\n==================\n\nThis is a test file uploaded to Cloudinary from your Recruitment System.\n\nTest Details:\n- Upload Time: 2026-03-18 11:32:16\n- Cloud Name: dp4kugfk8\n- Test Purpose: Verify Cloudinary integration\n\n🚀 Your Cloudinary integration is working!"
         
+        import io
+        test_file = io.BytesIO(test_content.encode('utf-8'))
+        
         upload_result = cloudinary.uploader.upload(
-            test_content,
+            test_file,
             resource_type="raw",
             folder="recruitment_tests",
             public_id=f"test_file_{int(time.time())}",

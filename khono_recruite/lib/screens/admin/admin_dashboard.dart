@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
+import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -12,6 +13,7 @@ import 'package:provider/provider.dart';
 import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/unified_api_service.dart';
+import '../../services/notification_service.dart';
 import '../../utils/api_endpoints.dart';
 import '../../constants/brand_tokens.dart';
 import '../../widgets/pill_search_bar.dart';
@@ -90,6 +92,10 @@ class _AdminDashboardState extends State<AdminDashboard>
   String? auditSearchQuery;
   bool loadingAudits = true;
 
+  // Notifications for dashboard widget (status changes + upcoming interviews)
+  List<Map<String, dynamic>> dashboardNotifications = [];
+  bool loadingNotifications = false;
+
   TextEditingController auditSearchController = TextEditingController();
   DateTime? filterStartDate;
   DateTime? filterEndDate;
@@ -109,6 +115,10 @@ class _AdminDashboardState extends State<AdminDashboard>
   String _profileImageUrl = "";
   final String apiBase = ApiEndpoints.candidateBase;
 
+  // Calendar appointments (interviews + meetings)
+  List<Appointment> _calendarAppointments = [];
+  bool _calendarLoading = false;
+
   String? _userName;
 
   /// Use role-based name when stored name is null, empty, or a placeholder (e.g. "Deployed Admin").
@@ -127,6 +137,8 @@ class _AdminDashboardState extends State<AdminDashboard>
     fetchPowerBIStatus();
     fetchAudits(page: 1);
     fetchProfileImage();
+    fetchDashboardNotifications();
+    _loadCalendarData();
 
     _statusTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       fetchPowerBIStatus();
@@ -154,6 +166,110 @@ class _AdminDashboardState extends State<AdminDashboard>
         setState(() => _userName = AuthService.getCachedDisplayName());
     } catch (_) {
       // Best-effort: avoid blocking dashboard load
+    }
+  }
+
+  Future<void> _loadCalendarData() async {
+    if (_calendarLoading) return;
+    if (!mounted) return;
+    setState(() => _calendarLoading = true);
+    final start = DateTime(focusedDay.year, focusedDay.month, 1);
+    final end = DateTime(focusedDay.year, focusedDay.month + 1, 0);
+    final startStr =
+        "${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}";
+    final endStr =
+        "${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}";
+    try {
+      final meetingsRes = await admin.getUpcomingMeetings(
+        limit: 100,
+        startDate: startStr,
+        endDate: endStr,
+      );
+      final meetings = meetingsRes['meetings'] as List<dynamic>? ?? [];
+      List<Map<String, dynamic>> interviews = [];
+      try {
+        interviews = await admin.getInterviewsForCalendar(
+          startDate: startStr,
+          endDate: endStr,
+        );
+      } catch (_) {}
+      final List<Appointment> appointments = [];
+      for (final m in meetings) {
+        final map = m as Map<String, dynamic>;
+        final startTimeStr = map['start_time'] as String?;
+        final endTimeStr = map['end_time'] as String?;
+        if (startTimeStr == null) continue;
+        DateTime startTime;
+        DateTime endTime;
+        try {
+          startTime = DateTime.parse(startTimeStr);
+          endTime = endTimeStr != null
+              ? DateTime.parse(endTimeStr)
+              : startTime.add(const Duration(hours: 1));
+          if (!endTime.isAfter(startTime)) {
+            endTime = startTime.add(const Duration(minutes: 15));
+          }
+        } catch (_) {
+          continue;
+        }
+        appointments.add(
+          Appointment(
+            startTime: startTime,
+            endTime: endTime,
+            subject: map['title'] as String? ?? 'Meeting',
+            color: Colors.blue,
+          ),
+        );
+      }
+      for (final i in interviews) {
+        final scheduledStr = i['scheduled_time'] as String?;
+        if (scheduledStr == null) continue;
+        DateTime startTime;
+        try {
+          startTime = DateTime.parse(scheduledStr);
+        } catch (_) {
+          continue;
+        }
+        DateTime endTime = startTime.add(const Duration(hours: 1));
+        if (!endTime.isAfter(startTime)) {
+          endTime = startTime.add(const Duration(minutes: 15));
+        }
+        final jobTitle = i['job_title'] as String? ?? 'Interview';
+        final candidateName = i['candidate_name'] as String? ?? '';
+        appointments.add(
+          Appointment(
+            startTime: startTime,
+            endTime: endTime,
+            subject:
+                'Interview: $jobTitle${candidateName.isNotEmpty ? ' – $candidateName' : ''}',
+            color: Colors.deepOrange,
+          ),
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _calendarAppointments = appointments;
+        _calendarLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Calendar load error: $e');
+      if (!mounted) return;
+      setState(() => _calendarLoading = false);
+    }
+  }
+
+  Future<void> fetchDashboardNotifications() async {
+    setState(() => loadingNotifications = true);
+    try {
+      final response = await NotificationService.getNotifications();
+      if (!mounted) return;
+      setState(() {
+        dashboardNotifications = response.notifications;
+        loadingNotifications = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => loadingNotifications = false);
     }
   }
 
@@ -488,20 +604,8 @@ class _AdminDashboardState extends State<AdminDashboard>
                                   'assets/images/Approval_Red_Badge_White.png',
                                   'Jobs',
                                   'jobs'),
-                              _sidebarEntry(
-                                  'assets/images/Collaboration_Red_Badge_White.png',
-                                  'Pipeline',
-                                  'pipeline'),
-                              _sidebarEntry(Icons.description_outlined,
-                                  'Offers', 'offers'),
-                              _sidebarEntry(
-                                  'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
-                                  'Test Packs',
-                                  'test_packs'),
-                              _sidebarEntry(
-                                  'assets/images/Meeting_Red_Badge_White.png',
-                                  'Shortlisted',
-                                  'candidates'),
+                              _sidebarEntry('assets/images/candidates.png',
+                                  'Candidates', 'all_candidates'),
                               _sidebarEntry(
                                   'assets/images/red_Management_Red_Badge_White.png',
                                   'Interviews',
@@ -510,18 +614,26 @@ class _AdminDashboardState extends State<AdminDashboard>
                                   'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
                                   'CV Reviews',
                                   'cv_reviews'),
-                              _sidebarEntry('assets/images/deadline.png',
-                                  'Audits', 'audits'),
                               _sidebarEntry('assets/icons/data-analytics.png',
                                   'Analytics', 'analytics'),
+                              _sidebarEntry('assets/icons/teamC.png',
+                                  'Team Collaboration', 'team_collaboration'),
+                              _sidebarEntry(
+                                  'assets/images/Notification_Red_White.png',
+                                  'Notifications',
+                                  'notifications'),
+                              _sidebarEntry(
+                                  'assets/images/innovation_brainstorm_red_badge_white.png',
+                                  'Settings',
+                                  'settings'),
+                              _sidebarEntry(
+                                  Icons.person_outline, 'Profile', 'profile'),
+                              _sidebarEntry('assets/images/deadline.png',
+                                  'Audits', 'audits'),
                               _sidebarEntry(
                                   'assets/images/Warning_Error_Red_Badge_White.png',
                                   'Role Access',
                                   'roles'),
-                              _sidebarEntry('assets/images/candidates.png',
-                                  'Candidates', 'all_candidates'),
-                              _sidebarEntry(Icons.settings_outlined, 'Settings',
-                                  'settings'),
                             ],
                           ),
                         ),
@@ -666,24 +778,6 @@ class _AdminDashboardState extends State<AdminDashboard>
                                     ),
                                     const SizedBox(width: 12),
 
-                                    // ---------- Analytics Icon ----------
-                                    IconButton(
-                                      onPressed: () {
-                                        setState(
-                                            () => currentScreen = 'analytics');
-                                      },
-                                      icon: Image.asset(
-                                        // Changed from Icon to Image.asset
-                                        'assets/icons/data-analytics.png',
-                                        width: 24,
-                                        height: 24,
-                                        color: const Color.fromARGB(
-                                            255, 193, 13, 0),
-                                      ),
-                                      tooltip: "Analytics Dashboard",
-                                    ),
-                                    const SizedBox(width: 8),
-
                                     // ---------- Power BI Status Icon ----------
                                     Container(
                                       width: 36,
@@ -718,117 +812,11 @@ class _AdminDashboardState extends State<AdminDashboard>
                                                 color: Colors.white, size: 20),
                                       ),
                                     ),
-                                    const SizedBox(width: 8),
-
-                                    // ---------- Team Collaboration Icon ----------
-                                    IconButton(
-                                      onPressed: () => setState(() =>
-                                          currentScreen = "team_collaboration"),
-                                      icon: Image.asset(
-                                        // Changed from Icon to Image.asset
-                                        'assets/icons/teamC.png',
-                                        width: 34,
-                                        height: 34,
-                                        color: const Color.fromARGB(
-                                            255, 193, 13, 0),
-                                      ),
-                                      tooltip: "Team Collaboration",
-                                    ),
-                                    const SizedBox(width: 8),
-
-                                    TextButton.icon(
-                                      onPressed: () {
-                                        setState(
-                                            () => currentScreen = 'offers');
-                                      },
-                                      icon: Image.asset(
-                                        'assets/icons/add.png',
-                                        width: 30,
-                                        height: 30,
-                                        color: const Color.fromARGB(
-                                            255, 193, 13, 0),
-                                      ),
-                                      label: Text(
-                                        "Create",
-                                        style: TextStyle(
-                                          fontFamily: 'Poppins',
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-
-                                    IconButton(
-                                      onPressed: () => setState(() =>
-                                          currentScreen = "notifications"),
-                                      icon: Image.asset(
-                                        // Changed from Icon to Image.asset
-                                        'assets/icons/notification.png',
-                                        width: 45,
-                                        height: 45,
-                                        color: const Color.fromARGB(
-                                            255, 193, 13, 0),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    GestureDetector(
-                                      onTap: () {
-                                        setState(
-                                            () => currentScreen = 'profile');
-                                      },
-                                      child: CircleAvatar(
-                                        radius: 18,
-                                        backgroundColor: Colors.grey.shade200,
-                                        backgroundImage:
-                                            _getProfileImageProvider(),
-                                        child: null,
-                                      ),
-                                    ),
                                   ],
                                 ),
                               ),
                             ),
                           ],
-                        ),
-                      ),
-                    ),
-                    // ---------- Top Tabs Bar ----------
-                    Container(
-                      height: 56,
-                      color: themeProvider.isDarkMode
-                          ? const Color(0xFF14131E).withValues(alpha: 0.6)
-                          : Colors.white.withValues(alpha: 0.6),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              _buildTab('Dashboard', 'dashboard',
-                                  Icons.dashboard_outlined),
-                              _buildTab('Jobs', 'jobs', Icons.work_outline),
-                              _buildTab('Pipeline', 'pipeline',
-                                  Icons.account_tree_outlined),
-                              _buildTab('Offers', 'offers',
-                                  Icons.card_giftcard_outlined),
-                              _buildTab('Interviews', 'interviews',
-                                  Icons.calendar_today_outlined),
-                              _buildTab('CV Reviews', 'cv_reviews',
-                                  Icons.rate_review_outlined),
-                              _buildTab('Candidates', 'all_candidates',
-                                  Icons.people_outline),
-                              _buildTab('Users', 'users',
-                                  Icons.manage_accounts_outlined),
-                              _buildTab(
-                                  'Audits', 'audits', Icons.analytics_outlined),
-                              _buildTab('Analytics', 'analytics',
-                                  Icons.analytics_outlined),
-                              _buildTab('Settings', 'settings',
-                                  Icons.settings_outlined),
-                            ],
-                          ),
                         ),
                       ),
                     ),
@@ -953,7 +941,7 @@ class _AdminDashboardState extends State<AdminDashboard>
       case "analytics":
         return const AnalyticsDashboard(embedded: true);
       case "notifications":
-        return const NotificationsScreen();
+        return NotificationsScreen(onNotificationTap: _handleNotificationTap);
       case "all_candidates":
         return const CandidateListScreen();
       case "team_collaboration":
@@ -1412,6 +1400,10 @@ class _AdminDashboardState extends State<AdminDashboard>
               ),
             ),
             const SizedBox(height: 24),
+
+            // Notifications: status changes and upcoming interviews
+            _buildNotificationsFocusCard(themeProvider),
+            const SizedBox(height: 16),
 
             // Grid layout
             LayoutBuilder(builder: (context, constraints) {
@@ -1992,6 +1984,197 @@ class _AdminDashboardState extends State<AdminDashboard>
     );
   }
 
+  void _handleNotificationTap(Map<String, dynamic> notification) {
+    final type = (notification['type']?.toString() ?? '').toLowerCase();
+    setState(() {
+      if (type == 'new_application' || type == 'new_candidate') {
+        currentScreen = 'candidates';
+      } else if (type == 'interview' ||
+          type == 'feedback_reminder' ||
+          type == 'feedback_received' ||
+          type == 'reminder' ||
+          type == 'reminder_urgent' ||
+          type == 'warning') {
+        currentScreen = 'interviews';
+      } else if (type == 'status_update') {
+        currentScreen = 'pipeline';
+      } else {
+        currentScreen = 'notifications';
+      }
+    });
+  }
+
+  String _notificationSectionLabel(Map<String, dynamic> notification) {
+    final type = (notification['type']?.toString() ?? '').toLowerCase();
+    if (type == 'new_application') return 'Applications';
+    if (type == 'new_candidate') return 'Candidates';
+    if (type == 'interview' ||
+        type == 'feedback_reminder' ||
+        type == 'feedback_received' ||
+        type == 'reminder' ||
+        type == 'reminder_urgent' ||
+        type == 'warning') {
+      return 'Interviews';
+    }
+    if (type == 'status_update') return 'Pipeline';
+    return 'General';
+  }
+
+  Widget _buildNotificationsFocusCard(ThemeProvider themeProvider) {
+    final notificationPreview =
+        dashboardNotifications.where((n) => n['is_read'] != true).toList();
+    final recentNotifications = (notificationPreview.isNotEmpty
+            ? notificationPreview
+            : dashboardNotifications)
+        .take(5)
+        .toList();
+    final upcomingFromCalendar = _calendarAppointments
+        .where((a) => a.startTime.isAfter(DateTime.now()))
+        .toList()
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+    final upcomingList = upcomingFromCalendar.take(3).toList();
+    final bg =
+        (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
+            .withValues(alpha: 0.9);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blue.withValues(alpha: 0.1),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Notifications",
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color:
+                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                ),
+              ),
+              TextButton(
+                onPressed: () =>
+                    setState(() => currentScreen = "notifications"),
+                child: const Text("View all", style: TextStyle(fontSize: 12)),
+                style: TextButton.styleFrom(
+                  foregroundColor: const Color.fromARGB(255, 193, 13, 0),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            "Upcoming interviews",
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: themeProvider.isDarkMode ? Colors.white70 : Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (upcomingList.isEmpty)
+            Text(
+              "No upcoming interviews.",
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade400
+                    : Colors.grey.shade600,
+              ),
+            )
+          else
+            ...upcomingList.map(
+              (a) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  "${a.subject} — ${DateFormat.MMMd().add_Hm().format(a.startTime)}",
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 11,
+                    color: themeProvider.isDarkMode
+                        ? Colors.white70
+                        : Colors.black87,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          const SizedBox(height: 10),
+          Text(
+            "Recent updates",
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: themeProvider.isDarkMode ? Colors.white70 : Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 4),
+          if (recentNotifications.isEmpty)
+            Text(
+              "No recent notifications.",
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade400
+                    : Colors.grey.shade600,
+              ),
+            )
+          else
+            ...recentNotifications.take(3).map(
+                  (n) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _notificationSectionLabel(n),
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: const Color.fromARGB(255, 193, 13, 0),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          n['message']?.toString() ?? 'Notification',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 11,
+                            color: themeProvider.isDarkMode
+                                ? Colors.white70
+                                : Colors.black87,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+        ],
+      ),
+    );
+  }
+
   Widget activitiesCard() {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
@@ -2095,58 +2278,6 @@ class _AdminDashboardState extends State<AdminDashboard>
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildTab(String title, String screenKey, IconData icon) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isSelected = currentScreen == screenKey;
-
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: InkWell(
-        onTap: () => setState(() => currentScreen = screenKey),
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          decoration: BoxDecoration(
-            color: isSelected ? BrandTokens.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isSelected ? BrandTokens.primary : Colors.grey.shade300,
-              width: 1,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 16,
-                color: isSelected
-                    ? Colors.white
-                    : themeProvider.isDarkMode
-                        ? Colors.grey.shade400
-                        : Colors.grey.shade600,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                title,
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: isSelected
-                      ? Colors.white
-                      : themeProvider.isDarkMode
-                          ? Colors.grey.shade300
-                          : Colors.grey.shade700,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

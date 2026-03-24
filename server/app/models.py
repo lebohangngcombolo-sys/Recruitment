@@ -853,7 +853,7 @@ class Meeting(db.Model):
     description = db.Column(db.Text)
     start_time = db.Column(db.DateTime, nullable=False)
     end_time = db.Column(db.DateTime, nullable=False)
-    organizer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    organizer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     participants = db.Column(JSONB, nullable=False, default=[])  # list of user emails or IDs
     meeting_link = db.Column(db.String(500))
     location = db.Column(db.String(500))
@@ -864,7 +864,7 @@ class Meeting(db.Model):
     cancelled_at = db.Column(db.DateTime, nullable=True)
     cancelled_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
 
-    organizer = db.relationship("User", backref=db.backref("organized_meetings", lazy=True), foreign_keys=[organizer_id])
+    organizer = db.relationship("User", backref=db.backref("organized_meetings", lazy=True, cascade="all, delete-orphan"), foreign_keys=[organizer_id])
 
     def to_dict(self):
         return {
