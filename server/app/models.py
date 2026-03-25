@@ -10,6 +10,7 @@ class User(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(150), unique=True, nullable=False)
+    username = db.Column(db.String(50), unique=True, nullable=True)  # For @mentions
     password = db.Column(db.String(200), nullable=False)
     role = db.Column(db.String(50), default='candidate')
 
@@ -863,31 +864,51 @@ class Meeting(db.Model):
     cancelled = db.Column(db.Boolean, default=False)
     cancelled_at = db.Column(db.DateTime, nullable=True)
     cancelled_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    
+    # New fields for enhanced collaboration
+    scheduled_at = db.Column(db.DateTime, nullable=False)  # Alias for start_time
+    duration_minutes = db.Column(db.Integer, default=60)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    thread_id = db.Column(db.Integer, db.ForeignKey('chat_threads.id'))
+    reminder_sent = db.Column(db.Boolean, default=False)
 
     organizer = db.relationship("User", backref=db.backref("organized_meetings", lazy=True, cascade="all, delete-orphan"), foreign_keys=[organizer_id])
-
+    creator = db.relationship('User', foreign_keys=[created_by])
+    thread = db.relationship('ChatThread', backref='meetings')
+    
     def to_dict(self):
         return {
-            "id": self.id,
-            "title": self.title,
-            "description": self.description,
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'scheduled_at': self.scheduled_at.isoformat() if self.scheduled_at else self.start_time.isoformat(),
+            'duration_minutes': self.duration_minutes,
+            'location': self.location,
+            'created_by': self.created_by,
+            'thread_id': self.thread_id,
+            'reminder_sent': self.reminder_sent,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'creator_name': self.creator.full_name if self.creator else None,
+            'participants': self.participants,
+            'meeting_link': self.meeting_link,
+            'meeting_type': self.meeting_type,
+            'cancelled': self.cancelled,
             "start_time": self.start_time.isoformat(),
             "end_time": self.end_time.isoformat(),
             "organizer_id": self.organizer_id,
             "organizer": {
                 "id": self.organizer.id,
+                "full_name": self.organizer.full_name,
                 "email": self.organizer.email,
-                "profile": self.organizer.profile
             } if self.organizer else None,
-            "participants": self.participants if isinstance(self.participants, list) else [],
+            "participants_list": self.participants,
             "meeting_link": self.meeting_link,
             "location": self.location,
             "meeting_type": self.meeting_type,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "cancelled": self.cancelled,
             "cancelled_at": self.cancelled_at.isoformat() if self.cancelled_at else None,
-            "cancelled_by": self.cancelled_by
+            "cancelled_by": self.cancelled_by,
         }
 
 # ------------------- CHAT FEATURE MODELS -------------------
@@ -1034,25 +1055,56 @@ class MessageReadStatus(db.Model):
 class UserPresence(db.Model):
     __tablename__ = 'user_presence'
     
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True)
-    status = db.Column(db.String(20), default='offline')  # 'online', 'away', 'offline'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    status = db.Column(db.String(20), default='offline')
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    socket_id = db.Column(db.String(100))
     is_typing = db.Column(db.Boolean, default=False)
-    typing_in_thread = db.Column(db.Integer, nullable=True)
-    socket_id = db.Column(db.String(100), nullable=True)
+    typing_in_thread = db.Column(db.Integer)
     
-    # Relationship (back_populates User.presence to avoid duplicate relationship warning)
-    user = db.relationship('User', back_populates='presence', uselist=False)
+    # Relationships
+    user = db.relationship('User', backref=db.backref('presence', uselist=False))
 
-    
     def to_dict(self):
         return {
             'user_id': self.user_id,
             'status': self.status,
             'last_seen': self.last_seen.isoformat() if self.last_seen else None,
+            'socket_id': self.socket_id,
             'is_typing': self.is_typing,
             'typing_in_thread': self.typing_in_thread
         }
+
+
+class MessageMention(db.Model):
+    __tablename__ = 'message_mentions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(db.Integer, db.ForeignKey('chat_messages.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    message = db.relationship('ChatMessage', backref='mentions')
+    user = db.relationship('User')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'message_id': self.message_id,
+            'user_id': self.user_id,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+# Association table for meeting participants
+meeting_participants = db.Table('meeting_participants',
+    db.Column('meeting_id', db.Integer, db.ForeignKey('meetings.id'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('status', db.String(20), default='pending'),  # accepted, declined, maybe
+    db.Column('notified_at', db.DateTime)
+)
         
 class OfferStatus(enum.Enum):
     DRAFT = "draft"

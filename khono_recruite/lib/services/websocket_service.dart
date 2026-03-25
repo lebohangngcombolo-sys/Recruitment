@@ -22,7 +22,7 @@ class WebSocketService {
 
   // Reconnection settings
   final int _maxReconnectAttempts = 5;
-  final int _reconnectDelay = 1000;
+  final int _reconnectDelay = 5000;
   int _reconnectAttempts = 0;
   Timer? _reconnectTimer;
 
@@ -31,8 +31,11 @@ class WebSocketService {
   VoidCallback? onDisconnected;
   Function(String error)? onError;
   Function(Map<String, dynamic> data)? onNewMessage;
-  Function(Map<String, dynamic> data)? onUserTyping;
+  Function(Map<String, dynamic> data)? onMention;
+  Function(Map<String, dynamic> data)? onMeetingInvite;
+  Function(Map<String, dynamic> data)? onMeetingResponse;
   Function(Map<String, dynamic> data)? onPresenceUpdate;
+  Function(Map<String, dynamic> data)? onUserTyping;
   Function(Map<String, dynamic> data)? onNewThread;
   Function(Map<String, dynamic> data)? onMessageSent;
   Function(Map<String, dynamic> data)? onMessagesRead;
@@ -236,6 +239,18 @@ class WebSocketService {
 
     _socket!.on('threads_data', (data) {
       _handleEvent('threads_data', data, onThreadsData);
+    });
+
+    _socket!.on('mention', (data) {
+      _handleEvent('mention', data, onMention);
+    });
+
+    _socket!.on('meeting_invite', (data) {
+      _handleEvent('meeting_invite', data, onMeetingInvite);
+    });
+
+    _socket!.on('meeting_response', (data) {
+      _handleEvent('meeting_response', data, onMeetingResponse);
     });
 
     _socket!.on('error', (data) {

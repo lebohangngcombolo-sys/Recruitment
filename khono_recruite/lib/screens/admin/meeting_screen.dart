@@ -39,7 +39,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
       if (!mounted) return;
       setState(() {
         _notifyStatusChanges = prefs['status_changes'] as bool? ?? true;
-        _notifyUpcomingInterviews = prefs['upcoming_interviews'] as bool? ?? true;
+        _notifyUpcomingInterviews =
+            prefs['upcoming_interviews'] as bool? ?? true;
       });
     } catch (_) {
       // keep defaults
@@ -48,7 +49,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
     }
   }
 
-  Future<void> _updateNotificationPrefs({bool? statusChanges, bool? upcomingInterviews}) async {
+  Future<void> _updateNotificationPrefs(
+      {bool? statusChanges, bool? upcomingInterviews}) async {
     try {
       await _apiService.updateNotificationPreferences(
         statusChanges: statusChanges ?? _notifyStatusChanges,
@@ -57,7 +59,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
       if (!mounted) return;
       setState(() {
         if (statusChanges != null) _notifyStatusChanges = statusChanges;
-        if (upcomingInterviews != null) _notifyUpcomingInterviews = upcomingInterviews;
+        if (upcomingInterviews != null)
+          _notifyUpcomingInterviews = upcomingInterviews;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Notification preferences saved')),
@@ -65,7 +68,9 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save: $e'), backgroundColor: AppColors.primaryRed),
+        SnackBar(
+            content: Text('Failed to save: $e'),
+            backgroundColor: AppColors.primaryRed),
       );
     }
   }
@@ -93,7 +98,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
 
       if (kDebugMode) debugPrint("Meetings response: $meetingsResponse");
       final meetingsData = meetingsResponse['meetings'] as List<dynamic>? ?? [];
-      if (kDebugMode) debugPrint("Fetched ${meetingsData.length} meetings from API");
+      if (kDebugMode)
+        debugPrint("Fetched ${meetingsData.length} meetings from API");
 
       // Convert to Meeting objects
       final loadedMeetings =
@@ -117,7 +123,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
         _meetings.clear();
         _meetings.addAll(filteredMeetings);
       });
-      if (kDebugMode) debugPrint("Displayed meetings count: ${_meetings.length}");
+      if (kDebugMode)
+        debugPrint("Displayed meetings count: ${_meetings.length}");
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -155,7 +162,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                 children: [
                   _buildHeader(themeProvider, primaryRed),
                   const SizedBox(height: 12),
-                  _buildInterviewSlotsAndBookingLinks(themeProvider, primaryRed),
+                  _buildInterviewSlotsAndBookingLinks(
+                      themeProvider, primaryRed),
                   const SizedBox(height: 12),
                   _buildNotificationPreferences(themeProvider, primaryRed),
                   const SizedBox(height: 16),
@@ -215,7 +223,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
     );
   }
 
-  Widget _buildInterviewSlotsAndBookingLinks(ThemeProvider themeProvider, Color primaryRed) {
+  Widget _buildInterviewSlotsAndBookingLinks(
+      ThemeProvider themeProvider, Color primaryRed) {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -253,17 +262,23 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
     );
   }
 
-  Widget _buildNotificationPreferences(ThemeProvider themeProvider, Color primaryRed) {
+  Widget _buildNotificationPreferences(
+      ThemeProvider themeProvider, Color primaryRed) {
     if (_prefsLoading) {
-      return const SizedBox(height: 32, child: Center(child: CircularProgressIndicator()));
+      return const SizedBox(
+          height: 32, child: Center(child: CircularProgressIndicator()));
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white).withValues(alpha: 0.9),
+        color:
+            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: themeProvider.isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
+          color: themeProvider.isDarkMode
+              ? Colors.grey.shade800
+              : Colors.grey.shade300,
         ),
       ),
       child: Column(
@@ -274,7 +289,8 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
             'Notifications',
             style: GoogleFonts.inter(
               fontWeight: FontWeight.w600,
-              color: themeProvider.isDarkMode ? Colors.white : AppColors.textDark,
+              color:
+                  themeProvider.isDarkMode ? Colors.white : AppColors.textDark,
             ),
           ),
           const SizedBox(height: 8),
@@ -285,7 +301,9 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                   'Status changes (e.g. interview scheduled, rescheduled)',
                   style: GoogleFonts.inter(
                     fontSize: 13,
-                    color: themeProvider.isDarkMode ? Colors.grey.shade400 : AppColors.textGrey,
+                    color: themeProvider.isDarkMode
+                        ? Colors.grey.shade400
+                        : AppColors.textGrey,
                   ),
                 ),
               ),
@@ -303,13 +321,16 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
                   'Upcoming interviews (reminders)',
                   style: GoogleFonts.inter(
                     fontSize: 13,
-                    color: themeProvider.isDarkMode ? Colors.grey.shade400 : AppColors.textGrey,
+                    color: themeProvider.isDarkMode
+                        ? Colors.grey.shade400
+                        : AppColors.textGrey,
                   ),
                 ),
               ),
               Switch(
                 value: _notifyUpcomingInterviews,
-                onChanged: (v) => _updateNotificationPrefs(upcomingInterviews: v),
+                onChanged: (v) =>
+                    _updateNotificationPrefs(upcomingInterviews: v),
                 activeColor: primaryRed,
               ),
             ],
@@ -813,23 +834,25 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
 
                 try {
                   if (meeting == null) {
-                    await _apiService.createMeeting({
+                    await _apiService.createMeetingFromMap({
                       'title': titleController.text.trim(),
                       'description': descController.text.trim(),
-                      'start_time': startTime!.toIso8601String(),
-                      'end_time': endTime!.toIso8601String(),
+                      'scheduled_at': startTime!.toIso8601String(),
+                      'duration_minutes':
+                          endTime!.difference(startTime!).inMinutes,
                       'meeting_link': linkController.text.trim(),
                       'location': locationController.text.trim(),
                     });
                   } else {
-                    await _apiService.updateMeeting(meeting.id, {
-                      'title': titleController.text.trim(),
-                      'description': descController.text.trim(),
-                      'start_time': startTime!.toIso8601String(),
-                      'end_time': endTime!.toIso8601String(),
-                      'meeting_link': linkController.text.trim(),
-                      'location': locationController.text.trim(),
-                    });
+                    await _apiService.updateMeeting(
+                      meeting.id,
+                      title: titleController.text.trim(),
+                      description: descController.text.trim(),
+                      scheduledAt: startTime,
+                      durationMinutes:
+                          endTime!.difference(startTime!).inMinutes,
+                      location: locationController.text.trim(),
+                    );
                   }
                   Navigator.pop(context);
                   await _loadMeetings();

@@ -6,6 +6,9 @@ import 'package:khono_recruite/providers/theme_provider.dart';
 import 'package:khono_recruite/services/websocket_service.dart';
 import '../../services/admin_service.dart';
 import '../../services/app_state_manager.dart';
+import '../../widgets/meeting_schedule_dialog.dart';
+import '../../models/team_member.dart';
+import 'meeting_screen.dart';
 
 class HMTeamCollaborationPage extends StatefulWidget {
   const HMTeamCollaborationPage({super.key});
@@ -85,8 +88,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
   Future<void> _createGeneralThread() async {
     try {
-      final participantIds =
-          _teamMembers.map((member) => member.userId).toList();
+      final participantIds = _teamMembers.map((member) => member.id).toList();
       final threadData = await _apiService.createChatThread(
         title: 'Team Chat',
         participantIds: participantIds,
@@ -164,12 +166,96 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         setState(() {
           _messages.add(CollaborationMessage(
             id: message['id'] ?? DateTime.now().millisecondsSinceEpoch,
-            authorId: message['author_id'] ?? 0,
+            authorId: message['sender_id'] ?? 0,
             authorName: message['author_name'] ?? 'Unknown',
             content: message['content'] ?? '',
             timestamp:
                 DateTime.tryParse(message['timestamp']) ?? DateTime.now(),
           ));
+        });
+      }
+    };
+
+    _webSocketService!.onMention = (mentionData) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${mentionData['sender_name']} mentioned you in "${mentionData['thread_title']}"',
+            ),
+            backgroundColor: Colors.blue,
+            action: SnackBarAction(
+              label: 'View',
+              textColor: Colors.white,
+              onPressed: () {
+                // Navigate to the thread if not already there
+                if (mentionData['thread_id'] != _currentThreadId) {
+                  final targetThread = _chatThreads.firstWhere(
+                    (thread) => thread.id == mentionData['thread_id'],
+                    orElse: () => _chatThreads.first,
+                  );
+                  _selectThread(targetThread);
+                }
+              },
+            ),
+          ),
+        );
+      }
+    };
+
+    _webSocketService!.onMeetingInvite = (meetingData) {
+      if (mounted) {
+        final meeting = meetingData['meeting'];
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Meeting invitation: "${meeting['title']}"',
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'View',
+              textColor: Colors.white,
+              onPressed: () {
+                // Navigate to meeting details
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => HMMeetingsPage(),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      }
+    };
+
+    _webSocketService!.onMeetingResponse = (responseData) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${responseData['user_name']} ${responseData['status']} your meeting invitation',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    };
+
+    _webSocketService!.onConnected = () {
+      if (mounted) {
+        setState(() {
+          _isConnected = true;
+        });
+      }
+    };
+
+    _webSocketService!.onDisconnected = () {
+      if (mounted) {
+        setState(() {
+          _isConnected = false;
         });
       }
     };
@@ -187,38 +273,40 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
     }
 
     try {
-      // Load team members - using the new team collaboration endpoint
+      // Load team members - using the updated team collaboration endpoint
       final teamResponse = await _apiService.getTeamCollaborationUsers();
-      final teamData = teamResponse;
 
-      // Combine all users from different role categories
-      List<dynamic> allUsers = [];
-      if (teamData['admins'] != null) allUsers.addAll(teamData['admins']);
-      if (teamData['hiring_managers'] != null)
-        allUsers.addAll(teamData['hiring_managers']);
-      if (teamData['candidates'] != null)
-        allUsers.addAll(teamData['candidates']);
-      if (teamData['hr'] != null) allUsers.addAll(teamData['hr']);
+      if (teamResponse['success'] == true) {
+        final teamData = teamResponse['team'];
 
-      final usersData = allUsers;
+        // Combine admins and hiring managers only
+        List<dynamic> allUsers = [];
+        if (teamData['admins'] != null) allUsers.addAll(teamData['admins']);
+        if (teamData['hiring_managers'] != null)
+          allUsers.addAll(teamData['hiring_managers']);
 
-      if (mounted) {
-        setState(() {
-          _teamMembers.clear();
-          _teamMembers.addAll(usersData
-              .map((user) => TeamMember(
-                    name: user['full_name'] ?? user['name'] ?? 'Unknown User',
-                    role: user['role'] ?? 'Unknown',
-                    avatar: user['profile_picture'],
-                    isOnline: user['is_online'] ?? false,
-                    lastSeen: user['last_seen'] != null
-                        ? DateTime.tryParse(user['last_seen'])
-                        : null,
-                    userId: user['id'] ?? 0,
-                  ))
-              .toList());
-          _isLoading = false;
-        });
+        final usersData = allUsers;
+
+        if (mounted) {
+          setState(() {
+            _teamMembers.clear();
+            _teamMembers.addAll(usersData
+                .map((user) => TeamMember.fromAdminData(
+                      name: user['name'] ?? user['email'] ?? 'Unknown User',
+                      role: user['role'] ?? 'Unknown',
+                      avatar: user['profile_picture'],
+                      isOnline: user['isOnline'] ?? false,
+                      lastSeen: user['lastSeen'] != null
+                          ? DateTime.tryParse(user['lastSeen'])
+                          : null,
+                      userId: user['id'] ?? 0,
+                    ))
+                .toList());
+            _isLoading = false;
+          });
+        }
+      } else {
+        throw Exception('Failed to load team data');
       }
     } catch (e) {
       if (mounted) {
@@ -939,22 +1027,49 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
   }
 
   Future<void> _scheduleMeeting() async {
-    // This would open a meeting scheduling dialog
-    // For now, showing a placeholder
-    if (mounted) {
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Schedule Meeting'),
-          content: const Text('Meeting scheduling feature coming soon!'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('OK'),
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => MeetingScheduleDialog(
+        teamMembers: _teamMembers,
+        threadId: _currentThreadId,
+      ),
+    );
+
+    if (result != null) {
+      try {
+        final response = await _apiService.createMeeting(
+          title: result['title'],
+          description: result['description'],
+          scheduledAt: result['scheduled_at'],
+          durationMinutes: result['duration_minutes'],
+          location: result['location'],
+          participantIds: List<int>.from(result['participant_ids']),
+          threadId: result['thread_id'],
+        );
+
+        if (response['success'] == true) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                    'Meeting "${response['meeting']['title']}" scheduled successfully!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          throw Exception('Failed to schedule meeting');
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error scheduling meeting: $e'),
+              backgroundColor: Colors.red,
             ),
-          ],
-        ),
-      );
+          );
+        }
+      }
     }
   }
 
@@ -993,24 +1108,6 @@ class CollaborationMessage {
     required this.authorName,
     required this.content,
     required this.timestamp,
-  });
-}
-
-class TeamMember {
-  final String name;
-  final String role;
-  final String? avatar;
-  final bool isOnline;
-  final DateTime? lastSeen;
-  final int userId;
-
-  TeamMember({
-    required this.name,
-    required this.role,
-    this.avatar,
-    required this.isOnline,
-    this.lastSeen,
-    required this.userId,
   });
 }
 
