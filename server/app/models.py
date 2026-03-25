@@ -1064,7 +1064,7 @@ class UserPresence(db.Model):
     typing_in_thread = db.Column(db.Integer)
     
     # Relationships
-    user = db.relationship('User', backref=db.backref('presence', uselist=False))
+    user = db.relationship('User', back_populates='presence')
 
     def to_dict(self):
         return {
