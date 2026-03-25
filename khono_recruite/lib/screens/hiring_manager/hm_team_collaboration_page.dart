@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../constants/app_colors.dart';
-import '../../../providers/theme_provider.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:khono_recruite/constants/app_colors.dart';
+import 'package:khono_recruite/providers/theme_provider.dart';
 import '../../services/admin_service.dart';
-import 'meeting_screen.dart'; // ADD THIS IMPORT
+import '../../models/team_member.dart';
+import 'meeting_screen.dart';
 
 class HMTeamCollaborationPage extends StatefulWidget {
   const HMTeamCollaborationPage({super.key});
@@ -113,29 +114,45 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
   Future<void> _loadTeamMembers() async {
     try {
-      final users = await _apiService.getUsers();
-      final members = <TeamMember>[];
-      for (final u in users.whereType<Map<String, dynamic>>()) {
-        final profile = u['profile'] as Map<String, dynamic>? ?? {};
-        final fullName =
-            (profile['full_name'] ?? profile['name'])?.toString().trim();
-        final email = (u['email'] ?? '').toString().trim();
-        final role = (u['role'] ?? '').toString().trim();
-        final displayName =
-            (fullName != null && fullName.isNotEmpty) ? fullName : email;
-        if (displayName.isEmpty) continue;
-        members.add(TeamMember(
-          name: displayName,
-          role: role.isEmpty ? 'Team member' : role,
-          isOnline: false, // presence will update this later
-        ));
-      }
-      if (mounted) {
-        setState(() {
-          _teamMembers
-            ..clear()
-            ..addAll(members);
-        });
+      final response = await _apiService.getTeamCollaborationUsers();
+      if (response['success'] == true) {
+        final team = response['team'];
+        final List<TeamMember> members = [];
+
+        // Only include admins and hiring managers
+        if (team['admins'] != null) {
+          members.addAll(
+              (team['admins'] as List).map((m) => TeamMember.fromAdminData(
+                    name: m['name'] ?? m['email'] ?? 'Unknown User',
+                    role: m['role'] ?? 'admin',
+                    isOnline: m['isOnline'] ?? false,
+                    lastSeen: m['lastSeen'] != null
+                        ? DateTime.tryParse(m['lastSeen'])
+                        : null,
+                    userId: m['id'] ?? 0,
+                  )));
+        }
+
+        if (team['hiring_managers'] != null) {
+          members.addAll((team['hiring_managers'] as List)
+              .map((m) => TeamMember.fromAdminData(
+                    name: m['name'] ?? m['email'] ?? 'Unknown User',
+                    role: m['role'] ?? 'hiring_manager',
+                    isOnline: m['isOnline'] ?? false,
+                    lastSeen: m['lastSeen'] != null
+                        ? DateTime.tryParse(m['lastSeen'])
+                        : null,
+                    userId: m['id'] ?? 0,
+                  )));
+        }
+
+        if (mounted) {
+          setState(() {
+            _teamMembers
+              ..clear()
+              ..addAll(members);
+          });
+        }
       }
     } catch (e) {
       debugPrint('Failed to load team members: $e');
@@ -2139,18 +2156,6 @@ class CollaborationMessage {
       );
 
   String toJson() => content;
-}
-
-class TeamMember {
-  final String name;
-  final String role;
-  final bool isOnline;
-
-  TeamMember({
-    required this.name,
-    required this.role,
-    required this.isOnline,
-  });
 }
 
 class SharedNote {

@@ -1733,21 +1733,24 @@ def list_users():
 @admin_bp.route("/team-collaboration", methods=["GET"])
 @role_required(["admin", "hiring_manager"])
 def get_team_collaboration_users():
-    """Get users organized by role for team collaboration feature"""
+    """Return only admin and hiring manager users with presence info."""
+    from app.models import User, UserPresence
+    from app import db
+
     current_user_id = get_jwt_identity()
     current_user = User.query.get(current_user_id) if current_user_id else None
     
     try:
-        # Get all active users
-        users = User.query.filter(User.is_active == True).all()
-        
-        # Organize users by role
+        # Fetch users with role admin or hiring_manager only
+        users = User.query.filter(
+            (User.role == 'admin') | (User.role == 'hiring_manager'),
+            User.is_active == True
+        ).all()
+
         team_data = {
             "admins": [],
             "hiring_managers": [],
-            "candidates": [],
-            "hr": [],
-            "total_users": len(users)
+            "current_user": {}
         }
         
         for u in users:
@@ -1766,6 +1769,9 @@ def get_team_collaboration_users():
                 # Fallback to email prefix
                 display_name = u.email.split('@')[0].replace('.', ' ').title()
             
+            # Get presence information
+            presence = UserPresence.query.filter_by(user_id=u.id).first()
+            
             user_data = {
                 "id": u.id,
                 "email": u.email,
@@ -1776,7 +1782,9 @@ def get_team_collaboration_users():
                 "is_verified": u.is_verified,
                 "enrollment_completed": u.enrollment_completed,
                 "created_at": u.created_at.isoformat() if u.created_at else None,
-                "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None
+                "last_login_at": u.last_login_at.isoformat() if u.last_login_at else None,
+                "isOnline": presence.status == 'online' if presence else False,
+                "lastSeen": presence.last_seen.isoformat() if presence and presence.last_seen else None
             }
             
             # Add to appropriate role category
@@ -1784,21 +1792,22 @@ def get_team_collaboration_users():
                 team_data["admins"].append(user_data)
             elif u.role == "hiring_manager":
                 team_data["hiring_managers"].append(user_data)
-            elif u.role == "candidate":
-                team_data["candidates"].append(user_data)
-            elif u.role == "hr":
-                team_data["hr"].append(user_data)
         
         # Add current user info
         if current_user:
-            team_data["current_user"] = {
+            current_user_data = next(
+                (user for user in team_data["admins"] + team_data["hiring_managers"] 
+                 if user["id"] == current_user.id),
+                None
+            ) or {
                 "id": current_user.id,
                 "email": current_user.email,
                 "role": current_user.role,
-                "name": team_data.get(f"{current_user.role}s", [{}])[0].get("name", current_user.email)
+                "name": display_name if 'display_name' in locals() else current_user.email
             }
+            team_data["current_user"] = current_user_data
         
-        return jsonify(team_data), 200
+        return jsonify({"success": True, "team": team_data}), 200
         
     except Exception as e:
         current_app.logger.error(f"Error fetching team collaboration users: {e}", exc_info=True)

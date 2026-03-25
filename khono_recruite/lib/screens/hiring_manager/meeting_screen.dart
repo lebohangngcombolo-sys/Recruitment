@@ -671,27 +671,27 @@ class _HMMeetingsPageState extends State<HMMeetingsPage> {
 
                 try {
                   if (meeting == null) {
-                    await _apiService.createMeeting({
+                    await _apiService.createMeetingFromMap({
                       'title': titleController.text.trim(),
                       'description': descController.text.trim(),
-                      'start_time': startTime!.toIso8601String(),
-                      'end_time': endTime!.toIso8601String(),
+                      'scheduled_at': startTime!.toIso8601String(),
+                      'duration_minutes':
+                          endTime!.difference(startTime!).inMinutes,
                       'meeting_link': linkController.text.trim(),
                       'location': locationController.text.trim(),
-                      'participants':
+                      'participant_ids':
                           [], // Empty participants list for HM meetings
                     });
                   } else {
-                    await _apiService.updateMeeting(meeting.id, {
-                      'title': titleController.text.trim(),
-                      'description': descController.text.trim(),
-                      'start_time': startTime!.toIso8601String(),
-                      'end_time': endTime!.toIso8601String(),
-                      'meeting_link': linkController.text.trim(),
-                      'location': locationController.text.trim(),
-                      'participants':
-                          [], // Empty participants list for HM meetings
-                    });
+                    await _apiService.updateMeeting(
+                      meeting.id,
+                      title: titleController.text.trim(),
+                      description: descController.text.trim(),
+                      scheduledAt: startTime,
+                      durationMinutes:
+                          endTime!.difference(startTime!).inMinutes,
+                      location: locationController.text.trim(),
+                    );
                   }
                   Navigator.pop(context);
                   await _loadMeetings();

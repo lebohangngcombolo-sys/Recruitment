@@ -939,127 +939,6 @@ class AdminService {
 // Note: The shareNote endpoint was removed as sharing is handled via participants in the backend
 // If you need sharing functionality, you'll need to update the backend or handle it differently
 
-// ---------- MEETINGS ----------
-  Future<Map<String, dynamic>> createMeeting(Map<String, dynamic> data) async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.post(
-      Uri.parse(ApiEndpoints.createMeeting),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-      body: json.encode(data),
-    );
-
-    if (res.statusCode == 201) {
-      return json.decode(res.body);
-    } else {
-      // Try to parse error message from response
-      try {
-        final errorBody = json.decode(res.body);
-        throw Exception(
-            errorBody['error'] ?? 'Failed to create meeting: ${res.body}');
-      } catch (e) {
-        throw Exception('Failed to create meeting: ${res.body}');
-      }
-    }
-  }
-
-  Future<Map<String, dynamic>> getMeetings({
-    int page = 1,
-    int perPage = 20,
-    String? status,
-    String? search,
-  }) async {
-    final token = await AuthService.getAccessToken();
-
-    final params = {
-      'page': page.toString(),
-      'per_page': perPage.toString(),
-      if (status != null && status.isNotEmpty) 'status': status,
-      if (search != null && search.isNotEmpty) 'search': search,
-    };
-
-    final uri =
-        Uri.parse(ApiEndpoints.getMeetings).replace(queryParameters: params);
-    final res = await http.get(
-      uri,
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
-
-    if (res.statusCode == 200) {
-      final body = json.decode(res.body);
-      return {
-        "meetings": body["meetings"] ?? [],
-        "total": body["total"] ?? 0,
-        "pages": body["pages"] ?? 0,
-        "current_page": body["current_page"] ?? page,
-        "per_page": body["per_page"] ?? perPage,
-      };
-    } else {
-      throw Exception('Failed to fetch meetings: ${res.body}');
-    }
-  }
-
-  Future<Map<String, dynamic>> getMeetingById(int meetingId) async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.get(
-      Uri.parse('${ApiEndpoints.getMeetingById}/$meetingId'),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
-    return _handleResponse(res);
-  }
-
-  Future<Map<String, dynamic>> updateMeeting(
-      int meetingId, Map<String, dynamic> data) async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.put(
-      Uri.parse('${ApiEndpoints.updateMeeting}/$meetingId'),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-      body: json.encode(data),
-    );
-    return _handleResponse(res);
-  }
-
-  Future<void> cancelMeeting(int meetingId) async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.post(
-      Uri.parse('${ApiEndpoints.cancelMeeting}/$meetingId'),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
-    if (res.statusCode != 200) {
-      throw Exception('Failed to cancel meeting: ${res.body}');
-    }
-  }
-
-  Future<void> deleteMeeting(int meetingId) async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.delete(
-      Uri.parse('${ApiEndpoints.deleteMeeting}/$meetingId'),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
-    if (res.statusCode != 200) {
-      throw Exception('Failed to delete meeting: ${res.body}');
-    }
-  }
-
-  Future<Map<String, dynamic>> getUpcomingMeetings({
-    int limit = 50,
-    String? startDate,
-    String? endDate,
-  }) async {
-    final token = await AuthService.getAccessToken();
-    final params = <String, String>{'limit': limit.toString()};
-    if (startDate != null) params['start_date'] = startDate;
-    if (endDate != null) params['end_date'] = endDate;
-    final uri = Uri.parse(ApiEndpoints.getUpcomingMeetings).replace(
-      queryParameters: params,
-    );
-    final res = await http.get(
-      uri,
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
-    final body = _handleResponse(res);
-    return {"meetings": body["meetings"] ?? body["data"] ?? []};
-  }
-
   // ---------- NOTIFICATION PREFERENCES (admin/HM) ----------
   Future<Map<String, dynamic>> getNotificationPreferences() async {
     final token = await AuthService.getAccessToken();
@@ -1363,6 +1242,213 @@ class AdminService {
     }
 
     throw Exception("Failed to load team collaboration users: ${res.body}");
+  }
+
+  // ------------------- MEETINGS -------------------
+
+  /// Create a new meeting
+  Future<Map<String, dynamic>> createMeeting({
+    required String title,
+    String? description,
+    required String scheduledAt,
+    int durationMinutes = 60,
+    String? location,
+    List<int>? participantIds,
+    int? threadId,
+  }) async {
+    final token = await AuthService.getAccessToken();
+
+    final body = {
+      'title': title,
+      'scheduled_at': scheduledAt,
+      'duration_minutes': durationMinutes,
+      'participant_ids': participantIds ?? [],
+    };
+
+    if (description != null) body['description'] = description;
+    if (location != null) body['location'] = location;
+    if (threadId != null) body['thread_id'] = threadId;
+
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.chatBase}/meetings'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: json.encode(body),
+    );
+
+    if (res.statusCode == 201) {
+      return json.decode(res.body);
+    }
+
+    throw Exception("Failed to create meeting: ${res.body}");
+  }
+
+  /// Create a meeting from a Map (for backward compatibility)
+  Future<Map<String, dynamic>> createMeetingFromMap(
+      Map<String, dynamic> data) async {
+    return createMeeting(
+      title: data['title'] ?? '',
+      scheduledAt: data['scheduled_at'] ?? DateTime.now().toIso8601String(),
+      durationMinutes: data['duration_minutes'] ?? 60,
+      location: data['location'],
+      participantIds: data['participant_ids'] != null
+          ? List<int>.from(data['participant_ids'])
+          : null,
+      threadId: data['thread_id'],
+    );
+  }
+
+  /// Get meetings with flexible pagination and filtering
+  Future<Map<String, dynamic>> getMeetings({
+    int? limit,
+    int? offset,
+    int? page,
+    int? perPage,
+    String? status,
+    String? search,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final token = await AuthService.getAccessToken();
+
+    // Map page/perPage to limit/offset if provided
+    int effectiveLimit = limit ?? perPage ?? 20;
+    int effectiveOffset =
+        offset ?? (page != null && perPage != null ? (page - 1) * perPage : 0);
+
+    final queryParams = <String, String>{};
+    if (effectiveLimit > 0) queryParams['limit'] = effectiveLimit.toString();
+    if (effectiveOffset > 0) queryParams['offset'] = effectiveOffset.toString();
+    if (status != null && status.isNotEmpty) queryParams['status'] = status;
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
+    if (startDate != null)
+      queryParams['start_date'] = startDate.toIso8601String();
+    if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
+
+    final uri = Uri.parse('${ApiEndpoints.chatBase}/meetings')
+        .replace(queryParameters: queryParams);
+    final res = await http.get(
+      uri,
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+
+    throw Exception("Failed to get meetings: ${res.body}");
+  }
+
+  /// Get upcoming meetings (next 7 days) with optional filtering
+  Future<Map<String, dynamic>> getUpcomingMeetings({
+    int? limit,
+    String? startDate,
+    String? endDate,
+  }) async {
+    final token = await AuthService.getAccessToken();
+
+    final queryParams = <String, String>{};
+    if (limit != null) queryParams['limit'] = limit.toString();
+    if (startDate != null) queryParams['start_date'] = startDate;
+    if (endDate != null) queryParams['end_date'] = endDate;
+
+    final uri = Uri.parse('${ApiEndpoints.chatBase}/meetings/upcoming')
+        .replace(queryParameters: queryParams);
+    final res = await http.get(
+      uri,
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+
+    throw Exception("Failed to get upcoming meetings: ${res.body}");
+  }
+
+  /// Update a meeting
+  Future<Map<String, dynamic>> updateMeeting(
+    int meetingId, {
+    String? title,
+    String? description,
+    DateTime? scheduledAt,
+    int? durationMinutes,
+    String? location,
+    List<int>? participantIds,
+  }) async {
+    final token = await AuthService.getAccessToken();
+
+    final body = <String, dynamic>{};
+    if (title != null) body['title'] = title;
+    if (description != null) body['description'] = description;
+    if (scheduledAt != null)
+      body['scheduled_at'] = scheduledAt.toIso8601String();
+    if (durationMinutes != null) body['duration_minutes'] = durationMinutes;
+    if (location != null) body['location'] = location;
+    if (participantIds != null) body['participant_ids'] = participantIds;
+
+    final res = await http.put(
+      Uri.parse('${ApiEndpoints.chatBase}/meetings/$meetingId'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: json.encode(body),
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+
+    throw Exception("Failed to update meeting: ${res.body}");
+  }
+
+  /// Cancel a meeting
+  Future<Map<String, dynamic>> cancelMeeting(int meetingId) async {
+    final token = await AuthService.getAccessToken();
+
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.chatBase}/meetings/$meetingId/cancel'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+
+    throw Exception("Failed to cancel meeting: ${res.body}");
+  }
+
+  /// Delete a meeting
+  Future<Map<String, dynamic>> deleteMeeting(int meetingId) async {
+    final token = await AuthService.getAccessToken();
+
+    final res = await http.delete(
+      Uri.parse('${ApiEndpoints.chatBase}/meetings/$meetingId'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+
+    throw Exception("Failed to delete meeting: ${res.body}");
+  }
+
+  /// Respond to meeting invitation
+  Future<Map<String, dynamic>> respondToMeeting({
+    required int meetingId,
+    required String status, // 'accepted', 'declined', 'maybe'
+  }) async {
+    final token = await AuthService.getAccessToken();
+
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.chatBase}/meetings/$meetingId/respond'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: json.encode({'status': status}),
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+
+    throw Exception("Failed to respond to meeting: ${res.body}");
   }
 
   /// Update user role
