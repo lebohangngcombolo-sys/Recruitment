@@ -21,6 +21,17 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
   bool loading = true;
   List<dynamic> savedApplications = [];
 
+  DateTime _parseDate(dynamic v) {
+    if (v == null) return DateTime.fromMillisecondsSinceEpoch(0);
+    if (v is int) {
+      // Assume unix millis.
+      return DateTime.fromMillisecondsSinceEpoch(v);
+    }
+    final s = v.toString().trim();
+    if (s.isEmpty) return DateTime.fromMillisecondsSinceEpoch(0);
+    return DateTime.tryParse(s) ?? DateTime.fromMillisecondsSinceEpoch(0);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -46,8 +57,29 @@ class _SavedApplicationsScreenState extends State<SavedApplicationsScreen> {
           data.map((e) => Map<String, dynamic>.from(e)),
         );
 
+        // Only show the most recent application that does NOT have an assessment.
+        // This should match the "Continue Your Application" cards where assessment is not started yet.
+        final continueWithoutAssessment = normalized.where((d) {
+          final lastScreen = d['last_saved_screen']?.toString().toLowerCase();
+          return lastScreen != 'assessment';
+        }).toList();
+
+        continueWithoutAssessment.sort((a, b) {
+          final da = _parseDate(a['updated_at'] ?? a['saved_at'] ?? a['created_at']);
+          final db = _parseDate(b['updated_at'] ?? b['saved_at'] ?? b['created_at']);
+          final byDate = db.compareTo(da);
+          if (byDate != 0) return byDate;
+          final ia = a['id'];
+          final ib = b['id'];
+          final inta = ia is int ? ia : int.tryParse(ia?.toString() ?? '');
+          final intb = ib is int ? ib : int.tryParse(ib?.toString() ?? '');
+          return (intb ?? 0).compareTo(inta ?? 0);
+        });
+
         setState(() {
-          savedApplications = normalized;
+          savedApplications = continueWithoutAssessment.isNotEmpty
+              ? [continueWithoutAssessment.first]
+              : [];
         });
       } else {
         throw Exception("Failed to load saved applications");
