@@ -10,6 +10,7 @@ class User(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(150), unique=True, nullable=False)
+    username = db.Column(db.String(50), unique=True, nullable=True)  # For @mentions
     password = db.Column(db.String(200), nullable=False)
     role = db.Column(db.String(50), default='candidate')
 
@@ -257,8 +258,15 @@ class Requisition(db.Model):
     # Must-have certifications (e.g. ["AWS Certified", "PMP"])
     required_certifications = db.Column(JSON, default=list)
 
+    # Job approval workflow: pending | approved | rejected
+    approval_status = db.Column(db.String(20), default='pending', nullable=False)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    rejection_reason = db.Column(db.Text, nullable=True)
+
     applications = db.relationship('Application', back_populates='requisition', lazy=True)
     creator = db.relationship('User', foreign_keys=[created_by], lazy=True)
+    approver = db.relationship('User', foreign_keys=[approved_by], lazy=True)
 
     def to_dict(self):
         creator = self.creator
@@ -308,6 +316,15 @@ class Requisition(db.Model):
             "start_date_to": self.start_date_to.isoformat() if self.start_date_to else None,
             "min_years_per_skill": self.min_years_per_skill if isinstance(self.min_years_per_skill, dict) else ({}),
             "required_certifications": self.required_certifications if isinstance(self.required_certifications, list) else [],
+            "approval_status": getattr(self, "approval_status", "pending"),
+            "approved_at": self.approved_at.isoformat() if getattr(self, "approved_at", None) else None,
+            "approved_by": getattr(self, "approved_by", None),
+            "rejection_reason": getattr(self, "rejection_reason", None),
+            "approved_by_user": {
+                "id": self.approver.id,
+                "name": self.approver.full_name,
+                "email": self.approver.email,
+            } if getattr(self, "approver", None) else None,
         }
     
     def to_dict_with_stats(self):
@@ -519,6 +536,12 @@ class Interview(db.Model):
     interview_type = db.Column(db.String(50), nullable=True)
     meeting_link = db.Column(db.String(255), nullable=True)
     status = db.Column(db.String(50), default='scheduled')  # Add this line if not present
+    # Admin approval workflow: pending | approved | rejected
+    # Default to approved for backward compatibility with existing rows/clients.
+    approval_status = db.Column(db.String(20), default='approved', nullable=False)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    rejection_reason = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # Add this
     
@@ -540,6 +563,7 @@ class Interview(db.Model):
     hiring_manager = db.relationship('User', foreign_keys=[hiring_manager_id], back_populates='managed_interviews')
 
     cancelled_by_user = db.relationship('User', foreign_keys=[cancelled_by], back_populates='cancelled_interviews')
+    approver = db.relationship('User', foreign_keys=[approved_by], lazy=True)
 
 
     def to_dict(self):
@@ -552,6 +576,17 @@ class Interview(db.Model):
             "interview_type": self.interview_type,
             "meeting_link": self.meeting_link,
             "status": self.status,
+            "approval_status": self.approval_status,
+            "approved_at": self.approved_at.isoformat() if getattr(self, "approved_at", None) else None,
+            "approved_by": getattr(self, "approved_by", None),
+            "rejection_reason": getattr(self, "rejection_reason", None),
+            "approved_by_user": {
+                "id": self.approver.id,
+                "name": getattr(self.approver, "full_name", None)
+                or f"{(self.approver.profile or {}).get('first_name', '')} {(self.approver.profile or {}).get('last_name', '')}".strip()
+                or self.approver.email,
+                "email": self.approver.email,
+            } if getattr(self, "approver", None) else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "google_calendar_event_id": self.google_calendar_event_id,
@@ -657,6 +692,7 @@ class InterviewSlot(db.Model):
 # ------------------- CV ANALYSIS -------------------
 class CVAnalysis(db.Model):
     __tablename__ = "cv_analyses"
+    __table_args__ = {'schema': 'cv_analyser'}
     id = db.Column(db.Integer, primary_key=True)
     candidate_id = db.Column(db.Integer, db.ForeignKey('candidates.id'), nullable=False)
     application_id = db.Column(db.Integer, db.ForeignKey('applications.id'), nullable=True)
@@ -708,7 +744,7 @@ class Notification(db.Model):
             "type": self.type,
             "interview_id": self.interview_id,
             "is_read": self.is_read,
-            "created_at": self.created_at.isoformat()
+            "created_at": self.created_at.isoformat() if self.created_at else datetime.utcnow().isoformat()
         }
 
 # ------------------- VERIFICATION CODE -------------------
@@ -818,7 +854,7 @@ class Meeting(db.Model):
     description = db.Column(db.Text)
     start_time = db.Column(db.DateTime, nullable=False)
     end_time = db.Column(db.DateTime, nullable=False)
-    organizer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    organizer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     participants = db.Column(JSONB, nullable=False, default=[])  # list of user emails or IDs
     meeting_link = db.Column(db.String(500))
     location = db.Column(db.String(500))
@@ -828,31 +864,51 @@ class Meeting(db.Model):
     cancelled = db.Column(db.Boolean, default=False)
     cancelled_at = db.Column(db.DateTime, nullable=True)
     cancelled_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    
+    # New fields for enhanced collaboration
+    scheduled_at = db.Column(db.DateTime, nullable=False)  # Alias for start_time
+    duration_minutes = db.Column(db.Integer, default=60)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    thread_id = db.Column(db.Integer, db.ForeignKey('chat_threads.id'))
+    reminder_sent = db.Column(db.Boolean, default=False)
 
-    organizer = db.relationship("User", backref=db.backref("organized_meetings", lazy=True), foreign_keys=[organizer_id])
-
+    organizer = db.relationship("User", backref=db.backref("organized_meetings", lazy=True, cascade="all, delete-orphan"), foreign_keys=[organizer_id])
+    creator = db.relationship('User', foreign_keys=[created_by])
+    thread = db.relationship('ChatThread', backref='meetings')
+    
     def to_dict(self):
         return {
-            "id": self.id,
-            "title": self.title,
-            "description": self.description,
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'scheduled_at': self.scheduled_at.isoformat() if self.scheduled_at else self.start_time.isoformat(),
+            'duration_minutes': self.duration_minutes,
+            'location': self.location,
+            'created_by': self.created_by,
+            'thread_id': self.thread_id,
+            'reminder_sent': self.reminder_sent,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'creator_name': self.creator.full_name if self.creator else None,
+            'participants': self.participants,
+            'meeting_link': self.meeting_link,
+            'meeting_type': self.meeting_type,
+            'cancelled': self.cancelled,
             "start_time": self.start_time.isoformat(),
             "end_time": self.end_time.isoformat(),
             "organizer_id": self.organizer_id,
             "organizer": {
                 "id": self.organizer.id,
+                "full_name": self.organizer.full_name,
                 "email": self.organizer.email,
-                "profile": self.organizer.profile
             } if self.organizer else None,
-            "participants": self.participants if isinstance(self.participants, list) else [],
+            "participants_list": self.participants,
             "meeting_link": self.meeting_link,
             "location": self.location,
             "meeting_type": self.meeting_type,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "cancelled": self.cancelled,
             "cancelled_at": self.cancelled_at.isoformat() if self.cancelled_at else None,
-            "cancelled_by": self.cancelled_by
+            "cancelled_by": self.cancelled_by,
         }
 
 # ------------------- CHAT FEATURE MODELS -------------------
@@ -999,25 +1055,56 @@ class MessageReadStatus(db.Model):
 class UserPresence(db.Model):
     __tablename__ = 'user_presence'
     
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True)
-    status = db.Column(db.String(20), default='offline')  # 'online', 'away', 'offline'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    status = db.Column(db.String(20), default='offline')
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    socket_id = db.Column(db.String(100))
     is_typing = db.Column(db.Boolean, default=False)
-    typing_in_thread = db.Column(db.Integer, nullable=True)
-    socket_id = db.Column(db.String(100), nullable=True)
+    typing_in_thread = db.Column(db.Integer)
     
-    # Relationship (back_populates User.presence to avoid duplicate relationship warning)
-    user = db.relationship('User', back_populates='presence', uselist=False)
+    # Relationships
+    user = db.relationship('User', back_populates='presence')
 
-    
     def to_dict(self):
         return {
             'user_id': self.user_id,
             'status': self.status,
             'last_seen': self.last_seen.isoformat() if self.last_seen else None,
+            'socket_id': self.socket_id,
             'is_typing': self.is_typing,
             'typing_in_thread': self.typing_in_thread
         }
+
+
+class MessageMention(db.Model):
+    __tablename__ = 'message_mentions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(db.Integer, db.ForeignKey('chat_messages.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    message = db.relationship('ChatMessage', backref='mentions')
+    user = db.relationship('User')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'message_id': self.message_id,
+            'user_id': self.user_id,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+# Association table for meeting participants
+meeting_participants = db.Table('meeting_participants',
+    db.Column('meeting_id', db.Integer, db.ForeignKey('meetings.id'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('status', db.String(20), default='pending'),  # accepted, declined, maybe
+    db.Column('notified_at', db.DateTime)
+)
         
 class OfferStatus(enum.Enum):
     DRAFT = "draft"

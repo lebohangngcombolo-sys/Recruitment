@@ -1,3 +1,7 @@
+
+// ignore_for_file: avoid_print, use_build_context_synchronously
+
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io' show File;
@@ -6,607 +10,284 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart';
+
 import '../../providers/theme_provider.dart';
-import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
 import '../../utils/api_endpoints.dart';
-import '../../utils/app_version.dart';
-import '../../widgets/state_widgets.dart';
-import '../../widgets/themed_dialog.dart';
-
-// ------------------- API Base URL -------------------
-final String candidateBase = ApiEndpoints.candidateBase;
 
 class ProfilePage extends StatefulWidget {
   final String token;
-  const ProfilePage({super.key, required this.token});
+
+  /// When set (e.g. when embedded in dashboard), back button calls this instead of popping.
+  final VoidCallback? onBack;
+
+  const ProfilePage({
+    super.key,
+    required this.token,
+    this.onBack,
+  });
 
   @override
-  _ProfilePageState createState() => _ProfilePageState();
+  State<ProfilePage> createState() =>
+      _HiringManagerProfileScreenState();
 }
 
-class _ProfilePageState extends State<ProfilePage>
-    with TickerProviderStateMixin {
-  bool loading = true;
-  bool showProfileSummary = true;
-  bool _isSaving = false;
-  final _formKey = GlobalKey<FormState>();
-
-  String selectedSidebar = "Profile";
-
-  // Profile Controllers
-  final TextEditingController fullNameController = TextEditingController();
-  final TextEditingController emailController = TextEditingController();
-  final TextEditingController phoneController = TextEditingController();
-  final TextEditingController genderController = TextEditingController();
-  final TextEditingController dobController = TextEditingController();
-  final TextEditingController nationalityController = TextEditingController();
-  final TextEditingController idNumberController = TextEditingController();
-  final TextEditingController bioController = TextEditingController();
-  final TextEditingController locationController = TextEditingController();
-  final TextEditingController titleController = TextEditingController();
-
-  // Candidate fields
-  final TextEditingController degreeController = TextEditingController();
-  final TextEditingController institutionController = TextEditingController();
-  final TextEditingController graduationYearController =
+class _HiringManagerProfileScreenState
+    extends State<ProfilePage> {
+  final TextEditingController _firstNameController = TextEditingController();
+  final TextEditingController _surnameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _departmentController = TextEditingController();
+  final TextEditingController _preferredNameController =
       TextEditingController();
-  final TextEditingController skillsController = TextEditingController();
-  final TextEditingController workExpController = TextEditingController();
-  final TextEditingController jobTitleController = TextEditingController();
-  final TextEditingController companyController = TextEditingController();
-  final TextEditingController yearsOfExpController = TextEditingController();
-  final TextEditingController linkedinController = TextEditingController();
-  final TextEditingController githubController = TextEditingController();
-  final TextEditingController portfolioController = TextEditingController();
-  final TextEditingController cvTextController = TextEditingController();
-  final TextEditingController cvUrlController = TextEditingController();
+  final TextEditingController _designationController = TextEditingController();
+  final TextEditingController _managerController = TextEditingController();
 
-  // Profile Image
+  String? _selectedDepartment;
+  String? _selectedDesignation;
+  String? _profileImageUrl;
+
+  final List<String> _departments = const [
+    'Management',
+    'Operations',
+    'Finance',
+    'HR',
+    'Sales',
+  ];
+
+  final List<String> _designations = const [
+    'Director',
+    'Developer',
+    'Support Analyst',
+    'Learner',
+    'UX Designer',
+    'AWS Cloud Engineer',
+    'Tester',
+    'Finance',
+    'Business Analyst',
+    'Manager',
+    'Delivery Manager',
+    'Analyst',
+    'Sales Person',
+    'HR',
+    'Junior Analyst',
+  ];
+
+  String? _phoneError;
+  String? _emailError;
+  bool _loading = true;
+  bool _saving = false;
+  bool _dataLoaded = false;
+
+  bool _isEditing = false;
+  bool _dirty = false;
+
   XFile? _profileImage;
   Uint8List? _profileImageBytes;
-  String _profileImageUrl = "";
   final ImagePicker _picker = ImagePicker();
 
-  // Settings
-  bool darkMode = false;
-  bool notificationsEnabled = true;
-  bool jobAlertsEnabled = true;
-  bool profileVisible = true;
-  bool enrollmentCompleted = false;
+  void _markDirty() {
+    if (!_dataLoaded) return;
+    if (mounted) setState(() => _dirty = true);
+  }
 
-  // 🆕 MFA State
-  bool _mfaEnabled = false;
-  bool _mfaLoading = false;
-  String? _mfaSecret;
-  String? _mfaQrCode;
-  List<String> _backupCodes = [];
-  int _backupCodesRemaining = 0;
+  bool _validateFields() {
+    final phone = _phoneController.text.trim();
+    final email = _emailController.text.trim();
+    bool isValid = true;
 
-  List<dynamic> documents = [];
+    if (mounted) {
+      setState(() {
+        if (phone.isNotEmpty && phone.length != 10) {
+          _phoneError =
+              'Please enter a valid 10-digit phone number\nExample: 0123456789';
+          isValid = false;
+        } else {
+          _phoneError = null;
+        }
 
-  final String apiBase = ApiEndpoints.candidateBase;
-  bool _isCandidateUser = false;
+        if (email.isNotEmpty &&
+            !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+          _emailError = 'Please enter a valid email address';
+          isValid = false;
+        } else {
+          _emailError = null;
+        }
+      });
+    }
+    if (_firstNameController.text.trim().isEmpty ||
+        _surnameController.text.trim().isEmpty ||
+        _emailController.text.trim().isEmpty) {
+      isValid = false;
+    }
+
+    return isValid;
+  }
 
   @override
   void initState() {
     super.initState();
-    fetchProfileAndSettings();
-    _loadMfaStatus();
+    _firstNameController.addListener(_markDirty);
+    _surnameController.addListener(_markDirty);
+    _emailController.addListener(_markDirty);
+    _phoneController.addListener(_markDirty);
+    _preferredNameController.addListener(_markDirty);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadUserData();
+    });
   }
 
-  // 🆕 MFA METHODS
-  Future<void> _loadMfaStatus() async {
-    try {
-      final result = await AuthService.getMfaStatus();
-      if (result.containsKey('mfa_enabled')) {
-        setState(() {
-          _mfaEnabled = result['mfa_enabled'];
-          _backupCodesRemaining = result['backup_codes_remaining'] ?? 0;
-        });
-      }
-    } catch (e) {
-      debugPrint("Error loading MFA status: $e");
-    }
+  @override
+  void dispose() {
+    _firstNameController.removeListener(_markDirty);
+    _surnameController.removeListener(_markDirty);
+    _emailController.removeListener(_markDirty);
+    _phoneController.removeListener(_markDirty);
+    _preferredNameController.removeListener(_markDirty);
+    _firstNameController.dispose();
+    _surnameController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
+    _departmentController.dispose();
+    _preferredNameController.dispose();
+    _designationController.dispose();
+    _managerController.dispose();
+    super.dispose();
   }
 
-  Future<void> _enableMfa() async {
-    if (mounted) setState(() => _mfaLoading = true);
+  Future<void> _loadUserData() async {
+    if (mounted) setState(() => _loading = true);
     try {
-      final result = await AuthService.enableMfa();
-      if (result.containsKey('qr_code')) {
-        if (mounted) {
-          setState(() {
-            _mfaSecret = result['secret'];
-            _mfaQrCode = result['qr_code'];
-          });
+      final data = await AuthService.getUserProfile(widget.token);
+      final user = data['user'] as Map<String, dynamic>?;
+      if (user == null) return;
+
+      final profile = Map<String, dynamic>.from(user['profile'] ?? {});
+      final email = (user['email'] ?? '').toString();
+      final firstName = (profile['first_name'] ??
+              profile['full_name']?.toString().split(' ').first ??
+              '')
+          .toString();
+      final lastName = (profile['last_name'] ??
+              profile['full_name']?.toString().split(' ').skip(1).join(' ') ??
+              '')
+          .toString();
+      final phone = (profile['phone'] ?? '').toString();
+      final deptRaw = (profile['department'] ?? '').toString().trim();
+      final desigRaw = (profile['designation'] ?? '').toString().trim();
+      final preferred = (profile['preferred_name'] ?? '').toString();
+      final manager = (profile['managed_by'] ?? '').toString();
+      final profileImageUrl = (profile['profile_picture'] ?? '').toString();
+
+      String? matchedDept;
+      if (deptRaw.isNotEmpty) {
+        try {
+          matchedDept = _departments.firstWhere(
+            (d) => d.toLowerCase() == deptRaw.toLowerCase(),
+          );
+        } catch (_) {
+          matchedDept = null;
         }
-        _showMfaSetupDialog();
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to enable MFA: $e")),
-      );
-    } finally {
-      if (mounted) setState(() => _mfaLoading = false);
-    }
-  }
 
-  Future<void> _verifyMfaSetup(String token) async {
-    if (mounted) setState(() => _mfaLoading = true);
-    try {
-      final result = await AuthService.verifyMfaSetup(token);
-      if (result.containsKey('backup_codes')) {
-        if (mounted) {
-          setState(() {
-            _mfaEnabled = true;
-            _backupCodes = List<String>.from(result['backup_codes']);
-            _backupCodesRemaining = _backupCodes.length;
-          });
+      String? matchedDesig;
+      if (desigRaw.isNotEmpty) {
+        try {
+          matchedDesig = _designations.firstWhere(
+            (d) => d.toLowerCase() == desigRaw.toLowerCase(),
+          );
+        } catch (_) {
+          matchedDesig = null;
         }
-        Navigator.pop(context); // Close setup dialog
-        _showBackupCodesDialog();
+      }
+
+      setState(() {
+        _firstNameController.text = firstName;
+        _surnameController.text = lastName;
+        _emailController.text = email;
+        _phoneController.text = phone;
+        _preferredNameController.text = preferred;
+        _managerController.text = manager;
+        _selectedDepartment = matchedDept;
+        _selectedDesignation = matchedDesig;
+        _profileImageUrl = profileImageUrl.isNotEmpty ? profileImageUrl : null;
+
+        _isEditing = false;
+        _dirty = false;
+      });
+    } catch (e) {
+      debugPrint('Error loading hiring manager profile: $e');
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("MFA enabled successfully")),
+          SnackBar(content: Text('Failed to load profile: $e')),
         );
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("MFA setup failed: $e")),
-      );
     } finally {
-      if (mounted) setState(() => _mfaLoading = false);
-    }
-  }
-
-  Future<void> _disableMfa(String password) async {
-    if (mounted) setState(() => _mfaLoading = true);
-    try {
-      final result = await AuthService.disableMfa(password);
-      if (result.containsKey('message')) {
-        if (mounted) {
-          setState(() {
-            _mfaEnabled = false;
-            _mfaSecret = null;
-            _mfaQrCode = null;
-            _backupCodes = [];
-            _backupCodesRemaining = 0;
-          });
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("MFA disabled successfully")),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to disable MFA: $e")),
-      );
-    } finally {
-      if (mounted) setState(() => _mfaLoading = false);
-    }
-  }
-
-  Future<void> _loadBackupCodes() async {
-    try {
-      final result = await AuthService.getBackupCodes();
-      if (result.containsKey('backup_codes')) {
+      if (mounted) {
         setState(() {
-          _backupCodes = List<String>.from(result['backup_codes']);
-          _backupCodesRemaining = _backupCodes.length;
+          _loading = false;
+          _dataLoaded = true;
         });
-        _showBackupCodesDialog();
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to load backup codes: $e")),
-      );
     }
   }
 
-  Future<void> _regenerateBackupCodes() async {
-    if (mounted) setState(() => _mfaLoading = true);
-    try {
-      final result = await AuthService.regenerateBackupCodes();
-      if (result.containsKey('backup_codes')) {
-        setState(() {
-          _backupCodes = List<String>.from(result['backup_codes']);
-          _backupCodesRemaining = _backupCodes.length;
-        });
-        _showBackupCodesDialog();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Backup codes regenerated")),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to regenerate backup codes: $e")),
-      );
-    } finally {
-      if (mounted) setState(() => _mfaLoading = false);
-    }
-  }
-
-  void _showMfaSetupDialog() {
-    final TextEditingController tokenController = TextEditingController();
-
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => ThemedDialog(
-          title: "Setup Two-Factor Authentication",
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  "Scan the QR code with your authenticator app:",
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                if (_mfaQrCode != null)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade300),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Image.network(_mfaQrCode!, height: 200, width: 200),
-                  ),
-                const SizedBox(height: 16),
-                const Text(
-                  "Or enter this secret manually:",
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: SelectableText(
-                    _mfaSecret ?? '',
-                    style:
-                        const TextStyle(fontFamily: 'Monospace', fontSize: 14),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text("Enter the 6-digit code from your app:"),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: tokenController,
-                  decoration: const InputDecoration(
-                    labelText: 'Verification Code',
-                    border: OutlineInputBorder(),
-                    hintText: '123456',
-                  ),
-                  keyboardType: TextInputType.number,
-                  maxLength: 6,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 18, letterSpacing: 4),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: _mfaLoading
-                  ? null
-                  : () {
-                      if (tokenController.text.length == 6) {
-                        _verifyMfaSetup(tokenController.text);
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text("Please enter a 6-digit code")),
-                        );
-                      }
-                    },
-              child: _mfaLoading
-                  ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text("Verify & Enable"),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showBackupCodesDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => ThemedDialog(
-        title: "Backup Codes",
-        icon: Icon(Icons.security, color: Colors.orange),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Save these backup codes in a secure place. Each code can be used once if you lose access to your authenticator app.",
-                style: TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Column(
-                  children: _backupCodes
-                      .map((code) => Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            child: Row(
-                              children: [
-                                Icon(Icons.vpn_key,
-                                    color: Colors.grey.shade600, size: 16),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: SelectableText(
-                                    code,
-                                    style: const TextStyle(
-                                        fontFamily: 'Monospace',
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ))
-                      .toList(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                "⚠️ These codes won't be shown again. Make sure to save them now!",
-                style: TextStyle(fontSize: 12, color: Colors.red),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("I've Saved These Codes"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showDisableMfaDialog() {
-    final TextEditingController passwordController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => ThemedDialog(
-        title: "Disable Two-Factor Authentication",
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text("Enter your password to disable 2FA:"),
-            const SizedBox(height: 16),
-            TextField(
-              controller: passwordController,
-              decoration: const InputDecoration(
-                labelText: 'Password',
-                border: OutlineInputBorder(),
-              ),
-              obscureText: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          ElevatedButton(
-            onPressed: _mfaLoading
-                ? null
-                : () {
-                    if (passwordController.text.isNotEmpty) {
-                      _disableMfa(passwordController.text);
-                      Navigator.pop(context);
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                            content: Text("Please enter your password")),
-                      );
-                    }
-                  },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-            ),
-            child: _mfaLoading
-                ? const SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text("Disable 2FA"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // NEW SAVE PROFILE METHOD
   Future<void> _saveProfile() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_saving || !_validateFields()) return;
 
-    setState(() => _isSaving = true);
+    if (mounted) setState(() => _saving = true);
     try {
       final profileData = {
-        'full_name': fullNameController.text.trim(),
-        'email': emailController.text.trim(),
-        'phone': phoneController.text.trim(),
-        'gender': genderController.text.trim(),
-        'dob': dobController.text.trim(),
-        'nationality': nationalityController.text.trim(),
-        'id_number': idNumberController.text.trim(),
-        'bio': bioController.text.trim(),
-        'location': locationController.text.trim(),
-        'title': titleController.text.trim(),
-        'company': companyController.text.trim(),
-        'years_of_experience': yearsOfExpController.text.trim(),
-        'job_title': jobTitleController.text.trim(),
-        'linkedin': linkedinController.text.trim(),
-        'github': githubController.text.trim(),
-        'portfolio': portfolioController.text.trim(),
-        'cv_text': cvTextController.text.trim(),
-        'cv_url': cvUrlController.text.trim(),
-        'skills': skillsController.text.trim(),
-        'work_experience': workExpController.text.trim(),
+        'first_name': _firstNameController.text.trim(),
+        'last_name': _surnameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'department': _selectedDepartment ?? '',
+        'designation': _selectedDesignation ?? '',
+        'preferred_name': _preferredNameController.text.trim(),
+        'managed_by': _managerController.text.trim(),
+        'profile_picture': _profileImageUrl ?? '',
       };
 
       final response = await http.put(
-        Uri.parse(ApiEndpoints.currentUser),
+        Uri.parse(ApiEndpoints.updateAuthProfile),
         headers: {
-          'Authorization': 'Bearer ${widget.token}',
           'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${widget.token}',
         },
-        body: jsonEncode({'profile': profileData}),
+        body: json.encode({'profile': profileData}),
       );
 
       if (response.statusCode == 200) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Profile updated successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        throw Exception('Failed to update profile: ${response.statusCode}');
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error saving profile: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    } finally {
-      setState(() => _isSaving = false);
-    }
-  }
-
-  // EXISTING PROFILE METHODS: use /api/auth/me first; candidate uses candidate profile/settings, admin/HM use user.profile
-  Future<void> fetchProfileAndSettings() async {
-    try {
-      final meRes = await http.get(
-        Uri.parse(ApiEndpoints.currentUser),
-        headers: {
-          'Authorization': 'Bearer ${widget.token}',
-          'Content-Type': 'application/json'
-        },
-      );
-
-      if (meRes.statusCode == 200) {
-        final body = json.decode(meRes.body) as Map<String, dynamic>;
-        final user = body['user'] as Map<String, dynamic>? ?? {};
-        final profile = user['profile'] as Map<String, dynamic>? ?? {};
-        final candidateProfile =
-            body['candidate_profile'] as Map<String, dynamic>?;
-
-        _isCandidateUser = candidateProfile != null;
-
-        if (candidateProfile != null) {
-          fullNameController.text =
-              candidateProfile['full_name']?.toString() ?? "";
-          emailController.text = user['email']?.toString() ?? "";
-          phoneController.text = candidateProfile['phone']?.toString() ?? "";
-          genderController.text = candidateProfile['gender']?.toString() ?? "";
-          dobController.text = candidateProfile['dob']?.toString() ?? "";
-          nationalityController.text =
-              candidateProfile['nationality']?.toString() ?? "";
-          idNumberController.text =
-              candidateProfile['id_number']?.toString() ?? "";
-          bioController.text = candidateProfile['bio']?.toString() ?? "";
-          locationController.text =
-              candidateProfile['location']?.toString() ?? "";
-          titleController.text = candidateProfile['title']?.toString() ?? "";
-          degreeController.text = candidateProfile['degree']?.toString() ?? "";
-          institutionController.text =
-              candidateProfile['institution']?.toString() ?? "";
-          graduationYearController.text =
-              candidateProfile['graduation_year']?.toString() ?? "";
-          skillsController.text = (candidateProfile['skills'] is List)
-              ? (candidateProfile['skills'] as List).join(", ")
-              : "";
-          workExpController.text = (candidateProfile['work_experience'] is List)
-              ? (candidateProfile['work_experience'] as List).join("\n")
-              : (candidateProfile['work_experience']?.toString() ?? "");
-          jobTitleController.text =
-              candidateProfile['job_title']?.toString() ?? "";
-          companyController.text =
-              candidateProfile['company']?.toString() ?? "";
-          yearsOfExpController.text =
-              candidateProfile['years_of_experience']?.toString() ?? "";
-          linkedinController.text =
-              candidateProfile['linkedin']?.toString() ?? "";
-          githubController.text = candidateProfile['github']?.toString() ?? "";
-          portfolioController.text =
-              candidateProfile['portfolio']?.toString() ?? "";
-          cvTextController.text = candidateProfile['cv_text']?.toString() ?? "";
-          cvUrlController.text = candidateProfile['cv_url']?.toString() ?? "";
-          documents = candidateProfile['documents'] is List
-              ? candidateProfile['documents'] as List
-              : [];
-          _profileImageUrl =
-              candidateProfile['profile_picture']?.toString() ?? "";
-        } else {
-          fullNameController.text = profile['full_name']?.toString() ?? "";
-          emailController.text = user['email']?.toString() ?? "";
-          phoneController.text = profile['phone']?.toString() ?? "";
-          _profileImageUrl = profile['profile_picture']?.toString() ?? "";
-        }
-
-        final settings = user['settings'] as Map<String, dynamic>? ?? {};
-        darkMode = settings['dark_mode'] == true;
-        notificationsEnabled = settings['notifications_enabled'] != false;
-        enrollmentCompleted = user['enrollment_completed'] == true;
-        jobAlertsEnabled = settings['job_alerts_enabled'] != false;
-        profileVisible = settings['profile_visible'] != false;
-
-        if (_isCandidateUser) {
-          final settingsRes = await http.get(
-            Uri.parse("$apiBase/settings"),
-            headers: {
-              'Authorization': 'Bearer ${widget.token}',
-              'Content-Type': 'application/json'
-            },
+        if (mounted) {
+          setState(() {
+            _isEditing = false;
+            _dirty = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Profile updated successfully')),
           );
-          if (settingsRes.statusCode == 200) {
-            final data = json.decode(settingsRes.body) as Map<String, dynamic>;
-            darkMode = data['dark_mode'] == true;
-            notificationsEnabled = data['notifications_enabled'] != false;
-            enrollmentCompleted = data['enrollment_completed'] == true;
-            jobAlertsEnabled = data['job_alerts_enabled'] != false;
-            profileVisible = data['profile_visible'] != false;
-          }
+        }
+      } else {
+        final body = json.decode(response.body);
+        final msg =
+            body['error'] ?? body['message'] ?? 'Failed to save profile';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(msg.toString())),
+          );
         }
       }
     } catch (e) {
-      debugPrint("Error fetching profile/settings: $e");
+      debugPrint('Error saving profile: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving profile: $e')),
+        );
+      }
     } finally {
-      setState(() => loading = false);
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -614,17 +295,18 @@ class _ProfilePageState extends State<ProfilePage>
     final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       if (kIsWeb) _profileImageBytes = await pickedFile.readAsBytes();
-      setState(() => _profileImage = pickedFile);
-      await uploadProfileImage();
+      if (mounted) setState(() => _profileImage = pickedFile);
+      await _uploadProfileImage();
     }
   }
 
-  Future<void> uploadProfileImage() async {
+  /// Uploads image to backend; backend uses Cloudinary (.env) and saves URL to user profile.
+  Future<void> _uploadProfileImage() async {
     if (_profileImage == null) return;
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse("$apiBase/upload_profile_picture"),
+        Uri.parse(ApiEndpoints.uploadAuthProfilePicture),
       );
       request.headers['Authorization'] = 'Bearer ${widget.token}';
       request.files.add(
@@ -642,123 +324,29 @@ class _ProfilePageState extends State<ProfilePage>
       final respJson = json.decode(respStr);
 
       if (response.statusCode == 200 && respJson['success'] == true) {
+        final url = respJson['data']?['profile_picture']?.toString() ?? '';
         if (mounted) {
           setState(() {
-            _profileImageUrl = respJson['data']['profile_picture'];
+            _profileImageUrl = url.isNotEmpty ? url : null;
             _profileImage = null;
             _profileImageBytes = null;
           });
         }
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Profile picture updated")));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Upload failed: ${response.statusCode}")));
-      }
-    } catch (e) {
-      debugPrint("Profile image upload error: $e");
-    }
-  }
-
-  Future<void> updateProfile() async {
-    try {
-      final payload = {
-        "full_name": fullNameController.text,
-        "phone": phoneController.text,
-        "gender": genderController.text,
-        "dob": dobController.text.isNotEmpty
-            ? DateFormat('yyyy-MM-dd')
-                .format(DateTime.parse(dobController.text))
-            : null,
-        "nationality": nationalityController.text,
-        "id_number": idNumberController.text,
-        "bio": bioController.text,
-        "location": locationController.text,
-        "title": titleController.text,
-        "degree": degreeController.text,
-        "institution": institutionController.text,
-        "graduation_year": graduationYearController.text,
-        "skills":
-            skillsController.text.split(",").map((e) => e.trim()).toList(),
-        "work_experience":
-            workExpController.text.split("\n").map((e) => e.trim()).toList(),
-        "job_title": jobTitleController.text,
-        "company": companyController.text,
-        "years_of_experience": yearsOfExpController.text,
-        "linkedin": linkedinController.text,
-        "github": githubController.text,
-        "portfolio": portfolioController.text,
-        "cv_text": cvTextController.text,
-        "cv_url": cvUrlController.text,
-        "user_profile": {"email": emailController.text},
-      };
-
-      if (_isCandidateUser) {
-        final res = await http.put(
-          Uri.parse("$apiBase/profile"),
-          headers: {
-            'Authorization': 'Bearer ${widget.token}',
-            'Content-Type': 'application/json'
-          },
-          body: json.encode(payload),
-        );
-        if (res.statusCode == 200) {
-          if (!mounted) return;
+        final msg = respJson['message'] ?? 'Upload failed';
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Profile updated successfully")));
-          if (mounted) setState(() => showProfileSummary = true);
-        }
-      } else {
-        final res = await http.put(
-          Uri.parse(ApiEndpoints.updateAuthProfile),
-          headers: {
-            'Authorization': 'Bearer ${widget.token}',
-            'Content-Type': 'application/json'
-          },
-          body: json.encode({
-            "profile": {
-              "full_name": fullNameController.text,
-              "phone": phoneController.text,
-            }
-          }),
-        );
-        if (res.statusCode == 200) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Profile updated successfully")));
-          if (mounted) setState(() => showProfileSummary = true);
+            SnackBar(content: Text(msg.toString())),
+          );
         }
       }
     } catch (e) {
-      debugPrint("Error updating profile: $e");
-    }
-  }
-
-  Future<void> updateSettings() async {
-    try {
-      final payload = {
-        "dark_mode": darkMode,
-        "notifications_enabled": notificationsEnabled,
-        "job_alerts_enabled": jobAlertsEnabled,
-        "profile_visible": profileVisible,
-        "enrollment_completed": enrollmentCompleted,
-      };
-
-      final res = await http.put(
-        Uri.parse("$apiBase/settings"),
-        headers: {
-          'Authorization': 'Bearer ${widget.token}',
-          'Content-Type': 'application/json'
-        },
-        body: json.encode(payload),
-      );
-
-      if (res.statusCode == 200) {
+      debugPrint('Profile image upload error: $e');
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Settings updated successfully")));
+          SnackBar(content: Text('Upload failed: $e')),
+        );
       }
-    } catch (e) {
-      debugPrint("Error updating settings: $e");
     }
   }
 
@@ -767,1589 +355,394 @@ class _ProfilePageState extends State<ProfilePage>
       if (kIsWeb) return MemoryImage(_profileImageBytes!);
       return FileImage(File(_profileImage!.path));
     }
-    if (_profileImageUrl.isNotEmpty) return NetworkImage(_profileImageUrl);
-    return const AssetImage("assets/images/profile_placeholder.png");
-  }
-
-  Widget _modernCard(String title, Widget child, {Color? headerColor}) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      decoration: BoxDecoration(
-        color:
-            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: headerColor ?? Colors.redAccent.withValues(alpha: 0.1),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
-              ),
-            ),
-            child: Text(
-              title,
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: themeProvider.isDarkMode
-                    ? Colors.white
-                    : Colors.grey.shade800,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: child,
-          ),
-        ],
-      ),
-    );
+    if (_profileImageUrl != null && _profileImageUrl!.isNotEmpty) {
+      return NetworkImage(_profileImageUrl!);
+    }
+    return const AssetImage('assets/images/profile_placeholder.png');
   }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.isDarkMode;
 
-    if (loading) {
+    if (_loading) {
       return Scaffold(
-        backgroundColor: themeProvider.isDarkMode
-            ? const Color(0xFF14131E)
-            : Colors.grey.shade50,
-        body: const ThemedLoadingState(
-          message: "Loading Profile...",
+        body: Container(
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage(themeProvider.backgroundImage),
+              fit: BoxFit.cover,
+            ),
+          ),
+          child: const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          ),
         ),
       );
     }
 
-    return Theme(
-      data: themeProvider.themeData,
-      child: Scaffold(
-        backgroundColor: themeProvider.isDarkMode
-            ? const Color(0xFF14131E)
-            : Colors.grey.shade50,
-        body: Row(
-          children: [
-            // Enhanced Sidebar
-            Container(
-              width: 280,
-              decoration: BoxDecoration(
-                color: themeProvider.isDarkMode
-                    ? const Color(0xFF14131E)
-                    : Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 8,
-                    offset: const Offset(2, 0),
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Container(
+        decoration: BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage(themeProvider.backgroundImage),
+            fit: BoxFit.cover,
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding:
+                const EdgeInsets.only(top: 16, left: 16, right: 16, bottom: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (!_isEditing)
+                      ElevatedButton(
+                        onPressed: _saving
+                            ? null
+                            : () {
+                                setState(() {
+                                  _isEditing = true;
+                                  _dirty = false;
+                                });
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFC10D00),
+                        ),
+                        child: const Text(
+                          'Edit',
+                          style: TextStyle(fontFamily: 'Poppins'),
+                        ),
+                      )
+                    else
+                      ElevatedButton(
+                        onPressed: (_saving || !_dirty) ? null : _saveProfile,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFC10D00),
+                        ),
+                        child: _saving
+                            ? const SizedBox(
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                'Save',
+                                style: TextStyle(fontFamily: 'Poppins'),
+                              ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.black.withValues(alpha: 0.4)
+                        : Colors.black.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFFC10D00).withValues(alpha: 0.3),
+                    ),
                   ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  const SizedBox(height: 40),
-                  // Profile Summary in Sidebar
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Column(
-                      children: [
-                        GestureDetector(
-                          onTap: _pickProfileImage,
-                          child: Stack(
-                            children: [
-                              CircleAvatar(
-                                radius: 40,
-                                backgroundImage: _getProfileImageProvider(),
-                              ),
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.redAccent,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
+                  child: Row(
+                    children: [
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          GestureDetector(
+                            onTap: _pickProfileImage,
+                            child: CircleAvatar(
+                              radius: 40,
+                              backgroundColor: (_profileImage != null ||
+                                      (_profileImageUrl != null &&
+                                          _profileImageUrl!.isNotEmpty))
+                                  ? Colors.grey.shade700
+                                  : const Color(0xFFC10D00),
+                              backgroundImage: (_profileImage != null ||
+                                      (_profileImageUrl != null &&
+                                          _profileImageUrl!.isNotEmpty))
+                                  ? _getProfileImageProvider()
+                                  : null,
+                              child: (_profileImage == null &&
+                                      (_profileImageUrl == null ||
+                                          _profileImageUrl!.isEmpty))
+                                  ? const Icon(
+                                      Icons.person,
+                                      size: 44,
                                       color: Colors.white,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.camera_alt,
-                                    color: Colors.white,
-                                    size: 16,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          fullNameController.text.isNotEmpty
-                              ? fullNameController.text
-                              : "Your Name",
-                          style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.grey.shade900,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        Text(
-                          titleController.text.isNotEmpty
-                              ? titleController.text
-                              : "Your Title",
-                          style: GoogleFonts.inter(
-                            fontSize: 14,
-                            color: themeProvider.isDarkMode
-                                ? Colors.grey.shade400
-                                : Colors.grey.shade600,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        // 🆕 MFA Status in Sidebar
-                        if (_mfaEnabled) ...[
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: Colors.green.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.green),
+                                    )
+                                  : null,
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.verified,
-                                    color: Colors.green, size: 12),
-                                const SizedBox(width: 4),
-                                Text(
-                                  "2FA Enabled",
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10,
-                                    color: Colors.green,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Tap to upload',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.8),
+                              fontSize: 12,
+                              fontFamily: 'Poppins',
                             ),
                           ),
                         ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  _sidebarButton("Profile", Icons.person_outline),
-                  _sidebarButton("Settings", Icons.settings_outlined),
-                  _sidebarButton("2FA", Icons.security_outlined),
-                  _sidebarButton("Reset Password", Icons.lock_reset_outlined),
-                ],
-              ),
-            ),
-
-            // Main Content
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                child: _buildSelectedTab(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _sidebarButton(String title, IconData icon) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isSelected = selectedSidebar == title;
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Material(
-        color: isSelected
-            ? Colors.redAccent.withValues(alpha: 0.1)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: () {
-            setState(() {
-              selectedSidebar = title;
-              if (title == "Profile") showProfileSummary = true;
-            });
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              children: [
-                Icon(
-                  icon,
-                  color: isSelected
-                      ? Colors.redAccent
-                      : (themeProvider.isDarkMode
-                          ? Colors.grey.shade400
-                          : Colors.grey.shade600),
-                  size: 20,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: isSelected
-                        ? Colors.redAccent
-                        : (themeProvider.isDarkMode
-                            ? Colors.grey.shade400
-                            : Colors.grey.shade700),
-                  ),
-                ),
-                const Spacer(),
-                if (isSelected)
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                      color: Colors.redAccent,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSelectedTab() {
-    switch (selectedSidebar) {
-      case "Profile":
-        return showProfileSummary
-            ? _buildProfileSummary()
-            : _buildProfileForm();
-      case "Settings":
-        return _buildSettingsTab();
-      case "2FA":
-        return _build2FATab();
-      case "Reset Password":
-        return _buildResetPasswordTab();
-      default:
-        return _buildProfileSummary();
-    }
-  }
-
-  // 🆕 ENHANCED 2FA TAB
-  Widget _build2FATab() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: themeProvider.isDarkMode
-                        ? const Color(0xFF14131E)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 8,
                       ),
-                    ],
-                  ),
-                  child: const Icon(Icons.arrow_back, color: Colors.redAccent),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                "Two-Factor Authentication",
-                style: GoogleFonts.poppins(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: themeProvider.isDarkMode
-                      ? Colors.white
-                      : Colors.grey.shade900,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Security Status Card
-          _modernCard(
-            "Security Status",
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: _mfaEnabled
-                            ? Colors.green.withValues(alpha: 0.1)
-                            : Colors.orange.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        _mfaEnabled ? Icons.verified : Icons.security,
-                        color: _mfaEnabled ? Colors.green : Colors.orange,
-                        size: 32,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _mfaEnabled ? "2FA Enabled" : "2FA Disabled",
-                            style: GoogleFonts.inter(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
-                              color: themeProvider.isDarkMode
-                                  ? Colors.white
-                                  : Colors.grey.shade800,
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Admin',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Poppins',
+                              ),
                             ),
-                          ),
-                          Text(
-                            _mfaEnabled
-                                ? "Your account is protected with two-factor authentication"
-                                : "Add an extra layer of security to your account",
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              color: themeProvider.isDarkMode
-                                  ? Colors.grey.shade400
-                                  : Colors.grey.shade600,
-                            ),
-                          ),
-                          if (_mfaEnabled) ...[
-                            const SizedBox(height: 8),
                             Text(
-                              "$_backupCodesRemaining backup codes remaining",
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                color: Colors.green,
-                                fontWeight: FontWeight.w500,
+                              _emailController.text.isEmpty
+                                  ? 'Loading...'
+                                  : _emailController.text,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 16,
+                                fontFamily: 'Poppins',
                               ),
                             ),
                           ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                if (!_mfaEnabled) ...[
-                  Text(
-                    "Two-factor authentication adds an additional layer of security to your account by requiring more than just a password to sign in.",
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: themeProvider.isDarkMode
-                          ? Colors.grey.shade400
-                          : Colors.grey.shade600,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _mfaLoading ? null : _enableMfa,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: _mfaLoading
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.security),
-                                SizedBox(width: 8),
-                                Text("Enable 2FA"),
-                              ],
-                            ),
-                    ),
-                  ),
-                ] else ...[
-                  // MFA Management when enabled
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _mfaOption(
-                        "View Backup Codes",
-                        "Get your current backup codes",
-                        Icons.backup,
-                        onTap: _loadBackupCodes,
-                      ),
-                      _mfaOption(
-                        "Regenerate Backup Codes",
-                        "Generate new backup codes (invalidates old ones)",
-                        Icons.refresh,
-                        onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) => ThemedDialog(
-                              title: "Regenerate Backup Codes",
-                              content: const Text(
-                                "This will invalidate all your existing backup codes. Are you sure?",
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text("Cancel"),
-                                ),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                    _regenerateBackupCodes();
-                                  },
-                                  child: const Text("Regenerate"),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton(
-                          onPressed: _mfaLoading ? null : _showDisableMfaDialog,
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.red,
-                            side: const BorderSide(color: Colors.red),
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: _mfaLoading
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(
-                                        Colors.red),
-                                  ),
-                                )
-                              : const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.remove_circle_outline),
-                                    SizedBox(width: 8),
-                                    Text("Disable 2FA"),
-                                  ],
-                                ),
                         ),
                       ),
                     ],
                   ),
-                ],
-              ],
-            ),
-          ),
-
-          // Security Tips Card
-          if (_mfaEnabled) ...[
-            const SizedBox(height: 24),
-            _modernCard(
-              "Security Tips",
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _securityTip(
-                    "Save Backup Codes",
-                    "Keep your backup codes in a safe place. You'll need them if you lose access to your authenticator app.",
-                    Icons.warning_amber,
-                    color: Colors.orange,
-                  ),
-                  _securityTip(
-                    "Use Authenticator App",
-                    "We recommend using Google Authenticator, Authy, or Microsoft Authenticator.",
-                    Icons.security,
-                    color: Colors.blue,
-                  ),
-                  _securityTip(
-                    "Secure Your Device",
-                    "Make sure your phone is protected with a PIN, pattern, or biometric lock.",
-                    Icons.phone_android,
-                    color: Colors.green,
-                  ),
-                ],
-              ),
-              headerColor: Colors.blue.withValues(alpha: 0.1),
-            ),
-          ],
-
-          // How It Works Card
-          const SizedBox(height: 24),
-          _modernCard(
-            "How It Works",
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _howItWorksStep(1, "Scan QR Code",
-                    "Use your authenticator app to scan the QR code"),
-                _howItWorksStep(
-                    2, "Enter Code", "Enter the 6-digit code from your app"),
-                _howItWorksStep(3, "Save Backup Codes",
-                    "Keep your backup codes in a safe place"),
-                _howItWorksStep(4, "Enhanced Security",
-                    "Your account is now protected with 2FA"),
-              ],
-            ),
-            headerColor: Colors.purple.withValues(alpha: 0.1),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _mfaOption(String title, String subtitle, IconData icon,
-      {required VoidCallback onTap}) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade200),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(icon, color: Colors.blue, size: 20),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.black.withValues(alpha: 0.4)
+                        : Colors.black.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFFC10D00).withValues(alpha: 0.3),
+                    ),
+                  ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        title,
-                        style: GoogleFonts.inter(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: themeProvider.isDarkMode
-                              ? Colors.white
-                              : Colors.grey.shade800,
-                        ),
-                      ),
-                      Text(
-                        subtitle,
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: themeProvider.isDarkMode
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right, color: Colors.grey),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _securityTip(String title, String content, IconData icon,
-      {Color color = Colors.blue}) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: themeProvider.isDarkMode
-                        ? Colors.white
-                        : Colors.grey.shade800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  content,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: themeProvider.isDarkMode
-                        ? Colors.grey.shade400
-                        : Colors.grey.shade600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _howItWorksStep(int step, String title, String description) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 24,
-            height: 24,
-            decoration: BoxDecoration(
-              color: Colors.redAccent,
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                step.toString(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: themeProvider.isDarkMode
-                        ? Colors.white
-                        : Colors.grey.shade800,
-                  ),
-                ),
-                Text(
-                  description,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    color: themeProvider.isDarkMode
-                        ? Colors.grey.shade400
-                        : Colors.grey.shade600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-// ----- Profile Summary -----
-  Widget _buildProfileSummary() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
-            children: [
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: themeProvider.isDarkMode
-                        ? const Color(0xFF14131E)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 8,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.arrow_back, color: Colors.redAccent),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                "Profile Overview",
-                style: GoogleFonts.poppins(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: themeProvider.isDarkMode
-                      ? Colors.white
-                      : Colors.grey.shade900,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.redAccent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.edit, color: Colors.redAccent, size: 16),
-                    const SizedBox(width: 6),
-                    GestureDetector(
-                      onTap: () {
-                        if (mounted) setState(() => showProfileSummary = false);
-                      },
-                      child: Text(
-                        "Edit Profile",
-                        style: GoogleFonts.inter(
-                          color: Colors.redAccent,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Personal Information Card
-          _modernCard(
-            "Personal Information",
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _infoRow("Full Name", fullNameController.text),
-                _infoRow("Email", emailController.text),
-                _infoRow("Phone", phoneController.text),
-                _infoRow("Location", locationController.text),
-                _infoRow("Nationality", nationalityController.text),
-                _infoRow("Title", titleController.text),
-                if (bioController.text.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    "Bio",
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.grey.shade700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    bioController.text,
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: themeProvider.isDarkMode
-                          ? Colors.grey.shade400
-                          : Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            headerColor: Colors.blue.withValues(alpha: 0.1),
-          ),
-
-          // Online Profiles Card
-          if (linkedinController.text.isNotEmpty ||
-              githubController.text.isNotEmpty ||
-              portfolioController.text.isNotEmpty)
-            _modernCard(
-              "Online Profiles",
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (linkedinController.text.isNotEmpty)
-                    _linkRow("LinkedIn", linkedinController.text,
-                        Icons.work_outline),
-                  if (githubController.text.isNotEmpty)
-                    _linkRow("GitHub", githubController.text, Icons.code),
-                  if (portfolioController.text.isNotEmpty)
-                    _linkRow(
-                        "Portfolio", portfolioController.text, Icons.public),
-                ],
-              ),
-              headerColor: Colors.purple.withValues(alpha: 0.1),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoRow(String label, String value) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    if (value.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: themeProvider.isDarkMode
-                    ? Colors.white
-                    : Colors.grey.shade700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              value,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                color: themeProvider.isDarkMode
-                    ? Colors.grey.shade400
-                    : Colors.grey.shade600,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _linkRow(String label, String value, IconData icon) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Icon(icon, color: Colors.redAccent, size: 18),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: themeProvider.isDarkMode
-                    ? Colors.white
-                    : Colors.grey.shade700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                final uri = Uri.tryParse(value) ?? Uri();
-                launchUrl(uri, mode: LaunchMode.externalApplication);
-              },
-              child: Text(
-                value,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  color: Colors.blue.shade600,
-                  decoration: TextDecoration.underline,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ----- Profile Form -----
-  Widget _buildProfileForm() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          // Header
-          Row(
-            children: [
-              IconButton(
-                onPressed: () {
-                  if (mounted) setState(() => showProfileSummary = true);
-                },
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: themeProvider.isDarkMode
-                        ? const Color(0xFF14131E)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 8,
-                      ),
-                    ],
-                  ),
-                  child: const Icon(Icons.arrow_back, color: Colors.redAccent),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Text(
-                "Edit Profile",
-                style: GoogleFonts.poppins(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: themeProvider.isDarkMode
-                      ? Colors.white
-                      : Colors.grey.shade900,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          _modernCard(
-            "Personal Information",
-            Column(
-              children: [
-                // Profile picture and basic info
-                Row(
-                  children: [
-                    GestureDetector(
-                      onTap: _pickProfileImage,
-                      child: Stack(
-                        children: [
-                          CircleAvatar(
-                            radius: 50,
-                            backgroundImage: _getProfileImageProvider(),
-                          ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: Colors.redAccent,
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white,
-                                  width: 2,
-                                ),
-                              ),
-                              child: const Icon(
-                                Icons.camera_alt,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    Expanded(
-                      child: Column(
+                      Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            "Administrator",
-                            style: GoogleFonts.poppins(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w600,
-                              color: themeProvider.isDarkMode
-                                  ? Colors.white
-                                  : Colors.grey.shade800,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildEditableField(
+                                  'First Name',
+                                  _firstNameController,
+                                  readOnly: !_isEditing,
+                                ),
+                                const SizedBox(height: 16),
+                                _buildEditableField(
+                                  'Surname',
+                                  _surnameController,
+                                  readOnly: !_isEditing,
+                                ),
+                                const SizedBox(height: 16),
+                                _buildEditableField(
+                                  'Email Address',
+                                  _emailController,
+                                  errorText: _emailError,
+                                  readOnly: !_isEditing,
+                                ),
+                                const SizedBox(height: 16),
+                                _buildEditableField(
+                                  'Phone Number',
+                                  _phoneController,
+                                  errorText: _phoneError,
+                                  readOnly: !_isEditing,
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            emailController.text.isNotEmpty
-                                ? emailController.text
-                                : "admin@example.com",
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              color: themeProvider.isDarkMode
-                                  ? Colors.grey.shade400
-                                  : Colors.grey.shade600,
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildDropdownField(
+                                  'Department',
+                                  _selectedDepartment,
+                                  _departments,
+                                  (String? newValue) {
+                                    if (!_isEditing) return;
+                                    setState(() {
+                                      _selectedDepartment = newValue;
+                                      _dirty = true;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                _buildDropdownField(
+                                  'Designation',
+                                  _selectedDesignation,
+                                  _designations,
+                                  (String? newValue) {
+                                    if (!_isEditing) return;
+                                    setState(() {
+                                      _selectedDesignation = newValue;
+                                      _dirty = true;
+                                    });
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                _buildEditableField(
+                                  'Preferred Name',
+                                  _preferredNameController,
+                                  readOnly: !_isEditing,
+                                ),
+                                const SizedBox(height: 16),
+                                _buildEditableField(
+                                  'Manager',
+                                  _managerController,
+                                  readOnly: true,
+                                ),
+                              ],
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 30),
-
-                // Two-column form layout
-                Row(
-                  children: [
-                    // Left column
-                    Expanded(
-                      child: Column(
-                        children: [
-                          CustomTextField(
-                            label: "First Name",
-                            controller: fullNameController,
-                          ),
-                          const SizedBox(height: 16),
-                          CustomTextField(
-                            label: "Surname",
-                            controller: TextEditingController(text: "Radebe"),
-                          ),
-                          const SizedBox(height: 16),
-                          CustomTextField(
-                            label: "Email Address",
-                            controller: emailController,
-                          ),
-                          const SizedBox(height: 16),
-                          CustomTextField(
-                            label: "Phone Number",
-                            controller: phoneController,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    // Right column
-                    Expanded(
-                      child: Column(
-                        children: [
-                          _buildDepartmentDropdown(),
-                          const SizedBox(height: 16),
-                          _buildDesignationDropdown(),
-                          const SizedBox(height: 16),
-                          CustomTextField(
-                            label: "Preferred Name",
-                            controller: TextEditingController(
-                                text: "Nathii Nathi SGOOD"),
-                          ),
-                          const SizedBox(height: 16),
-                          CustomTextField(
-                            label: "Manager",
-                            controller: TextEditingController(
-                                text: "Gladness Mulaudzi"),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 30),
-
-                // Version info
-                Align(
-                  alignment: Alignment.bottomLeft,
-                  child: AppVersionText(
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: themeProvider.isDarkMode
-                          ? Colors.grey.shade500
-                          : Colors.grey.shade400,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // Save button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _isSaving ? null : _saveProfile,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: _isSaving
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : Text(
-                            "Save Profile",
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 
-  // ----- Settings Tab -----
-  Widget _buildSettingsTab() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Settings",
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: themeProvider.isDarkMode
-                  ? Colors.white
-                  : Colors.grey.shade900,
+  Widget _buildEditableField(
+    String label,
+    TextEditingController controller, {
+    String? errorText,
+    bool readOnly = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: readOnly
+                ? Colors.white.withValues(alpha: 0.05)
+                : Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: errorText != null
+                  ? Colors.redAccent
+                  : Colors.white.withValues(alpha: 0.3),
             ),
           ),
-          const SizedBox(height: 24),
-          _modernCard(
-            "Preferences",
-            Column(
-              children: [
-                _settingsSwitch(
-                  "Dark Mode",
-                  "Enable dark theme",
-                  Icons.dark_mode_outlined,
-                  darkMode,
-                  (v) => setState(() => darkMode = v),
-                ),
-                _settingsSwitch(
-                  "Notifications",
-                  "Receive push notifications",
-                  Icons.notifications_outlined,
-                  notificationsEnabled,
-                  (v) => setState(() => notificationsEnabled = v),
-                ),
-                _settingsSwitch(
-                  "Job Alerts",
-                  "Get notified about new jobs",
-                  Icons.work_outline,
-                  jobAlertsEnabled,
-                  (v) => setState(() => jobAlertsEnabled = v),
-                ),
-                _settingsSwitch(
-                  "Profile Visibility",
-                  "Make your profile visible to employers",
-                  Icons.visibility_outlined,
-                  profileVisible,
-                  (v) => setState(() => profileVisible = v),
-                ),
-                _settingsSwitch(
-                  "Enrollment Completed",
-                  "Mark enrollment as completed",
-                  Icons.check_circle_outline,
-                  enrollmentCompleted,
-                  (v) => setState(() => enrollmentCompleted = v),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: updateSettings,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(
-                      "Save Settings",
-                      style: GoogleFonts.inter(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+          child: TextField(
+            controller: controller,
+            readOnly: readOnly,
+            style: TextStyle(
+              color: readOnly ? Colors.white70 : Colors.white,
+              fontSize: 16,
+              fontFamily: 'Poppins',
+            ),
+            decoration: InputDecoration(
+              border: InputBorder.none,
+              errorText: errorText,
+              errorStyle: const TextStyle(
+                color: Colors.redAccent,
+                fontSize: 12,
+                height: 0.8,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  Widget _settingsSwitch(String title, String subtitle, IconData icon,
-      bool value, Function(bool) onChanged) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.redAccent.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+  Widget _buildDropdownField(
+    String label,
+    String? initialValue,
+    List<String> items,
+    void Function(String?) onChanged,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+          ),
+          child: DropdownButtonFormField<String>(
+            value: initialValue,
+            dropdownColor: Colors.grey[800],
+            style: const TextStyle(color: Colors.white, fontFamily: 'Poppins'),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.grey[800]!.withValues(alpha: 0.5),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
             ),
-            child: Icon(icon, color: Colors.redAccent, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: themeProvider.isDarkMode
-                        ? Colors.white
-                        : Colors.grey.shade800,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: themeProvider.isDarkMode
-                        ? Colors.grey.shade400
-                        : Colors.grey.shade600,
-                  ),
-                ),
-              ],
+            hint: Text(
+              'Select $label',
+              style: TextStyle(color: Colors.grey[400], fontFamily: 'Poppins'),
             ),
-          ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeThumbColor: Colors.redAccent,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildResetPasswordTab() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final TextEditingController currentPassword = TextEditingController();
-    final TextEditingController newPassword = TextEditingController();
-    final TextEditingController confirmPassword = TextEditingController();
-    bool isLoading = false;
-
-    Future<void> changePassword() async {
-      if (newPassword.text != confirmPassword.text) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("New passwords do not match")),
-        );
-        return;
-      }
-
-      setState(() => isLoading = true);
-
-      try {
-        final response = await http.post(
-          Uri.parse("$candidateBase/settings/change_password"),
-          headers: {
-            "Authorization": "Bearer ${widget.token}",
-            "Content-Type": "application/json",
-          },
-          body: jsonEncode({
-            "current_password": currentPassword.text,
-            "new_password": newPassword.text,
-          }),
-        );
-
-        final data = jsonDecode(response.body);
-
-        if (response.statusCode == 200 && data["success"] == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Password updated successfully")),
-          );
-          currentPassword.clear();
-          newPassword.clear();
-          confirmPassword.clear();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content: Text(data["message"] ?? "Failed to update password")),
-          );
-        }
-      } catch (e) {
-        debugPrint("Password change error: $e");
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text("Error changing password. Please try again.")),
-        );
-      } finally {
-        setState(() => isLoading = false);
-      }
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Reset Password",
-            style: GoogleFonts.poppins(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: themeProvider.isDarkMode
-                  ? Colors.white
-                  : Colors.grey.shade900,
-            ),
-          ),
-          const SizedBox(height: 24),
-          _modernCard(
-            "Change Password",
-            Column(
-              children: [
-                CustomTextField(
-                  label: "Current Password",
-                  controller: currentPassword,
-                  obscureText: true,
-                ),
-                const SizedBox(height: 16),
-                CustomTextField(
-                  label: "New Password",
-                  controller: newPassword,
-                  obscureText: true,
-                ),
-                const SizedBox(height: 16),
-                CustomTextField(
-                  label: "Confirm New Password",
-                  controller: confirmPassword,
-                  obscureText: true,
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: isLoading ? null : changePassword,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.redAccent,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : Text(
-                            "Reset Password",
-                            style: GoogleFonts.inter(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDepartmentDropdown() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final departments = [
-      'Finance',
-      'Human Resources',
-      'Information Technology',
-      'Marketing',
-      'Sales',
-      'Operations',
-      'Engineering',
-      'Other',
-    ];
-
-    return Container(
-      decoration: BoxDecoration(
-        color:
-            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: themeProvider.isDarkMode
-              ? Colors.grey.shade600
-              : Colors.grey.shade300,
-        ),
-      ),
-      child: DropdownButtonFormField<String>(
-        initialValue: 'Finance',
-        decoration: InputDecoration(
-          labelText: 'Department',
-          labelStyle: GoogleFonts.inter(
-            color: themeProvider.isDarkMode
-                ? Colors.grey.shade400
-                : Colors.grey.shade600,
-          ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 12,
+            items: items
+                .map((String item) =>
+                    DropdownMenuItem<String>(value: item, child: Text(item)))
+                .toList(),
+            onChanged: _isEditing ? onChanged : null,
           ),
         ),
-        dropdownColor:
-            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        style: GoogleFonts.inter(
-          color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
-        ),
-        items: departments.map((String department) {
-          return DropdownMenuItem<String>(
-            value: department,
-            child: Text(department),
-          );
-        }).toList(),
-        onChanged: (String? newValue) {
-          // Handle department change
-        },
-      ),
-    );
-  }
-
-  Widget _buildDesignationDropdown() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final designations = [
-      'Business Analyst',
-      'Software Engineer',
-      'Project Manager',
-      'HR Manager',
-      'Marketing Specialist',
-      'Sales Executive',
-      'CEO',
-      'CTO',
-      'CFO',
-      'Other',
-    ];
-
-    return Container(
-      decoration: BoxDecoration(
-        color:
-            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: themeProvider.isDarkMode
-              ? Colors.grey.shade600
-              : Colors.grey.shade300,
-        ),
-      ),
-      child: DropdownButtonFormField<String>(
-        initialValue: 'Business Analyst',
-        decoration: InputDecoration(
-          labelText: 'Designation',
-          labelStyle: GoogleFonts.inter(
-            color: themeProvider.isDarkMode
-                ? Colors.grey.shade400
-                : Colors.grey.shade600,
-          ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 12,
-          ),
-        ),
-        dropdownColor:
-            themeProvider.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-        style: GoogleFonts.inter(
-          color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
-        ),
-        items: designations.map((String designation) {
-          return DropdownMenuItem<String>(
-            value: designation,
-            child: Text(designation),
-          );
-        }).toList(),
-        onChanged: (String? newValue) {
-          // Handle designation change
-        },
-      ),
+      ],
     );
   }
 }

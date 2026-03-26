@@ -297,6 +297,11 @@ class JobResponseSchema(JobBaseSchema):
     published_on = fields.DateTime()
     is_active = fields.Bool()
     deleted_at = fields.DateTime(allow_none=True)
+    approval_status = fields.Str(allow_none=True)
+    approved_at = fields.DateTime(allow_none=True)
+    approved_by = fields.Int(allow_none=True)
+    rejection_reason = fields.Str(allow_none=True)
+    approved_by_user = fields.Dict(allow_none=True)
 
     application_count = fields.Int(
         dump_only=True,
@@ -326,6 +331,10 @@ class JobFilterSchema(Schema):
     status = fields.Str(
         load_default="active",
         validate=OneOf(["active", "inactive", "all"])
+    )
+    approval_status = fields.Str(
+        load_default="all",
+        validate=OneOf(["pending", "approved", "rejected", "all"])
     )
     sort_by = fields.Str(
         load_default="created_at",
@@ -360,7 +369,10 @@ class JobActivityLogSchema(Schema):
             "DELETE",
             "VIEW",
             "VIEW_DETAILED",
-            "RESTORE"
+            "RESTORE",
+            "APPROVE",
+            "REJECT",
+            "RESUBMIT"
         ])
     )
     details = fields.Dict()

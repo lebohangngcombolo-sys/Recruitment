@@ -77,7 +77,7 @@ class OfferService {
 
   // ---------- MY OFFERS (current logged-in candidate) ----------
   Future<List<Offer>> getMyOffers() async {
-    final res = await _get(ApiEndpoints.myOffer());
+    final res = await _get(ApiEndpoints.myOffers);
     return (res as List).map((e) => Offer.fromJson(e)).toList();
   }
 

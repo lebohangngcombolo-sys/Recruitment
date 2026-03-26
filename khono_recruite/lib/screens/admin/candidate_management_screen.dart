@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import '../../services/admin_service.dart';
 import 'candidate_detail_screen.dart';
@@ -283,7 +284,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     int rank,
   ) {
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
+      cursor: kIsWeb ? SystemMouseCursors.click : MouseCursor.defer,
       child: GestureDetector(
         onTap: () => openCandidateDetails(candidate),
         child: ThemedSurfaceCard(

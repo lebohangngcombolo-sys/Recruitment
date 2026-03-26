@@ -217,15 +217,15 @@ def _job_list_item(job):
 
 # ----------------- GET AVAILABLE JOBS -----------------
 @candidate_bp.route("/jobs", methods=["GET"])
-@role_required(["candidate"])
+@role_required(["candidate", "admin", "hiring_manager"])
 def get_available_jobs():
     try:
         user_id = get_jwt_identity()
 
-        jobs = Requisition.query.filter_by(is_active=True)\
-                                .filter(Requisition.deleted_at.is_(None))\
-                                .order_by(Requisition.created_at.desc())\
-                                .all()
+        query = Requisition.query.filter_by(is_active=True).filter(Requisition.deleted_at.is_(None))
+        if hasattr(Requisition, "approval_status"):
+            query = query.filter(Requisition.approval_status == "approved")
+        jobs = query.order_by(Requisition.created_at.desc()).all()
         result = []
 
         for job in jobs:
@@ -379,15 +379,10 @@ def upload_resume(application_id):
         try:
             # Send to external analysis service
             from app.services.analysis_service_client import AnalysisServiceClient
-            # Ensure stream is reset for the external service upload
-            try:
-                file.stream.seek(0)
-            except Exception:
-                pass
-            external_result = AnalysisServiceClient.submit_cv(
-                file_storage=file,
-                filename=filename,
+            external_result = AnalysisServiceClient.submit_cv_text(
+                cv_text=resume_text or "",
                 job_description=JobService.build_job_spec_for_cv(job),
+                industry=job.category or None
             )
             cv_analysis.external_analysis_id = external_result.get('analysis_id')
             cv_analysis.status = 'submitted'
@@ -500,7 +495,7 @@ def get_cv_analysis_status(analysis_id):
 
 # ----------------- CANDIDATE APPLICATIONS -----------------
 @candidate_bp.route("/applications", methods=["GET"])
-@role_required(["candidate"])
+@role_required(["candidate", "admin", "hiring_manager"])
 def get_applications():
     try:
         user_id = get_jwt_identity()
@@ -925,7 +920,11 @@ def get_my_interviews():
         if not candidate:
             return jsonify({"interviews": [], "scheduled_count": 0}), 200
 
-        interviews = Interview.query.filter_by(candidate_id=candidate.id).order_by(Interview.scheduled_time.desc()).all()
+        interviews = (
+            Interview.query.filter_by(candidate_id=candidate.id, approval_status="approved")
+            .order_by(Interview.scheduled_time.desc())
+            .all()
+        )
         now = datetime.utcnow()
         scheduled_count = sum(
             1 for i in interviews
@@ -940,6 +939,7 @@ def get_my_interviews():
                 "interview_type": i.interview_type,
                 "meeting_link": i.meeting_link,
                 "status": i.status or "scheduled",
+                "approval_status": getattr(i, "approval_status", "approved"),
                 "job_title": i.application.requisition.title if i.application and i.application.requisition else None,
             })
         return jsonify({"interviews": out, "scheduled_count": scheduled_count}), 200

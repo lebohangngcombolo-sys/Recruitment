@@ -397,7 +397,7 @@ class AdminStateProvider extends ChangeNotifier {
         return;
       }
 
-      final stats = await _adminService.getJobStatistics();
+      final stats = await _adminService.getAllJobStatistics();
       _jobStatistics = stats;
       _setCachedData(cacheKey, stats);
     } catch (e) {

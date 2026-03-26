@@ -75,6 +75,7 @@ class Config:
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=_parse_positive(os.getenv('JWT_REFRESH_TOKEN_DAYS', '30'), 30))
     JWT_TOKEN_LOCATION = ["headers", "query_string"]  # Allow token in headers or query string
     JWT_QUERY_STRING_NAME = "access_token"            # Query param name
+    JWT_IGNORE_OPTIONS = True                         # Ignore OPTIONS requests for JWT check
     
     # Email (SMTP and/or SendGrid HTTP API; Render typically uses SENDGRID_API_KEY)
     MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
@@ -85,7 +86,16 @@ class Config:
     MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER')
     _mt = (os.getenv('MAIL_TIMEOUT') or '60').strip()
     MAIL_TIMEOUT = int(_mt) if _mt else 60
-    SENDGRID_API_KEY = (os.getenv('SENDGRID_API_KEY') or '').strip() or None
+    _sg = (os.getenv('SENDGRID_API_KEY') or '').strip() or None
+    if not _sg:
+        try:
+            if (MAIL_SERVER or '').strip().lower() == 'smtp.sendgrid.net' and (MAIL_USERNAME or '').strip().lower() == 'apikey':
+                candidate = (MAIL_PASSWORD or '').strip()
+                if candidate:
+                    _sg = candidate
+        except Exception:
+            _sg = None
+    SENDGRID_API_KEY = _sg
     SENDGRID_API_URL = (os.getenv('SENDGRID_API_URL') or 'https://api.sendgrid.com/v3/mail/send').strip()
     
     # OAuth Configuration
