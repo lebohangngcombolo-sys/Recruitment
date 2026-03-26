@@ -15,6 +15,7 @@ import 'dart:typed_data';
 // Import your existing services
 import '../../services/candidate_service.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 import '../../utils/app_version.dart';
 
 /// New landing screen: hero, explore by category, job cards. Optional [token] for logged-in state.
@@ -94,7 +95,6 @@ class _LandingPageState extends State<LandingPage>
   Uint8List? _profileImageBytes;
   // ignore: unused_field - kept for profile picture when UI is reconnected
   String _profileImageUrl = "";
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
   @override
   void initState() {
@@ -205,7 +205,7 @@ class _LandingPageState extends State<LandingPage>
     if (!_hasToken) return;
     try {
       final profileRes = await http.get(
-        Uri.parse("$apiBase/profile"),
+        Uri.parse("${ApiEndpoints.candidateBase}/profile"),
         headers: {
           'Authorization': 'Bearer ${_effectiveToken ?? ''}',
           'Content-Type': 'application/json',
@@ -231,7 +231,7 @@ class _LandingPageState extends State<LandingPage>
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse("$apiBase/upload_profile_picture"),
+        Uri.parse(ApiEndpoints.uploadAuthProfilePicture),
       );
 
       request.headers['Authorization'] = 'Bearer ${_effectiveToken ?? ''}';
@@ -276,8 +276,11 @@ class _LandingPageState extends State<LandingPage>
 
     _safeSetState(() => loadingJobs = true);
     try {
+      final role = await AuthService.getRole();
+      final isCandidate = role == 'candidate';
+
       final List<Map<String, dynamic>> jobs =
-          _hasToken && _effectiveToken != null
+          _hasToken && _effectiveToken != null && isCandidate
               ? await CandidateService.getAvailableJobs(_effectiveToken!)
               : await CandidateService.getPublicJobs();
       if (!mounted) return;
@@ -313,6 +316,12 @@ class _LandingPageState extends State<LandingPage>
   Future<void> fetchApplications() async {
     if (!mounted || !_hasToken) return;
 
+    final role = await AuthService.getRole();
+    if (role != 'candidate') {
+      _safeSetState(() => loadingApplications = false);
+      return;
+    }
+
     _safeSetState(() => loadingApplications = true);
     try {
       final data = await CandidateService.getApplications(_effectiveToken!);
@@ -339,6 +348,12 @@ class _LandingPageState extends State<LandingPage>
 
   Future<void> fetchNotifications() async {
     if (!mounted || !_hasToken) return;
+
+    final role = await AuthService.getRole();
+    if (role != 'candidate') {
+      _safeSetState(() => loadingNotifications = false);
+      return;
+    }
 
     _safeSetState(() => loadingNotifications = true);
     try {
@@ -525,7 +540,7 @@ class _LandingPageState extends State<LandingPage>
 
     try {
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/ai/chat"),
+        Uri.parse("${ApiEndpoints.aiBase}/chat"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer ${_effectiveToken ?? ''}",
@@ -576,7 +591,7 @@ class _LandingPageState extends State<LandingPage>
     _safeSetState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/ai/parse_cv"),
+        Uri.parse("${ApiEndpoints.aiBase}/parse_cv"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer ${_effectiveToken ?? ''}",

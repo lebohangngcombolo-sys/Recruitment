@@ -271,6 +271,7 @@ class _JobFormState extends State<JobForm> with SingleTickerProviderStateMixin {
         await _jobService.createJob(jobData);
       }
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(_isEditMode
@@ -283,6 +284,7 @@ class _JobFormState extends State<JobForm> with SingleTickerProviderStateMixin {
       widget.onSaved();
       Navigator.pop(context);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: ${e.toString()}'),
@@ -290,7 +292,7 @@ class _JobFormState extends State<JobForm> with SingleTickerProviderStateMixin {
         ),
       );
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -402,12 +404,83 @@ class _JobFormState extends State<JobForm> with SingleTickerProviderStateMixin {
   }
 
   Widget _buildBasicInfoTab() {
+    final approvalStatus = widget.initialData?['approval_status']?.toString();
+    final rejectionReason = widget.initialData?['rejection_reason']?.toString();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Form(
         key: _formKey,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (widget.initialData != null && approvalStatus != null && approvalStatus.isNotEmpty) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: approvalStatus == 'approved'
+                      ? Colors.green.withOpacity(0.1)
+                      : approvalStatus == 'rejected'
+                          ? Colors.red.withOpacity(0.1)
+                          : Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: approvalStatus == 'approved'
+                        ? Colors.green
+                        : approvalStatus == 'rejected'
+                            ? Colors.red
+                            : Colors.orange,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      'Approval status: ',
+                      style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+                    ),
+                    Text(
+                      approvalStatus == 'approved'
+                          ? 'Approved'
+                          : approvalStatus == 'rejected'
+                              ? 'Rejected'
+                              : 'Pending approval',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: approvalStatus == 'approved'
+                            ? Colors.green.shade700
+                            : approvalStatus == 'rejected'
+                                ? Colors.red.shade700
+                                : Colors.orange.shade700,
+                      ),
+                    ),
+                    if (approvalStatus == 'rejected' && rejectionReason != null && rejectionReason.isNotEmpty)
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: Text('Reason: $rejectionReason', style: TextStyle(fontSize: 12, color: Colors.red.shade800), maxLines: 2, overflow: TextOverflow.ellipsis),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ] else if (widget.initialData == null) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.blue, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(child: Text('This job will be submitted for approval after creation.', style: TextStyle(fontSize: 13, color: Colors.blue))),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
             TextFormField(
               controller: _titleController,
               decoration: const InputDecoration(

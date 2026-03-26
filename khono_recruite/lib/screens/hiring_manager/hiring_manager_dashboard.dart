@@ -2,8 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
-import '../../services/admin_service.dart';
+import '../../services/hiring_manager_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/admin_service.dart';
 import 'candidate_management_screen.dart';
 import 'cv_reviews_screen.dart';
 import '../notifications/notifications_screen.dart';
@@ -67,6 +68,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
   // Candidate-related variables
   bool loadingCandidates = true;
+  bool candidateLoading = true;
+  bool candidateHasMore = false;
   int candidatePage = 1;
   int candidatePerPage = 20;
   List<Map<String, dynamic>> candidates = [];
@@ -99,6 +102,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   DateTime selectedDay = DateTime.now();
 
   final AdminService admin = AdminService();
+  final HiringManagerService hmService = HiringManagerService();
 
   List<String> recentActivities = [];
 
@@ -192,6 +196,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     if (refresh) {
       setState(() {
         loadingCandidates = true;
+        candidateLoading = true;
         candidatePage = 1;
         candidates.clear();
       });
@@ -202,25 +207,27 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         page: candidatePage,
         perPage: candidatePerPage,
         search: candidateSearchQuery,
-        status: candidateStatusFilter,
       );
 
       if (!mounted) return;
 
       setState(() {
         if (refresh || candidatePage == 1) {
-          candidates = List<Map<String, dynamic>>.from(data['candidates']);
+          candidates = List<Map<String, dynamic>>.from(data);
         } else {
           candidates.addAll(
-            List<Map<String, dynamic>>.from(data['candidates']),
+            List<Map<String, dynamic>>.from(data),
           );
         }
+        candidateHasMore = data.length >= candidatePerPage;
         loadingCandidates = false;
+        candidateLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         loadingCandidates = false;
+        candidateLoading = false;
       });
       if (!mounted) return;
       _showErrorSnackBar('Failed to fetch candidates: $e');
@@ -257,8 +264,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       final profile = info['profile'] ?? {};
       final candidate = info['candidate'] ?? {};
 
-      final name =
-          info['full_name'] ??
+      final name = info['full_name'] ??
           info['name'] ??
           profile['full_name'] ??
           profile['name'] ??
@@ -427,7 +433,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     if (!mounted) return;
     setState(() => loadingStats = true);
     try {
-      final data = await admin.getDashboardCounts();
+      final data = await hmService.getDashboardCounts();
 
       final List<String> activities = [];
       if (audits.isNotEmpty) {
@@ -510,8 +516,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             .where((item) => item['time_to_interview_days'] != null)
             .toList();
         if (validTimes.isNotEmpty) {
-          final avgTime =
-              validTimes
+          final avgTime = validTimes
                   .map((item) => item['time_to_interview_days'] as int)
                   .reduce((a, b) => a + b) /
               validTimes.length;
@@ -1299,8 +1304,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                           MaterialPageRoute(
                                             builder: (context) =>
                                                 RecruitmentPipelinePage(
-                                                  token: widget.token,
-                                                ),
+                                              token: widget.token,
+                                            ),
                                           ),
                                         );
                                       },
@@ -1466,8 +1471,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           color: selected
               ? Colors.white
               : themeProvider.isDarkMode
-              ? Colors.grey.shade700
-              : Colors.grey.shade600,
+                  ? Colors.grey.shade700
+                  : Colors.grey.shade600,
         ),
         child: Icon(
           icon,
@@ -1493,8 +1498,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final iconColor = selected
         ? const Color.fromRGBO(151, 18, 8, 1)
         : themeProvider.isDarkMode
-        ? Colors.grey.shade400
-        : Colors.grey.shade800;
+            ? Colors.grey.shade400
+            : Colors.grey.shade800;
 
     return Column(
       children: [
@@ -1524,8 +1529,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                               color: selected
                                   ? Colors.white
                                   : themeProvider.isDarkMode
-                                  ? Colors.grey.shade400
-                                  : Colors.grey.shade800,
+                                      ? Colors.grey.shade400
+                                      : Colors.grey.shade800,
                               fontWeight: selected
                                   ? FontWeight.bold
                                   : FontWeight.normal,
@@ -1576,8 +1581,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final iconColor = selected
         ? const Color.fromRGBO(151, 18, 8, 1)
         : themeProvider.isDarkMode
-        ? Colors.grey.shade400
-        : Colors.grey.shade800;
+            ? Colors.grey.shade400
+            : Colors.grey.shade800;
 
     return InkWell(
       onTap: () {
@@ -1603,8 +1608,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   color: selected
                       ? const Color(0xFFC10D00)
                       : themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade800,
+                          ? Colors.grey.shade400
+                          : Colors.grey.shade800,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),
@@ -1626,8 +1631,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final iconColor = selected
         ? const Color.fromRGBO(151, 18, 8, 1)
         : themeProvider.isDarkMode
-        ? Colors.grey.shade400
-        : Colors.grey.shade800;
+            ? Colors.grey.shade400
+            : Colors.grey.shade800;
     return InkWell(
       onTap: onTapOverride ?? () => setState(() => currentScreen = screenKey),
       child: Container(
@@ -1646,8 +1651,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     color: selected
                         ? Colors.white
                         : themeProvider.isDarkMode
-                        ? Colors.grey.shade400
-                        : Colors.grey.shade800,
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade800,
                     fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
@@ -1831,11 +1836,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   final item = stats[index];
                   return Container(
                     decoration: BoxDecoration(
-                      color:
-                          (themeProvider.isDarkMode
-                                  ? const Color(0xFF14131E)
-                                  : Colors.white)
-                              .withValues(alpha: 0.9),
+                      color: (themeProvider.isDarkMode
+                              ? const Color(0xFF14131E)
+                              : Colors.white)
+                          .withValues(alpha: 0.9),
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
@@ -1995,9 +1999,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
-                  color: themeProvider.isDarkMode
-                      ? Colors.white
-                      : Colors.black87,
+                  color:
+                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
               Container(
@@ -2119,9 +2122,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
-                  color: themeProvider.isDarkMode
-                      ? Colors.white
-                      : Colors.black87,
+                  color:
+                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
               Container(
@@ -2392,9 +2394,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   fontFamily: 'Poppins',
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
-                  color: themeProvider.isDarkMode
-                      ? Colors.white
-                      : Colors.black87,
+                  color:
+                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
               Container(
@@ -2854,13 +2855,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     final inInterview = applicationStatusBreakdown['interview'] is int
         ? applicationStatusBreakdown['interview'] as int
         : (applicationStatusBreakdown['interview'] is num
-              ? (applicationStatusBreakdown['interview'] as num).toInt()
-              : 0);
+            ? (applicationStatusBreakdown['interview'] as num).toInt()
+            : 0);
     final recommended = applicationStatusBreakdown['recommended'] is int
         ? applicationStatusBreakdown['recommended'] as int
         : (applicationStatusBreakdown['recommended'] is num
-              ? (applicationStatusBreakdown['recommended'] as num).toInt()
-              : 0);
+            ? (applicationStatusBreakdown['recommended'] as num).toInt()
+            : 0);
     final total = inInterview + recommended;
     final bg =
         (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -2890,9 +2891,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   fontFamily: 'Poppins',
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: themeProvider.isDarkMode
-                      ? Colors.white
-                      : Colors.black87,
+                  color:
+                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
               if (total > 0)
@@ -2967,20 +2967,17 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
   // ---------------- Notifications: status changes & upcoming interviews ----------------
   Widget _buildNotificationsFocusCard(ThemeProvider themeProvider) {
-    final notificationPreview = dashboardNotifications
-        .where((n) => n['is_read'] != true)
+    final notificationPreview =
+        dashboardNotifications.where((n) => n['is_read'] != true).toList();
+    final recentNotifications = (notificationPreview.isNotEmpty
+            ? notificationPreview
+            : dashboardNotifications)
+        .take(5)
         .toList();
-    final recentNotifications =
-        (notificationPreview.isNotEmpty
-                ? notificationPreview
-                : dashboardNotifications)
-            .take(5)
-            .toList();
-    final upcomingFromCalendar =
-        _calendarAppointments
-            .where((a) => a.startTime.isAfter(DateTime.now()))
-            .toList()
-          ..sort((a, b) => a.startTime.compareTo(b.startTime));
+    final upcomingFromCalendar = _calendarAppointments
+        .where((a) => a.startTime.isAfter(DateTime.now()))
+        .toList()
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
     final upcomingList = upcomingFromCalendar.take(3).toList();
     final bg =
         (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
@@ -3010,9 +3007,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   fontFamily: 'Poppins',
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: themeProvider.isDarkMode
-                      ? Colors.white
-                      : Colors.black87,
+                  color:
+                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
               TextButton(
@@ -3088,9 +3084,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
             )
           else
-            ...recentNotifications
-                .take(3)
-                .map(
+            ...recentNotifications.take(3).map(
                   (n) => Padding(
                     padding: const EdgeInsets.only(bottom: 4),
                     child: Column(
@@ -3157,9 +3151,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   fontFamily: 'Poppins',
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
-                  color: themeProvider.isDarkMode
-                      ? Colors.white
-                      : Colors.black87,
+                  color:
+                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
                 ),
               ),
               Text(
@@ -3271,7 +3264,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               "Candidates Overview",
               style: TextStyle(
                 fontFamily: 'Poppins',
-                fontSize: 20,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: themeProvider.isDarkMode
                     ? Colors.white
@@ -3280,6 +3273,15 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             ),
             Row(
               children: [
+                IconButton(
+                  onPressed: () => fetchCandidates(refresh: true),
+                  icon: const Icon(Icons.refresh, size: 20),
+                  tooltip: 'Refresh candidates',
+                  color: themeProvider.isDarkMode
+                      ? Colors.white70
+                      : Colors.black54,
+                ),
+                const SizedBox(width: 8),
                 // Status Filter Dropdown
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -3287,11 +3289,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color:
-                        (themeProvider.isDarkMode
-                                ? const Color(0xFF14131E)
-                                : Colors.white)
-                            .withValues(alpha: 0.9),
+                    color: (themeProvider.isDarkMode
+                            ? const Color(0xFF14131E)
+                            : Colors.white)
+                        .withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.grey.shade300),
                   ),
@@ -3302,26 +3303,24 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                         "All Status",
                         style: TextStyle(fontSize: 12),
                       ),
-                      items:
-                          [
-                                'all',
-                                'applied',
-                                'reviewed',
-                                'interviewed',
-                                'offered',
-                                'rejected',
-                              ]
-                              .map(
-                                (status) => DropdownMenuItem(
-                                  value: status == 'all' ? null : status,
-                                  child: Text(
-                                    status[0].toUpperCase() +
-                                        status.substring(1),
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                              )
-                              .toList(),
+                      items: [
+                        'all',
+                        'applied',
+                        'reviewed',
+                        'interviewed',
+                        'offered',
+                        'rejected',
+                      ]
+                          .map(
+                            (status) => DropdownMenuItem(
+                              value: status == 'all' ? null : status,
+                              child: Text(
+                                status[0].toUpperCase() + status.substring(1),
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          )
+                          .toList(),
                       onChanged: (value) => _filterCandidatesByStatus(value),
                     ),
                   ),
@@ -3332,11 +3331,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   width: 200,
                   height: 36,
                   decoration: BoxDecoration(
-                    color:
-                        (themeProvider.isDarkMode
-                                ? const Color(0xFF14131E)
-                                : Colors.white)
-                            .withValues(alpha: 0.9),
+                    color: (themeProvider.isDarkMode
+                            ? const Color(0xFF14131E)
+                            : Colors.white)
+                        .withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: Colors.grey.shade300),
                   ),
@@ -3459,11 +3457,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
-          color:
-              (themeProvider.isDarkMode
-                      ? const Color(0xFF14131E)
-                      : Colors.white)
-                  .withValues(alpha: 0.9),
+          color: (themeProvider.isDarkMode
+                  ? const Color(0xFF14131E)
+                  : Colors.white)
+              .withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
@@ -3574,9 +3571,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                           latestStatus.length > 6
                               ? '${latestStatus.substring(0, 6)}.'
                               : latestStatus.isNotEmpty
-                              ? latestStatus[0].toUpperCase() +
-                                    latestStatus.substring(1)
-                              : '',
+                                  ? latestStatus[0].toUpperCase() +
+                                      latestStatus.substring(1)
+                                  : '',
                           style: TextStyle(
                             fontSize: 8,
                             fontWeight: FontWeight.w600,
@@ -3632,17 +3629,16 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
     final genderDistribution =
         candidateDemographics['gender_distribution'] as Map<String, dynamic>? ??
-        {};
-    final locationDistribution =
-        candidateDemographics['location_distribution']
+            {};
+    final locationDistribution = candidateDemographics['location_distribution']
             as Map<String, dynamic>? ??
         {};
     final topSkills =
         candidateDemographics['top_skills'] as Map<String, dynamic>? ?? {};
     final educationDistribution =
         candidateDemographics['education_distribution']
-            as Map<String, dynamic>? ??
-        {};
+                as Map<String, dynamic>? ??
+            {};
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -3664,8 +3660,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             int crossAxisCount = constraints.maxWidth > 1200
                 ? 4
                 : constraints.maxWidth > 800
-                ? 2
-                : 1;
+                    ? 2
+                    : 1;
 
             return GridView.count(
               shrinkWrap: true,
@@ -3727,11 +3723,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     if (data.isEmpty) {
       return Container(
         decoration: BoxDecoration(
-          color:
-              (themeProvider.isDarkMode
-                      ? const Color(0xFF14131E)
-                      : Colors.white)
-                  .withValues(alpha: 0.9),
+          color: (themeProvider.isDarkMode
+                  ? const Color(0xFF14131E)
+                  : Colors.white)
+              .withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.grey.shade200),
         ),
@@ -3782,11 +3777,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       borderRadius: BorderRadius.circular(12),
       child: Container(
         decoration: BoxDecoration(
-          color:
-              (themeProvider.isDarkMode
-                      ? const Color(0xFF14131E)
-                      : Colors.white)
-                  .withValues(alpha: 0.9),
+          color: (themeProvider.isDarkMode
+                  ? const Color(0xFF14131E)
+                  : Colors.white)
+              .withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [

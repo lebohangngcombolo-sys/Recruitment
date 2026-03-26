@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+  <body style="font-family: Arial, sans-serif; line-height: 1.5;">
+    <h2>Job pending approval</h2>
+    <p>A new job has been submitted and is waiting for approval.</p>
+    <p>
+      <strong>Title:</strong> {{ job_title }}<br/>
+      <strong>Company:</strong> {{ company }}<br/>
+      <strong>Created by:</strong> {{ created_by_name }} ({{ created_by_email }})<br/>
+      <strong>Created at:</strong> {{ created_at }}
+    </p>
+    <p>
+      Review in the admin portal: <a href="{{ admin_jobs_url }}">Open job approvals</a>
+    </p>
+  </body>
+</html>

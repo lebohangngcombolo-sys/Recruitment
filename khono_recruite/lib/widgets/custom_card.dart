@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class CustomCard extends StatefulWidget {
   final String title;
@@ -29,8 +30,8 @@ class _CustomCardState extends State<CustomCard> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onEnter: (_) => setState(() => isHovered = true),
-      onExit: (_) => setState(() => isHovered = false),
+      onEnter: kIsWeb ? (_) => setState(() => isHovered = true) : null,
+      onExit: kIsWeb ? (_) => setState(() => isHovered = false) : null,
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(

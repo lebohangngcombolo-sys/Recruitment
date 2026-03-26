@@ -1,7 +1,10 @@
+import 'dart:async';
 import 'dart:convert' as convert;
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../utils/api_endpoints.dart';
 import 'auth_service.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 class _SafeJson {
   const _SafeJson();
@@ -29,6 +32,72 @@ class AdminService {
   final Map<String, String> headers = {'Content-Type': 'application/json'};
 
   // ---------- JOBS ----------
+
+  /// Simple list jobs method (basic)
+  Future<List<dynamic>> listJobs() async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.get(
+      Uri.parse(ApiEndpoints.adminJobs),
+      headers: authHeaders,
+    );
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      return data['jobs'] ?? data['data'] ?? data ?? [];
+    }
+    throw Exception('Failed to fetch jobs: ${res.body}');
+  }
+
+  /// Update job status (activate/deactivate)
+  Future<void> updateJobStatus(int jobId, bool isActive) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.patch(
+      Uri.parse('${ApiEndpoints.adminJobs}/$jobId'),
+      headers: {...authHeaders, 'Content-Type': 'application/json'},
+      body: json.encode({'is_active': isActive}),
+    );
+    if (res.statusCode != 200) {
+      throw Exception('Failed to update job status: ${res.body}');
+    }
+  }
+
+  /// Create job (basic method)
+  Future<Map<String, dynamic>> createJob(Map<String, dynamic> data) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse(ApiEndpoints.adminJobs),
+      headers: {...authHeaders, 'Content-Type': 'application/json'},
+      body: json.encode(data),
+    );
+    if (res.statusCode == 201) return json.decode(res.body);
+    throw Exception('Failed to create job: ${res.body}');
+  }
+
+  /// Enhanced create job with workflow support
+  Future<Map<String, dynamic>> createJobEnhanced(
+      Map<String, dynamic> data) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.adminJobs}/enhanced'),
+      headers: {...authHeaders, 'Content-Type': 'application/json'},
+      body: json.encode(data),
+    );
+    if (res.statusCode == 201) return json.decode(res.body);
+    throw Exception('Failed to create job (enhanced): ${res.body}');
+  }
+
+  /// Enhanced update job with workflow support
+  Future<Map<String, dynamic>> updateJobEnhanced(
+      int jobId, Map<String, dynamic> data) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.put(
+      Uri.parse('${ApiEndpoints.adminJobs}/$jobId/enhanced'),
+      headers: {...authHeaders, 'Content-Type': 'application/json'},
+      body: json.encode(data),
+    );
+    if (res.statusCode == 200) return json.decode(res.body);
+    throw Exception('Failed to update job (enhanced): ${res.body}');
+  }
+
   // ========== ENHANCED JOB METHODS (ADD THESE) ==========
 
   Future<Map<String, String>> _getAuthHeaders() async {
@@ -60,6 +129,7 @@ class AdminService {
     int perPage = 20,
     String? category,
     String status = 'active',
+    String? approvalStatus,
     String sortBy = 'created_at',
     String sortOrder = 'desc',
     String? search,
@@ -75,6 +145,10 @@ class AdminService {
     };
 
     if (category != null) queryParams['category'] = category;
+    if (approvalStatus != null && approvalStatus != 'all')
+      queryParams['approval_status'] = approvalStatus;
+    if (approvalStatus != null && approvalStatus != 'all')
+      queryParams['approval_status'] = approvalStatus;
     if (search != null && search.isNotEmpty) queryParams['search'] = search;
 
     final uri =
@@ -119,6 +193,91 @@ class AdminService {
     if (res.statusCode != 200) {
       final error = json.decode(res.body);
       throw Exception('Failed to restore job: ${error['error'] ?? res.body}');
+    }
+  }
+
+  /// Approve a pending job (admin only).
+  Future<void> approveJob(int jobId, {String? note}) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.adminJobs}/$jobId/approve'),
+      headers: authHeaders,
+      body: note != null && note.trim().isNotEmpty
+          ? json.encode({'note': note.trim()})
+          : null,
+    );
+    if (res.statusCode != 200) {
+      final body = json.decode(res.body);
+      throw Exception(body['error'] ?? 'Failed to approve job');
+    }
+  }
+
+  /// Reject a pending job with reason (admin only).
+  Future<void> rejectJob(int jobId, String reason, {String? note}) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.adminJobs}/$jobId/reject'),
+      headers: authHeaders,
+      body: json.encode({
+        'reason': reason,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      }),
+    );
+    if (res.statusCode != 200) {
+      final body = json.decode(res.body);
+      throw Exception(body['error'] ?? 'Failed to reject job');
+    }
+  }
+
+  /// Bulk approve pending jobs (admin only). Partial success.
+  Future<Map<String, dynamic>> bulkApproveJobs(List<int> jobIds,
+      {String? note}) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse(ApiEndpoints.bulkApproveJobs),
+      headers: authHeaders,
+      body: json.encode({
+        'job_ids': jobIds,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      }),
+    );
+    if (res.statusCode == 200) {
+      return json.decode(res.body) as Map<String, dynamic>;
+    }
+    final body = json.decode(res.body);
+    throw Exception(body is Map ? (body['error'] ?? res.body) : res.body);
+  }
+
+  /// Bulk reject pending jobs (admin only). Partial success.
+  Future<Map<String, dynamic>> bulkRejectJobs(List<int> jobIds, String reason,
+      {String? note}) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse(ApiEndpoints.bulkRejectJobs),
+      headers: authHeaders,
+      body: json.encode({
+        'job_ids': jobIds,
+        'reason': reason,
+        if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+      }),
+    );
+    if (res.statusCode == 200) {
+      return json.decode(res.body) as Map<String, dynamic>;
+    }
+    final body = json.decode(res.body);
+    throw Exception(body is Map ? (body['error'] ?? res.body) : res.body);
+  }
+
+  /// Resubmit a rejected job for approval (HM or admin).
+  Future<void> resubmitJob(int jobId) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.adminJobs}/$jobId/resubmit'),
+      headers: authHeaders,
+    );
+    if (res.statusCode != 200) {
+      final body = json.decode(res.body);
+      throw Exception(body['error'] ?? 'Failed to resubmit job');
     }
   }
 
@@ -188,7 +347,6 @@ class AdminService {
     return data['applications'] ?? [];
   }
 
-  /// Same as getApplicationsForMyJobs but returns full response with pagination.
   Future<Map<String, dynamic>> getApplicationsForMyJobsPage({
     int page = 1,
     int perPage = 200,
@@ -211,242 +369,6 @@ class AdminService {
     }
   }
 
-  /// Fetches all applications for the current user's jobs (all pages).
-  Future<List<dynamic>> getAllApplicationsForMyJobs() async {
-    final all = <dynamic>[];
-    int page = 1;
-    const perPage = 500;
-    while (true) {
-      final data =
-          await getApplicationsForMyJobsPage(page: page, perPage: perPage);
-      final list = data['applications'] as List<dynamic>? ?? [];
-      all.addAll(list);
-      final pagination = data['pagination'] as Map<String, dynamic>?;
-      final hasNext = pagination?['has_next'] == true;
-      if (!hasNext || list.length < perPage) break;
-      page++;
-    }
-    return all;
-  }
-
-  // Get job statistics
-  Future<Map<String, dynamic>> getJobStatistics() async {
-    final authHeaders = await _getAuthHeaders();
-    final res = await http.get(
-      Uri.parse('${ApiEndpoints.adminJobs}/stats'),
-      headers: authHeaders,
-    );
-
-    if (res.statusCode == 200) {
-      return json.decode(res.body);
-    } else {
-      final error = json.decode(res.body);
-      throw Exception(
-          'Failed to get job statistics: ${error['error'] ?? res.body}');
-    }
-  }
-
-  // Update job status (activate/deactivate)
-  Future<void> updateJobStatus(int jobId, bool isActive) async {
-    final authHeaders = await _getAuthHeaders();
-    final data = {'is_active': isActive};
-
-    final res = await http.put(
-      Uri.parse('${ApiEndpoints.adminJobs}/$jobId'),
-      headers: authHeaders,
-      body: json.encode(data),
-    );
-
-    if (res.statusCode != 200) {
-      final error = json.decode(res.body);
-      throw Exception(
-          'Failed to update job status: ${error['error'] ?? res.body}');
-    }
-  }
-
-  // Create job with full data (enhanced version)
-  Future<Map<String, dynamic>> createJobEnhanced(
-      Map<String, dynamic> data) async {
-    final authHeaders = await _getAuthHeaders();
-    final res = await http.post(
-      Uri.parse(ApiEndpoints.adminJobs),
-      headers: authHeaders,
-      body: json.encode(data),
-    );
-
-    if (res.statusCode == 201) {
-      return json.decode(res.body);
-    } else {
-      Map<String, dynamic> body = {};
-      try {
-        if (res.body.isNotEmpty) body = json.decode(res.body);
-      } catch (_) {}
-      final error = body['error'] ?? 'Failed to create job';
-      final details = body['details'];
-      final msg = details != null
-          ? '$error: ${details is Map ? details.entries.map((e) => '${e.key}: ${e.value}').join('; ') : details}'
-          : error.toString();
-      throw Exception(msg);
-    }
-  }
-
-  // Update job with full data (enhanced version)
-  Future<Map<String, dynamic>> updateJobEnhanced(
-      int jobId, Map<String, dynamic> data) async {
-    final authHeaders = await _getAuthHeaders();
-    final res = await http.put(
-      Uri.parse('${ApiEndpoints.adminJobs}/$jobId'),
-      headers: authHeaders,
-      body: json.encode(data),
-    );
-
-    if (res.statusCode == 200) {
-      return json.decode(res.body);
-    } else {
-      final error = json.decode(res.body);
-      throw Exception('Failed to update job: ${error['error'] ?? res.body}');
-    }
-  }
-
-  Future<List<dynamic>> listJobs() async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.get(
-      Uri.parse(ApiEndpoints.adminJobs),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
-    if (res.statusCode == 200) {
-      final data = json.decode(res.body);
-      if (data is List) {
-        return data;
-      }
-      if (data is Map<String, dynamic>) {
-        return List<dynamic>.from(data['jobs'] ?? []);
-      }
-      return [];
-    }
-    throw Exception('Failed to load jobs: ${res.body}');
-  }
-
-  Future<Map<String, dynamic>> createJob(Map<String, dynamic> data) async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.post(
-      Uri.parse(ApiEndpoints.adminJobs),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-      body: json.encode(data),
-    );
-    if (res.statusCode == 201) return json.decode(res.body);
-    Map<String, dynamic> body = {};
-    try {
-      if (res.body.isNotEmpty) body = json.decode(res.body);
-    } catch (_) {}
-    final error = body['error'] ?? 'Failed to create job';
-    final details = body['details'];
-    final msg = details != null
-        ? '$error: ${details is Map ? details.entries.map((e) => '${e.key}: ${e.value}').join('; ') : details}'
-        : (body['message'] ?? error).toString();
-    throw Exception(msg);
-  }
-
-  Future<Map<String, dynamic>> updateJob(
-      int jobId, Map<String, dynamic> data) async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.put(
-      Uri.parse('${ApiEndpoints.adminJobs}/$jobId'),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-      body: json.encode(data),
-    );
-    if (res.statusCode == 200) return json.decode(res.body);
-    throw Exception('Failed to update job: ${res.body}');
-  }
-
-  Future<void> deleteJob(int jobId) async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.delete(
-      Uri.parse('${ApiEndpoints.adminJobs}/$jobId'),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
-    if (res.statusCode != 200)
-      throw Exception('Failed to delete job: ${res.body}');
-  }
-
-  // ---------- CANDIDATES ----------
-  Future<List<dynamic>> listCandidates() async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.get(
-      Uri.parse('${ApiEndpoints.adminBase}/candidates'),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
-    if (res.statusCode == 200) return json.decode(res.body);
-    throw Exception('Failed to fetch candidates: ${res.body}');
-  }
-
-  Future<Map<String, dynamic>> getCandidatesWithDetails({
-    int page = 1,
-    int perPage = 50,
-    String? search,
-    String? status,
-  }) async {
-    final authHeaders = await _getAuthHeaders();
-
-    final queryParams = <String, String>{
-      'page': page.toString(),
-      'per_page': perPage.toString(),
-    };
-
-    if (search != null && search.isNotEmpty) {
-      queryParams['search'] = search;
-    }
-
-    if (status != null && status.isNotEmpty) {
-      queryParams['status'] = status;
-    }
-
-    final uri = Uri.parse('${ApiEndpoints.adminBase}/candidates')
-        .replace(queryParameters: queryParams);
-
-    final res = await http.get(uri, headers: authHeaders);
-
-    if (res.statusCode == 200) {
-      return json.decode(res.body);
-    } else {
-      final error = json.decode(res.body);
-      throw Exception(
-          'Failed to fetch candidates with details: ${error['error'] ?? res.body}');
-    }
-  }
-
-  Future<Map<String, dynamic>> getCandidateById(int candidateId) async {
-    final authHeaders = await _getAuthHeaders();
-    final res = await http.get(
-      Uri.parse('${ApiEndpoints.adminBase}/candidates/$candidateId'),
-      headers: authHeaders,
-    );
-
-    if (res.statusCode == 200) {
-      return json.decode(res.body);
-    } else {
-      final error = json.decode(res.body);
-      throw Exception(
-          'Failed to fetch candidate: ${error['error'] ?? res.body}');
-    }
-  }
-
-  Future<Map<String, dynamic>> getCandidatesAnalytics() async {
-    final authHeaders = await _getAuthHeaders();
-    final res = await http.get(
-      Uri.parse('${ApiEndpoints.adminBase}/candidates/analytics'),
-      headers: authHeaders,
-    );
-
-    if (res.statusCode == 200) {
-      return json.decode(res.body);
-    } else {
-      final error = json.decode(res.body);
-      throw Exception(
-          'Failed to fetch candidates analytics: ${error['error'] ?? res.body}');
-    }
-  }
-
   Future<Map<String, dynamic>> getApplication(int applicationId) async {
     final token = await AuthService.getAccessToken();
     final res = await http.get(
@@ -455,21 +377,6 @@ class AdminService {
     );
     if (res.statusCode == 200) return json.decode(res.body);
     throw Exception('Failed to fetch application: ${res.body}');
-  }
-
-  /// Per-application audit timeline (who moved status when).
-  Future<List<Map<String, dynamic>>> getApplicationTimeline(
-      int applicationId) async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.get(
-      Uri.parse(ApiEndpoints.getApplicationTimeline(applicationId)),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
-    if (res.statusCode == 200) {
-      final data = json.decode(res.body);
-      return List<Map<String, dynamic>>.from(data['results'] ?? []);
-    }
-    throw Exception('Failed to fetch application timeline: ${res.body}');
   }
 
   /// Add a comment/note to the application's audit timeline.
@@ -593,6 +500,23 @@ class AdminService {
         err['error'] ?? 'Failed to schedule interview: ${res.body}');
   }
 
+  /// Schedule interview with named parameters
+  Future<Map<String, dynamic>> scheduleInterviewNamed({
+    required int applicationId,
+    required DateTime scheduledTime,
+    String? interviewType,
+    String? notes,
+  }) async {
+    final data = {
+      'application_id': applicationId,
+      'scheduled_time': scheduledTime.toIso8601String(),
+    };
+    if (interviewType != null) data['interview_type'] = interviewType;
+    if (notes != null && notes.isNotEmpty) data['notes'] = notes;
+
+    return await scheduleInterview(data);
+  }
+
   // ---------- INTERVIEW SLOTS (HM availability for smart scheduling) ----------
   Future<List<Map<String, dynamic>>> getAvailableInterviewSlots(
       {int? requisitionId}) async {
@@ -645,6 +569,9 @@ class AdminService {
     if (res.statusCode != 201)
       throw Exception(
           json.decode(res.body)['error'] ?? 'Failed to create slot');
+    if (res.statusCode != 201)
+      throw Exception(
+          json.decode(res.body)['error'] ?? 'Failed to create slot');
     return json.decode(res.body);
   }
 
@@ -654,6 +581,8 @@ class AdminService {
       Uri.parse(ApiEndpoints.deleteInterviewSlot(slotId)),
       headers: authHeaders,
     );
+    if (res.statusCode != 200)
+      throw Exception('Failed to delete slot: ${res.body}');
     if (res.statusCode != 200)
       throw Exception('Failed to delete slot: ${res.body}');
   }
@@ -679,6 +608,16 @@ class AdminService {
     );
     if (res.statusCode != 200)
       throw Exception("Failed to cancel interview: ${res.body}");
+  }
+
+  Future<void> deleteInterview(int interviewId) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.delete(
+      Uri.parse("${ApiEndpoints.adminBase}/interviews/$interviewId"),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+    if (res.statusCode != 200)
+      throw Exception("Failed to delete interview: ${res.body}");
   }
 
   // ---------- CANDIDATE INTERVIEWS ----------
@@ -1000,127 +939,6 @@ class AdminService {
 // Note: The shareNote endpoint was removed as sharing is handled via participants in the backend
 // If you need sharing functionality, you'll need to update the backend or handle it differently
 
-// ---------- MEETINGS ----------
-  Future<Map<String, dynamic>> createMeeting(Map<String, dynamic> data) async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.post(
-      Uri.parse(ApiEndpoints.createMeeting),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-      body: json.encode(data),
-    );
-
-    if (res.statusCode == 201) {
-      return json.decode(res.body);
-    } else {
-      // Try to parse error message from response
-      try {
-        final errorBody = json.decode(res.body);
-        throw Exception(
-            errorBody['error'] ?? 'Failed to create meeting: ${res.body}');
-      } catch (e) {
-        throw Exception('Failed to create meeting: ${res.body}');
-      }
-    }
-  }
-
-  Future<Map<String, dynamic>> getMeetings({
-    int page = 1,
-    int perPage = 20,
-    String? status,
-    String? search,
-  }) async {
-    final token = await AuthService.getAccessToken();
-
-    final params = {
-      'page': page.toString(),
-      'per_page': perPage.toString(),
-      if (status != null && status.isNotEmpty) 'status': status,
-      if (search != null && search.isNotEmpty) 'search': search,
-    };
-
-    final uri =
-        Uri.parse(ApiEndpoints.getMeetings).replace(queryParameters: params);
-    final res = await http.get(
-      uri,
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
-
-    if (res.statusCode == 200) {
-      final body = json.decode(res.body);
-      return {
-        "meetings": body["meetings"] ?? [],
-        "total": body["total"] ?? 0,
-        "pages": body["pages"] ?? 0,
-        "current_page": body["current_page"] ?? page,
-        "per_page": body["per_page"] ?? perPage,
-      };
-    } else {
-      throw Exception('Failed to fetch meetings: ${res.body}');
-    }
-  }
-
-  Future<Map<String, dynamic>> getMeetingById(int meetingId) async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.get(
-      Uri.parse('${ApiEndpoints.getMeetingById}/$meetingId'),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
-    return _handleResponse(res);
-  }
-
-  Future<Map<String, dynamic>> updateMeeting(
-      int meetingId, Map<String, dynamic> data) async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.put(
-      Uri.parse('${ApiEndpoints.updateMeeting}/$meetingId'),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-      body: json.encode(data),
-    );
-    return _handleResponse(res);
-  }
-
-  Future<void> cancelMeeting(int meetingId) async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.post(
-      Uri.parse('${ApiEndpoints.cancelMeeting}/$meetingId'),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
-    if (res.statusCode != 200) {
-      throw Exception('Failed to cancel meeting: ${res.body}');
-    }
-  }
-
-  Future<void> deleteMeeting(int meetingId) async {
-    final token = await AuthService.getAccessToken();
-    final res = await http.delete(
-      Uri.parse('${ApiEndpoints.deleteMeeting}/$meetingId'),
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
-    if (res.statusCode != 200) {
-      throw Exception('Failed to delete meeting: ${res.body}');
-    }
-  }
-
-  Future<Map<String, dynamic>> getUpcomingMeetings({
-    int limit = 50,
-    String? startDate,
-    String? endDate,
-  }) async {
-    final token = await AuthService.getAccessToken();
-    final params = <String, String>{'limit': limit.toString()};
-    if (startDate != null) params['start_date'] = startDate;
-    if (endDate != null) params['end_date'] = endDate;
-    final uri = Uri.parse(ApiEndpoints.getUpcomingMeetings).replace(
-      queryParameters: params,
-    );
-    final res = await http.get(
-      uri,
-      headers: {...headers, 'Authorization': 'Bearer $token'},
-    );
-    final body = _handleResponse(res);
-    return {"meetings": body["meetings"] ?? body["data"] ?? []};
-  }
-
   // ---------- NOTIFICATION PREFERENCES (admin/HM) ----------
   Future<Map<String, dynamic>> getNotificationPreferences() async {
     final token = await AuthService.getAccessToken();
@@ -1128,6 +946,8 @@ class AdminService {
       Uri.parse(ApiEndpoints.getNotificationPreferences),
       headers: {...headers, 'Authorization': 'Bearer $token'},
     );
+    if (res.statusCode != 200)
+      throw Exception('Failed to fetch notification preferences: ${res.body}');
     if (res.statusCode != 200)
       throw Exception('Failed to fetch notification preferences: ${res.body}');
     final body = json.decode(res.body);
@@ -1143,11 +963,15 @@ class AdminService {
     if (statusChanges != null) body['status_changes'] = statusChanges;
     if (upcomingInterviews != null)
       body['upcoming_interviews'] = upcomingInterviews;
+    if (upcomingInterviews != null)
+      body['upcoming_interviews'] = upcomingInterviews;
     final res = await http.put(
       Uri.parse(ApiEndpoints.updateNotificationPreferences),
       headers: {...headers, 'Authorization': 'Bearer $token'},
       body: convert.jsonEncode(body),
     );
+    if (res.statusCode != 200)
+      throw Exception('Failed to update preferences: ${res.body}');
     if (res.statusCode != 200)
       throw Exception('Failed to update preferences: ${res.body}');
     return json.decode(res.body);
@@ -1403,6 +1227,291 @@ class AdminService {
     throw Exception("Failed to load users: ${res.body}");
   }
 
+  /// Get users organized by role for team collaboration
+  Future<Map<String, dynamic>> getTeamCollaborationUsers() async {
+    final token = await AuthService.getAccessToken();
+
+    final res = await http.get(
+      Uri.parse(ApiEndpoints.teamCollaboration),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      return data;
+    }
+
+    throw Exception("Failed to load team collaboration users: ${res.body}");
+  }
+
+  // ------------------- MEETINGS -------------------
+
+  /// Create a new meeting
+  Future<Map<String, dynamic>> createMeeting({
+    required String title,
+    String? description,
+    required String scheduledAt,
+    int durationMinutes = 60,
+    String? location,
+    List<int>? participantIds,
+    int? threadId,
+  }) async {
+    final token = await AuthService.getAccessToken();
+
+    final body = {
+      'title': title,
+      'scheduled_at': scheduledAt,
+      'duration_minutes': durationMinutes,
+      'participant_ids': participantIds ?? [],
+    };
+
+    if (description != null) body['description'] = description;
+    if (location != null) body['location'] = location;
+    if (threadId != null) body['thread_id'] = threadId;
+
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.chatBase}/meetings'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: json.encode(body),
+    );
+
+    if (res.statusCode == 201) {
+      return json.decode(res.body);
+    }
+
+    throw Exception("Failed to create meeting: ${res.body}");
+  }
+
+  /// Create a meeting from a Map (for backward compatibility)
+  Future<Map<String, dynamic>> createMeetingFromMap(
+      Map<String, dynamic> data) async {
+    return createMeeting(
+      title: data['title'] ?? '',
+      scheduledAt: data['scheduled_at'] ?? DateTime.now().toIso8601String(),
+      durationMinutes: data['duration_minutes'] ?? 60,
+      location: data['location'],
+      participantIds: data['participant_ids'] != null
+          ? List<int>.from(data['participant_ids'])
+          : null,
+      threadId: data['thread_id'],
+    );
+  }
+
+  /// Get meetings with flexible pagination and filtering
+  Future<Map<String, dynamic>> getMeetings({
+    int? limit,
+    int? offset,
+    int? page,
+    int? perPage,
+    String? status,
+    String? search,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final token = await AuthService.getAccessToken();
+
+    // Map page/perPage to limit/offset if provided
+    int effectiveLimit = limit ?? perPage ?? 20;
+    int effectiveOffset =
+        offset ?? (page != null && perPage != null ? (page - 1) * perPage : 0);
+
+    final queryParams = <String, String>{};
+    if (effectiveLimit > 0) queryParams['limit'] = effectiveLimit.toString();
+    if (effectiveOffset > 0) queryParams['offset'] = effectiveOffset.toString();
+    if (status != null && status.isNotEmpty) queryParams['status'] = status;
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
+    if (startDate != null)
+      queryParams['start_date'] = startDate.toIso8601String();
+    if (endDate != null) queryParams['end_date'] = endDate.toIso8601String();
+
+    final uri = Uri.parse('${ApiEndpoints.chatBase}/meetings')
+        .replace(queryParameters: queryParams);
+    final res = await http.get(
+      uri,
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+
+    throw Exception("Failed to get meetings: ${res.body}");
+  }
+
+  /// Get upcoming meetings (next 7 days) with optional filtering
+  Future<Map<String, dynamic>> getUpcomingMeetings({
+    int? limit,
+    String? startDate,
+    String? endDate,
+  }) async {
+    final token = await AuthService.getAccessToken();
+
+    final queryParams = <String, String>{};
+    if (limit != null) queryParams['limit'] = limit.toString();
+    if (startDate != null) queryParams['start_date'] = startDate;
+    if (endDate != null) queryParams['end_date'] = endDate;
+
+    final uri = Uri.parse('${ApiEndpoints.chatBase}/meetings/upcoming')
+        .replace(queryParameters: queryParams);
+    final res = await http.get(
+      uri,
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+
+    throw Exception("Failed to get upcoming meetings: ${res.body}");
+  }
+
+  /// Update a meeting
+  Future<Map<String, dynamic>> updateMeeting(
+    int meetingId, {
+    String? title,
+    String? description,
+    DateTime? scheduledAt,
+    int? durationMinutes,
+    String? location,
+    List<int>? participantIds,
+  }) async {
+    final token = await AuthService.getAccessToken();
+
+    final body = <String, dynamic>{};
+    if (title != null) body['title'] = title;
+    if (description != null) body['description'] = description;
+    if (scheduledAt != null)
+      body['scheduled_at'] = scheduledAt.toIso8601String();
+    if (durationMinutes != null) body['duration_minutes'] = durationMinutes;
+    if (location != null) body['location'] = location;
+    if (participantIds != null) body['participant_ids'] = participantIds;
+
+    final res = await http.put(
+      Uri.parse('${ApiEndpoints.chatBase}/meetings/$meetingId'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: json.encode(body),
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+
+    throw Exception("Failed to update meeting: ${res.body}");
+  }
+
+  /// Cancel a meeting
+  Future<Map<String, dynamic>> cancelMeeting(int meetingId) async {
+    final token = await AuthService.getAccessToken();
+
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.chatBase}/meetings/$meetingId/cancel'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+
+    throw Exception("Failed to cancel meeting: ${res.body}");
+  }
+
+  /// Delete a meeting
+  Future<Map<String, dynamic>> deleteMeeting(int meetingId) async {
+    final token = await AuthService.getAccessToken();
+
+    final res = await http.delete(
+      Uri.parse('${ApiEndpoints.chatBase}/meetings/$meetingId'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+
+    throw Exception("Failed to delete meeting: ${res.body}");
+  }
+
+  /// Respond to meeting invitation
+  Future<Map<String, dynamic>> respondToMeeting({
+    required int meetingId,
+    required String status, // 'accepted', 'declined', 'maybe'
+  }) async {
+    final token = await AuthService.getAccessToken();
+
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.chatBase}/meetings/$meetingId/respond'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: json.encode({'status': status}),
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+
+    throw Exception("Failed to respond to meeting: ${res.body}");
+  }
+
+  /// Update user role
+  Future<bool> updateUserRole(int userId, String newRole) async {
+    final token = await AuthService.getAccessToken();
+
+    final res = await http.patch(
+      Uri.parse('${ApiEndpoints.adminBase}/users/$userId/role'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: json.encode({'role': newRole}),
+    );
+
+    if (res.statusCode == 200) {
+      return true;
+    }
+    throw Exception("Failed to update user role: ${res.body}");
+  }
+
+  /// Deactivate user
+  Future<bool> deactivateUser(int userId) async {
+    final token = await AuthService.getAccessToken();
+
+    final res = await http.patch(
+      Uri.parse('${ApiEndpoints.adminBase}/users/$userId/deactivate'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return true;
+    }
+    throw Exception("Failed to deactivate user: ${res.body}");
+  }
+
+  /// Activate user
+  Future<bool> activateUser(int userId) async {
+    final token = await AuthService.getAccessToken();
+
+    final res = await http.patch(
+      Uri.parse('${ApiEndpoints.adminBase}/users/$userId/activate'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return true;
+    }
+    throw Exception("Failed to activate user: ${res.body}");
+  }
+
+  /// Delete user
+  Future<bool> deleteUser(int userId) async {
+    final token = await AuthService.getAccessToken();
+
+    final res = await http.delete(
+      Uri.parse('${ApiEndpoints.adminBase}/users/$userId'),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+
+    if (res.statusCode == 200) {
+      return true;
+    }
+    throw Exception("Failed to delete user: ${res.body}");
+  }
+
   // =====================================================
 // 📅 INTERVIEW CALENDAR (GOOGLE CALENDAR)
 // =====================================================
@@ -1536,6 +1645,44 @@ class AdminService {
     }
 
     throw Exception('Failed to reschedule interview: ${res.body}');
+  }
+
+  // ---------- INTERVIEW APPROVAL WORKFLOW ----------
+  Future<void> approveInterview(int interviewId) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.post(
+      Uri.parse(ApiEndpoints.approveInterview(interviewId)),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+    );
+    if (res.statusCode >= 200 && res.statusCode < 300) return;
+    dynamic body;
+    try {
+      body = json.decode(res.body);
+    } catch (_) {
+      body = null;
+    }
+    final msg =
+        body is Map ? (body['error'] ?? body['message'] ?? res.body) : res.body;
+    throw Exception(msg.toString());
+  }
+
+  Future<void> rejectInterview(int interviewId, String reason) async {
+    final token = await AuthService.getAccessToken();
+    final res = await http.post(
+      Uri.parse(ApiEndpoints.rejectInterview(interviewId)),
+      headers: {...headers, 'Authorization': 'Bearer $token'},
+      body: json.encode({'reason': reason}),
+    );
+    if (res.statusCode >= 200 && res.statusCode < 300) return;
+    dynamic body;
+    try {
+      body = json.decode(res.body);
+    } catch (_) {
+      body = null;
+    }
+    final msg =
+        body is Map ? (body['error'] ?? body['message'] ?? res.body) : res.body;
+    throw Exception(msg.toString());
   }
 
   // ---------- INTERVIEW FEEDBACK ----------
@@ -2353,7 +2500,6 @@ class AdminService {
     throw Exception('Failed to fetch interviews requiring action: ${res.body}');
   }
 
-  // ========== ADD THE NEW METHOD HERE ==========
   /// Get candidates ready for job offers (optimized database query)
   Future<Map<String, dynamic>> getCandidatesReadyForOffer({
     int minInterviews = 2,
@@ -2383,5 +2529,221 @@ class AdminService {
     }
 
     throw Exception('Failed to fetch candidates ready for offers: ${res.body}');
+  }
+
+  /// Delete a job
+  Future<void> deleteJob(int jobId) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.delete(
+      Uri.parse('${ApiEndpoints.adminJobs}/$jobId'),
+      headers: authHeaders,
+    );
+
+    if (res.statusCode != 200) {
+      throw Exception('Failed to delete job: ${res.body}');
+    }
+  }
+
+  /// Update a job
+  Future<Map<String, dynamic>> updateJob(
+      int jobId, Map<String, dynamic> jobData) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.put(
+      Uri.parse('${ApiEndpoints.adminJobs}/$jobId'),
+      headers: authHeaders,
+      body: json.encode(jobData),
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+    throw Exception('Failed to update job: ${res.body}');
+  }
+
+  /// Get application timeline
+  Future<List<Map<String, dynamic>>> getApplicationTimeline(
+      int applicationId) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.get(
+      Uri.parse(
+          '${ApiEndpoints.adminBase}/applications/$applicationId/timeline'),
+      headers: authHeaders,
+    );
+
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      return List<Map<String, dynamic>>.from(data['timeline'] ?? []);
+    }
+    throw Exception('Failed to fetch application timeline: ${res.body}');
+  }
+
+  /// Get candidate profile
+  Future<Map<String, dynamic>> getCandidateProfile(int candidateId) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.get(
+      Uri.parse('${ApiEndpoints.adminBase}/candidates/$candidateId/profile'),
+      headers: authHeaders,
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+    throw Exception('Failed to fetch candidate profile: ${res.body}');
+  }
+
+  /// Get all applications for my jobs
+  Future<List<dynamic>> getAllApplicationsForMyJobs() async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.get(
+      Uri.parse('${ApiEndpoints.adminBase}/applications/my-jobs/all'),
+      headers: authHeaders,
+    );
+
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      return data['applications'] ?? [];
+    }
+    throw Exception('Failed to fetch all applications: ${res.body}');
+  }
+
+  /// Get job statistics
+  Future<Map<String, dynamic>> getJobStatistics(int jobId) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.get(
+      Uri.parse('${ApiEndpoints.adminBase}/jobs/$jobId/statistics'),
+      headers: authHeaders,
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+    throw Exception('Failed to fetch job statistics: ${res.body}');
+  }
+
+  /// Get all jobs statistics
+  Future<Map<String, dynamic>> getAllJobStatistics() async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.get(
+      Uri.parse('${ApiEndpoints.adminBase}/jobs/statistics'),
+      headers: authHeaders,
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+    throw Exception('Failed to fetch all job statistics: ${res.body}');
+  }
+
+  /// List all candidates
+  Future<List<Map<String, dynamic>>> listCandidates({
+    int page = 1,
+    int perPage = 20,
+    String? search,
+    String? status,
+  }) async {
+    final queryParams = {
+      'page': page.toString(),
+      'per_page': perPage.toString(),
+    };
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
+    if (status != null) queryParams['status'] = status;
+
+    final uri = Uri.parse('${ApiEndpoints.adminBase}/candidates')
+        .replace(queryParameters: queryParams);
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.get(uri, headers: authHeaders);
+
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      return List<Map<String, dynamic>>.from(data['candidates'] ?? []);
+    }
+    throw Exception('Failed to fetch candidates: ${res.body}');
+  }
+
+  /// Get candidates analytics
+  Future<Map<String, dynamic>> getCandidatesAnalytics() async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.get(
+      Uri.parse('${ApiEndpoints.adminBase}/candidates/analytics'),
+      headers: authHeaders,
+    );
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+    throw Exception('Failed to fetch candidates analytics: ${res.body}');
+  }
+
+  /// Get candidates with details
+  Future<List<Map<String, dynamic>>> getCandidatesWithDetails({
+    int page = 1,
+    int perPage = 20,
+    String? search,
+  }) async {
+    final queryParams = {
+      'page': page.toString(),
+      'per_page': perPage.toString(),
+    };
+    if (search != null && search.isNotEmpty) queryParams['search'] = search;
+
+    final uri = Uri.parse('${ApiEndpoints.adminBase}/candidates/with-details')
+        .replace(queryParameters: queryParams);
+    final authHeaders = await _getAuthHeaders();
+
+    try {
+      final res = await http
+          .get(uri, headers: authHeaders)
+          .timeout(const Duration(seconds: 15));
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        return List<Map<String, dynamic>>.from(data['candidates'] ?? []);
+      } else {
+        // Log detailed error information for debugging
+        debugPrint('=== Admin Candidates Fetch Error ===');
+        debugPrint('Status Code: ${res.statusCode}');
+        debugPrint('Response Body: ${res.body}');
+        debugPrint('Headers: $authHeaders');
+        debugPrint('URI: $uri');
+        debugPrint('================================');
+
+        // Provide user-friendly error message
+        String userMessage = 'Failed to fetch candidates';
+        if (res.statusCode == 403) {
+          userMessage =
+              'Access denied: You may not have permission to view candidates';
+        } else if (res.statusCode == 401) {
+          userMessage = 'Authentication expired: Please log in again';
+        } else if (res.statusCode >= 500) {
+          userMessage = 'Server error: Please try again later';
+        }
+
+        throw Exception('$userMessage (Status: ${res.statusCode})');
+      }
+    } on SocketException catch (e) {
+      debugPrint('=== Admin Candidates Network Error ===');
+      debugPrint('Error: $e');
+      debugPrint('URI: $uri');
+      debugPrint('================================');
+      throw Exception(
+          'Network error: Unable to connect to server. Please check your connection and ensure the server is running at ${uri.host}:${uri.port}');
+    } on TimeoutException catch (e) {
+      debugPrint('=== Admin Candidates Timeout Error ===');
+      debugPrint('Error: $e');
+      debugPrint('URI: $uri');
+      debugPrint('================================');
+      throw Exception(
+          'Request timed out: The server is taking too long to respond.');
+    } catch (e) {
+      debugPrint('=== Admin Candidates Unexpected Error ===');
+      debugPrint('Error: $e');
+      debugPrint('URI: $uri');
+      debugPrint('================================');
+      if (e.toString().contains('ClientException')) {
+        throw Exception(
+            'Connection failed: The browser blocked the request or the server is unreachable. Ensure CORS is configured and the server is running at ${uri.host}:${uri.port}');
+      }
+      throw Exception('An unexpected error occurred. Please try again.');
+    }
   }
 }

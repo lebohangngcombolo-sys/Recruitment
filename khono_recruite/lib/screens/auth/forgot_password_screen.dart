@@ -97,8 +97,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           Center(
             child: SingleChildScrollView(
               child: MouseRegion(
-                onEnter: (_) => kIsWeb ? _animationController.forward() : null,
-                onExit: (_) => kIsWeb ? _animationController.reverse() : null,
+                onEnter: kIsWeb ? (_) => _animationController.forward() : null,
+                onExit: kIsWeb ? (_) => _animationController.reverse() : null,
                 child: ScaleTransition(
                   scale: _scaleAnimation,
                   child: Container(
