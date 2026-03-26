@@ -2,10 +2,10 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../services/auth_service.dart';
-import 'assessments_results_screen.dart';
 
 class CVUploadScreen extends StatefulWidget {
   final int applicationId;
@@ -154,6 +154,66 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
     }
   }
 
+  Future<void> _showResultDialogAndGoDashboard({
+    required bool success,
+    required String message,
+    required String tokenValue,
+  }) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            success ? 'Documents submitted' : 'Upload failed',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: success ? Colors.black87 : _accentRed,
+            ),
+          ),
+          content: Text(
+            message,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: Colors.black87,
+            ),
+          ),
+          actionsAlignment: MainAxisAlignment.center,
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _accentRed,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+              ),
+              child: Text(
+                'OK',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted) return;
+    if (tokenValue.isNotEmpty) {
+      context.go('/candidate-dashboard?token=${Uri.encodeComponent(tokenValue)}');
+    } else {
+      context.go('/candidate-dashboard');
+    }
+  }
+
   Future<bool> _uploadApplicationDocument({
     required String type,
     required Uint8List bytes,
@@ -236,8 +296,12 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
           }
         } catch (_) {}
         final err = resp['error'] ?? resp['message'] ?? responseString;
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("CV upload failed: $err")));
         setState(() => uploading = false);
+        await _showResultDialogAndGoDashboard(
+          success: false,
+          message: 'CV upload failed: $err',
+          tokenValue: tokenValue,
+        );
         return;
       }
 
@@ -245,6 +309,11 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
         final ok = await _uploadApplicationDocument(type: 'id', bytes: idFileBytes!, filename: idFileName!, tokenValue: tokenValue);
         if (!ok) {
           setState(() => uploading = false);
+          await _showResultDialogAndGoDashboard(
+            success: false,
+            message: 'ID document upload failed. Please try again.',
+            tokenValue: tokenValue,
+          );
           return;
         }
       }
@@ -259,6 +328,11 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
         );
         if (!ok) {
           setState(() => uploading = false);
+          await _showResultDialogAndGoDashboard(
+            success: false,
+            message: 'Qualification document upload failed. Please try again.',
+            tokenValue: tokenValue,
+          );
           return;
         }
       }
@@ -268,68 +342,21 @@ class _CVUploadScreenState extends State<CVUploadScreen> {
       // Stop the loading spinner before showing success dialog
       setState(() => uploading = false);
 
-      await showDialog<void>(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) {
-          return AlertDialog(
-            backgroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Text(
-              'Documents submitted',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: Colors.black87,
-              ),
-            ),
-            content: Text(
-              'Your documents have been uploaded successfully.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: Colors.black87,
-              ),
-            ),
-            actionsAlignment: MainAxisAlignment.center,
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(dialogContext).pop();
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _accentRed,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-                ),
-                child: Text(
-                  'Continue',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => AssessmentResultsPage(
-            token: tokenValue!,
-            applicationId: widget.applicationId,
-          ),
-        ),
+      await _showResultDialogAndGoDashboard(
+        success: true,
+        message: 'Your documents have been uploaded successfully.',
+        tokenValue: tokenValue,
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      if (uploading) {
+        setState(() => uploading = false);
+      }
+      await _showResultDialogAndGoDashboard(
+        success: false,
+        message: 'Error while uploading documents: $e',
+        tokenValue: tokenValue ?? '',
+      );
     } finally {
       if (!mounted) return;
       if (uploading) {
