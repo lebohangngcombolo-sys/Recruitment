@@ -45,6 +45,105 @@ def _normalize_application_deadline(value):
 
 admin_bp = Blueprint("admin_bp", __name__)
 
+CANONICAL_PIPELINE_STATUSES = [
+    "screening",
+    "assessment",
+    "recommended",
+    "interview",
+    "offer",
+    "hired",
+    "rejected",
+]
+
+CANONICAL_RECOMMENDATION_LABELS = {
+    "proceed": "Proceed to Final Interview",
+    "hold": "Hold",
+    "reject": "Reject",
+}
+
+
+def _get_current_user_or_404():
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    if not user:
+        return None, jsonify({"error": "User not found"}), 404
+    return user, None, None
+
+
+def _hm_job_ids(user):
+    if not current_app.config.get("ENABLE_HM_SCOPED_PIPELINE_READS", True):
+        return None
+    if user.role != "hiring_manager":
+        return None
+    return db.session.query(Requisition.id).filter(Requisition.created_by == user.id)
+
+
+def _scope_jobs_query_for_user(user):
+    query = Requisition.query
+    hm_ids = _hm_job_ids(user)
+    if hm_ids is not None:
+        query = query.filter(Requisition.id.in_(hm_ids))
+    return query
+
+
+def _scope_applications_query_for_user(user):
+    query = Application.query
+    hm_ids = _hm_job_ids(user)
+    if hm_ids is not None:
+        query = query.filter(Application.requisition_id.in_(hm_ids))
+    return query
+
+
+def _scope_interviews_query_for_user(user):
+    query = Interview.query
+    hm_ids = _hm_job_ids(user)
+    if hm_ids is not None:
+        query = query.filter(
+            or_(
+                Interview.hiring_manager_id == user.id,
+                Interview.application_id.in_(
+                    db.session.query(Application.id).filter(
+                        Application.requisition_id.in_(hm_ids)
+                    )
+                ),
+            )
+        )
+    return query
+
+
+def _normalize_application_status(status):
+    value = (status or "").strip().lower()
+    if value in CANONICAL_PIPELINE_STATUSES:
+        return value
+    if value in {"applied", "in_progress", "draft"}:
+        return "screening"
+    if value in {"assessment_submitted"}:
+        return "assessment"
+    if value in {"disqualified"}:
+        return "rejected"
+    if value in {"interview_no_show", "interview_cancelled_by_candidate"}:
+        return "interview"
+    return "screening"
+
+
+def _normalize_pipeline_recommendation(app_recommendation, assessment_recommendation=None):
+    text = (app_recommendation or "").strip()
+    if text:
+        lower = text.lower()
+        if "proceed" in lower or "final interview" in lower:
+            return CANONICAL_RECOMMENDATION_LABELS["proceed"]
+        if "hold" in lower:
+            return CANONICAL_RECOMMENDATION_LABELS["hold"]
+        if "reject" in lower:
+            return CANONICAL_RECOMMENDATION_LABELS["reject"]
+        return text
+    assess = (assessment_recommendation or "").strip().lower()
+    if assess == "pass":
+        return CANONICAL_RECOMMENDATION_LABELS["hold"]
+    if assess in {"fail", "no_hire", "strong_no_hire"}:
+        return CANONICAL_RECOMMENDATION_LABELS["reject"]
+    return CANONICAL_RECOMMENDATION_LABELS["hold"]
+
 # ----------------- ANALYTICS ROUTES -----------------
 @admin_bp.route('/analytics/dashboard', methods=['GET'])
 @role_required(["admin", "hiring_manager"])
@@ -4984,19 +5083,24 @@ def get_pipeline_stats():
     Get statistics for the recruitment pipeline header
     """
     try:
-        # Active jobs (where requisition has status 'active' - you might need to add this field)
-        # For now, assuming all requisitions are active
-        active_jobs = Requisition.query.count()
-        
-        # Total applications
-        total_applications = Application.query.count()
-        
-        # Offers sent (status = 'sent' in Offer model)
-        offers_sent = Offer.query.filter_by(status=OfferStatus.SENT).count()
-        
+        user, err_resp, err_code = _get_current_user_or_404()
+        if err_resp:
+            return err_resp, err_code
+        scoped_jobs = _scope_jobs_query_for_user(user)
+        scoped_apps = _scope_applications_query_for_user(user)
+        scoped_interviews = _scope_interviews_query_for_user(user)
+
+        active_jobs = scoped_jobs.count()
+        total_applications = scoped_apps.count()
+        app_ids_subq = scoped_apps.with_entities(Application.id).subquery()
+        offers_sent = Offer.query.filter(
+            Offer.status == OfferStatus.SENT,
+            Offer.application_id.in_(db.session.query(app_ids_subq.c.id)),
+        ).count()
+
         # Today's interviews
         today = datetime.utcnow().date()
-        today_interviews = Interview.query.filter(
+        today_interviews = scoped_interviews.filter(
             db.func.date(Interview.scheduled_time) == today,
             Interview.status == 'scheduled'
         ).count()
@@ -5006,11 +5110,11 @@ def get_pipeline_stats():
         apps_by_stage = {}
         
         for stage in stages:
-            count = Application.query.filter_by(status=stage).count()
+            count = scoped_apps.filter(Application.status == stage).count()
             apps_by_stage[stage] = count
         
         # Add pending interviews count
-        pending_interviews = Interview.query.filter(
+        pending_interviews = scoped_interviews.filter(
             Interview.status == 'scheduled'
         ).count()
         
@@ -5021,9 +5125,11 @@ def get_pipeline_stats():
             "today_interviews": today_interviews,
             "pending_interviews": pending_interviews,
             "applications_by_stage": apps_by_stage,
-            "total_requisitions": Requisition.query.count(),
-            "total_interviews": Interview.query.count(),
-            "total_offers": Offer.query.count()
+            "total_requisitions": active_jobs,
+            "total_interviews": scoped_interviews.count(),
+            "total_offers": Offer.query.filter(
+                Offer.application_id.in_(db.session.query(app_ids_subq.c.id))
+            ).count()
         }), 200
         
     except Exception as e:
@@ -5046,8 +5152,10 @@ def get_filtered_applications():
         page = request.args.get("page", 1, type=int)
         per_page = request.args.get("per_page", 20, type=int)
         
-        # Base query
-        query = Application.query.join(Candidate).join(Requisition)
+        user, err_resp, err_code = _get_current_user_or_404()
+        if err_resp:
+            return err_resp, err_code
+        query = _scope_applications_query_for_user(user).join(Candidate).join(Requisition)
         
         # Apply filters
         if status and status != 'all':
@@ -5122,15 +5230,18 @@ def get_filtered_applications():
                 "candidate_email": candidate.user.email if candidate and candidate.user else None,
                 "requisition_title": job.title if job else "Unknown",
                 "job_id": app.requisition_id,
-                "status": app.status,
+                "status": _normalize_application_status(app.status),
                 "cv_score": app.cv_score or 0,
                 "assessment_score": app.assessment_score or 0,
                 "overall_score": app.overall_score or 0,
                 "feedback_score": feedback_score,
                 "applied_date": app.created_at.isoformat() if app.created_at else None,
-                "recommendation": assessment.recommendation if assessment else 'moderate',
+                "recommendation": _normalize_pipeline_recommendation(
+                    app.recommendation,
+                    assessment.recommendation if assessment else None,
+                ),
                 "next_interview": next_interview.scheduled_time.isoformat() if next_interview else None,
-                "stage_progress": app.status,
+                "stage_progress": _normalize_application_status(app.status),
                 "last_updated": app.created_at.isoformat() if app.created_at else None,
                 "interview_status": app.interview_status,
                 "has_resume": bool(app.resume_url)
@@ -5155,7 +5266,10 @@ def get_jobs_with_stats():
     Get all jobs with their statistics
     """
     try:
-        jobs = Requisition.query.all()
+        user, err_resp, err_code = _get_current_user_or_404()
+        if err_resp:
+            return err_resp, err_code
+        jobs = _scope_jobs_query_for_user(user).all()
         result = []
         
         for job in jobs:
@@ -5258,8 +5372,10 @@ def get_interviews_by_timeframe(timeframe):
         else:
             return jsonify({"error": "Invalid timeframe"}), 400
 
-        # Query interviews
-        interviews = Interview.query.filter(query_filter).order_by(
+        user, err_resp, err_code = _get_current_user_or_404()
+        if err_resp:
+            return err_resp, err_code
+        interviews = _scope_interviews_query_for_user(user).filter(query_filter).order_by(
             Interview.scheduled_time
         ).all()
         
@@ -5383,6 +5499,11 @@ def get_pipeline_stages_count():
     Get count of candidates in each pipeline stage
     """
     try:
+        user, err_resp, err_code = _get_current_user_or_404()
+        if err_resp:
+            return err_resp, err_code
+        scoped_apps = _scope_applications_query_for_user(user)
+        scoped_interviews = _scope_interviews_query_for_user(user)
         stages = [
             {"id": "screening", "name": "Screening", "icon": "filter_list", "color": "#4285F4"},
             {"id": "assessment", "name": "Assessment", "icon": "assessment", "color": "#FBBC04"},
@@ -5396,18 +5517,18 @@ def get_pipeline_stages_count():
 
         for stage in stages:
             # Base count by application status
-            count = (
-                db.session.query(func.count(Application.id))
-                .filter(Application.status == stage["id"])
-                .scalar()
-            )
+            count = scoped_apps.filter(Application.status == stage["id"]).count()
 
             if stage["id"] == "interview":
                 # Count DISTINCT application IDs with scheduled interviews
+                scoped_app_ids = scoped_apps.with_entities(Application.id).subquery()
                 interview_apps = (
                     db.session.query(func.count(func.distinct(Application.id)))
                     .join(Interview, Application.id == Interview.application_id)
-                    .filter(Interview.status == "scheduled")
+                    .filter(
+                        Interview.status == "scheduled",
+                        Application.id.in_(db.session.query(scoped_app_ids.c.id)),
+                    )
                     .scalar()
                 )
 
@@ -5453,12 +5574,22 @@ def get_pipeline_quick_stats():
         week_ago = now - timedelta(days=7)
         month_ago = now - timedelta(days=30)
 
-        # Core stats
-        active_jobs = Requisition.query.count()
-        total_applications = Application.query.count()
-        offers_sent = Offer.query.filter_by(status=OfferStatus.SENT).count()
+        user, err_resp, err_code = _get_current_user_or_404()
+        if err_resp:
+            return err_resp, err_code
+        scoped_jobs = _scope_jobs_query_for_user(user)
+        scoped_apps = _scope_applications_query_for_user(user)
+        scoped_interviews = _scope_interviews_query_for_user(user)
+        app_ids_subq = scoped_apps.with_entities(Application.id).subquery()
 
-        today_interviews = Interview.query.filter(
+        active_jobs = scoped_jobs.count()
+        total_applications = scoped_apps.count()
+        offers_sent = Offer.query.filter(
+            Offer.status == OfferStatus.SENT,
+            Offer.application_id.in_(db.session.query(app_ids_subq.c.id)),
+        ).count()
+
+        today_interviews = scoped_interviews.filter(
             db.func.date(Interview.scheduled_time) == today,
             Interview.status == "scheduled"
         ).count()
@@ -5471,44 +5602,53 @@ def get_pipeline_quick_stats():
                     db.func.now() - Application.created_at
                 ) / 86400
             )
-        ).filter(Application.status == "hired").scalar()
+        ).filter(
+            Application.status == "hired",
+            Application.id.in_(db.session.query(app_ids_subq.c.id)),
+        ).scalar()
 
         time_to_hire = round(time_to_hire_query or 28, 1)
 
         # Offer acceptance rate
-        total_offers = Offer.query.filter_by(status=OfferStatus.SENT).count()
-        accepted_offers = Offer.query.filter_by(status=OfferStatus.SIGNED).count()
+        total_offers = Offer.query.filter(
+            Offer.status == OfferStatus.SENT,
+            Offer.application_id.in_(db.session.query(app_ids_subq.c.id)),
+        ).count()
+        accepted_offers = Offer.query.filter(
+            Offer.status == OfferStatus.SIGNED,
+            Offer.application_id.in_(db.session.query(app_ids_subq.c.id)),
+        ).count()
         acceptance_rate = (
             round((accepted_offers / total_offers) * 100, 1)
             if total_offers > 0 else 0
         )
 
         # Recent activity
-        recent_applications = Application.query.filter(
+        recent_applications = scoped_apps.filter(
             Application.created_at >= week_ago
         ).count()
 
-        recent_interviews = Interview.query.filter(
+        recent_interviews = scoped_interviews.filter(
             Interview.created_at >= week_ago
         ).count()
 
         # Stage distribution
         stages = ["screening", "assessment", "interview", "offer", "hired"]
         stage_distribution = {
-            stage: Application.query.filter_by(status=stage).count()
+            stage: scoped_apps.filter(Application.status == stage).count()
             for stage in stages
         }
 
         # Interview completion rate
-        total_interviews = Interview.query.count()
-        completed_interviews = Interview.query.filter_by(status="completed").count()
+        total_interviews = scoped_interviews.count()
+        completed_interviews = scoped_interviews.filter(Interview.status == "completed").count()
         interview_completion_rate = (
             round((completed_interviews / total_interviews) * 100, 1)
             if total_interviews > 0 else 0
         )
 
         # Hires in last 30 days (using created_at as proxy)
-        hires_last_30_days = Application.query.filter(
+        hires_last_30_days = scoped_apps.filter(
             Application.status == "hired",
             Application.created_at >= month_ago
         ).count()
@@ -5518,7 +5658,7 @@ def get_pipeline_quick_stats():
             "total_candidates": total_applications,
             "offers_sent": offers_sent,
             "today_interviews": today_interviews,
-            "pending_reviews": Application.query.filter_by(status="screening").count(),
+            "pending_reviews": scoped_apps.filter(Application.status == "screening").count(),
 
             "performance_metrics": {
                 "time_to_hire_days": time_to_hire,
@@ -5532,19 +5672,21 @@ def get_pipeline_quick_stats():
                 "applications_last_7_days": recent_applications,
                 "interviews_last_7_days": recent_interviews,
                 "offers_last_7_days": Offer.query.filter(
-                    Offer.created_at >= week_ago
+                    Offer.created_at >= week_ago,
+                    Offer.application_id.in_(db.session.query(app_ids_subq.c.id)),
                 ).count(),
                 "hires_last_30_days": hires_last_30_days
             },
 
             "stage_distribution": stage_distribution,
             "total_interviews": total_interviews,
-            "upcoming_interviews": Interview.query.filter(
+            "upcoming_interviews": scoped_interviews.filter(
                 Interview.scheduled_time > now,
                 Interview.status == "scheduled"
             ).count(),
-            "offers_pending_response": Offer.query.filter_by(
-                status=OfferStatus.SENT
+            "offers_pending_response": Offer.query.filter(
+                Offer.status == OfferStatus.SENT,
+                Offer.application_id.in_(db.session.query(app_ids_subq.c.id)),
             ).count(),
 
             "updated_at": now.isoformat()
@@ -5564,20 +5706,35 @@ def get_pipeline_quick_stats():
 def update_application_recommendation(application_id):
     """Set hiring committee recommendation: Proceed to Final Interview / Hold / Reject."""
     try:
+        user, err_resp, err_code = _get_current_user_or_404()
+        if err_resp:
+            return err_resp, err_code
         application = Application.query.get_or_404(application_id)
+        if (
+            user.role == "hiring_manager"
+            and (not application.requisition or application.requisition.created_by != user.id)
+        ):
+            return jsonify({"error": "Forbidden"}), 403
         data = request.get_json() or {}
-        recommendation = (data.get("recommendation") or "").strip()
+        recommendation_raw = (data.get("recommendation") or "").strip()
+        recommendation_note = (data.get("recommendation_note") or "").strip()
+        recommendation = _normalize_pipeline_recommendation(recommendation_raw)
         if not recommendation:
             return jsonify({"error": "recommendation is required"}), 400
+        if recommendation not in set(CANONICAL_RECOMMENDATION_LABELS.values()):
+            return jsonify({"error": "Invalid recommendation. Use Proceed to Final Interview, Hold, or Reject."}), 400
+        if len(recommendation_note) > 500:
+            return jsonify({"error": "recommendation_note must be at most 500 characters"}), 400
         if len(recommendation) > 500:
             return jsonify({"error": "recommendation must be at most 500 characters"}), 400
-        application.recommendation = recommendation
+        application.recommendation = recommendation if not recommendation_note else f"{recommendation} | Note: {recommendation_note}"
         db.session.commit()
         return jsonify({
             "message": "Recommendation updated",
             "application": {
                 "id": application.id,
-                "recommendation": application.recommendation,
+                "recommendation": recommendation,
+                "recommendation_note": recommendation_note or None,
             }
         }), 200
     except Exception as e:
@@ -5593,7 +5750,15 @@ def update_application_status(application_id):
     Update application pipeline status
     """
     try:
+        user, err_resp, err_code = _get_current_user_or_404()
+        if err_resp:
+            return err_resp, err_code
         application = Application.query.get_or_404(application_id)
+        if (
+            user.role == "hiring_manager"
+            and (not application.requisition or application.requisition.created_by != user.id)
+        ):
+            return jsonify({"error": "Forbidden"}), 403
         data = request.get_json()
         new_status = data.get("status")
         
@@ -5607,9 +5772,24 @@ def update_application_status(application_id):
                 "error": f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
             }), 400
         
-        old_status = application.status
+        old_status = _normalize_application_status(application.status)
+        new_status = _normalize_application_status(new_status)
+        transition_map = {
+            "screening": {"assessment", "recommended", "rejected"},
+            "assessment": {"recommended", "rejected", "interview"},
+            "recommended": {"interview", "rejected"},
+            "interview": {"offer", "hired", "rejected"},
+            "offer": {"hired", "rejected"},
+            "hired": set(),
+            "rejected": set(),
+        }
+        if new_status != old_status and new_status not in transition_map.get(old_status, set()):
+            return jsonify({
+                "error": f"Invalid transition from {old_status} to {new_status}"
+            }), 400
         application.status = new_status
-        application.updated_at = datetime.utcnow()
+        if hasattr(application, "updated_at"):
+            application.updated_at = datetime.utcnow()
         candidate_name = (
             application.candidate.full_name
             if application.candidate and application.candidate.full_name
@@ -5671,7 +5851,7 @@ def update_application_status(application_id):
         db.session.commit()
         
         # Audit log; lock snapshot when moving recommended -> interview for audit
-        current_user_id = get_jwt_identity()
+        current_user_id = user.id
         extra_data = {
             "application_id": application_id,
             "old_status": old_status,
@@ -5703,7 +5883,7 @@ def update_application_status(application_id):
                 "status": application.status,
                 "candidate_name": application.candidate.full_name if application.candidate else None,
                 "job_title": application.requisition.title if application.requisition else None,
-                "updated_at": application.updated_at.isoformat() if application.updated_at else None
+                "updated_at": application.updated_at.isoformat() if hasattr(application, "updated_at") and application.updated_at else None
             }
         }), 200
         
