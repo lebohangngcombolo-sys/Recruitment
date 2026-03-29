@@ -379,18 +379,56 @@ def upload_resume(application_id):
         try:
             # Send to external analysis service
             from app.services.analysis_service_client import AnalysisServiceClient
+            from app.services.cv_promotion_service import CVPromotionService
+            
             external_result = AnalysisServiceClient.submit_cv_text(
                 cv_text=resume_text or "",
                 job_description=JobService.build_job_spec_for_cv(job),
                 industry=job.category or None
             )
-            cv_analysis.external_analysis_id = external_result.get('analysis_id')
-            cv_analysis.status = 'submitted'
+            external_analysis_id = external_result.get('analysis_id')
+            
+            # Use CVPromotionService to initialize analysis submission
+            cv_analysis = CVPromotionService.initialize_analysis_submission(
+                candidate_id=candidate.id,
+                external_analysis_id=external_analysis_id,
+                cv_text=resume_text or "",
+                job_description=JobService.build_job_spec_for_cv(job),
+                application_id=application.id,
+                requisition_id=job.id
+            )
+            
+            # Store extraction metadata in result
+            cv_analysis.result = {
+                "extraction_metadata": {
+                    "extraction_method": ocr_result.get("extraction_method"),
+                    "confidence": ocr_result.get("confidence"),
+                    "pages": ocr_result.get("pages"),
+                    "has_scanned_content": ocr_result.get("has_scanned_content"),
+                }
+            }
+            db.session.add(cv_analysis)
             db.session.commit()
+            
         except Exception as e:
-            cv_analysis.status = 'failed'
-            cv_analysis.result = {"error": str(e)}
+            # Create failed analysis record
+            cv_analysis = CVAnalysis(
+                candidate_id=candidate.id,
+                application_id=application.id,
+                requisition_id=job.id,
+                job_description=JobService.build_job_spec_for_cv(job),
+                cv_text=resume_text or "",
+                result={"error": str(e), "extraction_metadata": ocr_result},
+                status='failed'
+            )
+            db.session.add(cv_analysis)
             db.session.commit()
+            
+            # Update candidate status
+            candidate.cv_analysis_status = 'failed'
+            db.session.add(candidate)
+            db.session.commit()
+            
             current_app.logger.exception("Failed to submit CV to analysis service")
             return jsonify({"error": "Failed to submit CV for analysis"}), 500
 
@@ -484,6 +522,125 @@ def get_cv_analysis_status(analysis_id):
         }), 200
     except Exception as e:
         current_app.logger.error(f"Get CV analysis status error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+# ----------------- CV ANALYSIS STATUS (Cross-Database Sync) -----------------
+@candidate_bp.route("/cv-analysis-status", methods=["GET"])
+@role_required(["candidate"])
+def get_my_cv_analysis_status():
+    """
+    Get current CV analysis status for authenticated candidate.
+    Returns cross-database synchronization status.
+    """
+    try:
+        user_id = get_jwt_identity()
+        candidate = Candidate.query.filter_by(user_id=user_id).first()
+        if not candidate:
+            return jsonify({"error": "Candidate not found"}), 404
+
+        from app.services.cv_promotion_service import CVPromotionService
+        
+        # Get promotion summary
+        summary = CVPromotionService.get_promotion_summary(candidate.id)
+        
+        return jsonify({
+            "candidate_id": candidate.id,
+            "analyser_id": candidate.analyser_id,
+            "status": candidate.cv_analysis_status,
+            "promoted_at": candidate.cv_analysis_promoted_at.isoformat() if candidate.cv_analysis_promoted_at else None,
+            "last_analysis_id": candidate.last_cv_analysis_id,
+            "is_promoted": candidate.cv_analysis_status == CVPromotionService.STATUS_COMPLETED and candidate.cv_analysis_promoted_at is not None,
+            "details": summary.get('analysis') if 'analysis' in summary else None
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Get CV analysis status error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+# ----------------- SYNC CV ANALYSIS (Manual Trigger) -----------------
+@candidate_bp.route("/sync-cv-analysis", methods=["POST"])
+@role_required(["candidate"])
+def sync_cv_analysis_manual():
+    """
+    Manually trigger sync of CV analysis from external service.
+    Useful when webhook/polling hasn't updated yet.
+    """
+    try:
+        user_id = get_jwt_identity()
+        candidate = Candidate.query.filter_by(user_id=user_id).first()
+        if not candidate:
+            return jsonify({"error": "Candidate not found"}), 404
+
+        from app.services.cv_promotion_service import CVPromotionService
+        
+        # Trigger sync
+        updated = CVPromotionService.sync_analysis_status(candidate.id, force_refresh=True)
+        
+        if updated:
+            # Refresh candidate data
+            db.session.refresh(candidate)
+            
+            return jsonify({
+                "success": True,
+                "message": "CV analysis status synchronized",
+                "status": candidate.cv_analysis_status,
+                "analyser_id": candidate.analyser_id,
+                "promoted_at": candidate.cv_analysis_promoted_at.isoformat() if candidate.cv_analysis_promoted_at else None
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "message": "No update needed or sync failed",
+                "current_status": candidate.cv_analysis_status
+            }), 200
+            
+    except Exception as e:
+        current_app.logger.error(f"Sync CV analysis error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+# ----------------- PROMOTE CV ANALYSIS (Manual Trigger) -----------------
+@candidate_bp.route("/cv-analyses/<int:analysis_id>/promote", methods=["POST"])
+@role_required(["candidate"])
+def promote_cv_analysis(analysis_id):
+    """
+    Manually promote a CV analysis to candidate profile.
+    Use case: Force promotion when automatic promotion failed.
+    """
+    try:
+        user_id = get_jwt_identity()
+        candidate = Candidate.query.filter_by(user_id=user_id).first()
+        if not candidate:
+            return jsonify({"error": "Candidate not found"}), 404
+
+        # Verify analysis belongs to candidate
+        analysis = CVAnalysis.query.get_or_404(analysis_id)
+        if analysis.candidate_id != candidate.id:
+            return jsonify({"error": "Unauthorized"}), 403
+
+        from app.services.cv_promotion_service import CVPromotionService
+        
+        # Trigger promotion
+        result = CVPromotionService.promote_analysis_to_candidate(candidate.id, analysis_id)
+        
+        if result['success']:
+            return jsonify({
+                "success": True,
+                "message": "CV analysis promoted successfully",
+                "promoted_fields": result['promoted_fields'],
+                "promoted_at": result.get('promoted_at')
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "error": result.get('error', 'Promotion failed'),
+                "status": result.get('status')
+            }), 400
+            
+    except Exception as e:
+        current_app.logger.error(f"Promote CV analysis error: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
 
 

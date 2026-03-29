@@ -121,7 +121,7 @@ class DataMerger:
             new_items = []
             for edu in _as_list(external_education):
                 if isinstance(edu, dict):
-                    if float(edu.get('confidence', 1.0) or 1.0) <= 0.8:
+                    if float(edu.get('confidence', 1.0) or 1.0) < 0.9:
                         continue
                     degree = (edu.get('degree') or '').strip()
                     institution = (edu.get('institution') or '').strip()
