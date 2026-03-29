@@ -394,12 +394,19 @@ class Candidate(db.Model):
     notifications_email = db.Column(db.Boolean, default=True)
     notifications_push = db.Column(db.Boolean, default=False)
 
+    # 🔗 Cross-Database Synchronization Fields (CV Analyser Integration)
+    analyser_id = db.Column(db.String(255), nullable=True, index=True)  # External analysis ID
+    cv_analysis_status = db.Column(db.String(20), nullable=True)  # pending/processing/completed/failed
+    cv_analysis_promoted_at = db.Column(db.DateTime, nullable=True)  # When data was promoted
+    last_cv_analysis_id = db.Column(db.Integer, db.ForeignKey('cv_analyses.id'), nullable=True)  # Link to local CVAnalysis
+
     # 🔗 Relationships
     user = db.relationship('User', back_populates='candidates')
     applications = db.relationship('Application', back_populates='candidate', lazy=True)
     interviews = db.relationship('Interview', back_populates='candidate', lazy=True)
     assessments = db.relationship('AssessmentResult', back_populates='candidate', lazy=True)
     analyses = db.relationship('CVAnalysis', back_populates='candidate', lazy=True)
+    last_cv_analysis = db.relationship('CVAnalysis', foreign_keys=[last_cv_analysis_id], uselist=False)
 
     def to_dict(self):
         """Return candidate data for API responses."""
@@ -434,7 +441,12 @@ class Candidate(db.Model):
             "dark_mode": self.dark_mode,
             "notifications_email": self.notifications_email,
             "notifications_push": self.notifications_push,
-            "overall_interview_score": self.overall_interview_score,  # Add this
+            "overall_interview_score": self.overall_interview_score,
+            # 🔗 Cross-Database Sync Fields
+            "analyser_id": self.analyser_id,
+            "cv_analysis_status": self.cv_analysis_status,
+            "cv_analysis_promoted_at": self.cv_analysis_promoted_at.isoformat() if self.cv_analysis_promoted_at else None,
+            "last_cv_analysis_id": self.last_cv_analysis_id,
         }
 
 # ------------------- APPLICATION -------------------

@@ -1105,63 +1105,149 @@ def init_auth_routes(app):
 
             cv_file = request.files["cv"]
 
-            # Extract text locally (Recruitment app owns OCR/text extraction)
+            # Extract text with enhanced quality feedback (Recruitment app owns OCR/text extraction)
             try:
-                cv_text = AIParser.read_cv_file(cv_file) or ""
-            except Exception:
-                cv_text = ""
+                from app.services.enhanced_cv_parser import EnhancedCVParser
+                enhanced_parser = EnhancedCVParser()
+                enhanced_result = enhanced_parser.parse_cv_with_quality_feedback(cv_file)
+                
+                # Extract structured data from enhanced result
+                if enhanced_result and not enhanced_result.get("error"):
+                    extracted_data = {
+                        "full_name": enhanced_result.get("full_name", ""),
+                        "email": enhanced_result.get("email", ""),
+                        "phone": enhanced_result.get("phone", ""),
+                        "address": enhanced_result.get("address", ""),
+                        "dob": enhanced_result.get("dob", ""),
+                        "linkedin": enhanced_result.get("linkedin", ""),
+                        "github": enhanced_result.get("github", ""),
+                        "portfolio": enhanced_result.get("portfolio", ""),
+                        "education": enhanced_result.get("education", []),
+                        "skills": enhanced_result.get("skills", []),
+                        "certifications": enhanced_result.get("certifications", []),
+                        "languages": enhanced_result.get("languages", []),
+                        "experience": enhanced_result.get("experience", ""),
+                        "position": enhanced_result.get("position", ""),
+                        "previous_companies": enhanced_result.get("previous_companies", []),
+                        "bio": enhanced_result.get("bio", ""),
+                        "cv_text": enhanced_result.get("cv_text", ""),
+                        # Add quality metadata for frontend
+                        "quality_indicators": enhanced_result.get("quality_indicators", {}),
+                        "extraction_metadata": enhanced_result.get("extraction_metadata", {})
+                    }
+                else:
+                    # Fallback to basic extraction if enhanced parser fails
+                    cv_text = AIParser.read_cv_file(cv_file) or ""
+                    extracted_data = {"cv_text": cv_text, "error": enhanced_result.get("error", "Enhanced parsing failed")}
+                    
+            except Exception as e:
+                logger.warning(f"Enhanced CV parsing failed, falling back to basic: {e}")
+                # Fallback to original method
+                try:
+                    cv_text = AIParser.read_cv_file(cv_file) or ""
+                except Exception:
+                    cv_text = ""
+                extracted_data = {"cv_text": cv_text}
 
-            # Submit text to decoupled analyser and wait briefly for structured_data
-            try:
-                from app.services.analysis_service_client import AnalysisServiceClient
-                submit = AnalysisServiceClient.submit_cv_text(cv_text=cv_text)
-                external_id = submit.get("analysis_id")
-                if external_id:
-                    import time
-                    max_attempts = int(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_ATTEMPTS", "6") or "6")
-                    sleep_seconds = float(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_SLEEP", "0.8") or "0.8")
-                    for _ in range(max_attempts):
-                        status = AnalysisServiceClient.get_analysis_status(external_id)
-                        if (status or {}).get("status") == "completed":
-                            result = AnalysisServiceClient.get_analysis_result(external_id) or {}
-                            structured = result.get("structured_data") if isinstance(result, dict) else None
+            # If enhanced parsing succeeded, still try to get AI analysis for additional insights
+            if extracted_data and not extracted_data.get("error") and extracted_data.get("cv_text"):
+                try:
+                    from app.services.analysis_service_client import AnalysisServiceClient
+                    submit = AnalysisServiceClient.submit_cv_text(cv_text=extracted_data["cv_text"])
+                    external_id = submit.get("analysis_id")
+                    if external_id:
+                        import time
+                        max_attempts = int(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_ATTEMPTS", "6") or "6")
+                        sleep_seconds = float(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_SLEEP", "0.8") or "0.8")
+                        for _ in range(max_attempts):
+                            status = AnalysisServiceClient.get_analysis_status(external_id)
+                            if (status or {}).get("status") == "completed":
+                                result = AnalysisServiceClient.get_analysis_result(external_id) or {}
+                                structured = result.get("structured_data") if isinstance(result, dict) else None
 
-                            # Map analyser structured_data -> enrollment autofill keys
-                            if isinstance(structured, dict):
-                                personal = structured.get("personal_details") or {}
-                                education = structured.get("education_details") or {}
-                                professional = structured.get("professional_details") or {}
+                                # Merge AI insights with enhanced extraction
+                                if isinstance(structured, dict):
+                                    personal = structured.get("personal_details") or {}
+                                    education = structured.get("education_details") or {}
+                                    professional = structured.get("professional_details") or {}
 
-                                extracted_data = {
-                                    "full_name": personal.get("full_name") or "",
-                                    "email": personal.get("email") or "",
-                                    "phone": personal.get("phone") or "",
-                                    "address": personal.get("address") or "",
-                                    "dob": personal.get("dob") or "",
-                                    "linkedin": personal.get("linkedin") or "",
-                                    "github": personal.get("github") or "",
-                                    "portfolio": personal.get("portfolio") or "",
-                                    "education": education.get("education") or [],
-                                    "skills": professional.get("skills") or [],
-                                    "certifications": education.get("certifications") or [],
-                                    "languages": education.get("languages") or [],
-                                    "experience": professional.get("experience") or "",
-                                    "position": professional.get("position") or "",
-                                    "previous_companies": professional.get("previous_companies") or [],
-                                    "bio": professional.get("bio") or "",
-                                    "cv_text": cv_text,
-                                }
+                                    # Only override if enhanced extraction didn't find the field
+                                    if not extracted_data.get("full_name") and personal.get("full_name"):
+                                        extracted_data["full_name"] = personal.get("full_name")
+                                    if not extracted_data.get("email") and personal.get("email"):
+                                        extracted_data["email"] = personal.get("email")
+                                    if not extracted_data.get("phone") and personal.get("phone"):
+                                        extracted_data["phone"] = personal.get("phone")
+                                    # Add any additional fields from AI that weren't in enhanced extraction
+                                    extracted_data["ai_insights"] = {
+                                        "match_score": structured.get("match_score"),
+                                        "missing_skills": structured.get("missing_skills"),
+                                        "suggestions": structured.get("suggestions")
+                                    }
+                                break
+                            if (status or {}).get("status") == "failed":
+                                break
+                            time.sleep(sleep_seconds)
+                except Exception as e:
+                    logger.warning(f"AI analysis integration failed: {e}")
+                    # Continue with enhanced extraction results
 
-                                return jsonify(extracted_data), 200
+            # If enhanced parsing failed, try original AI analysis as fallback
+            if extracted_data.get("error") or not extracted_data.get("full_name"):
+                try:
+                    from app.services.analysis_service_client import AnalysisServiceClient
+                    submit = AnalysisServiceClient.submit_cv_text(cv_text=cv_text)
+                    external_id = submit.get("analysis_id")
+                    if external_id:
+                        import time
+                        max_attempts = int(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_ATTEMPTS", "6") or "6")
+                        sleep_seconds = float(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_SLEEP", "0.8") or "0.8")
+                        for _ in range(max_attempts):
+                            status = AnalysisServiceClient.get_analysis_status(external_id)
+                            if (status or {}).get("status") == "completed":
+                                result = AnalysisServiceClient.get_analysis_result(external_id) or {}
+                                structured = result.get("structured_data") if isinstance(result, dict) else None
 
-                            break
+                                # Map analyser structured_data -> enrollment autofill keys
+                                if isinstance(structured, dict):
+                                    personal = structured.get("personal_details") or {}
+                                    education = structured.get("education_details") or {}
+                                    professional = structured.get("professional_details") or {}
 
-                        if (status or {}).get("status") == "failed":
-                            break
-                        time.sleep(sleep_seconds)
-            except Exception:
-                # Analyzer integration is best-effort for autofill; fall back below.
-                pass
+                                    extracted_data = {
+                                        "full_name": personal.get("full_name") or "",
+                                        "email": personal.get("email") or "",
+                                        "phone": personal.get("phone") or "",
+                                        "address": personal.get("address") or "",
+                                        "dob": personal.get("dob") or "",
+                                        "linkedin": personal.get("linkedin") or "",
+                                        "github": personal.get("github") or "",
+                                        "portfolio": personal.get("portfolio") or "",
+                                        "education": education.get("education") or [],
+                                        "skills": professional.get("skills") or [],
+                                        "certifications": education.get("certifications") or [],
+                                        "languages": education.get("languages") or [],
+                                        "experience": professional.get("experience") or "",
+                                        "position": professional.get("position") or "",
+                                        "previous_companies": professional.get("previous_companies") or [],
+                                        "bio": professional.get("bio") or "",
+                                        "cv_text": cv_text,
+                                    }
+
+                                    return jsonify(extracted_data), 200
+
+                                break
+
+                            if (status or {}).get("status") == "failed":
+                                break
+                            time.sleep(sleep_seconds)
+                except Exception:
+                    # Analyzer integration is best-effort for autofill; fall back below.
+                    pass
+
+            # Return enhanced parsing results if successful
+            if extracted_data and not extracted_data.get("error"):
+                return jsonify(extracted_data), 200
 
             # Fallback: Use local hybrid parser (LLM + offline regex) for autofill.
             extracted_data = AIParser.extract_cv_data(cv_file)
