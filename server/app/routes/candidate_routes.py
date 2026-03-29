@@ -430,7 +430,13 @@ def upload_resume(application_id):
             db.session.commit()
             
             current_app.logger.exception("Failed to submit CV to analysis service")
-            return jsonify({"error": "Failed to submit CV for analysis"}), 500
+            # Do not fail the overall resume upload if external analysis is down.
+            return jsonify({
+                "message": "Resume uploaded, but analysis service is currently unavailable.",
+                "analysis_id": cv_analysis.id,
+                "resume_url": resume_url,
+                "status": "analysis_failed"
+            }), 202
 
         return jsonify({
             "message": "Resume uploaded and submitted for analysis",
@@ -920,11 +926,11 @@ def get_assessment(application_id):
         if application.candidate_id != candidate.id:
             return jsonify({"error": "Unauthorized"}), 403
 
-        job = application.requisition
-        if not job or not job.is_active or job.deleted_at is not None:
-            return jsonify({"error": "Job is not accepting applications"}), 400
-
         result = AssessmentResult.query.filter_by(application_id=application.id).first()
+        job = application.requisition
+        # Allow review of already submitted assessments even if the job is now inactive.
+        if (not job or not job.is_active or job.deleted_at is not None) and not result:
+            return jsonify({"error": "Job is not accepting applications"}), 400
         from app.services.assessment_service import get_questions_for_requisition
         req = application.requisition
         questions = get_questions_for_requisition(req) if req else []

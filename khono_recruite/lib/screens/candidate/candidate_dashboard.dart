@@ -19,7 +19,6 @@ import 'assessments_results_screen.dart';
 import '../../screens/candidate/user_profile_page.dart';
 import 'saved_application_screen.dart';
 import '../../services/auth_service.dart';
-import '../../utils/api_endpoints.dart';
 
 class CandidateDashboard extends StatefulWidget {
   final String token;
@@ -47,6 +46,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   final Color primaryColor = Color(0xFF991A1A);
   final Color strokeColor = Color(0xFFC10D00);
   final Color fillColor = Color(0xFFf2f2f2).withValues(alpha: 0.2);
+  final String apiBase = "http://127.0.0.1:5000/api/candidate";
   final GlobalKey _jobsSectionKey = GlobalKey();
 
   List<Map<String, dynamic>> notifications = [];
@@ -64,22 +64,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   @override
   void initState() {
     super.initState();
-    _checkRoleAndInitialize();
-  }
-
-  Future<void> _checkRoleAndInitialize() async {
-    final role = await AuthService.getRole();
-    if (role != 'candidate') {
-      // If not a candidate, don't fetch candidate-specific data
-      if (mounted) {
-        setState(() {
-          _loadingJobs = false;
-          _dashboardCountsLoaded = true;
-        });
-      }
-      return;
-    }
-
     WidgetsBinding.instance.addObserver(this);
     // Persist token so Jobs Applied and other routes can use AuthService.getAccessToken()
     if (widget.token.trim().isNotEmpty) {
@@ -232,6 +216,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
 
   /// Form submitted but assessment not done (status 'applied') — show "Applied" on job cards, not in Continue section.
   List<Map<String, dynamic>> _appliedOnlyApplications = [];
+  /// All application records (irrespective of status) so we can reliably hide already-applied jobs
+  /// from Recommended Jobs even when backend status values vary.
+  List<Map<String, dynamic>> _allApplications = [];
   int _interviewsScheduledCount = 0;
   bool _dashboardCountsLoaded = false;
   static const String _kCachedInProgressApps =
@@ -279,6 +266,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       ]);
       if (mounted) {
         final apps = List<dynamic>.from(results[0] as Iterable<dynamic>);
+        final allAppsMaps = apps
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
         final submittedOrCompletedList =
             apps.where(_isSubmittedOrCompletedApplication).toList();
         final submittedOrCompletedMaps = submittedOrCompletedList
@@ -319,6 +310,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           _inProgressApplications = inProgressMaps;
           _completedApplications = completedMaps;
           _appliedOnlyApplications = appliedOnlyMaps;
+          _allApplications = allAppsMaps;
           _interviewsScheduledCount = scheduledCount;
           _dashboardCountsLoaded = true;
         });
@@ -351,10 +343,24 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           _inProgressApplications = [];
           _completedApplications = [];
           _appliedOnlyApplications = [];
+          _allApplications = [];
           _interviewsScheduledCount = 0;
           _dashboardCountsLoaded = true;
         });
     }
+  }
+
+  int? _toIntId(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    return int.tryParse(v.toString());
+  }
+
+  bool _idsEqual(dynamic a, dynamic b) {
+    final ia = _toIntId(a);
+    final ib = _toIntId(b);
+    if (ia == null || ib == null) return false;
+    return ia == ib;
   }
 
   /// In-progress application for this job, if any (so we can show Continue instead of Apply Now). Only draft/in_progress.
@@ -362,7 +368,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     final jobId = job['id'];
     if (jobId == null) return null;
     for (final app in _inProgressApplications) {
-      if (app['job_id'] == jobId) return app;
+      if (_idsEqual(app['job_id'], jobId)) return app;
     }
     return null;
   }
@@ -372,7 +378,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     final jobId = job['id'];
     if (jobId == null) return null;
     for (final app in _appliedOnlyApplications) {
-      if (app['job_id'] == jobId) return app;
+      if (_idsEqual(app['job_id'], jobId)) return app;
     }
     return null;
   }
@@ -382,7 +388,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     final jobId = job['id'];
     if (jobId == null) return null;
     for (final app in _completedApplications) {
-      if (app['job_id'] == jobId) return app;
+      if (_idsEqual(app['job_id'], jobId)) return app;
     }
     return null;
   }
@@ -868,7 +874,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         final base64Image = base64Encode(bytes);
 
         final response = await http.post(
-          Uri.parse('${ApiEndpoints.candidateBase}/analyze-cv'),
+          Uri.parse('$apiBase/analyze-cv'),
           headers: {
             'Authorization': 'Bearer ${widget.token}',
             'Content-Type': 'application/json',
@@ -1119,6 +1125,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
         border: Border(bottom: BorderSide(color: Colors.white12, width: 1)),
       ),
       child: Row(
@@ -1156,6 +1163,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.015),
         border: Border(
           bottom: BorderSide(
             color: Colors.white.withValues(alpha: 0.08),
@@ -1338,9 +1346,18 @@ class _CandidateDashboardState extends State<CandidateDashboard>
 
   /// True if the candidate has any application for this job (in progress, completed, or applied); such jobs are hidden from Recommended Jobs.
   bool _hasAnyApplicationForJob(Map<String, dynamic> job) {
-    return _inProgressForJob(job) != null ||
-        _completedApplicationForJob(job) != null ||
-        _appliedOnlyForJob(job) != null;
+    final jobId = job['id'];
+    if (jobId == null) return false;
+    final jid = _toIntId(jobId);
+    if (jid == null) return false;
+    for (final app in _allApplications) {
+      final appJobId = app['job_id'] ??
+          app['requisition_id'] ??
+          app['jobId'] ??
+          app['requisitionId'];
+      if (_idsEqual(appJobId, jid)) return true;
+    }
+    return false;
   }
 
   List<Map<String, dynamic>> _getFilteredJobs(int typeIndex) {
@@ -1386,9 +1403,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       );
     }
     if (jobs.isEmpty) {
-      return Center(
+      return Align(
+        alignment: Alignment.topCenter,
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.only(top: 32, left: 24, right: 24),
           child: Text(
             'No jobs found.',
             style: GoogleFonts.poppins(fontSize: 16, color: Colors.white70),
@@ -1404,25 +1422,36 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       children: [
         Container(
           decoration: BoxDecoration(
-            color: Color(0xFF2A2A2A),
+            // Glassmorphic container so it blends with the dark background.
+            color: Colors.white.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.28),
+                blurRadius: 22,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildJobTableHeader(),
-                ...paginatedJobs.map((job) {
-                  final j = Map<String, dynamic>.from(job);
-                  if (!j.containsKey('type') &&
-                      j.containsKey('employment_type')) {
-                    j['type'] = j['employment_type'];
-                  }
-                  return _buildJobTableRow(j);
-                }),
-              ],
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildJobTableHeader(),
+                  ...paginatedJobs.map((job) {
+                    final j = Map<String, dynamic>.from(job);
+                    if (!j.containsKey('type') &&
+                        j.containsKey('employment_type')) {
+                      j['type'] = j['employment_type'];
+                    }
+                    return _buildJobTableRow(j);
+                  }),
+                ],
+              ),
             ),
           ),
         ),
@@ -1665,7 +1694,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     _safeSetState(() => _continuingApplication = true);
     try {
       final res = await http.post(
-        Uri.parse('${ApiEndpoints.candidateBase}/apply/$jobId'),
+        Uri.parse('$apiBase/apply/$jobId'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer ${widget.token}',
@@ -1689,8 +1718,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) =>
-                AssessmentPage(applicationId: data['application_id'] as int),
+            builder: (_) => RedirectToAssessmentPage(
+              applicationId: data['application_id'] as int,
+              jobTitle: job['title']?.toString(),
+            ),
           ),
         );
       } else if (res.statusCode == 400 && data is Map) {

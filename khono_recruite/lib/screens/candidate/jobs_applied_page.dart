@@ -8,7 +8,6 @@ import '../../services/candidate_service.dart';
 import '../../utils/api_endpoints.dart';
 import 'assessment_page.dart';
 import 'cv_upload_page.dart';
-import 'pick_interview_slot_page.dart';
 
 /// Display status for UI. Backend status is mapped to one of these.
 enum _DisplayStatus { inProgress, applied, interview, offer, rejected }
@@ -25,10 +24,13 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
   List<Map<String, dynamic>> applications = [];
   bool loading = true;
   int _selectedTabIndex = 0; // 0=All, 1=In Progress, 2=Offers, 3=Unsuccessful
+  int _currentPage = 0;
   Map<String, dynamic>? _drawerApplication;
   bool _drawerVisible = false;
+  static const int _rowsPerPage = 7;
 
   static const Color _accentRed = Color(0xFFC10D00);
+  static const Color _actionBlue = Color(0xFF6EA8FE);
   static const Color _cardDark = Color(0xFF252525);
   static const Color _borderLight = Color(0xFF3A3A3A);
 
@@ -120,7 +122,12 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
           .where(_isTrackableApplication)
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
-      if (mounted) setState(() => applications = trackable);
+      if (mounted) {
+        setState(() {
+          applications = trackable;
+          _currentPage = 0;
+        });
+      }
     } catch (e) {
       debugPrint("Error fetching applications: $e");
       if (mounted) setState(() => applications = []);
@@ -313,7 +320,10 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
               color: selected ? _accentRed : Colors.white.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
               child: InkWell(
-                onTap: () => setState(() => _selectedTabIndex = i),
+                onTap: () => setState(() {
+                  _selectedTabIndex = i;
+                  _currentPage = 0;
+                }),
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -363,6 +373,14 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
       );
     }
     final rows = _filteredApplications;
+    final totalPages =
+        rows.isEmpty ? 1 : ((rows.length + _rowsPerPage - 1) ~/ _rowsPerPage);
+    if (_currentPage >= totalPages) {
+      _currentPage = totalPages - 1;
+    }
+    final start = _currentPage * _rowsPerPage;
+    final end = (start + _rowsPerPage).clamp(0, rows.length);
+    final visibleRows = rows.sublist(start, end);
     if (rows.isEmpty) {
       return Center(
         child: Column(
@@ -389,116 +407,241 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final tableWidth = constraints.maxWidth.isFinite ? constraints.maxWidth - 24.0 : 800.0;
+        final tableWidth =
+            constraints.maxWidth.isFinite ? constraints.maxWidth - 24.0 : 1100.0;
+        final hasActionColumn = !_drawerVisible;
+        final minRequiredWidth = hasActionColumn ? 920.0 : 760.0;
+        final effectiveWidth =
+            tableWidth < minRequiredWidth ? minRequiredWidth : tableWidth;
+        const indexColWidth = 40.0;
+        final contentWidth = effectiveWidth - indexColWidth;
+
+        // Enterprise-like proportional sizing so the table fills the full area.
+        final jobTitleWidth = hasActionColumn ? contentWidth * 0.28 : contentWidth * 0.34;
+        final companyWidth = hasActionColumn ? contentWidth * 0.22 : contentWidth * 0.26;
+        final dateWidth = hasActionColumn ? contentWidth * 0.17 : contentWidth * 0.20;
+        final statusWidth = hasActionColumn ? contentWidth * 0.18 : contentWidth * 0.20;
+        final actionWidth = hasActionColumn
+            ? contentWidth - (jobTitleWidth + companyWidth + dateWidth + statusWidth)
+            : 0.0;
+
         return SingleChildScrollView(
           scrollDirection: Axis.vertical,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          child: Container(
-            width: tableWidth,
-            decoration: BoxDecoration(
-              color: _cardDark.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: _borderLight, width: 1),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.2),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+          child: Column(
+            children: [
+              Container(
+                width: tableWidth,
+                decoration: BoxDecoration(
+                  color: _cardDark.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _borderLight, width: 1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.2),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: DataTable(
-              headingRowColor: WidgetStateProperty.all(Colors.white.withValues(alpha: 0.06)),
-              headingTextStyle: GoogleFonts.poppins(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.white70,
-              ),
-              dataRowColor: WidgetStateProperty.resolveWith((states) {
-                return Colors.transparent;
-              }),
-              dataTextStyle: GoogleFonts.poppins(fontSize: 14, color: Colors.white),
-              border: TableBorder(
-                horizontalInside: BorderSide(color: _borderLight, width: 1),
-                verticalInside: BorderSide(color: _borderLight, width: 1),
-              ),
-              columnSpacing: 12,
-              horizontalMargin: 8,
-              columns: [
-                DataColumn(
-                  columnWidth: const FixedColumnWidth(28),
-                  label: const Text('#'),
-                ),
-                DataColumn(
-                  columnWidth: const FixedColumnWidth(100),
-                  label: const Text('Job Title'),
-                ),
-                DataColumn(
-                  columnWidth: const FixedColumnWidth(90),
-                  label: const Text('Company'),
-                ),
-                DataColumn(
-                  columnWidth: const FixedColumnWidth(100),
-                  label: const Text('Date Applied'),
-                ),
-                DataColumn(
-                  columnWidth: const FlexColumnWidth(1.0),
-                  label: const Text('Application Status'),
-                ),
-                if (!_drawerVisible)
-                  DataColumn(
-                    columnWidth: const FlexColumnWidth(1.0),
-                    label: const Text('Action'),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: SizedBox(
+                    width: effectiveWidth,
+                    child: DataTable(
+                  headingRowColor:
+                      WidgetStateProperty.all(Colors.white.withValues(alpha: 0.06)),
+                  headingTextStyle: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white70,
                   ),
-              ],
-              rows: List.generate(rows.length, (i) {
-                final app = rows[i];
-                final displayStatus = _toDisplayStatus(app);
-                final cells = [
-                  DataCell(Align(alignment: Alignment.centerLeft, child: Text('${i + 1}'))),
-                  DataCell(Text(
-                    app['job_title']?.toString() ?? '—',
-                    overflow: TextOverflow.ellipsis,
-                  )),
-                DataCell(Text(
-                  app['company']?.toString() ?? '—',
-                  overflow: TextOverflow.ellipsis,
-                )),
-                DataCell(Text(_dateApplied(app))),
-                DataCell(
-                  FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: _buildStatusPill(displayStatus),
+                  dataRowColor: WidgetStateProperty.resolveWith((states) {
+                    return Colors.transparent;
+                  }),
+                  dataTextStyle: GoogleFonts.poppins(fontSize: 14, color: Colors.white),
+                  dataRowMinHeight: 44,
+                  dataRowMaxHeight: 50,
+                  border: TableBorder(
+                    horizontalInside: BorderSide(color: _borderLight, width: 1),
+                    verticalInside: BorderSide(color: _borderLight, width: 1),
                   ),
-                ),
-              ];
-                if (!_drawerVisible) {
-                cells.add(
-                  DataCell(
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: TextButton(
-                        onPressed: () => _openDrawer(app),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                        ),
-                        child: Text(
-                          'View Application',
-                          style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
+                  columnSpacing: 8,
+                  horizontalMargin: 8,
+                  columns: [
+                    DataColumn(
+                      columnWidth: const FixedColumnWidth(indexColWidth),
+                      label: const Text('#'),
+                    ),
+                    DataColumn(
+                      columnWidth: FixedColumnWidth(jobTitleWidth),
+                      label: const Text('Job Title'),
+                    ),
+                    DataColumn(
+                      columnWidth: FixedColumnWidth(companyWidth),
+                      label: const Text('Company'),
+                    ),
+                    DataColumn(
+                      columnWidth: FixedColumnWidth(dateWidth),
+                      label: const Text('Date Applied'),
+                    ),
+                    DataColumn(
+                      columnWidth: FixedColumnWidth(statusWidth),
+                      label: const Text('Application Status'),
+                    ),
+                    if (!_drawerVisible)
+                      DataColumn(
+                        columnWidth: FixedColumnWidth(actionWidth),
+                        label: const Text('Action'),
+                      ),
+                  ],
+                  rows: List.generate(visibleRows.length, (i) {
+                    final app = visibleRows[i];
+                    final displayStatus = _toDisplayStatus(app);
+                    final jobTitle = app['job_title']?.toString() ?? '—';
+                    final company = app['company']?.toString() ?? '—';
+                    final cells = [
+                      DataCell(
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('${start + i + 1}'),
                         ),
                       ),
+                      DataCell(
+                        Tooltip(
+                          message: jobTitle,
+                          child: Text(
+                            jobTitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      DataCell(
+                        Tooltip(
+                          message: company,
+                          child: Text(
+                            company,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                      DataCell(Text(_dateApplied(app))),
+                      DataCell(
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: _buildStatusPill(displayStatus),
+                        ),
+                      ),
+                    ];
+                    if (!_drawerVisible) {
+                      cells.add(
+                        DataCell(
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton(
+                              onPressed: () => _openDrawer(app),
+                              style: TextButton.styleFrom(
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 6,
+                                ),
+                              ),
+                              child: Text(
+                                'View Application',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }
+                    return DataRow(cells: cells);
+                  }),
                     ),
                   ),
-                );
-              }
-              return DataRow(cells: cells);
-            }),
-            ),
+                ),
+              ),
+              if (rows.length > _rowsPerPage) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: tableWidth,
+                  child: Row(
+                    children: [
+                      Text(
+                        'Showing ${start + 1}-${end} of ${rows.length}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.white70,
+                        ),
+                      ),
+                      const Spacer(),
+                      OutlinedButton.icon(
+                        onPressed: _currentPage > 0
+                            ? () => setState(() => _currentPage--)
+                            : null,
+                        icon: const Icon(Icons.chevron_left, size: 18),
+                        label: Text(
+                          'Previous',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: BorderSide(
+                            color: _currentPage > 0 ? Colors.white30 : Colors.white12,
+                          ),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${_currentPage + 1} / $totalPages',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.white70,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        onPressed: _currentPage < totalPages - 1
+                            ? () => setState(() => _currentPage++)
+                            : null,
+                        icon: const Icon(Icons.chevron_right, size: 18),
+                        iconAlignment: IconAlignment.end,
+                        label: Text(
+                          'Next',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: BorderSide(
+                            color: _currentPage < totalPages - 1
+                                ? Colors.white30
+                                : Colors.white12,
+                          ),
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
           ),
         );
       },
@@ -663,46 +806,6 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                               ),
                             ),
                           ],
-                          if (assessmentDone && cvDone &&
-                              (app['interview_status']?.toString().toLowerCase() ?? '') != 'scheduled') ...[
-                            const SizedBox(height: 16),
-                            SizedBox(
-                              width: double.infinity,
-                              child: OutlinedButton.icon(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => PickInterviewSlotPage(
-                                        applicationId: app['application_id'] as int,
-                                        jobTitle: app['job_title']?.toString() ?? 'Interview',
-                                      ),
-                                    ),
-                                  ).then((_) {
-                                    _closeDrawer();
-                                    _fetchApplications();
-                                  });
-                                },
-                                icon: const Icon(Icons.event_available, size: 20, color: Color(0xFFC10D00)),
-                                label: Text(
-                                  'Pick a slot',
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 15,
-                                    color: const Color(0xFFC10D00),
-                                  ),
-                                ),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFFC10D00),
-                                  side: const BorderSide(color: Color(0xFFC10D00)),
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
                           if (_cvUploaded(app)) ...[
                             const SizedBox(height: 24),
                             _drawerSectionTitle('Documents'),
@@ -722,16 +825,22 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                                 ),
                                 TextButton.icon(
                                   onPressed: () => _previewCv(context, app),
-                                  icon: const Icon(Icons.visibility_outlined, size: 18, color: Color(0xFFC10D00)),
+                                  icon: Icon(
+                                    Icons.visibility_outlined,
+                                    size: 18,
+                                    color: _actionBlue,
+                                  ),
                                   label: Text(
                                     'Preview',
                                     style: GoogleFonts.poppins(
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,
-                                      color: const Color(0xFFC10D00),
+                                      color: _actionBlue,
                                     ),
                                   ),
                                   style: TextButton.styleFrom(
+                                    backgroundColor:
+                                        _actionBlue.withValues(alpha: 0.10),
                                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                                     minimumSize: Size.zero,
                                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,

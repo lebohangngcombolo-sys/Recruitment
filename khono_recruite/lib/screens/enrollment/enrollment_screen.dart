@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'dart:ui';
 import '../../services/auth_service.dart';
 import 'enrollment_drop_stub.dart' if (dart.library.html) 'enrollment_drop_web.dart' as enrollment_drop;
 
@@ -10,8 +11,6 @@ import 'enrollment_drop_stub.dart' if (dart.library.html) 'enrollment_drop_web.d
 const Color _kKhonologyRed = Color(0xFFC10D00);
 const Color _kOnboardingCardBg = Color(0xFF2A2A2A);
 const Color _kSuccess = Color(0xFF22C55E);
-const Color _kWarning = Color(0xFFB91C1C);
-const Color _kWarningText = Color(0xFFFECACA);
 
 class EnrollmentScreen extends StatefulWidget {
   final String token;
@@ -29,7 +28,13 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
   bool profileLoading = false;
   bool _loggingIn = false;
   String? userName;
+  String? userEmail;
   PlatformFile? selectedCV;
+
+  // Step 3 inline editing (no edit buttons/modals).
+  bool _editingFullNameInline = false;
+  bool _editingWorkExperienceInline = false;
+  final FocusNode _fullNameInlineFocusNode = FocusNode();
 
   // --- 3-step onboarding flow ---
   /// 0 = CV Upload, 1 = Processing, 2 = Review. When true, user chose "Fill out manually" and we show the 4-step form.
@@ -147,12 +152,26 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         debugPrint("Profile load skipped (unauthorized or token expired)");
         return;
       }
+
+      final cachedName = AuthService.getCachedDisplayName();
+
+      String? resolvedName = profile['user']?['profile']?['full_name'] ??
+          profile['full_name'] ??
+          profile['name'];
+      if (resolvedName == null || resolvedName.trim().isEmpty) {
+        resolvedName = cachedName;
+      }
+      if (resolvedName == null || resolvedName.trim().isEmpty) {
+        resolvedName = await AuthService.getPersistedDisplayName();
+      }
+
+      final resolvedEmail = profile['user']?['email'] ??
+          profile['email'] ??
+          profile['user']?['profile']?['email'];
+
       setState(() {
-        userName = profile['user']?['profile']?['full_name'] ??
-            profile['full_name'] ??
-            profile['name'] ??
-            profile['user']?['email']?.split('@').first ??
-            profile['email']?.split('@').first;
+        userName = resolvedName?.toString().trim();
+        userEmail = resolvedEmail?.toString();
         if (userName != null && userName!.isNotEmpty) {
           nameController.text = userName!;
         }
@@ -162,10 +181,22 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       try {
         final localUser = await AuthService.getUserInfo();
         if (localUser != null && mounted) {
+          final user = localUser['user'] ?? localUser;
+          final profile = user is Map<String, dynamic> ? (user['profile'] ?? {}) : {};
+          final candidateProfile =
+              localUser['candidate_profile'] ?? localUser['candidate'] ?? {};
+
+          final cachedName = AuthService.getCachedDisplayName();
+          String? resolvedName = localUser['full_name']?.toString() ??
+              localUser['name']?.toString() ??
+              (candidateProfile is Map ? candidateProfile['full_name']?.toString() : null) ??
+              (profile is Map ? profile['full_name']?.toString() : null) ??
+              cachedName;
+
           setState(() {
-            userName = localUser['full_name'] ??
-                localUser['name'] ??
-                localUser['email']?.split('@').first;
+            userName = resolvedName?.trim();
+            userEmail = localUser['email']?.toString() ??
+                (user is Map ? user['email']?.toString() : null);
             if (userName != null && userName!.isNotEmpty) {
               nameController.text = userName!;
             }
@@ -307,17 +338,16 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       );
     } else {
       if (!context.mounted) return;
-      setState(() {
-        _loggingIn = true;
-      });
-      Future.delayed(const Duration(milliseconds: 1200), () async {
-        if (!context.mounted) return;
-        try {
-          await AuthService.getCurrentUser(token: widget.token);
-        } catch (_) {}
-        if (!context.mounted) return;
-        context.go('/candidate-dashboard?token=${Uri.encodeComponent(widget.token)}');
-      });
+      // Navigate immediately after successful enrollment.
+      // We refresh the user info in the background so the dashboard can load fast.
+      setState(() => _loggingIn = true);
+      unawaited(
+        AuthService.getCurrentUser(token: widget.token)
+            .catchError((_) => <String, dynamic>{}),
+      );
+      context.go(
+        '/candidate-dashboard?token=${Uri.encodeComponent(widget.token)}',
+      );
     }
   }
 
@@ -357,8 +387,10 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       margin: flexible ? _cardMarginInRow : _cardMargin,
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        color: _kOnboardingCardBg,
+        // Glassmorphic card so the grey blends with the app background.
+        color: Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
@@ -369,11 +401,18 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       ),
       child: child,
     );
-    if (flexible) return container;
+    final glass = ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: container,
+      ),
+    );
+    if (flexible) return glass;
     return Center(
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
-        child: container,
+        child: glass,
       ),
     );
   }
@@ -1027,7 +1066,18 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     final educationOk = educationController.text.trim().isNotEmpty || universityController.text.trim().isNotEmpty;
     final skillsOk = skillsController.text.trim().isNotEmpty;
     final experienceOk = experienceController.text.trim().isNotEmpty || positionController.text.trim().isNotEmpty;
-    final responsibilitiesMissing = experienceController.text.trim().isEmpty && positionController.text.trim().isNotEmpty;
+
+    // Enterprise-style preview: keep Step 3 compact by limiting long lists.
+    final List<String> _eduAll = [
+      ..._getEducationEntries(educationController.text),
+    ];
+    final String _uni = universityController.text.trim();
+    if (_uni.isNotEmpty && _eduAll.isEmpty) {
+      _eduAll.add(_uni);
+    }
+    const int _eduPreviewMax = 3;
+    final List<String> _eduVisible = _eduAll.take(_eduPreviewMax).toList();
+    final int _eduHidden = _eduAll.length - _eduVisible.length;
 
     return SingleChildScrollView(
       child: Column(
@@ -1056,166 +1106,284 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                     height: 1.4,
                   ),
                 ),
-                if (!_reviewRequiredComplete) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: _kWarning,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline, size: 18, color: _kWarningText),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Complete required fields to continue.',
-                            style: GoogleFonts.poppins(
-                              fontSize: 13,
-                              color: _kWarningText,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
                 const SizedBox(height: 24),
-                SizedBox(
-                  height: 520,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: _buildCollapsibleReviewSection(
-                                sectionKey: 'personal',
-                                title: 'Personal Details',
-                                completed: nameOk,
-                                onEdit: () => _showEditPersonal(context),
-                                expandBody: true,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    _buildReviewRow('Full Name', nameController.text, null),
-                                    _buildReviewRow('Email', userName ?? '—', null),
-                                    _buildReviewRow('Phone', phoneController.text, null),
-                                    _buildReviewRow('Address', addressController.text, null),
-                                    _buildReviewRow('Date of Birth', dobController.text.trim().isEmpty ? '—' : dobController.text, null),
-                                    _buildReviewRow('LinkedIn', linkedinController.text.trim().isEmpty ? '—' : linkedinController.text, null),
-                                    _buildReviewRow('Gender', selectedGender ?? '—', null),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Expanded(
-                              child: _buildCollapsibleReviewSection(
-                                sectionKey: 'skills',
-                                title: 'Skills',
-                                completed: skillsOk,
-                                onEdit: null,
-                                expandBody: true,
-                                child: skillsOk
-                                    ? _buildSkillsReviewContent()
-                                    : Padding(
-                                        padding: const EdgeInsets.only(bottom: 8),
-                                        child: Text(
-                                          'No skills listed',
-                                          style: GoogleFonts.poppins(fontSize: 14, color: Colors.white54),
-                                        ),
-                                      ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 24),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: _buildCollapsibleReviewSection(
-                                sectionKey: 'education',
-                                title: 'Education',
-                                completed: educationOk,
-                                onEdit: () => _showEditEducation(context),
-                                expandBody: true,
-                                child: educationOk
-                                    ? Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          ..._getEducationEntries(educationController.text)
-                                              .map((entry) => _buildEducationEntryBlock(entry)),
-                                          if (universityController.text.trim().isNotEmpty && _getEducationEntries(educationController.text).isEmpty)
-                                            _buildEducationEntryBlock(universityController.text.trim()),
-                                        ],
-                                      )
-                                    : _buildEmptySection('No education details found', 'Add Education', () => _showEditEducation(context)),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Expanded(
-                              child: _buildCollapsibleReviewSection(
-                                sectionKey: 'experience',
-                                title: 'Work Experience',
-                                completed: experienceOk && !responsibilitiesMissing,
-                                onEdit: () => _showEditExperience(context),
-                                expandBody: true,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (experienceOk || positionController.text.trim().isNotEmpty) ...[
-                                      ..._getWorkExperienceSummaries().map(
-                                        (m) => _buildWorkExperienceSummaryCard(
-                                          m['company']!,
-                                          m['role']!,
-                                          m['year']!,
-                                        ),
-                                      ),
-                                    ] else
-                                      _buildEmptySection('No work experience added', 'Add Experience', () => _showEditExperience(context)),
-                                    if (responsibilitiesMissing)
-                                      Container(
-                                        margin: const EdgeInsets.only(top: 8),
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                        decoration: BoxDecoration(
-                                          color: _kWarning,
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Row(
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildCollapsibleReviewSection(
+                            sectionKey: 'personal',
+                            title: 'Personal Details',
+                            completed: nameOk,
+                            onEdit: null,
+                            expandBody: false,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
-                                            Icon(Icons.warning_amber_rounded, size: 18, color: _kWarningText),
-                                            const SizedBox(width: 8),
-                                            Expanded(
-                                              child: Text(
-                                                'Missing: Responsibilities – Please complete this field.',
-                                                style: GoogleFonts.poppins(
-                                                  fontSize: 13,
-                                                  color: _kWarningText,
-                                                  fontWeight: FontWeight.w500,
-                                                ),
+                                            Text(
+                                              'Full Name',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white,
                                               ),
                                             ),
+                                            const SizedBox(height: 2),
+                                            _editingFullNameInline
+                                                ? TextField(
+                                                    controller: nameController,
+                                                    focusNode:
+                                                        _fullNameInlineFocusNode,
+                                                    autofocus: true,
+                                                    style: GoogleFonts.poppins(
+                                                      color: Colors.white,
+                                                      height: 1.3,
+                                                    ),
+                                                    cursorColor: _kKhonologyRed,
+                                                    decoration: const InputDecoration(
+                                                      isDense: true,
+                                                      border: InputBorder.none,
+                                                      contentPadding:
+                                                          EdgeInsets.zero,
+                                                    ),
+                                                    maxLines: 1,
+                                                    onSubmitted: (_) {
+                                                      setState(() {
+                                                        _editingFullNameInline =
+                                                            false;
+                                                      });
+                                                    },
+                                                  )
+                                                : InkWell(
+                                                    onTap: () {
+                                                      setState(() {
+                                                        _editingFullNameInline =
+                                                            true;
+                                                      });
+                                                      Future.microtask(() {
+                                                        if (!mounted) return;
+                                                        _fullNameInlineFocusNode
+                                                            .requestFocus();
+                                                      });
+                                                    },
+                                                    child: Text(
+                                                      (nameController.text
+                                                                  .trim()
+                                                                  .isEmpty
+                                                              ? '—'
+                                                              : nameController.text
+                                                                  .trim())
+                                                          ,
+                                                      style: GoogleFonts.poppins(
+                                                        fontSize: 14,
+                                                        color: Colors.white70,
+                                                        height: 1.3,
+                                                      ),
+                                                      maxLines: 2,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                  ),
                                           ],
                                         ),
                                       ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
+                                _buildReviewRow(
+                                  'Email',
+                                  (userEmail != null && userEmail!.contains('@'))
+                                      ? userEmail!
+                                      : (userName != null && userName!.contains('@'))
+                                          ? userName!
+                                          : '—',
+                                  null,
+                                ),
+                                _buildReviewRow('Phone', phoneController.text, null),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildCollapsibleReviewSection(
+                            sectionKey: 'skills',
+                            title: 'Skills',
+                            completed: skillsOk,
+                            onEdit: null,
+                            expandBody: false,
+                            child: skillsOk
+                                ? _buildSkillsReviewContent()
+                                : Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Text(
+                                      'No skills listed',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        color: Colors.white54,
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 24),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _buildCollapsibleReviewSection(
+                            sectionKey: 'education',
+                            title: 'Education',
+                            completed: educationOk,
+                            onEdit: null,
+                            expandBody: false,
+                            child: educationOk
+                                ? Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      ..._eduVisible
+                                          .map((entry) => _buildEducationEntryBlock(entry)),
+                                      if (_eduHidden > 0)
+                                        Padding(
+                                          padding: const EdgeInsets.only(top: 2),
+                                          child: Text(
+                                            'and $_eduHidden more',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: _kKhonologyRed,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  )
+                                : Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: Text(
+                                      'No education details found',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        color: Colors.white54,
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildCollapsibleReviewSection(
+                            sectionKey: 'experience',
+                            title: 'Work Experience',
+                            completed: experienceOk,
+                            onEdit: null,
+                            expandBody: false,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (_editingWorkExperienceInline)
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Work Experience',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      _buildTextField(
+                                        previousCompaniesController,
+                                        'Previous Companies',
+                                      ),
+                                      _buildTextField(
+                                        positionController,
+                                        'Position',
+                                      ),
+                                      _buildTextField(
+                                        experienceController,
+                                        'Work Experience',
+                                        maxLines: 3,
+                                      ),
+                                      TextButton(
+                                        onPressed: () {
+                                          setState(() {
+                                            _editingWorkExperienceInline = false;
+                                          });
+                                        },
+                                        child: Text(
+                                          'Done',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                            color: _kKhonologyRed,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                else if (experienceOk ||
+                                    positionController
+                                        .text
+                                        .trim()
+                                        .isNotEmpty) ...[
+                                  ..._getWorkExperienceSummaries().map(
+                                    (m) => InkWell(
+                                      onTap: () {
+                                        setState(() {
+                                          _editingWorkExperienceInline = true;
+                                        });
+                                      },
+                                      child: _buildWorkExperienceSummaryCard(
+                                        m['company']!,
+                                        m['role']!,
+                                        m['year']!,
+                                      ),
+                                    ),
+                                  ),
+                                ] else
+                                  InkWell(
+                                    onTap: () {
+                                      setState(() {
+                                        _editingWorkExperienceInline = true;
+                                      });
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: Text(
+                                        'No work experience added',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          color: Colors.white54,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 28),
                 Row(
@@ -1233,12 +1401,10 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                       ),
                     ),
                     ElevatedButton(
-                      onPressed: _reviewRequiredComplete ? submitEnrollment : null,
+                      onPressed: submitEnrollment,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _kKhonologyRed,
                         foregroundColor: Colors.white,
-                        disabledBackgroundColor: Colors.grey.shade700,
-                        disabledForegroundColor: Colors.grey.shade400,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -1277,14 +1443,20 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: child,
     );
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Column(
-        mainAxisSize: expandBody ? MainAxisSize.max : MainAxisSize.min,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          ),
+          child: Column(
+        // Use content-driven sizing to avoid infinite-height errors inside
+        // unbounded parents like SingleChildScrollView.
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           InkWell(
@@ -1338,12 +1510,11 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             ),
           ),
           if (expandBody)
-            Expanded(
-              child: isCollapsed ? const SizedBox.shrink() : SingleChildScrollView(child: body),
-            )
-          else if (!isCollapsed)
-            body,
+            isCollapsed ? const SizedBox.shrink() : body
+          else if (!isCollapsed) body,
         ],
+          ),
+        ),
       ),
     );
   }
@@ -1397,6 +1568,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     );
   }
 
+  // ignore: unused_element
   Widget _buildEmptySection(String message, String buttonLabel, VoidCallback onAdd) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -1635,6 +1807,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     );
   }
 
+  // ignore: unused_element
   void _showEditPersonal(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -1654,6 +1827,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     ).then((_) => setState(() {}));
   }
 
+  // ignore: unused_element
   void _showEditEducation(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -1668,6 +1842,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     ).then((_) => setState(() {}));
   }
 
+  // ignore: unused_element
   void _showEditExperience(BuildContext context) {
     showModalBottomSheet(
       context: context,
@@ -2644,6 +2819,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
   void dispose() {
     _tabController.dispose();
     _scrollController.dispose();
+    _fullNameInlineFocusNode.dispose();
     super.dispose();
   }
 
@@ -2736,10 +2912,6 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     }
   }
 
-  bool get _reviewRequiredComplete {
-    final name = nameController.text.trim();
-    return name.isNotEmpty;
-  }
 }
 
 class _EnrollmentDropZoneScope extends StatefulWidget {
