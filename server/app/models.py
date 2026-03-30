@@ -454,6 +454,7 @@ class Application(db.Model):
     recommendation = db.Column(db.String(500))
     assessed_date = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_saved_screen = db.Column(db.String(50))
     saved_at = db.Column(db.DateTime)
     last_interview_date = db.Column(db.DateTime, nullable=True)
@@ -483,6 +484,7 @@ class Application(db.Model):
             "recommendation": self.recommendation,
             "assessed_date": self.assessed_date.isoformat() if self.assessed_date else None,
             "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "assessment_results": [ar.to_dict() for ar in self.assessment_results],
             "last_saved_screen": self.last_saved_screen,
             "saved_at": self.saved_at.isoformat() if self.saved_at else None,

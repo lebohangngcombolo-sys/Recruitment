@@ -22,17 +22,17 @@ if os.path.isfile(_env_path):
     from dotenv import load_dotenv
     load_dotenv(_env_path)
 
-EMAIL = "sim.carl@khonology.com"
+EMAIL = "caite.gotte.c@khonology.com"
 DEFAULT_PASSWORD = "TempPass123!"
 PROFILE = {
-    "first_name": "Sim",
-    "last_name": "Carl",
-    "full_name": "Sim Carl",
+    "first_name": "Caite",
+    "last_name": "Gotte",
+    "full_name": "Caite Gotte",
 }
 
 
 def main():
-    password = (sys.argv[1] if len(sys.argv) >= 2 else None) or os.environ.get("SIM_CARL_PASSWORD") or DEFAULT_PASSWORD
+    password = (sys.argv[1] if len(sys.argv) >= 2 else None) or os.environ.get("CAITE_GOTTE_PASSWORD") or DEFAULT_PASSWORD
     email = EMAIL.strip().lower()
 
     from app import create_app
