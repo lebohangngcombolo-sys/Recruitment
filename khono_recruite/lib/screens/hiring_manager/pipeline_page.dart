@@ -4,6 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../services/recruitment_service.dart';
 import 'job_management.dart';
+import 'candidate_detail_screen.dart';
+import 'interviews_list_screen.dart';
+import 'offer_list_screen.dart';
 
 class RecruitmentPipelinePage extends StatefulWidget {
   final String token;
@@ -186,6 +189,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             _applications[index]['status'] = status;
           });
         }
+        if (status == 'interview') {
+          _openInterviewFlow(applicationId: applicationId);
+        } else if (status == 'offer' || status == 'hired') {
+          _openOfferFlow(applicationId: applicationId);
+        }
       } else {
         _showErrorSnackbar('Failed to update status');
       }
@@ -239,10 +247,85 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           if (newStatus != null) _applications[index]['status'] = newStatus;
         });
       }
+      if (action == 'rec_proceed') {
+        _openInterviewFlow(applicationId: applicationId);
+      }
     } catch (e) {
       debugPrint('Error in recommendation action: $e');
       _showErrorSnackbar('Action failed');
     }
+  }
+
+  Future<void> _openCandidateDetail(Map<String, dynamic> app) async {
+    final candidateId = app['candidate_id'];
+    final applicationId = app['id'];
+    if (candidateId == null || applicationId == null) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CandidateDetailScreen(
+          candidateId: candidateId is int ? candidateId : int.tryParse(candidateId.toString()) ?? 0,
+          applicationId: applicationId is int ? applicationId : int.tryParse(applicationId.toString()) ?? 0,
+        ),
+      ),
+    );
+    if (mounted) {
+      _loadTabData(_activeTab);
+    }
+  }
+
+  Future<void> _openInterviewFlow({int? applicationId, int? candidateId}) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InterviewListScreen(
+          initialApplicationId: applicationId,
+          initialCandidateId: candidateId,
+        ),
+      ),
+    );
+    if (mounted) {
+      _loadTabData(0);
+    }
+  }
+
+  Future<void> _openOfferFlow({int? applicationId}) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdminOfferListScreen(
+          token: widget.token,
+          initialApplicationId: applicationId,
+        ),
+      ),
+    );
+    if (mounted) {
+      _loadTabData(0);
+    }
+  }
+
+  void _handleAppMenuAction(Map<String, dynamic> app, String value) {
+    final appId = app['id'] is int ? app['id'] as int : int.tryParse('${app['id']}');
+    final candidateId = app['candidate_id'] is int
+        ? app['candidate_id'] as int
+        : int.tryParse('${app['candidate_id']}');
+    if (value == 'open_candidate') {
+      _openCandidateDetail(app);
+      return;
+    }
+    if (value == 'open_interviews') {
+      _openInterviewFlow(applicationId: appId, candidateId: candidateId);
+      return;
+    }
+    if (value == 'open_offer') {
+      _openOfferFlow(applicationId: appId);
+      return;
+    }
+    if (value == 'rec_proceed' || value == 'rec_hold' || value == 'rec_reject') {
+      _handleRecommendationAction(appId ?? 0, value);
+      return;
+    }
+    _updateApplicationStatus(appId ?? 0, value);
   }
 
   void _showErrorSnackbar(String message) {
@@ -379,7 +462,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Manage candidates and track hiring progress',
+                        'Manage candidates and track hiring progress for my requisitions',
                         style: GoogleFonts.inter(
                           fontSize: 14,
                           color: Colors.grey.shade600,
@@ -960,16 +1043,15 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                   ),
                 ),
                 PopupMenuButton<String>(
-                  onSelected: (value) {
-                    if (value == 'rec_proceed' ||
-                        value == 'rec_hold' ||
-                        value == 'rec_reject') {
-                      _handleRecommendationAction(app['id'], value);
-                    } else {
-                      _updateApplicationStatus(app['id'], value);
-                    }
-                  },
+                  onSelected: (value) => _handleAppMenuAction(app, value),
                   itemBuilder: (context) => [
+                    const PopupMenuItem(
+                        value: 'open_candidate', child: Text('Open Candidate Detail')),
+                    const PopupMenuItem(
+                        value: 'open_interviews', child: Text('Open Interviews')),
+                    const PopupMenuItem(
+                        value: 'open_offer', child: Text('Open Offers')),
+                    const PopupMenuDivider(),
                     const PopupMenuItem(
                         value: 'screening', child: Text('Move to Screening')),
                     const PopupMenuItem(
@@ -1037,7 +1119,9 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         app['requisition_title'] ?? app['job']?['title'] ?? 'Unknown Position';
     final overallScore = app['overall_score'] ?? app['score'] ?? 0;
 
-    return Padding(
+    return InkWell(
+      onTap: () => _openCandidateDetail(app),
+      child: Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         children: [
@@ -1113,16 +1197,15 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               ),
               const SizedBox(width: 16),
               PopupMenuButton<String>(
-                onSelected: (value) {
-                  if (value == 'rec_proceed' ||
-                      value == 'rec_hold' ||
-                      value == 'rec_reject') {
-                    _handleRecommendationAction(app['id'], value);
-                  } else {
-                    _updateApplicationStatus(app['id'], value);
-                  }
-                },
+                onSelected: (value) => _handleAppMenuAction(app, value),
                 itemBuilder: (context) => [
+                  const PopupMenuItem(
+                      value: 'open_candidate', child: Text('Open Candidate Detail')),
+                  const PopupMenuItem(
+                      value: 'open_interviews', child: Text('Open Interviews')),
+                  const PopupMenuItem(
+                      value: 'open_offer', child: Text('Open Offers')),
+                  const PopupMenuDivider(),
                   const PopupMenuItem(
                       value: 'screening', child: Text('Move to Screening')),
                   const PopupMenuItem(
@@ -1155,6 +1238,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           const SizedBox(height: 20),
           Divider(color: Colors.grey.shade200, height: 1),
         ],
+      ),
       ),
     );
   }
