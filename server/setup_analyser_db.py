@@ -31,10 +31,24 @@ def setup_analyser_database():
         cur.execute("CREATE SCHEMA IF NOT EXISTS cv_analyser")
         print("✅ Created cv_analyser schema")
 
+        # Create cv_records table
+        create_cv_records_query = """
+        CREATE TABLE IF NOT EXISTS cv_analyser.cv_records (
+            id VARCHAR(36) PRIMARY KEY,
+            cv_text TEXT NOT NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """
+        cur.execute(create_cv_records_query)
+        print("✅ Created cv_records table")
+
         # Create cv_analyses table
         create_table_query = """
         CREATE TABLE IF NOT EXISTS cv_analyser.cv_analyses (
             id SERIAL PRIMARY KEY,
+            record_id VARCHAR(36) REFERENCES cv_analyser.cv_records(id),
             candidate_id INTEGER,
             application_id INTEGER,
             requisition_id INTEGER,
@@ -42,7 +56,6 @@ def setup_analyser_database():
             cv_text TEXT,
             result JSONB DEFAULT '{}',
             status VARCHAR(20) DEFAULT 'pending',
-            external_analysis_id VARCHAR(255),
             started_at TIMESTAMP,
             finished_at TIMESTAMP,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -50,7 +63,28 @@ def setup_analyser_database():
         )
         """
         cur.execute(create_table_query)
-        print("✅ Created cv_analyses table")
+        print("✅ Created cv_analyses table (if not exists)")
+
+        # Ensure cv_analyses required columns exist
+        required_columns = [
+            ("candidate_id", "INTEGER"),
+            ("application_id", "INTEGER"),
+            ("requisition_id", "INTEGER"),
+            ("job_description", "TEXT"),
+            ("cv_text", "TEXT"),
+            ("result", "JSONB DEFAULT '{}'"),
+            ("status", "VARCHAR(20) DEFAULT 'pending'"),
+            ("started_at", "TIMESTAMP"),
+            ("finished_at", "TIMESTAMP"),
+            ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+            ("updated_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP"),
+            ("external_analysis_id", "VARCHAR(255)")
+        ]
+
+        for column_name, column_type in required_columns:
+            cur.execute(f"ALTER TABLE cv_analyser.cv_analyses ADD COLUMN IF NOT EXISTS {column_name} {column_type}")
+
+        print("✅ Ensured cv_analyses required columns exist")
 
         # Create indexes
         indexes = [
@@ -63,7 +97,17 @@ def setup_analyser_database():
             cur.execute(index_query)
         print("✅ Created indexes")
 
-        # Verify table exists
+        # Verify tables exist
+        cur.execute("""
+            SELECT EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'cv_analyser'
+                AND table_name = 'cv_records'
+            )
+        """)
+        records_result = cur.fetchone()
+        print(f"✅ Table verification: cv_records exists = {records_result[0]}")
+
         cur.execute("""
             SELECT EXISTS (
                 SELECT 1 FROM information_schema.tables
@@ -71,8 +115,8 @@ def setup_analyser_database():
                 AND table_name = 'cv_analyses'
             )
         """)
-        result = cur.fetchone()
-        print(f"✅ Table verification: cv_analyses exists = {result[0]}")
+        analyses_result = cur.fetchone()
+        print(f"✅ Table verification: cv_analyses exists = {analyses_result[0]}")
 
         cur.close()
         conn.close()
