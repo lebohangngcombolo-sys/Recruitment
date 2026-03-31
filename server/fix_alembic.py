@@ -27,8 +27,13 @@ if bad_revisions:
         cursor.execute('DELETE FROM alembic_version WHERE version_num = %s;', (rev,))
     conn.commit()
     print('Fixed alembic_version table')
-else:
-    print('No bad revisions found')
+
+# Stamp with correct revision (7ec5a07c5b21 - before our new migration)
+target_revision = '7ec5a07c5b21'
+cursor.execute('DELETE FROM alembic_version;')
+cursor.execute('INSERT INTO alembic_version (version_num) VALUES (%s);', (target_revision,))
+conn.commit()
+print(f'Stamped database with revision: {target_revision}')
 
 conn.close()
 print('Done!')
