@@ -355,6 +355,10 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final backgroundAsset = isDark
+        ? "assets/images/dark.png"
+        : "assets/images/light_mode_bg.png";
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
@@ -362,7 +366,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           // Background Image
           Positioned.fill(
             child: Image.asset(
-              "assets/images/dark.png",
+              backgroundAsset,
               fit: BoxFit.cover,
             ),
           ),
