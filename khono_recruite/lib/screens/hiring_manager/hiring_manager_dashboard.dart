@@ -43,6 +43,27 @@ class HMMainDashboard extends StatefulWidget {
 
 class _HMMainDashboardState extends State<HMMainDashboard>
     with SingleTickerProviderStateMixin {
+  static const Color _palettePrimary = Color(0xFFCF2030);
+  static const Color _paletteWhite = Color(0xFFFFFFFF);
+  static const Color _paletteInk = Color(0xFF090812);
+  static const Color _paletteCharcoal = Color(0xFF3D3F40);
+  static const Color _paletteSteel = Color(0xFF727576);
+  static const Color _paletteSilver = Color(0xFFB0B6BB);
+  static const Color _paletteCanvas = Color(0xFFF8F6F3);
+  static const Color _palettePeriwinkle = Color(0xFF81829B);
+  static const Color _palettePurple = Color(0xFF5C389D);
+  static const Color _paletteBlue = Color(0xFF6095CC);
+  static const Color _paletteOrange = Color(0xFFEA990C);
+  static const Color _paletteYellow = Color(0xFFE7BE2D);
+  static const Color _paletteGreen = Color(0xFF6CA510);
+  static const List<Color> _paletteAccents = [
+    _palettePeriwinkle,
+    _palettePurple,
+    _paletteBlue,
+    _paletteOrange,
+    _paletteYellow,
+    _paletteGreen,
+  ];
   String currentScreen = "dashboard";
   bool loadingStats = true;
 
@@ -1364,84 +1385,135 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   // ---------------- Dashboard widgets ----------------
   Widget dashboardOverview() {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.isDarkMode;
 
     if (loadingStats) {
       return const Center(
           child: CircularProgressIndicator(color: Colors.redAccent));
     }
 
-    final stats = [
+    final kpis = [
       {
         "title": "Total Jobs",
         "count": jobsCount,
-        "subtitle": "$activeJobs active",
-        "color": const Color.fromARGB(255, 193, 13, 0),
+        "subtitle":
+            "additional job description information can be included if required.",
+        "color": _palettePrimary,
+        "icon": Icons.work_outline,
       },
       {
         "title": "Candidates",
         "count": candidatesCount,
-        "subtitle": "${candidatesWithCV} with CV",
-        "color": const Color.fromARGB(255, 193, 13, 0),
+        "subtitle":
+            "additional candidate information can be included if required.",
+        "color": _palettePrimary,
+        "icon": Icons.groups_2_outlined,
       },
       {
         "title": "Interviews",
         "count": interviewsCount,
-        "subtitle": "$upcomingInterviews upcoming",
-        "color": const Color.fromARGB(255, 193, 13, 0),
+        "subtitle":
+            "additional interview information can be included if required.",
+        "color": _palettePrimary,
+        "icon": Icons.record_voice_over_outlined,
       },
       {
         "title": "Applications",
         "count": cvReviewsCount,
-        "subtitle": "$newApplicationsWeek this week",
-        "color": const Color.fromARGB(255, 193, 13, 0),
+        "subtitle":
+            "additional application information can be included if required.",
+        "color": _palettePrimary,
+        "icon": Icons.find_in_page_outlined,
+      },
+      {
+        "title": "Offers",
+        "count": 0,
+        "subtitle":
+            "additional offer description information can be included if required.",
+        "color": _palettePrimary,
+        "icon": Icons.send_outlined,
       },
       {
         "title": "Assessments",
         "count": candidatesWithAssessments,
-        "subtitle": "Completed",
-        "color": const Color.fromARGB(255, 193, 13, 0),
+        "subtitle":
+            "additional assessment information can be included if required.",
+        "color": _palettePrimary,
+        "icon": Icons.assignment_turned_in_outlined,
       },
     ];
 
+    final topCandidates = candidates.take(8).toList();
+    final activities = pipelineActivity.take(6).toList();
+    final sourceData = sourcePerformanceData.isNotEmpty
+        ? sourcePerformanceData
+        : <_ChartData>[
+            _ChartData("LinkedIn", 40),
+            _ChartData("Referral", 25),
+            _ChartData("Job Boards", 20),
+            _ChartData("Career Site", 10),
+          ];
+
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 4),
             Text(
-              'Welcome back, ${_effectiveWelcomeName(userName)}',
+              'Hiring Manager Dashboard',
               style: TextStyle(
                 fontFamily: 'Poppins',
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.3,
-                color: themeProvider.isDarkMode
-                    ? Colors.white
-                    : const Color(0xFF14131E),
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: isDark ? _paletteWhite : _paletteInk,
               ),
             ),
-            const SizedBox(height: 6),
             Text(
-              "Your key metrics and calendar at a glance.",
+              'Hello, ${_effectiveWelcomeName(userName)}',
               style: TextStyle(
                 fontFamily: 'Poppins',
-                fontSize: 14,
-                fontWeight: FontWeight.w400,
-                height: 1.35,
-                color: themeProvider.isDarkMode
-                    ? Colors.grey.shade400
-                    : Colors.grey.shade600,
+                fontSize: 11,
+                color: isDark ? _paletteSilver : _paletteCharcoal,
               ),
             ),
-            const SizedBox(height: 20),
-
-            _buildHmSimpleKpiStrip(stats, themeProvider),
-            const SizedBox(height: 28),
-
-            modernCalendarCard(),
-            const SizedBox(height: 50),
+            const SizedBox(height: 10),
+            _buildScreenshotKpiGrid(kpis, isDark),
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildCandidateOverviewCard(topCandidates, isDark),
+                      const SizedBox(height: 10),
+                      _buildCandidatePipelineCard(isDark),
+                      const SizedBox(height: 10),
+                      _buildDiversityMetricsCard(isDark),
+                      const SizedBox(height: 10),
+                      _buildTeamCollaborationCard(isDark),
+                      const SizedBox(height: 10),
+                      _buildRecentActivitiesCard(activities, isDark),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildDemographicsInsightsCard(isDark),
+                      const SizedBox(height: 10),
+                      _buildTimeToFillCard(isDark),
+                      const SizedBox(height: 10),
+                      _buildSourcePerformanceCard(sourceData, isDark),
+                      const SizedBox(height: 10),
+                      _buildCalendarPanelCard(isDark),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -1449,19 +1521,557 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
 
+  Widget _buildScreenshotKpiGrid(List<Map<String, dynamic>> items, bool isDark) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 2.8,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+      ),
+      itemCount: items.length,
+      itemBuilder: (_, i) => _buildScreenshotKpiTile(items[i], isDark),
+    );
+  }
+
+  Widget _buildScreenshotKpiTile(Map<String, dynamic> item, bool isDark) {
+    final Color accent = item['color'] as Color;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark
+            ? _paletteInk.withValues(alpha: 0.92)
+            : _paletteCanvas.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(item['title'] as String,
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                        color: isDark ? _paletteWhite : _paletteInk)),
+                Text(
+                  item['subtitle'] as String,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 8,
+                      color: isDark ? _paletteSilver : _paletteSteel),
+                ),
+                const SizedBox(height: 3),
+                Text('${item['count']}',
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? _paletteWhite : _paletteInk)),
+              ],
+            ),
+          ),
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+            child: Icon(item['icon'] as IconData, color: _paletteWhite, size: 18),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDashboardCard(String title, bool isDark,
+      {Widget? trailing, required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isDark
+            ? _paletteInk.withValues(alpha: 0.92)
+            : _paletteCanvas.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(title,
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        color: isDark ? _paletteWhite : _paletteInk)),
+              ),
+              if (trailing != null) trailing,
+            ],
+          ),
+          const SizedBox(height: 8),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCandidateOverviewCard(
+      List<Map<String, dynamic>> candidatesData, bool isDark) {
+    return _buildDashboardCard(
+      'Candidate Overview',
+      isDark,
+      trailing: TextButton(
+        onPressed: () => setState(() => currentScreen = "candidates"),
+        child: const Text('VIEW', style: TextStyle(fontSize: 10)),
+      ),
+      child: Column(
+        children: candidatesData.isEmpty
+            ? [
+                Text('No candidate data available',
+                    style:
+                        TextStyle(color: isDark ? _paletteSilver : _paletteSteel)),
+              ]
+            : candidatesData.map((c) {
+                final name = (c['full_name'] ?? c['name'] ?? 'Unnamed').toString();
+                final role =
+                    (c['requisition_title'] ?? c['job_title'] ?? 'N/A').toString();
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isDark ? _paletteCharcoal : _paletteCanvas,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 10,
+                        backgroundColor: _palettePrimary,
+                        child: Icon(Icons.person, size: 12, color: _paletteWhite),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color: isDark ? _paletteWhite : _paletteInk)),
+                            Text(role,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 8,
+                                    color: isDark ? _paletteSilver : _paletteSteel)),
+                          ],
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () => setState(() => currentScreen = "pipeline"),
+                        child: const Text('VIA', style: TextStyle(fontSize: 9)),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildDemographicsInsightsCard(bool isDark) {
+    final gender = _mapEntries(candidateDemographics['gender_distribution']);
+    final locations = _mapEntries(candidateDemographics['top_locations']);
+    final education = _mapEntries(candidateDemographics['education_levels']);
+    final List<_ChartData> skills =
+        skillsData.isNotEmpty ? List<_ChartData>.from(skillsData.take(3)) : [];
+    return _buildDashboardCard(
+      'Candidate Demographics & Insights',
+      isDark,
+      child: Column(
+        children: [
+          _smallPairList('Gender Distribution:', gender, isDark),
+          const SizedBox(height: 6),
+          _smallChartDataList('Top Skills:', skills, isDark),
+          const SizedBox(height: 6),
+          _smallPairList('Top Locations:', locations, isDark),
+          const SizedBox(height: 6),
+          _smallPairList('Education Levels:', education, isDark),
+        ],
+      ),
+    );
+  }
+
+  List<MapEntry<String, int>> _mapEntries(dynamic raw) {
+    if (raw is! Map) return [const MapEntry('N/A', 0)];
+    return raw.entries
+        .map((e) => MapEntry(e.key.toString(), (e.value as num?)?.toInt() ?? 0))
+        .toList();
+  }
+
+  Widget _smallPairList(String title, List<MapEntry<String, int>> data, bool isDark) {
+    final rows = data.isEmpty ? [const MapEntry('N/A', 0)] : data.take(3).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: isDark ? _paletteWhite : _paletteInk)),
+        const SizedBox(height: 3),
+        ...rows.map((e) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(e.key,
+                        style: TextStyle(
+                            fontSize: 9,
+                            color: isDark ? _paletteSilver : _paletteSteel)),
+                  ),
+                  Text('${e.value}',
+                      style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? _paletteWhite : _paletteInk)),
+                ],
+              ),
+            )),
+      ],
+    );
+  }
+
+  Widget _smallChartDataList(String title, List<_ChartData> data, bool isDark) {
+    final rows = data.isEmpty ? [_ChartData('N/A', 0)] : data;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: isDark ? _paletteWhite : _paletteInk)),
+        const SizedBox(height: 3),
+        ...rows.map((e) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(e.label,
+                        style: TextStyle(
+                            fontSize: 9,
+                            color: isDark ? _paletteSilver : _paletteSteel)),
+                  ),
+                  Text('${e.value}',
+                      style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? _paletteWhite : _paletteInk)),
+                ],
+              ),
+            )),
+      ],
+    );
+  }
+
+  Widget _buildCandidatePipelineCard(bool isDark) {
+    final data = candidatePipelineData.isEmpty
+        ? [
+            _ChartData('Applied', 0),
+            _ChartData('Screened', 0),
+            _ChartData('Interviewed', 0),
+            _ChartData('Offers', 0),
+            _ChartData('Hired', 0),
+          ]
+        : candidatePipelineData;
+    final maxVal = data.map((e) => e.value).fold<int>(1, (a, b) => a > b ? a : b);
+    return _buildDashboardCard(
+      'Candidate Pipeline',
+      isDark,
+      child: SizedBox(
+        height: 150,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: data.map((e) {
+            final h = ((e.value / maxVal) * 95).clamp(8, 95).toDouble();
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text('${e.value}',
+                        style: TextStyle(
+                            fontSize: 8,
+                            color: isDark ? _paletteSilver : _paletteSteel)),
+                    const SizedBox(height: 3),
+                    Container(
+                        height: h,
+                        decoration: BoxDecoration(
+                            color: _palettePrimary,
+                            borderRadius: BorderRadius.circular(4))),
+                    const SizedBox(height: 4),
+                    Text(e.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 8,
+                            color: isDark ? _paletteSilver : _paletteSteel)),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeToFillCard(bool isDark) {
+    final data = timeToFillData.isEmpty
+        ? [
+            _ChartData('Oct 25', 30),
+            _ChartData('Nov 25', 28),
+            _ChartData('Dec 25', 35),
+            _ChartData('Jan 26', 31),
+            _ChartData('Feb 26', 27),
+            _ChartData('Mar 26', 23),
+          ]
+        : timeToFillData;
+    final maxVal = data.map((e) => e.value).fold<int>(1, (a, b) => a > b ? a : b);
+    return _buildDashboardCard(
+      'Time-to-Fill Trend',
+      isDark,
+      child: SizedBox(
+        height: 150,
+        child: CustomPaint(
+          painter: _LineChartPainter(data, maxVal, isDark),
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiversityMetricsCard(bool isDark) {
+    return _buildDashboardCard(
+      'Diversity Metrics',
+      isDark,
+      child: Row(
+        children: [
+          Expanded(child: _simpleDonutLegend('Gender:', genderData, isDark)),
+          const SizedBox(width: 8),
+          Expanded(child: _simpleDonutLegend('Ethnicity:', ethnicityData, isDark)),
+        ],
+      ),
+    );
+  }
+
+  Widget _simpleDonutLegend(String title, List<_ChartData> data, bool isDark) {
+    final values = data.isEmpty ? [_ChartData('Unknown', 100)] : data.take(4).toList();
+    final total = values.fold<int>(0, (p, e) => p + e.value).clamp(1, 999999);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: isDark ? _paletteWhite : _paletteInk)),
+        const SizedBox(height: 6),
+        ...values.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final e = entry.value;
+          final pct = ((e.value / total) * 100).round();
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 1),
+            child: Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: _paletteAccents[idx % _paletteAccents.length]
+                        .withValues(alpha: (0.55 + (pct / 100)).clamp(0.55, 1.0)),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(e.label,
+                      style: TextStyle(
+                          fontSize: 8,
+                          color: isDark ? _paletteSilver : _paletteSteel)),
+                ),
+                Text('$pct%',
+                    style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? _paletteWhite : _paletteInk)),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildSourcePerformanceCard(List<_ChartData> data, bool isDark) {
+    final maxVal = data.map((e) => e.value).fold<int>(1, (a, b) => a > b ? a : b);
+    return _buildDashboardCard(
+      'Source Performance',
+      isDark,
+      child: SizedBox(
+        height: 150,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: data.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final e = entry.value;
+            final h = ((e.value / maxVal) * 95).clamp(10, 95).toDouble();
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text('${e.value}',
+                        style: TextStyle(
+                            fontSize: 8,
+                            color: isDark ? _paletteSilver : _paletteSteel)),
+                    const SizedBox(height: 3),
+                    Container(
+                      height: h,
+                      decoration: BoxDecoration(
+                        color: _paletteAccents[idx % _paletteAccents.length],
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(e.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 8,
+                            color: isDark ? _paletteSilver : _paletteSteel)),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTeamCollaborationCard(bool isDark) {
+    return _buildDashboardCard(
+      'Team Collaboration',
+      isDark,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.account_circle_outlined, size: 14),
+          const SizedBox(width: 4),
+          Text('${teamMessages.length}',
+              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
+        ],
+      ),
+      child: Column(
+        children: teamMessages.take(5).map((m) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 5),
+            child: Row(
+              children: [
+                const Icon(Icons.flag, size: 10, color: _palettePrimary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    m,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 9, color: isDark ? _paletteSilver : _paletteSteel),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildRecentActivitiesCard(
+      List<Map<String, dynamic>> items, bool isDark) {
+    final list = items.isEmpty
+        ? [
+            {"action": "No recent activities", "details": ""}
+          ]
+        : items;
+    return _buildDashboardCard(
+      'Recent Activities',
+      isDark,
+      child: Column(
+        children: list.map((a) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 5),
+            child: Row(
+              children: [
+                const Icon(Icons.notifications_active,
+                    size: 10, color: _palettePrimary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '${a['action'] ?? 'Update'} ${a['details'] ?? ''}'.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 9, color: isDark ? _paletteSilver : _paletteSteel),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildCalendarPanelCard(bool isDark) {
+    return _buildDashboardCard(
+      'Calendar',
+      isDark,
+      trailing: TextButton(
+        onPressed: () => setState(() => currentScreen = "meetings"),
+        child: const Text('VIEW', style: TextStyle(fontSize: 10)),
+      ),
+      child: SizedBox(height: 380, child: modernCalendarCard()),
+    );
+  }
+
   Widget modernCalendarCard() {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color:
-            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withValues(alpha: 0.9),
+        color: (themeProvider.isDarkMode ? _paletteInk : _paletteCanvas)
+            .withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.blueGrey.withValues(alpha: 0.1),
+            color: _paletteCharcoal.withValues(alpha: 0.12),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1471,18 +2081,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.blue.shade900.withValues(alpha: 0.3),
-                  Colors.purple.shade900.withValues(alpha: 0.3),
-                  Colors.indigo.shade900.withValues(alpha: 0.2),
+                  _paletteInk.withValues(alpha: 0.96),
+                  _paletteCharcoal.withValues(alpha: 0.94),
+                  _paletteSteel.withValues(alpha: 0.88),
                 ],
               )
             : LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.blue.shade50,
-                  Colors.purple.shade50,
-                  Colors.indigo.shade50,
+                  _paletteCanvas,
+                  _paletteWhite,
+                  _paletteCanvas.withValues(alpha: 0.98),
                 ],
               ),
       ),
@@ -1497,12 +2107,10 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color.fromARGB(255, 153, 26, 26)
-                          .withValues(alpha: 0.1),
+                      color: _palettePrimary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.calendar_month,
-                        color: Color.fromARGB(255, 250, 250, 250), size: 22),
+                    child: const Icon(Icons.calendar_month, color: _paletteWhite, size: 22),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -1511,7 +2119,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
                       fontSize: 16,
-                      color: Colors.blueAccent,
+                      color: _palettePrimary,
                     ),
                   ),
                 ],
@@ -1522,7 +2130,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: Colors.blueAccent.withValues(alpha: 0.1),
+                      color: _palettePeriwinkle.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: StreamBuilder(
@@ -1533,7 +2141,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                           style: const TextStyle(
                             fontFamily: 'Poppins',
                             fontWeight: FontWeight.w600,
-                            color: Colors.blueAccent,
+                            color: _palettePrimary,
                             fontSize: 12,
                           ),
                         );
@@ -1542,8 +2150,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    icon: const Icon(Icons.analytics_outlined,
-                        color: Colors.blueAccent),
+                    icon: const Icon(Icons.analytics_outlined, color: _palettePrimary),
                     onPressed: () => _showCalendarAnalytics(),
                     tooltip: "View calendar analytics",
                   ),
@@ -1557,11 +2164,11 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.9),
+                color: _paletteWhite.withValues(alpha: 0.92),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
+                    color: _paletteCharcoal.withValues(alpha: 0.08),
                     blurRadius: 10,
                     offset: const Offset(0, 4),
                   ),
@@ -1606,146 +2213,21 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                             fontFamily: 'Poppins',
                             fontSize: 14,
                             color: themeProvider.isDarkMode
-                                ? Colors.grey.shade300
-                                : Colors.grey.shade700,
+                                ? _paletteSilver
+                                : _paletteCharcoal,
                           ),
                         ),
                       ),
-                      todayHighlightColor: Colors.blueAccent,
+                      todayHighlightColor: _palettePrimary,
                       selectionDecoration: BoxDecoration(
-                        color: Colors.blueAccent.withValues(alpha: 0.2),
-                        border: Border.all(color: Colors.blueAccent, width: 2),
+                        color: _palettePeriwinkle.withValues(alpha: 0.25),
+                        border: Border.all(color: _palettePrimary, width: 2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
             ),
           ),
           _buildDailyEventSummary(themeProvider),
-        ],
-      ),
-    );
-  }
-
-  /// Minimal text-first KPI row for the HM dashboard home.
-  Widget _buildHmSimpleKpiStrip(
-    List<Map<String, dynamic>> stats,
-    ThemeProvider themeProvider,
-  ) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final w = constraints.maxWidth;
-        if (w >= 1100) {
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (int i = 0; i < stats.length; i++) ...[
-                if (i > 0) const SizedBox(width: 10),
-                Expanded(
-                  child: _simpleHmKpiTile(stats[i], themeProvider),
-                ),
-              ],
-            ],
-          );
-        }
-        final int cols;
-        double aspect;
-        if (w >= 720) {
-          cols = 3;
-          aspect = 1.55;
-        } else if (w >= 400) {
-          cols = 2;
-          aspect = 1.35;
-        } else {
-          cols = 1;
-          aspect = 2.1;
-        }
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: cols,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: aspect,
-          ),
-          itemCount: stats.length,
-          itemBuilder: (context, index) =>
-              _simpleHmKpiTile(stats[index], themeProvider),
-        );
-      },
-    );
-  }
-
-  Widget _simpleHmKpiTile(
-    Map<String, dynamic> item,
-    ThemeProvider themeProvider,
-  ) {
-    final title = item['title'] as String;
-    final count = item['count'] as int;
-    final subtitle = item['subtitle'] as String?;
-    final color = item['color'] as Color;
-    final isDark = themeProvider.isDarkMode;
-    final surface = isDark ? const Color(0xFF1C1A26) : const Color(0xFFFAFAFA);
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-      decoration: BoxDecoration(
-        color: surface.withValues(alpha: isDark ? 0.92 : 1),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: color.withValues(alpha: isDark ? 0.22 : 0.12),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.22 : 0.05),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            title.toUpperCase(),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.85,
-              color: color.withValues(alpha: 0.95),
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            count.toString(),
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 26,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.6,
-              height: 1,
-              color: isDark ? Colors.white : const Color(0xFF14131E),
-            ),
-          ),
-          if (subtitle != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: isDark ? Colors.grey.shade500 : Colors.grey.shade600,
-              ),
-            ),
-          ],
         ],
       ),
     );
@@ -1858,7 +2340,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   _eventTypeButton("Interview", Icons.video_call,
                       Colors.deepOrange, selectedDate),
                   _eventTypeButton(
-                      "Meeting", Icons.event, Colors.blue, selectedDate),
+                      "Meeting", Icons.event, _paletteBlue, selectedDate),
                 ],
               ),
             ],
@@ -1975,6 +2457,55 @@ class StackedLineData {
   final int delete;
   StackedLineData(this.month, this.login, this.logout, this.create, this.update,
       this.delete);
+}
+
+class _LineChartPainter extends CustomPainter {
+  final List<_ChartData> points;
+  final int maxValue;
+  final bool isDark;
+
+  _LineChartPainter(this.points, this.maxValue, this.isDark);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.isEmpty) return;
+    final linePaint = Paint()
+      ..color = const Color(0xFFCF2030)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final dotPaint = Paint()
+      ..color = const Color(0xFFCF2030)
+      ..style = PaintingStyle.fill;
+    final gridPaint = Paint()
+      ..color = (isDark ? const Color(0xFFB0B6BB) : const Color(0xFF727576))
+          .withValues(alpha: 0.35)
+      ..strokeWidth = 1;
+
+    for (int i = 1; i <= 4; i++) {
+      final y = size.height * (i / 4);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final path = Path();
+    for (int i = 0; i < points.length; i++) {
+      final x = (points.length == 1) ? 0.0 : (i / (points.length - 1)) * size.width;
+      final y = size.height - ((points[i].value / maxValue) * (size.height - 8));
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+      canvas.drawCircle(Offset(x, y), 3, dotPaint);
+    }
+    canvas.drawPath(path, linePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LineChartPainter oldDelegate) {
+    return oldDelegate.points != points ||
+        oldDelegate.maxValue != maxValue ||
+        oldDelegate.isDark != isDark;
+  }
 }
 
 class _ChartData {
