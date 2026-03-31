@@ -30,7 +30,7 @@ class ThemeProvider extends ChangeNotifier {
 
   /// 🌆 Dynamic background image based on theme
   String get backgroundImage =>
-      _isDarkMode ? 'assets/images/dark.png' : 'assets/images/final.jpg';
+      _isDarkMode ? 'assets/images/dark.png' : 'assets/images/light_mode_bg.png';
 
   // Light Theme
   final ThemeData lightTheme = ThemeData(

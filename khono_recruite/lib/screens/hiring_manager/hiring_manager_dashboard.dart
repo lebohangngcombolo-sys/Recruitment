@@ -845,7 +845,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     decoration: BoxDecoration(
                       color: themeProvider.isDarkMode
                           ? const Color(0xFF1F2840)
-                          : const Color.fromARGB(156, 255, 255, 255),
+                          : const Color(0xFFFFFFFF),
                       border: Border(
                         right:
                             BorderSide(color: Colors.grey.shade200, width: 1),
