@@ -25,12 +25,12 @@ if os.path.isfile(_env_path):
     from dotenv import load_dotenv
     load_dotenv(_env_path)
 
-EMAIL = "sihlomso.mkhize@khonology.com"
+EMAIL = "caite.gotte.c@khonology.com"
 DEFAULT_PASSWORD = "TempPass123!"
 PROFILE = {
-    "first_name": "sihlomso",
-    "last_name": "mkhize",
-    "full_name": "sihlomso mkhize",
+    "first_name": "Caite",
+    "last_name": "Gotte",
+    "full_name": "Caite Gotte",
 }
 
 

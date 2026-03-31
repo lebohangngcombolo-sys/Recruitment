@@ -133,7 +133,7 @@ def apply_job(job_id):
         ).first()
         if existing_app:
             # Allow resuming: if application is still in progress (or form submitted, not yet assessment), update details and return it
-            if existing_app.status in ("in_progress", "draft", "applied"):
+            if existing_app.status in ("in_progress", "draft", "applied", "screening"):
                 db.session.commit()  # persist candidate info updates above
                 return jsonify({
                     "message": "Application updated.",
@@ -142,11 +142,11 @@ def apply_job(job_id):
             # Already fully applied
             return jsonify({"error": "You have already applied for this job"}), 400
 
-        # Create new application (in_progress until assessment + required steps are complete)
+        # Create new application in screening stage.
         application = Application(
             candidate_id=candidate.id,
             requisition_id=job_id,
-            status="in_progress",
+            status="screening",
             created_at=datetime.utcnow()
         )
         db.session.add(application)
@@ -1022,7 +1022,7 @@ def submit_assessment(application_id):
             violations = JobService.evaluate_knockout_rules(job, candidate)
 
         application.knockout_rule_violations = violations
-        application.status = "disqualified" if violations else "assessment_submitted"
+        application.status = "rejected" if violations else "assessment"
         application.assessed_date = datetime.utcnow()
         db.session.commit()
 
@@ -1848,8 +1848,8 @@ def get_application_drafts():
 @role_required(["candidate"])
 def submit_draft(draft_id):
     """
-    Converts a saved draft back to in_progress so the candidate can continue.
-    Application is only considered complete after assessment is submitted (assessment_submitted).
+    Converts a saved draft back to screening so the candidate can continue.
+    Application is only considered complete after assessment is submitted.
     """
     try:
         user_id = get_jwt_identity()
@@ -1864,7 +1864,7 @@ def submit_draft(draft_id):
             return jsonify({"error": "Job is not accepting applications"}), 400
 
         draft.is_draft = False
-        draft.status = "in_progress"  # Stay in progress until assessment is submitted
+        draft.status = "screening"  # Stay in screening until assessment is submitted
         draft.created_at = datetime.utcnow()
         db.session.commit()
         
