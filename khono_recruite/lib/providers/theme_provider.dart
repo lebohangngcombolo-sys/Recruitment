@@ -31,7 +31,7 @@ class ThemeProvider extends ChangeNotifier {
 
   /// 🌆 Dynamic background image based on theme
   String get backgroundImage =>
-      _isDarkMode ? 'assets/images/dark.png' : 'assets/images/final.jpg';
+      _isDarkMode ? 'assets/images/dark.png' : 'assets/images/light_mode_bg.png';
 
   // Consistent text colors across the app
   Color get headerTextColor => _isDarkMode ? Colors.white : Colors.black87;
