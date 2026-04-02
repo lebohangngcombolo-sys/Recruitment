@@ -73,8 +73,11 @@ class EnrollmentService:
     )
 
     CV_TEXT_MIN_LENGTH = 120
-    HF_ANALYSIS_URL = "https://dzunisani007-cv-analyser.hf.space/api/v1/analyze"
-    HF_HEALTH_URL = "https://dzunisani007-cv-analyser.hf.space/health"
+    @staticmethod
+    def _get_analysis_url():
+        from flask import current_app
+        base = current_app.config.get("ANALYSIS_SERVICE_URL", "http://localhost:8000")
+        return f"{base.rstrip('/')}/api/v1/analyze"
 
     # -----------------------------
     # Helpers
@@ -196,7 +199,8 @@ class EnrollmentService:
             }
 
             # Submit analysis
-            response = requests.post(EnrollmentService.HF_ANALYSIS_URL, json=payload, timeout=30)
+            analysis_url = EnrollmentService._get_analysis_url()
+            response = requests.post(analysis_url, json=payload, timeout=30)
             if response.status_code != 200:
                 return None
 
@@ -207,13 +211,13 @@ class EnrollmentService:
 
             # Poll for results
             for _ in range(30):
-                status_response = requests.get(f"{EnrollmentService.HF_ANALYSIS_URL}/{external_analysis_id}/status", timeout=10)
+                status_response = requests.get(f"{analysis_url}/{external_analysis_id}/status", timeout=10)
                 if status_response.status_code == 200:
                     status = status_response.json()
                     status_code = status.get("status")
 
                     if status_code == "completed":
-                        result_response = requests.get(f"{EnrollmentService.HF_ANALYSIS_URL}/{external_analysis_id}/result", timeout=30)
+                        result_response = requests.get(f"{analysis_url}/{external_analysis_id}/result", timeout=30)
                         if result_response.status_code == 200:
                             result_payload = result_response.json()
                             result_payload["external_analysis_id"] = external_analysis_id
