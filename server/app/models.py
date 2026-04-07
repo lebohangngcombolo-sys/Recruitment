@@ -3,6 +3,7 @@ from datetime import datetime
 from sqlalchemy.dialects.postgresql import JSON, JSONB
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 import enum
+import uuid
 
 # ------------------- USER -------------------
 class User(db.Model):
@@ -394,12 +395,17 @@ class Candidate(db.Model):
     notifications_email = db.Column(db.Boolean, default=True)
     notifications_push = db.Column(db.Boolean, default=False)
 
-    # 🔗 Relationships
+    # 🔗 Cross-Database Synchronization Fields (CV Analyser Integration)
+    analyser_id = db.Column(db.String(255), nullable=True, index=True)  # External analysis ID
+    cv_analysis_status = db.Column(db.String(20), nullable=True)  # pending/processing/completed/failed
+    cv_analysis_promoted_at = db.Column(db.DateTime, nullable=True)  # When data was promoted
+    last_cv_analysis_id = db.Column(db.Integer, nullable=True)  # Link to local CVAnalysis (no FK due to cross-schema)
+
+    # Relationships
     user = db.relationship('User', back_populates='candidates')
     applications = db.relationship('Application', back_populates='candidate', lazy=True)
     interviews = db.relationship('Interview', back_populates='candidate', lazy=True)
     assessments = db.relationship('AssessmentResult', back_populates='candidate', lazy=True)
-    analyses = db.relationship('CVAnalysis', back_populates='candidate', lazy=True)
 
     def to_dict(self):
         """Return candidate data for API responses."""
@@ -434,7 +440,12 @@ class Candidate(db.Model):
             "dark_mode": self.dark_mode,
             "notifications_email": self.notifications_email,
             "notifications_push": self.notifications_push,
-            "overall_interview_score": self.overall_interview_score,  # Add this
+            "overall_interview_score": self.overall_interview_score,
+            # 🔗 Cross-Database Sync Fields
+            "analyser_id": self.analyser_id,
+            "cv_analysis_status": self.cv_analysis_status,
+            "cv_analysis_promoted_at": self.cv_analysis_promoted_at.isoformat() if self.cv_analysis_promoted_at else None,
+            "last_cv_analysis_id": self.last_cv_analysis_id,
         }
 
 # ------------------- APPLICATION -------------------
@@ -456,6 +467,7 @@ class Application(db.Model):
     recommendation = db.Column(db.String(500))
     assessed_date = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_saved_screen = db.Column(db.String(50))
     saved_at = db.Column(db.DateTime)
     last_interview_date = db.Column(db.DateTime, nullable=True)
@@ -485,6 +497,7 @@ class Application(db.Model):
             "recommendation": self.recommendation,
             "assessed_date": self.assessed_date.isoformat() if self.assessed_date else None,
             "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "assessment_results": [ar.to_dict() for ar in self.assessment_results],
             "last_saved_screen": self.last_saved_screen,
             "saved_at": self.saved_at.isoformat() if self.saved_at else None,
@@ -689,27 +702,52 @@ class InterviewSlot(db.Model):
         }
 
 
+# ------------------- CV RECORD -------------------
+# Updated CVRecord model to match actual database schema
+class CVRecord(db.Model):
+    __tablename__ = "cv_records"
+    __bind_key__ = 'analyser'  # Use analyser database binding
+    __table_args__ = {'schema': 'cv_analyser'}
+    
+    # Use UUID primary key to match the new schema
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    
+    # CV content (based on actual schema)
+    cv_text = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="pending")
+    
+    # Timestamps (based on actual schema)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 # ------------------- CV ANALYSIS -------------------
 class CVAnalysis(db.Model):
     __tablename__ = "cv_analyses"
+    __bind_key__ = 'analyser'  # Use analyser database binding
     __table_args__ = {'schema': 'cv_analyser'}
-    id = db.Column(db.Integer, primary_key=True)
-    candidate_id = db.Column(db.Integer, db.ForeignKey('candidates.id'), nullable=False)
-    application_id = db.Column(db.Integer, db.ForeignKey('applications.id'), nullable=True)
-    requisition_id = db.Column(db.Integer, db.ForeignKey('requisitions.id'), nullable=True)
+    
+    # Use UUID primary key to match the new schema
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    
+    # Reference to CV record (UUID)
+    record_id = db.Column(db.String(36), db.ForeignKey('cv_analyser.cv_records.id'), nullable=False)
+    
+    # Analysis metadata
     job_description = db.Column(db.Text)
-    cv_text = db.Column(db.Text)
-    result = db.Column(JSON, default={})
     status = db.Column(db.String(20), default="pending")
-    external_analysis_id = db.Column(db.String(255), nullable=True, index=True)
+    result = db.Column(JSON, default={})
+    overall_score = db.Column(db.Float, nullable=True)
+    component_scores = db.Column(JSON, default={})
+    warnings = db.Column(JSON, default={})
+    
+    # Timestamps
     started_at = db.Column(db.DateTime, nullable=True)
     finished_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-    candidate = db.relationship('Candidate', back_populates='analyses')
-    application = db.relationship('Application', backref='cv_analyses')
-    requisition = db.relationship('Requisition', backref='cv_analyses')
+    
+    # Relationship to CV record
+    record = db.relationship('CVRecord', backref='analyses')
 
 
 # ------------------- NOTIFICATION -------------------

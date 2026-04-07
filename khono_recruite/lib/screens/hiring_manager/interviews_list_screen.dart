@@ -9,7 +9,14 @@ import '../../utils/api_endpoints.dart';
 import '../../providers/theme_provider.dart';
 
 class InterviewListScreen extends StatefulWidget {
-  const InterviewListScreen({super.key});
+  final int? initialApplicationId;
+  final int? initialCandidateId;
+
+  const InterviewListScreen({
+    super.key,
+    this.initialApplicationId,
+    this.initialCandidateId,
+  });
 
   @override
   State<InterviewListScreen> createState() => _InterviewListScreenState();
@@ -58,8 +65,20 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
       );
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
+        final loaded = List<dynamic>.from(decoded['interviews'] ?? []);
+        final filtered = loaded.where((i) {
+          if (widget.initialApplicationId != null &&
+              i['application_id'] != widget.initialApplicationId) {
+            return false;
+          }
+          if (widget.initialCandidateId != null &&
+              i['candidate_id'] != widget.initialCandidateId) {
+            return false;
+          }
+          return true;
+        }).toList();
         setState(() {
-          interviews = decoded['interviews'] ?? [];
+          interviews = filtered;
           loading = false;
         });
       } else {
@@ -306,25 +325,6 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
         ),
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          appBar: AppBar(
-            title: Text(
-              "Interview Schedule",
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            centerTitle: true,
-            backgroundColor: (themeProvider.isDarkMode
-                    ? const Color(0xFF14131E)
-                    : Colors.white)
-                .withValues(alpha: 0.9),
-            elevation: 0,
-            foregroundColor:
-                themeProvider.isDarkMode ? Colors.white : Colors.black87,
-            iconTheme: IconThemeData(
-                color:
-                    themeProvider.isDarkMode ? Colors.white : Colors.black87),
-          ),
           body: loading
               ? Center(
                   child: Column(

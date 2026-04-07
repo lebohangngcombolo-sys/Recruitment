@@ -1,26 +1,55 @@
 # Hiring Manager Data Scope
 
-## Current behavior
+## Canonical HM scope contract
 
-- **Dashboard counts** (`GET /api/admin/dashboard-counts`): Returns global counts (all jobs, candidates, interviews, etc.) for both admin and hiring_manager.
-- **Jobs, candidates, applications, interviews**: List endpoints return all records visible to the role; there is no filtering by `hiring_manager_id` for hiring managers.
+This project now treats HM data as **owned requisition scope**:
 
-So today, hiring managers see the same aggregate data as admins. If your product should restrict HMs to only their own jobs/interviews/candidates, the backend needs to apply role-based filtering.
+- HM can read only data tied to requisitions where `requisitions.created_by == hm_user_id`.
+- HM can read interviews they own directly (`interviews.hiring_manager_id == hm_user_id`) or interviews tied to applications in their requisitions.
+- HM can mutate only applications/recommendations/statuses tied to their owned requisitions.
+- Admin/HR remain global-scope users.
 
-## Optional: scope HM to own data
+## Canonical pipeline status contract
 
-To scope hiring managers to their own data:
+UI-facing statuses must be normalized to:
 
-1. **Identify current user**: In admin routes, use `get_jwt_identity()` and load `User` to get `user.role`.
-2. **When `role == "hiring_manager"`**:
-   - **Jobs**: Filter `Requisition` by `created_by == user_id` (if you have `created_by`) or a dedicated `hiring_manager_id` on the job.
-   - **Interviews**: Filter `Interview` by `hiring_manager_id == user_id` (already available on the model).
-   - **Candidates / applications**: Filter by jobs the HM owns, or by applications linked to HM’s interviews.
-3. **Dashboard counts**: For HM, compute counts from the same filtered queries (e.g. `Interview.query.filter_by(hiring_manager_id=user_id).count()`).
+- `screening`
+- `assessment`
+- `recommended`
+- `interview`
+- `offer`
+- `hired`
+- `rejected`
 
-No schema change is required for interviews; `Interview.hiring_manager_id` is already present. For jobs, use `Requisition.created_by` if it exists, or add a `hiring_manager_id` (or similar) to the requisition table if jobs are assigned to HMs.
+Legacy/internal statuses are mapped at API boundary (example: `assessment_submitted -> assessment`, `disqualified -> rejected`).
+
+## Canonical recommendation contract
+
+Pipeline recommendation choices are:
+
+- `Proceed to Final Interview`
+- `Hold`
+- `Reject`
+
+Any free-form notes are stored separately as supporting context.
+
+## HM scoped endpoints (pipeline critical path)
+
+- `GET /api/admin/pipeline/stats`
+- `GET /api/admin/applications/filtered`
+- `GET /api/admin/jobs/with-stats`
+- `GET /api/admin/interviews/dashboard/<timeframe>`
+- `GET /api/admin/pipeline/stages/count`
+- `GET /api/admin/pipeline/quick-stats`
+- `PATCH /api/admin/applications/<id>/status` (scope-guarded)
+- `PATCH /api/admin/applications/<id>/recommendation` (scope-guarded)
+
+### Rollout flag
+
+- `ENABLE_HM_SCOPED_PIPELINE_READS` (default `true`): when disabled, read endpoints fall back to global visibility for rapid rollback.
 
 ## References
 
-- `server/app/routes/admin_routes.py`: dashboard_counts, jobs list, interviews, candidates.
-- `server/app/models.py`: `Interview.hiring_manager_id`, `Requisition`, `Application`.
+- `server/app/routes/admin_routes.py`
+- `server/app/routes/candidate_routes.py`
+- `server/app/models.py`
