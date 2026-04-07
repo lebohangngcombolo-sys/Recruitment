@@ -166,7 +166,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   Future<void> _fetchJobs() async {
     _safeSetState(() => _loadingJobs = true);
     try {
-      final list = await UnifiedApiService.getJobs().timeout(
+      // Use the widget token directly instead of relying on storage
+      final token = widget.token.trim().isNotEmpty ? widget.token : await AuthService.getAccessToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('No authentication token available');
+      }
+      
+      final list = await UnifiedApiService.getJobsWithToken(token).timeout(
         _jobsFetchTimeout,
         onTimeout: () => <Map<String, dynamic>>[],
       );
@@ -415,7 +421,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
 
   Future<void> _fetchNotifications() async {
     try {
-      final notificationList = await UnifiedApiService.getNotifications();
+      // Use the widget token directly instead of relying on storage
+      final token = widget.token.trim().isNotEmpty ? widget.token : await AuthService.getAccessToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('No authentication token available');
+      }
+      
+      final notificationList = await UnifiedApiService.getNotificationsWithToken(token);
       if (mounted) {
         _safeSetState(() {
           notifications = notificationList;
