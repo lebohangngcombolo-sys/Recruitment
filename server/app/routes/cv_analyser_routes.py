@@ -102,10 +102,9 @@ def proxy_upload():
     if not signing_secret:
         return jsonify({"detail": "CV analyser signing secret not configured"}), 500
 
-    if "file" not in request.files:
+    f = request.files.get("cv_file") or request.files.get("file")
+    if not f:
         return jsonify({"detail": "Missing file"}), 400
-
-    f = request.files["file"]
     if not f or not getattr(f, "filename", None):
         return jsonify({"detail": "Missing file"}), 400
 
