@@ -11,6 +11,7 @@ import 'dart:async';
 import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart'
     show File;
 import 'dart:typed_data';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Import your existing services
 import '../../services/candidate_service.dart';
@@ -35,6 +36,10 @@ class _LandingPageState extends State<LandingPage>
 
   int _currentTab = 0;
   int _selectedCategoryIndex = 0; // 0 = All, 1..8 = category tabs
+  
+  // Saved jobs functionality
+  List<Map<String, dynamic>> _savedJobs = [];
+  
   // Aligned with Khonology's typical vacancies (development, architecture, cloud, data/digital)
   static const List<String> _categoryNames = [
     'All',
@@ -102,6 +107,7 @@ class _LandingPageState extends State<LandingPage>
     _isDisposed = false;
     WidgetsBinding.instance.addObserver(this);
     _initializeData();
+    _loadSavedJobs(); // Load saved jobs
     if (_hasToken) fetchProfileImage();
   }
 
@@ -739,11 +745,17 @@ class _LandingPageState extends State<LandingPage>
                   children: [
                     IconButton(
                       icon: Icon(
-                        Icons.favorite_border,
-                        color: strokeColor,
+                        _isJobSaved(job) ? Icons.favorite : Icons.favorite_border,
+                        color: _isJobSaved(job) ? Colors.red : strokeColor,
                         size: 22,
                       ),
-                      onPressed: () => _saveJob(job),
+                      onPressed: () {
+                        if (_isJobSaved(job)) {
+                          _unsaveJob(job);
+                        } else {
+                          _saveJobToFavorites(job);
+                        }
+                      },
                     ),
                     SizedBox(width: 4),
                     ElevatedButton(
@@ -790,13 +802,121 @@ class _LandingPageState extends State<LandingPage>
     );
   }
 
-  void _saveJob(Map<String, dynamic> job) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Job saved to favorites', style: GoogleFonts.poppins()),
-        backgroundColor: primaryColor,
-      ),
-    );
+  // Saved jobs functionality
+  Future<void> _loadSavedJobs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedJobsJson = prefs.getString('saved_jobs');
+      if (savedJobsJson != null && savedJobsJson.isNotEmpty) {
+        final List<dynamic> savedList = jsonDecode(savedJobsJson);
+        final savedJobsList = savedList
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        if (mounted) {
+          setState(() {
+            _savedJobs = savedJobsList;
+          });
+        }
+      }
+    } catch (e) {
+      // Error handling, no state change needed
+    }
+  }
+
+  Future<void> _saveJobToFavorites(Map<String, dynamic> job) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jobId = job['id']?.toString();
+      if (jobId == null) return;
+
+      // Check if already saved
+      if (_isJobSaved(job)) return;
+
+      final newSavedJob = Map<String, dynamic>.from(job);
+      newSavedJob['saved_at'] = DateTime.now().toIso8601String();
+
+      final updatedSavedJobs = [..._savedJobs, newSavedJob];
+      await prefs.setString('saved_jobs', jsonEncode(updatedSavedJobs));
+
+      if (mounted) {
+        setState(() {
+          _savedJobs = updatedSavedJobs;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Job saved',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to save job',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _unsaveJob(Map<String, dynamic> job) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jobId = job['id']?.toString();
+      if (jobId == null) return;
+
+      final updatedSavedJobs = _savedJobs
+          .where((savedJob) => savedJob['id']?.toString() != jobId)
+          .toList();
+
+      await prefs.setString('saved_jobs', jsonEncode(updatedSavedJobs));
+
+      if (mounted) {
+        setState(() {
+          _savedJobs = updatedSavedJobs;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Job removed from saved',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to remove saved job',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  bool _isJobSaved(Map<String, dynamic> job) {
+    final jobId = job['id']?.toString();
+    if (jobId == null) return false;
+    return _savedJobs.any((savedJob) => savedJob['id']?.toString() == jobId);
   }
 
   // Updated search functionality (kept for possible search UI)

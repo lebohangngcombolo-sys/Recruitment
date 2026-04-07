@@ -133,6 +133,57 @@ class UnifiedApiService {
     }
   }
 
+  // Unified method to get jobs with explicit token
+  static Future<List<Map<String, dynamic>>> getJobsWithToken(String token) async {
+    try {
+      if (token.isEmpty) {
+        throw Exception('User not authenticated');
+      }
+
+      final endpoint = await getJobsEndpoint();
+      final response = await http.get(
+        Uri.parse(endpoint),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          return data
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
+        }
+        if (data is Map<String, dynamic>) {
+          final jobs = data['jobs'] ?? data['data'] ?? data['results'];
+          if (jobs is List) {
+            return jobs
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList();
+          }
+        }
+        return [];
+      } else if (response.statusCode == 401) {
+        // Try token refresh
+        final newToken = await AuthService.refreshAccessToken();
+        if (newToken != null) {
+          return getJobsWithToken(newToken); // Retry with new token
+        }
+        throw Exception('Session expired. Please log in again.');
+      } else if (response.statusCode == 403) {
+        throw Exception('You do not have permission to access jobs.');
+      } else {
+        throw Exception('Failed to fetch jobs: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error fetching jobs: $e');
+    }
+  }
+
   // Unified method to get applications with proper error handling
   static Future<List<dynamic>> getApplications() async {
     try {
@@ -228,6 +279,49 @@ class UnifiedApiService {
       } else {
         throw Exception(
             'Failed to fetch notifications: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error fetching notifications: $e');
+    }
+  }
+
+  // Unified method to get notifications with explicit token
+  static Future<List<Map<String, dynamic>>> getNotificationsWithToken(String token) async {
+    try {
+      if (token.isEmpty) {
+        throw Exception('User not authenticated');
+      }
+
+      final endpoint = await getNotificationsEndpoint();
+      final response = await http.get(
+        Uri.parse(endpoint),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is List) {
+          return data
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
+        }
+        if (data is Map<String, dynamic>) {
+          final notifications =
+              data['notifications'] ?? data['data'] ?? data['results'];
+          if (notifications is List) {
+            return notifications
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList();
+          }
+        }
+        return [];
+      } else {
+        throw Exception('Failed to fetch notifications: ${response.statusCode}');
       }
     } catch (e) {
       throw Exception('Error fetching notifications: $e');
