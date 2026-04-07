@@ -40,6 +40,11 @@ class Config:
     # PostgreSQL (from .env DATABASE_URL; SSL enabled for remote e.g. Render)
     SQLALCHEMY_DATABASE_URI = _database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # Multiple database bindings for cross-database sync
+    SQLALCHEMY_BINDS = {
+        'main': _database_uri(),
+        'analyser': os.getenv('ANALYSER_DATABASE_URL', 'postgresql://recruiter:zhubXkTYjieGoYevXB7jtHj5EdhNYmV7@dpg-d6v72fchg0os73ddre00-a.oregon-postgres.render.com/analyser_w2n9?sslmode=require')
+    }
     # Enhanced connection pooling for production scalability
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
@@ -55,6 +60,9 @@ class Config:
     
     # MongoDB
     MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/recruitment_cv')
+    
+    # CV Analyser Database (separate from main database)
+    ANALYSER_DATABASE_URL = os.getenv('ANALYSER_DATABASE_URL', 'postgresql://recruiter:zhubXkTYjieGoYevXB7jtHj5EdhNYmV7@dpg-d6v72fchg0os73ddre00-a.oregon-postgres.render.com/analyser_w2n9?sslmode=require')
     
     # Redis
     #REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')

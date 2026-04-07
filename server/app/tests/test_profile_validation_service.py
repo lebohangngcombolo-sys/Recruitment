@@ -278,8 +278,8 @@ class TestProfileFileValidator:
 class TestProfileSyncService:
     """Test profile synchronization functionality"""
     
-    @patch('app.services.profile_validation_service.User')
-    @patch('app.services.profile_validation_service.Candidate')
+    @patch('app.models.User')
+    @patch('app.models.Candidate')
     def test_sync_user_to_candidate_success(self, mock_candidate, mock_user):
         """Test successful user to candidate sync"""
         # Setup mocks
@@ -309,8 +309,8 @@ class TestProfileSyncService:
         assert mock_candidate_instance.notifications_push is False
         mock_session.commit.assert_called_once()
     
-    @patch('app.services.profile_validation_service.User')
-    @patch('app.services.profile_validation_service.Candidate')
+    @patch('app.models.User')
+    @patch('app.models.Candidate')
     def test_sync_candidate_to_user_success(self, mock_candidate, mock_user):
         """Test successful candidate to user sync"""
         # Setup mocks
@@ -339,8 +339,8 @@ class TestProfileSyncService:
 class TestProfileAuditService:
     """Test profile audit functionality"""
     
-    @patch('app.services.profile_validation_service.User')
-    @patch('app.services.profile_validation_service.AuditLog')
+    @patch('app.models.User')
+    @patch('app.models.AuditLog')
     def test_log_profile_update(self, mock_audit_log, mock_user):
         """Test profile update logging"""
         # Setup mocks
@@ -367,7 +367,7 @@ class TestProfileAuditService:
         assert details["email"] == "t***@example.com"
         assert details["updated_fields"] == ["full_name", "phone"]
     
-    @patch('app.services.profile_validation_service.AuditLog')
+    @patch('app.models.AuditLog')
     def test_log_file_upload(self, mock_audit_log):
         """Test file upload logging"""
         mock_session = Mock()
@@ -504,8 +504,8 @@ class TestIntegration:
         ProfileAuditService.log_file_upload(1, "profile_picture", mock_file.content_length, mock_session)
         assert mock_session.add.called
     
-    @patch('app.services.profile_validation_service.User')
-    @patch('app.services.profile_validation_service.Candidate')
+    @patch('app.models.User')
+    @patch('app.models.Candidate')
     def test_profile_sync_flow(self, mock_candidate, mock_user):
         """Test complete profile synchronization flow"""
         # Setup mock data

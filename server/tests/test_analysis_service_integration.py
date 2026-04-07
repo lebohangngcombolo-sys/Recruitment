@@ -15,15 +15,18 @@ class TestAnalysisServiceIntegration:
         mock_post.return_value.raise_for_status.return_value = None
         mock_post.return_value.status_code = 202
         
-        with patch('flask.current_app') as mock_app:
-            mock_app.config = {
-                'ANALYSIS_SERVICE_URL': 'http://test.com',
-                'ANALYSIS_SERVICE_API_KEY': 'test-key'
-            }
-            
-            result = AnalysisServiceClient.submit_cv(1, 'http://cv.url', 'job description')
-            assert result['analysis_id'] == 'ext-123'
-            mock_post.assert_called_once()
+        app = create_app()
+        app.config['TESTING'] = True
+        with app.app_context():
+            with patch('flask.current_app') as mock_app:
+                mock_app.config = {
+                    'ANALYSIS_SERVICE_URL': 'http://test.com',
+                    'ANALYSIS_SERVICE_API_KEY': 'test-key'
+                }
+
+                result = AnalysisServiceClient.submit_cv(1, 'http://cv.url', 'job description')
+                assert result['analysis_id'] == 'ext-123'
+                mock_post.assert_called_once()
     
     @patch('requests.get')
     def test_get_analysis_status(self, mock_get):
@@ -31,15 +34,18 @@ class TestAnalysisServiceIntegration:
         mock_get.return_value.json.return_value = {'status': 'completed'}
         mock_get.return_value.raise_for_status.return_value = None
         
-        with patch('flask.current_app') as mock_app:
-            mock_app.config = {
-                'ANALYSIS_SERVICE_URL': 'http://test.com',
-                'ANALYSIS_SERVICE_API_KEY': 'test-key'
-            }
-            
-            result = AnalysisServiceClient.get_analysis_status('ext-123')
-            assert result['status'] == 'completed'
-            mock_get.assert_called_once()
+        app = create_app()
+        app.config['TESTING'] = True
+        with app.app_context():
+            with patch('flask.current_app') as mock_app:
+                mock_app.config = {
+                    'ANALYSIS_SERVICE_URL': 'http://test.com',
+                    'ANALYSIS_SERVICE_API_KEY': 'test-key'
+                }
+
+                result = AnalysisServiceClient.get_analysis_status('ext-123')
+                assert result['status'] == 'completed'
+                mock_get.assert_called_once()
     
     @patch('requests.get')
     def test_get_analysis_result(self, mock_get):
@@ -58,15 +64,17 @@ class TestAnalysisServiceIntegration:
         mock_get.return_value.json.return_value = mock_result
         mock_get.return_value.raise_for_status.return_value = None
         
-        with patch('flask.current_app') as mock_app:
-            mock_app.config = {
-                'ANALYSIS_SERVICE_URL': 'http://test.com',
-                'ANALYSIS_SERVICE_API_KEY': 'test-key'
-            }
-            
-            result = AnalysisServiceClient.get_analysis_result('ext-123')
-            assert result['match_analysis']['overall_score'] == 85
-            mock_get.assert_called_once()
+        app = create_app({'TESTING': True})
+        with app.app_context():
+            with patch('flask.current_app') as mock_app:
+                mock_app.config = {
+                    'ANALYSIS_SERVICE_URL': 'http://test.com',
+                    'ANALYSIS_SERVICE_API_KEY': 'test-key'
+                }
+
+                result = AnalysisServiceClient.get_analysis_result('ext-123')
+                assert result['match_analysis']['overall_score'] == 85
+                mock_get.assert_called_once()
 
 class TestDataMerger:
     
@@ -93,7 +101,10 @@ class TestDataMerger:
         DataMerger._merge_candidate_profile(candidate, external_result)
         
         # Check that JavaScript was added but Ruby was not
-        skills_list = [s.strip() for s in candidate.skills.split(',')]
+        if isinstance(candidate.skills, list):
+            skills_list = candidate.skills
+        else:
+            skills_list = [s.strip() for s in str(candidate.skills).split(',')]
         assert 'JavaScript' in skills_list
         assert 'Ruby' not in skills_list
     
@@ -116,8 +127,13 @@ class TestDataMerger:
         DataMerger._merge_candidate_profile(candidate, external_result)
         
         # Check that high confidence education was added
-        assert 'MS at MIT' in candidate.education
-        assert 'BS at MIT' not in candidate.education
+        if isinstance(candidate.education, list):
+            # education entries are stored as dicts in new pipeline.
+            assert any((e.get('degree') == 'MS' and e.get('institution') == 'MIT') for e in candidate.education)
+            assert not any((e.get('degree') == 'BS' and e.get('institution') == 'MIT') for e in candidate.education)
+        else:
+            assert 'MS at MIT' in str(candidate.education)
+            assert 'BS at MIT' not in str(candidate.education)
 
 if __name__ == '__main__':
     pytest.main([__file__])
