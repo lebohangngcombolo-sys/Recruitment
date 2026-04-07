@@ -1105,55 +1105,72 @@ def init_auth_routes(app):
 
             cv_file = request.files["cv"]
 
-            # Extract text with enhanced quality feedback (Recruitment app owns OCR/text extraction)
+            # Option A: Single source of truth (Hugging Face)
+            from app.services.analysis_service_client import AnalysisServiceClient
+            from app.services.enrollment_service import EnrollmentService
+            from app.services.ai_cv_parser import AIParser
+            
+            if hasattr(cv_file, "seek"):
+                cv_file.seek(0)
+            file_content = cv_file.read()
+            filename = cv_file.filename
+            
+            job_description = request.form.get("job_description", "General candidate profile analysis for enrollment autofill")
+            
             try:
-                from app.services.enhanced_cv_parser import EnhancedCVParser
-                enhanced_parser = EnhancedCVParser()
-                enhanced_result = enhanced_parser.parse_cv_with_quality_feedback(cv_file)
+                # 1. Submit file to HF
+                submit_resp = AnalysisServiceClient.submit_cv_file(
+                    file_content=file_content,
+                    filename=filename,
+                    job_description=job_description
+                )
+                analysis_id = (submit_resp or {}).get("analysis_id")
+                if not analysis_id:
+                    raise Exception("No analysis_id returned from HF")
                 
-                # Extract structured data from enhanced result
-                if enhanced_result and not enhanced_result.get("error"):
-                    extracted_data = {
-                        "full_name": enhanced_result.get("full_name", ""),
-                        "email": enhanced_result.get("email", ""),
-                        "phone": enhanced_result.get("phone", ""),
-                        "address": enhanced_result.get("address", ""),
-                        "dob": enhanced_result.get("dob", ""),
-                        "linkedin": enhanced_result.get("linkedin", ""),
-                        "github": enhanced_result.get("github", ""),
-                        "portfolio": enhanced_result.get("portfolio", ""),
-                        "education": enhanced_result.get("education", []),
-                        "skills": enhanced_result.get("skills", []),
-                        "certifications": enhanced_result.get("certifications", []),
-                        "languages": enhanced_result.get("languages", []),
-                        "experience": enhanced_result.get("experience", ""),
-                        "position": enhanced_result.get("position", ""),
-                        "previous_companies": enhanced_result.get("previous_companies", []),
-                        "bio": enhanced_result.get("bio", ""),
-                        "cv_text": enhanced_result.get("cv_text", ""),
-                        # Add quality metadata for frontend
-                        "quality_indicators": enhanced_result.get("quality_indicators", {}),
-                        "extraction_metadata": enhanced_result.get("extraction_metadata", {})
-                    }
-                else:
-                    # Fallback to basic extraction if enhanced parser fails
-                    cv_text = AIParser.read_cv_file(cv_file) or ""
-                    extracted_data = {"cv_text": cv_text, "error": enhanced_result.get("error", "Enhanced parsing failed")}
-                    
+                # 2. Poll for completion
+                result = AnalysisServiceClient.wait_for_result(analysis_id)
+                if not result:
+                    raise Exception("HF Analysis timeout or failed")
+                
+                # 3. Map to flat fields for registration/enrollment UI
+                mapped_data = EnrollmentService.map_cv_analysis_to_form_fields(result)
+                
+                # Ensure cv_text and debug info are passed back
+                if "cv_text" not in mapped_data and result.get("cv_text"):
+                    mapped_data["cv_text"] = result["cv_text"]
+                if "extraction_debug" in result:
+                    mapped_data["extraction_metadata"] = result["extraction_debug"]
+                
+                return jsonify(mapped_data), 200
+                
             except Exception as e:
-                logger.warning(f"Enhanced CV parsing failed, falling back to basic: {e}")
-                # Fallback to original method
-                try:
-                    cv_text = AIParser.read_cv_file(cv_file) or ""
-                except Exception:
-                    cv_text = ""
-                extracted_data = {"cv_text": cv_text}
+                current_app.logger.warning(f"HF unified extraction failed, falling back to local: {e}")
+                if hasattr(cv_file, "seek"):
+                    cv_file.seek(0)
+                return jsonify(AIParser.extract_cv_data(cv_file)), 200
 
             # If enhanced parsing succeeded, still try to get AI analysis for additional insights
-            if extracted_data and not extracted_data.get("error") and extracted_data.get("cv_text"):
+            if extracted_data and not extracted_data.get("error"):
                 try:
                     from app.services.analysis_service_client import AnalysisServiceClient
-                    submit = AnalysisServiceClient.submit_cv_text(cv_text=extracted_data["cv_text"])
+                    
+                    # Ensure we have the raw file content for Hugging Face OCR
+                    if hasattr(cv_file, "seek"):
+                        cv_file.seek(0)
+                        file_content = cv_file.read()
+                        filename = getattr(cv_file, "filename", "cv.pdf")
+                        
+                        # Use file-based submission so Hugging Face can perform its own OCR
+                        submit = AnalysisServiceClient.submit_cv_file(
+                            file_content=file_content,
+                            filename=filename,
+                            job_description=job_description
+                        )
+                    else:
+                        # Fallback to text submission if file stream is unavailable
+                        submit = AnalysisServiceClient.submit_cv_text(cv_text=extracted_data.get("cv_text") or "")
+                        
                     external_id = submit.get("analysis_id")
                     if external_id:
                         import time
@@ -1189,7 +1206,7 @@ def init_auth_routes(app):
                                 break
                             time.sleep(sleep_seconds)
                 except Exception as e:
-                    logger.warning(f"AI analysis integration failed: {e}")
+                    current_app.logger.warning(f"AI analysis integration failed: {e}")
                     # Continue with enhanced extraction results
 
             # If enhanced parsing failed, try original AI analysis as fallback
@@ -1250,6 +1267,7 @@ def init_auth_routes(app):
                 return jsonify(extracted_data), 200
 
             # Fallback: Use local hybrid parser (LLM + offline regex) for autofill.
+            if hasattr(cv_file, "seek"): cv_file.seek(0)
             extracted_data = AIParser.extract_cv_data(cv_file)
             try:
                 if isinstance(extracted_data, dict) and cv_text and not extracted_data.get("cv_text"):

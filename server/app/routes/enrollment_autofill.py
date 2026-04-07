@@ -3,9 +3,9 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.utils import secure_filename
 import os
-import tempfile
 
 from app.services.enrollment_service import EnrollmentService
+from app.services.analysis_service_client import AnalysisServiceClient
 
 enrollment_autofill_bp = Blueprint('enrollment_autofill', __name__)
 
@@ -32,68 +32,46 @@ def analyze_cv_for_autofill():
                 cv_file.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
             return {"error": "Invalid file type. Allowed: PDF, DOC, DOCX, TXT"}, 400
         
-        # Save file temporarily
         filename = secure_filename(cv_file.filename)
-        temp_path = os.path.join(tempfile.gettempdir(), f"cv_{user_id}_{filename}")
-        cv_file.save(temp_path)
-        
-        try:
-            # Extract CV text
-            from app.services.ai_cv_parser import AIParser
-            cv_text = AIParser.read_cv_file(temp_path)
-            
-            if not cv_text or not cv_text.strip():
-                return {"error": "Could not extract text from CV"}, 400
-            
-            # Analyze with HuggingFace
-            cv_analysis_data = EnrollmentService.analyze_cv_with_hf(cv_text)
-            
-            if cv_analysis_data:
-                # Map to form fields
-                form_fields = EnrollmentService.map_cv_analysis_to_form_fields(cv_analysis_data)
-                
-                return {
-                    "success": True,
-                    "source": "huggingface",
-                    "cv_analysis": cv_analysis_data,
-                    "form_fields": form_fields,
-                    "message": "CV analyzed successfully with HuggingFace AI"
-                }, 200
-            else:
-                # Fallback to local parser
-                ai_data = AIParser.extract_cv_data(temp_path) or {}
-                
-                # Map local results to form fields
-                form_fields = {}
-                if ai_data:
-                    form_fields = {
-                        "full_name": ai_data.get("full_name", ""),
-                        "phone": ai_data.get("phone", ""),
-                        "address": ai_data.get("address", ""),
-                        "email": ai_data.get("email", ""),
-                        "linkedin": ai_data.get("linkedin", ""),
-                        "github": ai_data.get("github", ""),
-                        "education": ai_data.get("education", ""),
-                        "skills": ", ".join(ai_data.get("skills", [])) if ai_data.get("skills") else "",
-                        "experience": ai_data.get("experience", ""),
-                        "position": ai_data.get("position", ""),
-                        "previous_companies": ", ".join(ai_data.get("previous_companies", [])) if ai_data.get("previous_companies") else "",
-                        "certifications": ", ".join(ai_data.get("certifications", [])) if ai_data.get("certifications") else "",
-                        "languages": ", ".join(ai_data.get("languages", [])) if ai_data.get("languages") else ""
-                    }
-                
-                return {
-                    "success": True,
-                    "source": "local_parser",
-                    "cv_analysis": ai_data,
-                    "form_fields": form_fields,
-                    "message": "CV analyzed with local parser (HuggingFace unavailable)"
-                }, 200
-                
-        finally:
-            # Clean up temporary file
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
+        cv_file.stream.seek(0)
+        file_content = cv_file.read()
+        if not file_content:
+            return {"error": "Uploaded CV file is empty"}, 400
+
+        job_description = request.form.get(
+            "job_description",
+            "General candidate profile analysis for enrollment autofill",
+        )
+
+        # Submit original file to HF (single source of extraction) then poll for result
+        submit = AnalysisServiceClient.submit_cv_file(
+            file_content,
+            filename,
+            job_description=job_description,
+        )
+        external_analysis_id = (submit or {}).get("analysis_id")
+        if not external_analysis_id:
+            return {"error": "Failed to submit CV to analysis service"}, 502
+
+        result_payload = AnalysisServiceClient.wait_for_result(
+            external_analysis_id,
+            timeout_seconds=300,
+            poll_interval_seconds=5,
+        )
+        if not result_payload:
+            return {"error": "CV analysis did not complete"}, 502
+
+        # Map to form fields
+        form_fields = EnrollmentService.map_cv_analysis_to_form_fields(result_payload)
+
+        return {
+            "success": True,
+            "source": "huggingface",
+            "analysis_id": external_analysis_id,
+            "cv_analysis": result_payload,
+            "form_fields": form_fields,
+            "message": "CV analyzed successfully with HuggingFace AI",
+        }, 200
                 
     except Exception as e:
         return {"error": f"CV analysis failed: {str(e)}"}, 500

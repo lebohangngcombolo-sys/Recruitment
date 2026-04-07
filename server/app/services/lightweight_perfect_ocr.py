@@ -191,8 +191,8 @@ class LightweightPerfectOCR:
                     pix.save(tmp.name)
                     
                     try:
-                        # Optimized Tesseract configuration
-                        custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@.-()[]{}:;/\#$%^&*!?,\'" '
+                        # Optimized Tesseract configuration - Removed restrictive whitelist and fixed quotes
+                        custom_config = r'--oem 3 --psm 6'
                         
                         # Preprocess image with PIL for better OCR
                         img = Image.open(tmp.name)
@@ -209,8 +209,9 @@ class LightweightPerfectOCR:
                             new_height = int(height * scale)
                             img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
                         
-                        # Apply OCR
-                        text = pytesseract.image_to_string(img, config=custom_config, lang='eng')
+                        # Apply OCR with South African language support
+                        langs = 'eng+afr+zul+xho+nso+sot+tsn+ssw+ven+tso+nbl'
+                        text = pytesseract.image_to_string(img, config=custom_config, lang=langs)
                         
                         if text and text.strip():
                             texts.append(text.strip())

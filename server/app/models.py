@@ -399,7 +399,7 @@ class Candidate(db.Model):
     analyser_id = db.Column(db.String(255), nullable=True, index=True)  # External analysis ID
     cv_analysis_status = db.Column(db.String(20), nullable=True)  # pending/processing/completed/failed
     cv_analysis_promoted_at = db.Column(db.DateTime, nullable=True)  # When data was promoted
-    last_cv_analysis_id = db.Column(db.Integer, nullable=True)  # Link to local CVAnalysis (no FK due to cross-schema)
+    last_cv_analysis_id = db.Column(db.String(255), nullable=True)  # Link to local CVAnalysis (cross-database aware)
 
     # Relationships
     user = db.relationship('User', back_populates='candidates')
@@ -726,19 +726,29 @@ class CVAnalysis(db.Model):
     __bind_key__ = 'analyser'  # Use analyser database binding
     __table_args__ = {'schema': 'cv_analyser'}
     
-    # Use UUID primary key to match the new schema
+    # Use UUID primary key to match the HF backend schema
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     
-    # Reference to CV record (UUID)
-    record_id = db.Column(db.String(36), db.ForeignKey('cv_analyser.cv_records.id'), nullable=False)
+    # Reference to CV record (UUID) - can be null for legacy records
+    record_id = db.Column(db.String(36), db.ForeignKey('cv_analyser.cv_records.id'), nullable=True)
+    
+    # Recruitment system references
+    candidate_id = db.Column(db.Integer, nullable=True)
+    application_id = db.Column(db.Integer, nullable=True)
+    requisition_id = db.Column(db.Integer, nullable=True)
+    
+    # External analysis ID for cross-service tracking
+    external_analysis_id = db.Column(db.String(255), nullable=True)
     
     # Analysis metadata
     job_description = db.Column(db.Text)
+    cv_text = db.Column(db.Text)
     status = db.Column(db.String(20), default="pending")
     result = db.Column(JSON, default={})
     overall_score = db.Column(db.Float, nullable=True)
     component_scores = db.Column(JSON, default={})
     warnings = db.Column(JSON, default={})
+    extraction_metadata = db.Column(JSON, default={})
     
     # Timestamps
     started_at = db.Column(db.DateTime, nullable=True)
