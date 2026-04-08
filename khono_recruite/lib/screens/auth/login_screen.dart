@@ -76,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen>
       final result = await AuthService.login(
         emailController.text.trim(),
         passwordController.text.trim(),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 15));
 
       if (result['success'] == true) {
         // 🆕 Check if MFA is required
@@ -143,7 +143,10 @@ class _LoginScreenState extends State<LoginScreen>
         msg.contains('email')) {
       return 'Email or password is incorrect. Please try again.';
     }
-    if (msg.contains('network') || msg.contains('timeout')) {
+    if (msg.contains('timeout') || msg.contains('timed out')) {
+      return 'Login is taking too long. Please try again in a moment.';
+    }
+    if (msg.contains('network') || msg.contains('socket')) {
       return 'We could not connect. Please check your internet and try again.';
     }
     return 'Something is wrong. Please try again.';

@@ -15,6 +15,7 @@ import 'screens/candidate/assessments_results_screen.dart';
 import 'screens/candidate/user_profile_page.dart';
 import 'screens/admin/admin_dashboard.dart';
 import 'screens/hr/hr_dashboard.dart';
+import 'screens/hiring_manager/hiring_manager_dashboard.dart';
 import 'screens/candidate/job_details_page.dart';
 import 'screens/candidate/redirect_to_assessment_page.dart';
 
@@ -75,7 +76,8 @@ class MyApp extends StatelessWidget {
             final allowedUnauth = path == '/' ||
                 path.startsWith('/login') ||
                 path.startsWith('/register') ||
-                path.startsWith('/forgot-password');
+                path.startsWith('/forgot-password') ||
+                path.startsWith('/oauth-callback');
             if (!allowedUnauth) {
               return '/';
             }
@@ -112,6 +114,15 @@ class MyApp extends StatelessWidget {
           GoRoute(
             path: '/forgot-password',
             builder: (context, state) => ForgotPasswordScreen(),
+          ),
+          GoRoute(
+            path: '/oauth-callback',
+            builder: (context, state) => OAuthCallbackPage(
+              accessToken: state.uri.queryParameters['access_token'],
+              refreshToken: state.uri.queryParameters['refresh_token'],
+              role: state.uri.queryParameters['role'],
+              dashboard: state.uri.queryParameters['dashboard'],
+            ),
           ),
           
           // Candidate routes
@@ -178,6 +189,14 @@ class MyApp extends StatelessWidget {
               token: state.uri.queryParameters['token'] ?? '',
             ),
           ),
+
+          // Hiring Manager routes
+          GoRoute(
+            path: '/hiring-manager-dashboard',
+            builder: (context, state) => HMMainDashboard(
+              token: state.uri.queryParameters['token'] ?? '',
+            ),
+          ),
         ],
         errorBuilder: (context, state) => Scaffold(
           body: Center(
@@ -197,10 +216,74 @@ class MyApp extends StatelessWidget {
         return '/admin-dashboard';
       case 'hr':
         return '/hr-dashboard';
+      case 'hiring_manager':
+        return '/hiring-manager-dashboard';
       case 'candidate':
         return '/candidate-dashboard';
       default:
         return '/login';
     }
+  }
+}
+
+class OAuthCallbackPage extends StatefulWidget {
+  final String? accessToken;
+  final String? refreshToken;
+  final String? role;
+  final String? dashboard;
+
+  const OAuthCallbackPage({
+    super.key,
+    this.accessToken,
+    this.refreshToken,
+    this.role,
+    this.dashboard,
+  });
+
+  @override
+  State<OAuthCallbackPage> createState() => _OAuthCallbackPageState();
+}
+
+class _OAuthCallbackPageState extends State<OAuthCallbackPage> {
+  @override
+  void initState() {
+    super.initState();
+    _handleOAuthRedirect();
+  }
+
+  Future<void> _handleOAuthRedirect() async {
+    final access = widget.accessToken?.trim();
+    final refresh = widget.refreshToken?.trim();
+    final role = (widget.role ?? 'candidate').trim();
+    final dashboard = widget.dashboard?.trim();
+
+    if (access == null || access.isEmpty) {
+      if (!mounted) return;
+      context.go('/login');
+      return;
+    }
+
+    await AuthService.clearAuthState();
+    await AuthService.storeTokens(access, refresh, role);
+
+    if (!mounted) return;
+    final encodedToken = Uri.encodeComponent(access);
+    final nextPath = switch (role) {
+      'admin' => '/admin-dashboard?token=$encodedToken',
+      'hiring_manager' => '/hiring-manager-dashboard?token=$encodedToken',
+      'hr' => '/hr-dashboard?token=$encodedToken',
+      'candidate' when dashboard == '/enrollment' => '/enrollment?token=$encodedToken',
+      _ => '/candidate-dashboard?token=$encodedToken',
+    };
+    context.go(nextPath);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
   }
 }
