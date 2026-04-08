@@ -253,7 +253,7 @@ class _SplashLandingPageState extends State<SplashLandingPage>
                                       width: _buttonWidth,
                                       height: _buttonHeight,
                                       child: OutlinedButton(
-                                        onPressed: () => context.push('/about-us'),
+                                        onPressed: () {},
                                         style: OutlinedButton.styleFrom(
                                           foregroundColor: Colors.white,
                                           side: const BorderSide(
