@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from .extensions import db, jwt, mail, cloudinary_client, mongo_client, migrate, cors, bcrypt, oauth, limiter, socketio
 from .models import *
-from .routes import auth, admin_routes, candidate_routes, ai_routes, mfa_routes, sso_routes, analytics_routes, chat_routes, offer_routes, public_routes, test_pack_routes, cv_analyser_routes
+from .routes import auth, admin_routes, candidate_routes, ai_routes, mfa_routes, sso_routes, analytics_routes, chat_routes, offer_routes, public_routes, test_pack_routes, cv_analyser_routes, recruitee_routes
 from .websocket_handler import register_websocket_handlers
 import firebase_admin
 from firebase_admin import credentials
@@ -111,6 +111,9 @@ def create_app():
     app.register_blueprint(offer_routes.offer_bp, url_prefix="/api/offer")
     app.register_blueprint(public_routes.public_bp, url_prefix="/api/public")
     app.register_blueprint(cv_analyser_routes.cv_analyser_bp, url_prefix="/api")
+    
+    # ---------------- Register Recruitee Integration Blueprint ----------------
+    app.register_blueprint(recruitee_routes.recruitee_bp)
 
     # ---------------- Register SSO Blueprint ----------------
     sso_routes.register_sso_provider(app)      # initialize Auth0 / SSO provider

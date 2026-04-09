@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../widgets/weighting_configuration_widget.dart';
@@ -11,6 +12,9 @@ import '../../services/ai_service.dart';
 import '../../services/test_pack_service.dart';
 import '../../models/test_pack.dart';
 import '../../widgets/save_test_pack_dialog.dart';
+import '../../widgets/sync_status_badge.dart';
+import '../../widgets/bulk_sync_dialog.dart';
+import '../../screens/admin/sync_history_screen.dart';
 import '../../providers/theme_provider.dart';
 
 class JobManagement extends StatefulWidget {
@@ -133,6 +137,125 @@ class _JobManagementState extends State<JobManagement> {
       } else {
         _expandedJobIds.add(jobId);
         _fetchApplicationsForJob(jobId);
+      }
+    });
+  }
+
+  // ==================== RECRUITEE SYNC METHODS ====================
+
+  Future<void> _toggleJobSync(int jobId, bool enabled) async {
+    try {
+      await admin.toggleJobSync(jobId, enabled);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text(enabled ? 'Sync enabled for job' : 'Sync disabled for job'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      fetchJobs(); // Refresh to show updated state
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _syncJobToRecruitee(int jobId, String jobTitle) async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final result = await admin.syncJobToRecruitee(jobId);
+      Navigator.pop(context); // Close loading
+
+      if (result['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('✓ Successfully synced to Recruitee'),
+            backgroundColor: Colors.green,
+            action: result['recruitee_url'] != null
+                ? SnackBarAction(
+                    label: 'View',
+                    onPressed: () => _launchUrl(result['recruitee_url']),
+                  )
+                : null,
+          ),
+        );
+        fetchJobs(); // Refresh to show updated sync status
+      } else if (result['retry_scheduled'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                const Text('⚠ Sync failed. Retry scheduled automatically.'),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✗ Error: ${result['error']}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      Navigator.pop(context); // Close loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Network error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _launchUrl(String? url) async {
+    if (url == null || url.isEmpty) return;
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not launch URL: $url'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showSyncHistory(int jobId, String jobTitle) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SyncHistoryScreen(
+          jobId: jobId,
+          jobTitle: jobTitle,
+        ),
+      ),
+    );
+  }
+
+  void _showBulkSyncDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => BulkSyncDialog(
+        jobs: jobs,
+      ),
+    ).then((result) {
+      if (result == true) {
+        fetchJobs(); // Refresh after bulk sync
       }
     });
   }
@@ -262,6 +385,11 @@ class _JobManagementState extends State<JobManagement> {
                             fontSize: 12,
                             color: textColor),
                         overflow: TextOverflow.ellipsis)),
+                // Recruitee Sync Status Column
+                Expanded(
+                  flex: 1,
+                  child: SyncStatusBadge(job: job),
+                ),
                 SizedBox(
                   width: 200, // Increased width to accommodate more buttons
                   child: Row(
@@ -362,6 +490,77 @@ class _JobManagementState extends State<JobManagement> {
                             minHeight: 32,
                           ),
                         ),
+                      // Recruitee Sync Actions
+                      if (job['approval_status'] == 'approved') ...[
+                        // Toggle sync switch
+                        Tooltip(
+                          message: job['sync_to_recruitee'] == true
+                              ? 'Disable sync'
+                              : 'Enable sync',
+                          child: Switch(
+                            value: job['sync_to_recruitee'] ?? false,
+                            onChanged: (value) => _toggleJobSync(jobId, value),
+                            activeColor: Colors.blue,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                        // Sync now button (only if enabled)
+                        if (job['sync_to_recruitee'] == true)
+                          IconButton(
+                            icon: Icon(
+                              Icons.cloud_upload,
+                              color: job['last_synced_source'] == 'recruitee'
+                                  ? Colors.grey
+                                  : Colors.blue,
+                              size: 20,
+                            ),
+                            onPressed: job['last_synced_source'] == 'recruitee'
+                                ? null // Disable if just synced from Recruitee
+                                : () => _syncJobToRecruitee(
+                                    jobId, job['title'] ?? 'Job'),
+                            tooltip: job['last_synced_source'] == 'recruitee'
+                                ? 'Synced from Recruitee - push disabled'
+                                : 'Sync to Recruitee',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 32,
+                              minHeight: 32,
+                            ),
+                          ),
+                        // View in Recruitee link
+                        if (job['recruitee_url'] != null)
+                          IconButton(
+                            icon: const Icon(
+                              Icons.open_in_new,
+                              color: Colors.green,
+                              size: 20,
+                            ),
+                            onPressed: () => _launchUrl(job['recruitee_url']),
+                            tooltip: 'View in Recruitee',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(
+                              minWidth: 32,
+                              minHeight: 32,
+                            ),
+                          ),
+                        // View sync history
+                        IconButton(
+                          icon: const Icon(
+                            Icons.history,
+                            color: Colors.grey,
+                            size: 20,
+                          ),
+                          onPressed: () =>
+                              _showSyncHistory(jobId, job['title'] ?? 'Job'),
+                          tooltip: 'View sync history',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(
+                            minWidth: 32,
+                            minHeight: 32,
+                          ),
+                        ),
+                      ],
                       Icon(
                         isExpanded ? Icons.expand_less : Icons.expand_more,
                         color: textColor,
@@ -1166,6 +1365,19 @@ class _JobManagementState extends State<JobManagement> {
                                 }
                               },
                             ),
+                            const Spacer(),
+                            // Bulk Sync Button
+                            ElevatedButton.icon(
+                              onPressed: _showBulkSyncDialog,
+                              icon: const Icon(Icons.cloud_sync, size: 18),
+                              label: const Text('Bulk Sync'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 16),
@@ -1248,8 +1460,11 @@ class _JobManagementState extends State<JobManagement> {
                                               _tableHeaderCell('Created by',
                                                   flex: 2,
                                                   themeProvider: themeProvider),
+                                              _tableHeaderCell('Recruitee',
+                                                  flex: 1,
+                                                  themeProvider: themeProvider),
                                               SizedBox(
-                                                  width: 120,
+                                                  width: 200,
                                                   child: Text('Actions',
                                                       style: TextStyle(
                                                           fontFamily: 'Poppins',

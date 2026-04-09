@@ -19,6 +19,7 @@ import '../../constants/brand_tokens.dart';
 import '../../widgets/pill_search_bar.dart';
 import '../../widgets/themed_surface_card.dart';
 import '../../widgets/state_widgets.dart';
+import '../../widgets/recruitee_integration_card.dart';
 import 'candidate_management_screen.dart';
 import 'cv_reviews_screen.dart';
 import 'hm_team_collaboration_page.dart';
@@ -1424,6 +1425,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                   cvReviewsMixedChart(cvReviewData),
                   modernCalendarCard(),
                   activitiesCard(),
+                  const RecruiteeIntegrationCard(),
                 ],
               );
             }),

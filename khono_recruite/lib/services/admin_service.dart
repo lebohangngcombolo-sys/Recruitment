@@ -2746,4 +2746,116 @@ class AdminService {
       throw Exception('An unexpected error occurred. Please try again.');
     }
   }
+
+  // ==================== RECRUITEE INTEGRATION ====================
+
+  /// Get Recruitee integration status
+  Future<Map<String, dynamic>> getRecruiteeStatus() async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.get(
+      Uri.parse('${ApiEndpoints.adminBase}/integrations/recruitee/status'),
+      headers: authHeaders,
+    );
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+    throw Exception('Failed to get Recruitee status: ${res.body}');
+  }
+
+  /// Toggle sync for a job
+  Future<bool> toggleJobSync(int jobId, bool enabled) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse(
+          '${ApiEndpoints.adminBase}/integrations/recruitee/jobs/$jobId/toggle-sync'),
+      headers: {...authHeaders, 'Content-Type': 'application/json'},
+      body: json.encode({'sync': enabled}),
+    );
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      return data['sync_to_recruitee'] ?? false;
+    }
+    throw Exception('Failed to toggle sync: ${res.body}');
+  }
+
+  /// Sync single job to Recruitee
+  Future<Map<String, dynamic>> syncJobToRecruitee(int jobId) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse(
+          '${ApiEndpoints.adminBase}/integrations/recruitee/jobs/$jobId/sync'),
+      headers: authHeaders,
+    );
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+    // Handle 400 errors with retry info
+    if (res.statusCode == 400) {
+      final data = json.decode(res.body);
+      return data;
+    }
+    throw Exception('Failed to sync job: ${res.body}');
+  }
+
+  /// Bulk sync jobs
+  Future<Map<String, dynamic>> bulkSyncJobs({
+    List<int>? jobIds,
+    bool onlyActive = true,
+  }) async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse('${ApiEndpoints.adminBase}/integrations/recruitee/sync/jobs'),
+      headers: {...authHeaders, 'Content-Type': 'application/json'},
+      body: json.encode({
+        'job_ids': jobIds,
+        'only_active': onlyActive,
+      }),
+    );
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+    throw Exception('Failed to bulk sync: ${res.body}');
+  }
+
+  /// Get sync history
+  Future<List<dynamic>> getSyncHistory({
+    String? entityType,
+    int? entityId,
+    String? status,
+    int limit = 50,
+  }) async {
+    final authHeaders = await _getAuthHeaders();
+
+    final queryParams = <String, String>{
+      if (entityType != null) 'entity_type': entityType,
+      if (entityId != null) 'entity_id': entityId.toString(),
+      if (status != null) 'status': status,
+      'limit': limit.toString(),
+    };
+
+    final uri = Uri.parse(
+            '${ApiEndpoints.adminBase}/integrations/recruitee/sync-history')
+        .replace(queryParameters: queryParams);
+
+    final res = await http.get(uri, headers: authHeaders);
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      return data['history'] ?? [];
+    }
+    throw Exception('Failed to get history: ${res.body}');
+  }
+
+  /// Process pending retries
+  Future<Map<String, dynamic>> processRetries() async {
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.post(
+      Uri.parse(
+          '${ApiEndpoints.adminBase}/integrations/recruitee/process-retries'),
+      headers: authHeaders,
+    );
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+    throw Exception('Failed to process retries: ${res.body}');
+  }
 }

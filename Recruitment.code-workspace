@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../CascadeProjects/cv-analyser-backend/cv-analyser"
+		}
+	],
+	"settings": {}
+}
