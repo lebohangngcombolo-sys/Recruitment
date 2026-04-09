@@ -123,18 +123,37 @@ class AnalysisServiceClient:
         external_analysis_id: str,
         *,
         timeout_seconds: int = 300,
-        poll_interval_seconds: int = 5,
+        initial_poll_interval: int = 1,
+        max_poll_interval: int = 5,
     ) -> dict | None:
-        """Poll external service until analysis is completed/failed or timeout."""
+        """Poll external service until analysis is completed/failed or timeout.
+        Uses exponential backoff for better UX and performance.
+        """
         start = time.time()
+        wait = initial_poll_interval
+        
         while (time.time() - start) < timeout_seconds:
-            status = AnalysisServiceClient.get_analysis_status(external_analysis_id)
-            state = (status or {}).get("status")
-            if state == "completed":
-                return AnalysisServiceClient.get_analysis_result(external_analysis_id)
-            if state == "failed":
-                return None
-            time.sleep(poll_interval_seconds)
+            try:
+                status = AnalysisServiceClient.get_analysis_status(external_analysis_id)
+                state = (status or {}).get("status")
+                
+                if state == "completed":
+                    logger.info(f"✅ Analysis {external_analysis_id} completed. Fetching results...")
+                    return AnalysisServiceClient.get_analysis_result(external_analysis_id)
+                
+                if state == "failed":
+                    logger.error(f"❌ Analysis {external_analysis_id} failed.")
+                    return None
+                
+                # Exponential backoff
+                time.sleep(wait)
+                wait = min(wait * 1.5, max_poll_interval)
+                
+            except Exception as e:
+                logger.warning(f"Polling error for {external_analysis_id}: {e}")
+                time.sleep(max_poll_interval)
+        
+        logger.warning(f"⏳ Polling timeout for analysis {external_analysis_id} after {timeout_seconds}s")
         return None
 
     @staticmethod

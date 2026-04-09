@@ -287,6 +287,10 @@ class EnrollmentService:
         mapped_fields["bio"] = get_field("personal.summary") or \
                                structured_data.get("professional_summary") or \
                                structured_data.get("summary") or ""
+        
+        # Gender extraction
+        mapped_fields["gender"] = get_field("personal.gender") or \
+                                  structured_data.get("personal_details", {}).get("gender") or ""
 
         dob_val = get_field("personal.dob")
         if dob_val:
@@ -294,29 +298,49 @@ class EnrollmentService:
             if dob:
                 mapped_fields["dob"] = dob.isoformat()
 
-        # Education
+        # Education - transform to frontend-compatible format
         education_data = autofill.get("education") or structured_data.get("education") or []
         if isinstance(education_data, list):
-            mapped_fields["education"] = education_data
-            if education_data:
-                latest = education_data[0]
-                if isinstance(latest, dict):
-                    mapped_fields["university"] = latest.get("institution") or latest.get("school") or ""
-                    mapped_fields["graduation_year"] = latest.get("year") or latest.get("graduation_year") or ""
+            # Transform HF keys (degree, university, year) to frontend keys (level, institution, graduation_year)
+            transformed_education = []
+            for edu in education_data:
+                if isinstance(edu, dict):
+                    transformed_education.append({
+                        "level": edu.get("degree") or edu.get("level") or "",
+                        "institution": edu.get("university") or edu.get("institution") or edu.get("school") or "",
+                        "graduation_year": edu.get("year") or edu.get("graduation_year") or ""
+                    })
+            mapped_fields["education"] = transformed_education
+            
+            if transformed_education:
+                latest = transformed_education[0]
+                mapped_fields["university"] = latest.get("institution") or ""
+                mapped_fields["graduation_year"] = latest.get("graduation_year") or ""
         elif isinstance(education_data, str):
-            mapped_fields["education"] = [education_data]
+            mapped_fields["education"] = [{"level": education_data, "institution": "", "graduation_year": ""}]
 
-        # Work experience
+        # Work experience - transform to frontend-compatible format
         experience_data = autofill.get("experience") or structured_data.get("work_experience") or structured_data.get("experience") or []
         if isinstance(experience_data, list):
-            mapped_fields["work_experience"] = experience_data
-            companies = [e.get("company") for e in experience_data if isinstance(e, dict) and e.get("company")]
-            titles = [e.get("title") for e in experience_data if isinstance(e, dict) and e.get("title")]
-            descriptions = [e.get("description") for e in experience_data if isinstance(e, dict) and e.get("description")]
+            # Transform HF keys (title) to frontend keys (position)
+            transformed_experience = []
+            for exp in experience_data:
+                if isinstance(exp, dict):
+                    transformed_experience.append({
+                        "position": exp.get("title") or exp.get("position") or "",
+                        "company": exp.get("company") or "",
+                        "description": exp.get("description") or "",
+                        "period": exp.get("period") or f"{exp.get('start_date', '')} - {exp.get('end_date', 'Present')}"
+                    })
+            mapped_fields["work_experience"] = transformed_experience
+            
+            companies = [e.get("company") for e in transformed_experience if e.get("company")]
+            positions = [e.get("position") for e in transformed_experience if e.get("position")]
+            descriptions = [e.get("description") for e in transformed_experience if e.get("description")]
             if companies:
                 mapped_fields["previous_companies"] = ", ".join(dict.fromkeys(companies))
-            if titles:
-                mapped_fields["position"] = titles[0]
+            if positions:
+                mapped_fields["position"] = positions[0]
             if descriptions:
                 mapped_fields["experience"] = "\n\n".join(descriptions)
         elif isinstance(experience_data, str):

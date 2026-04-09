@@ -150,6 +150,13 @@ class Config:
     ANALYSIS_SERVICE_URL = os.getenv('ANALYSIS_SERVICE_URL', 'http://localhost:8000')
     ANALYSIS_SERVICE_API_KEY = os.getenv('ANALYSIS_SERVICE_API_KEY', '')
 
+    # Recruitee ATS Integration
+    RECRUITEE_ENABLED = os.getenv('RECRUITEE_ENABLED', 'false').lower() == 'true'
+    RECRUITEE_COMPANY_ID = os.getenv('RECRUITEE_COMPANY_ID', '')
+    RECRUITEE_API_TOKEN = os.getenv('RECRUITEE_API_TOKEN', '')
+    RECRUITEE_WEBHOOK_SECRET = os.getenv('RECRUITEE_WEBHOOK_SECRET', '')
+    RECRUITEE_BASE_URL = f"https://api.recruitee.com/c/{RECRUITEE_COMPANY_ID}" if RECRUITEE_COMPANY_ID else ""
+
     
 class DevelopmentConfig(Config):
     DEBUG = True

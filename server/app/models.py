@@ -265,6 +265,12 @@ class Requisition(db.Model):
     approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     rejection_reason = db.Column(db.Text, nullable=True)
 
+    # Recruitee ATS Integration fields
+    recruitee_id = db.Column(db.String(100), nullable=True, index=True)
+    sync_to_recruitee = db.Column(db.Boolean, default=False, nullable=False)
+    last_synced_at = db.Column(db.DateTime, nullable=True)
+    last_synced_source = db.Column(db.String(20), nullable=True)  # 'local' or 'recruitee'
+
     applications = db.relationship('Application', back_populates='requisition', lazy=True)
     creator = db.relationship('User', foreign_keys=[created_by], lazy=True)
     approver = db.relationship('User', foreign_keys=[approved_by], lazy=True)
@@ -326,6 +332,12 @@ class Requisition(db.Model):
                 "name": self.approver.full_name,
                 "email": self.approver.email,
             } if getattr(self, "approver", None) else None,
+            # Recruitee ATS Integration
+            "recruitee_id": self.recruitee_id,
+            "sync_to_recruitee": self.sync_to_recruitee,
+            "last_synced_at": self.last_synced_at.isoformat() if self.last_synced_at else None,
+            "last_synced_source": self.last_synced_source,
+            "recruitee_url": self.get_recruitee_url(),
         }
     
     def to_dict_with_stats(self):
@@ -354,6 +366,13 @@ class Requisition(db.Model):
         })
         
         return base_dict
+    
+    def get_recruitee_url(self):
+        """Get the public Recruitee job URL if synced"""
+        if not self.recruitee_id:
+            return None
+        # Using subdomain from company_id (khonology1.recruitee.com)
+        return f"https://khonology1.recruitee.com/o/{self.recruitee_id}"
 
 # ------------------- CANDIDATE -------------------
 class Candidate(db.Model):
@@ -401,6 +420,12 @@ class Candidate(db.Model):
     cv_analysis_promoted_at = db.Column(db.DateTime, nullable=True)  # When data was promoted
     last_cv_analysis_id = db.Column(db.String(255), nullable=True)  # Link to local CVAnalysis (cross-database aware)
 
+    # Recruitee ATS Integration fields
+    recruitee_id = db.Column(db.String(100), nullable=True, index=True)
+    sync_to_recruitee = db.Column(db.Boolean, default=False, nullable=False)
+    last_synced_at = db.Column(db.DateTime, nullable=True)
+    last_synced_source = db.Column(db.String(20), nullable=True)  # 'local' or 'recruitee'
+
     # Relationships
     user = db.relationship('User', back_populates='candidates')
     applications = db.relationship('Application', back_populates='candidate', lazy=True)
@@ -446,6 +471,11 @@ class Candidate(db.Model):
             "cv_analysis_status": self.cv_analysis_status,
             "cv_analysis_promoted_at": self.cv_analysis_promoted_at.isoformat() if self.cv_analysis_promoted_at else None,
             "last_cv_analysis_id": self.last_cv_analysis_id,
+            # Recruitee ATS Integration
+            "recruitee_id": self.recruitee_id,
+            "sync_to_recruitee": self.sync_to_recruitee,
+            "last_synced_at": self.last_synced_at.isoformat() if self.last_synced_at else None,
+            "last_synced_source": self.last_synced_source,
         }
 
 # ------------------- APPLICATION -------------------
@@ -1400,3 +1430,108 @@ class InterviewReminder(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
+
+
+class RecruiteeSyncHistory(db.Model):
+    """Audit log for all Recruitee sync attempts with retry support"""
+    __tablename__ = 'recruitee_sync_history'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    entity_type = db.Column(db.String(20), nullable=False)  # 'job' or 'candidate'
+    entity_id = db.Column(db.Integer, nullable=False)  # local requisition_id or candidate_id
+    recruitee_id = db.Column(db.String(100), nullable=True)  # Recruitee's ID
+    action = db.Column(db.String(20), nullable=False)  # 'create', 'update', 'delete', 'retry'
+    status = db.Column(db.String(20), nullable=False, default='pending')  # 'success', 'failed', 'pending', 'skipped'
+    error_message = db.Column(db.Text, nullable=True)
+    retry_count = db.Column(db.Integer, default=0)
+    max_retries = db.Column(db.Integer, default=3)
+    next_retry_at = db.Column(db.DateTime, nullable=True)
+    request_data = db.Column(JSONB, default=dict)
+    response_data = db.Column(JSONB, default=dict)
+    synced_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    
+    # Relationships
+    user = db.relationship('User', lazy=True)
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "entity_type": self.entity_type,
+            "entity_id": self.entity_id,
+            "recruitee_id": self.recruitee_id,
+            "action": self.action,
+            "status": self.status,
+            "error_message": self.error_message,
+            "retry_count": self.retry_count,
+            "max_retries": self.max_retries,
+            "next_retry_at": self.next_retry_at.isoformat() if self.next_retry_at else None,
+            "request_data": self.request_data,
+            "response_data": self.response_data,
+            "synced_by": self.synced_by,
+            "synced_by_user": {
+                "id": self.user.id,
+                "name": self.user.full_name,
+                "email": self.user.email
+            } if self.user else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None
+        }
+    
+    def should_retry(self):
+        """Check if this sync attempt should be retried"""
+        if self.status == 'success' or self.status == 'skipped':
+            return False
+        if self.retry_count >= self.max_retries:
+            return False
+        if self.next_retry_at and datetime.utcnow() < self.next_retry_at:
+            return False
+        return True
+    
+    def schedule_retry(self, minutes=None):
+        """Schedule next retry with exponential backoff"""
+        from datetime import timedelta
+        if minutes is None:
+            # Exponential backoff: 5min, 15min, 45min
+            minutes = 5 * (3 ** self.retry_count)
+        self.next_retry_at = datetime.utcnow() + timedelta(minutes=minutes)
+        self.retry_count += 1
+        self.status = 'pending'
+
+
+class RecruiteeWebhookLog(db.Model):
+    """Track all incoming Recruitee webhooks for debugging and idempotency"""
+    __tablename__ = 'recruitee_webhook_logs'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.String(100), unique=True, nullable=False, index=True)  # Recruitee event ID
+    event_type = db.Column(db.String(50), nullable=False, index=True)
+    raw_payload = db.Column(JSONB, default=dict)
+    processed = db.Column(db.Boolean, default=False, nullable=False)
+    processing_status = db.Column(db.String(20), default='pending')  # pending, success, failed
+    error_message = db.Column(db.Text)
+    processed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "event_id": self.event_id,
+            "event_type": self.event_type,
+            "raw_payload": self.raw_payload,
+            "processed": self.processed,
+            "processing_status": self.processing_status,
+            "error_message": self.error_message,
+            "processed_at": self.processed_at.isoformat() if self.processed_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None
+        }
+    
+    def mark_processed(self, status='success', error=None):
+        """Mark webhook as processed with status"""
+        self.processed = True
+        self.processing_status = status
+        self.processed_at = datetime.utcnow()
+        if error:
+            self.error_message = error
+        db.session.commit()
