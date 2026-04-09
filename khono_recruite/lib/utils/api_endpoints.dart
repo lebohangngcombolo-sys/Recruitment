@@ -473,31 +473,31 @@ class ApiEndpoints {
 
   // Analytics blueprint routes
   static const getApplicationsPerRequisition =
-      "$analyticsBase/analytics/applications-per-requisition";
+      "$analyticsBase/applications-per-requisition";
   static const getApplicationToInterviewConversion =
-      "$analyticsBase/analytics/conversion/application-to-interview";
+      "$analyticsBase/conversion/application-to-interview";
   static const getInterviewToOfferConversion =
-      "$analyticsBase/analytics/conversion/interview-to-offer";
-  static const getStageDropoff = "$analyticsBase/analytics/dropoff";
-  static const getTimePerStage = "$analyticsBase/analytics/time-per-stage";
+      "$analyticsBase/conversion/interview-to-offer";
+  static const getStageDropoff = "$analyticsBase/dropoff";
+  static const getTimePerStage = "$analyticsBase/time-per-stage";
   static const getMonthlyApplications =
-      "$analyticsBase/analytics/applications/monthly";
+      "$analyticsBase/applications/monthly";
   static const getCVScreeningDrop =
-      "$analyticsBase/analytics/cv-screening-drop";
+      "$analyticsBase/cv-screening-drop";
   static const getAssessmentPassRate =
-      "$analyticsBase/analytics/assessments/pass-rate";
+      "$analyticsBase/assessments/pass-rate";
   static const getInterviewScheduling =
-      "$analyticsBase/analytics/interviews/scheduled";
+      "$analyticsBase/interviews/scheduled";
   static const getOffersByCategory =
-      "$analyticsBase/analytics/offers-by-category";
+      "$analyticsBase/offers-by-category";
   static const getAvgCVScore =
-      "$analyticsBase/analytics/candidate/avg-cv-score";
+      "$analyticsBase/candidate/avg-cv-score";
   static const getAvgAssessmentScore =
-      "$analyticsBase/analytics/candidate/avg-assessment-score";
+      "$analyticsBase/candidate/avg-assessment-score";
   static const getSkillsFrequency =
-      "$analyticsBase/analytics/candidate/skills-frequency";
+      "$analyticsBase/candidate/skills-frequency";
   static const getExperienceDistribution =
-      "$analyticsBase/analytics/candidate/experience-distribution";
+      "$analyticsBase/candidate/experience-distribution";
 
   // ==================== CANDIDATE ENDPOINTS ====================
   static const getCandidateProfile = "$candidateBase/profile";
