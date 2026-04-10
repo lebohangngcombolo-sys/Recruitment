@@ -358,6 +358,7 @@ class ApiEndpoints {
       "$offerBase/candidate/$candidateId";
   static String myOffer(int offerId) => "$offerBase/$offerId";
 
+<<<<<<< HEAD
   // ------------------- Misc -------------------
   static String markNotificationRead(int notificationId) =>
       "$adminBase/notifications/$notificationId/read";
@@ -366,4 +367,186 @@ class ApiEndpoints {
       "$adminBase/jobs/$jobId/shortlist";
   static String shortlistExport(int jobId) =>
       "$adminBase/jobs/$jobId/shortlist/export";
+=======
+  static String getApplicationOffers(int applicationId) =>
+      "$adminBase/applications/$applicationId/offers";
+
+  static const getOfferAnalytics = "$offerBase/analytics";
+
+  // Candidate's own offers
+  static String myOffer() => "$offerBase/my-offers";
+
+  // ==================== APPLICATION ENDPOINTS ====================
+
+  /// GET - Get all applications (existing endpoint)
+  static const getCandidateApplications = "$adminBase/applications";
+
+  /// GET - Get all applications (alternative)
+  static const getAllApplications = "$adminBase/applications/all";
+
+  // ==================== ANALYTICS ENDPOINTS ====================
+  static const getDashboardAnalytics = "$adminBase/analytics/dashboard";
+  static const getUsersGrowthAnalytics = "$adminBase/analytics/users-growth";
+  static const getApplicationsAnalysis =
+      "$adminBase/analytics/applications-analysis";
+  static const getInterviewsAnalysis =
+      "$adminBase/analytics/interviews-analysis";
+  static const getAssessmentsAnalysis =
+      "$adminBase/analytics/assessments-analysis";
+  static const getDashboardCounts = "$adminBase/dashboard-counts";
+  static const getRecentActivities = "$adminBase/recent-activities";
+  static const getPowerBIData = "$adminBase/powerbi/data";
+  static const getPowerBIStatus = "$adminBase/powerbi/status";
+
+  // Analytics blueprint routes
+  static const getApplicationsPerRequisition =
+      "$analyticsBase/applications-per-requisition";
+  static const getApplicationToInterviewConversion =
+      "$analyticsBase/conversion/application-to-interview";
+  static const getInterviewToOfferConversion =
+      "$analyticsBase/conversion/interview-to-offer";
+  static const getStageDropoff = "$analyticsBase/dropoff";
+  static const getTimePerStage = "$analyticsBase/time-per-stage";
+  static const getMonthlyApplications =
+      "$analyticsBase/applications/monthly";
+  static const getCVScreeningDrop =
+      "$analyticsBase/cv-screening-drop";
+  static const getAssessmentPassRate =
+      "$analyticsBase/assessments/pass-rate";
+  static const getInterviewScheduling =
+      "$analyticsBase/interviews/scheduled";
+  static const getOffersByCategory =
+      "$analyticsBase/offers-by-category";
+  static const getAvgCVScore =
+      "$analyticsBase/candidate/avg-cv-score";
+  static const getAvgAssessmentScore =
+      "$analyticsBase/candidate/avg-assessment-score";
+  static const getSkillsFrequency =
+      "$analyticsBase/candidate/skills-frequency";
+  static const getExperienceDistribution =
+      "$analyticsBase/candidate/experience-distribution";
+
+  // ==================== CANDIDATE ENDPOINTS ====================
+  static const getCandidateProfile = "$candidateBase/profile";
+  static const updateCandidateProfile = "$candidateBase/profile";
+  static const uploadCandidateDocument = "$candidateBase/upload_document";
+  static const uploadProfilePicture = "$candidateBase/upload_profile_picture";
+  static const getCandidateSettings = "$candidateBase/settings";
+  static const updateCandidateSettings = "$candidateBase/settings";
+  static const changeCandidatePassword =
+      "$candidateBase/settings/change_password";
+  static const updateCandidateNotificationPreferences =
+      "$candidateBase/settings/notifications";
+  static const deactivateCandidateAccount =
+      "$candidateBase/settings/deactivate";
+  static const getCandidateNotifications = "$candidateBase/notifications";
+
+  // ==================== HELPER METHODS ====================
+
+  /// Helper method to get all endpoints for a specific interview
+  static Map<String, String> getInterviewEndpoints(int interviewId) {
+    return {
+      'updateStatus': updateInterviewStatus(interviewId),
+      'feedback': submitInterviewFeedback(interviewId),
+      'getFeedback': getInterviewFeedback(interviewId),
+      'reschedule': rescheduleInterview(interviewId),
+      'cancel': cancelSingleInterview(interviewId),
+      'reminders': getInterviewReminders(interviewId),
+      'notes': getInterviewNotes(interviewId),
+      'addNotes': addInterviewNotes(interviewId),
+      'calendarSync': syncSingleInterviewCalendar(interviewId),
+      'calendarStatus': getInterviewCalendarStatus(interviewId),
+      'feedbackSummary': getFeedbackSummary(interviewId),
+      'workflowNext': moveInterviewToNextStage(interviewId),
+      'workflowPrevious': moveInterviewToPreviousStage(interviewId),
+      'requestFeedback': requestFeedback(interviewId),
+      'sendImmediateReminder': sendImmediateReminder(interviewId),
+    };
+  }
+
+  /// Helper method to get dashboard endpoints
+  static Map<String, String> getDashboardEndpoints() {
+    return {
+      'today': getTodaysInterviews,
+      'upcoming': getUpcomingInterviews,
+      'past': getPastInterviews,
+      'actionRequired': getInterviewsRequiringAction,
+      'analytics': getInterviewAnalytics,
+      'noShowAnalytics': getNoShowAnalytics,
+      'feedbackAnalytics': getFeedbackAnalytics,
+      'interviewerAnalytics': getInterviewerAnalytics,
+      'pipelineStats': getPipelineStats,
+      'quickStats': getPipelineQuickStats,
+      'stagesCount': getPipelineStagesCount,
+    };
+  }
+
+  /// Helper method to get bulk operation endpoints
+  static Map<String, String> getBulkOperationEndpoints() {
+    return {
+      'bulkStatus': bulkUpdateInterviewStatus,
+      'bulkReminders': bulkScheduleReminders,
+      'bulkFeedbackRequest': bulkRequestFeedback,
+      'bulkCalendarSync': bulkSyncInterviewCalendar,
+    };
+  }
+
+  /// Helper method to get recruitment pipeline endpoints
+  static Map<String, String> getRecruitmentPipelineEndpoints() {
+    return {
+      'pipelineStats': getPipelineStats,
+      'quickStats': getPipelineQuickStats,
+      'stagesCount': getPipelineStagesCount,
+      'filteredApplications': getFilteredApplications,
+      'jobsWithStats': getJobsWithStats,
+      'todayInterviews': getTodaysInterviews,
+      'upcomingInterviews': getUpcomingInterviews,
+      'pastInterviews': getPastInterviews,
+      'allOffers': getAllOffers,
+      'candidatesReadyForOffer': getCandidatesReadyForOffer,
+      'analytics': getDashboardAnalytics,
+      'offerAnalytics': getOfferAnalytics,
+      'searchAll': searchAll(''), // Base URL without query
+    };
+  }
+
+  /// Helper method to get endpoints for a specific application
+  static Map<String, String> getApplicationEndpoints(int applicationId) {
+    return {
+      'get': getApplicationById(applicationId),
+      'updateStatus': updateApplicationStatus(applicationId),
+      'downloadCV': "$adminBase/applications/$applicationId/download-cv",
+      'getOffers': getApplicationOffers(applicationId),
+      'getAssessment': "$candidateBase/applications/$applicationId/assessment",
+      'submitAssessment':
+          "$candidateBase/applications/$applicationId/assessment",
+      'saveDraft': "$candidateBase/applications/$applicationId/draft",
+      'submitDraft': "$candidateBase/applications/submit_draft/$applicationId",
+    };
+  }
+
+  /// Helper method to get endpoints for a specific job/requisition
+  static Map<String, String> getJobEndpoints(int jobId) {
+    return {
+      'get': getJobById(jobId),
+      'update': updateJob(jobId),
+      'delete': deleteJob(jobId),
+      'shortlist': shortlistCandidates(jobId),
+      'applications': getApplicationsByJob(jobId),
+      'scheduleInterview': scheduleInterview,
+    };
+  }
+
+  /// Helper method to get candidate management endpoints
+  static Map<String, String> getCandidateManagementEndpoints(int candidateId) {
+    return {
+      'getProfile': "$adminBase/candidates/$candidateId",
+      'getInterviews': getCandidateInterviews(candidateId),
+      'getAvailability': getCandidateAvailability(candidateId),
+      'setAvailability': setCandidateAvailability(candidateId),
+      'getOffers': getCandidateOffers(candidateId),
+      'chat': getCandidateChat(candidateId),
+    };
+  }
+>>>>>>> 5650d70d9d92b0a6f6829a559a2e1d7d9d20ed77
 }
