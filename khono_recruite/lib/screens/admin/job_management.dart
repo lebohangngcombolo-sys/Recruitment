@@ -164,60 +164,6 @@ class _JobManagementState extends State<JobManagement> {
     }
   }
 
-  Future<void> _syncJobToRecruitee(int jobId, String jobTitle) async {
-    // Show loading indicator
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      final result = await admin.syncJobToRecruitee(jobId);
-      Navigator.pop(context); // Close loading
-
-      if (result['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('✓ Successfully synced to Recruitee'),
-            backgroundColor: Colors.green,
-            action: result['recruitee_url'] != null
-                ? SnackBarAction(
-                    label: 'View',
-                    onPressed: () => _launchUrl(result['recruitee_url']),
-                  )
-                : null,
-          ),
-        );
-        fetchJobs(); // Refresh to show updated sync status
-      } else if (result['retry_scheduled'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content:
-                const Text('⚠ Sync failed. Retry scheduled automatically.'),
-            backgroundColor: Colors.orange,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✗ Error: ${result['error']}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      Navigator.pop(context); // Close loading
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Network error: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
   Future<void> _launchUrl(String? url) async {
     if (url == null || url.isEmpty) return;
     final uri = Uri.parse(url);
@@ -247,6 +193,79 @@ class _JobManagementState extends State<JobManagement> {
     );
   }
 
+  void _handleMenuAction(String action, Map<String, dynamic> job, int jobId) {
+    switch (action) {
+      case 'approve':
+        _approveJob(jobId, job['title'] ?? 'Job');
+        break;
+      case 'decline':
+        _declineJob(jobId, job['title'] ?? 'Job');
+        break;
+      case 'edit':
+        openJobForm(job: job);
+        break;
+      case 'delete':
+        _confirmDeleteJob(jobId, job['title'] ?? 'Job');
+        break;
+      case 'select':
+        if (widget.onJobSelected != null) {
+          widget.onJobSelected!(jobId);
+        }
+        break;
+      case 'toggle_sync':
+        _toggleJobSync(jobId, !(job['sync_to_recruitee'] ?? false));
+        break;
+      case 'history':
+        _showSyncHistory(jobId, job['title'] ?? 'Job');
+        break;
+    }
+  }
+
+  void _confirmDeleteJob(int jobId, String jobTitle) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title:
+            const Text('Delete Job', style: TextStyle(fontFamily: 'Poppins')),
+        content: Text(
+          'Are you sure you want to delete "$jobTitle"?',
+          style: const TextStyle(fontFamily: 'Poppins'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child:
+                const Text('Cancel', style: TextStyle(fontFamily: 'Poppins')),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await admin.deleteJob(jobId);
+                fetchJobs();
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        "Error deleting job: $e",
+                        style: const TextStyle(fontFamily: 'Poppins'),
+                      ),
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red, fontFamily: 'Poppins'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showBulkSyncDialog() {
     showDialog(
       context: context,
@@ -265,8 +284,9 @@ class _JobManagementState extends State<JobManagement> {
     required int flex,
     required ThemeProvider themeProvider,
   }) {
-    return Expanded(
+    return Flexible(
       flex: flex,
+      fit: FlexFit.loose,
       child: Text(
         label,
         style: TextStyle(
@@ -275,6 +295,7 @@ class _JobManagementState extends State<JobManagement> {
           fontSize: 14,
           color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
         ),
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
@@ -315,9 +336,11 @@ class _JobManagementState extends State<JobManagement> {
               ),
             ),
             child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Expanded(
-                  flex: 3,
+                Flexible(
+                  flex: 4,
+                  fit: FlexFit.loose,
                   child: Text(
                     job['title'] ?? '—',
                     style: TextStyle(
@@ -328,8 +351,9 @@ class _JobManagementState extends State<JobManagement> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Expanded(
-                  flex: 1,
+                Flexible(
+                  flex: 2,
+                  fit: FlexFit.loose,
                   child: Text(
                     job['category'] ?? '—',
                     style: TextStyle(
@@ -340,8 +364,9 @@ class _JobManagementState extends State<JobManagement> {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Expanded(
-                  flex: 1,
+                Flexible(
+                  flex: 2,
+                  fit: FlexFit.loose,
                   child: Text(
                     '${job['application_count'] ?? 0}',
                     style: TextStyle(
@@ -351,8 +376,9 @@ class _JobManagementState extends State<JobManagement> {
                     ),
                   ),
                 ),
-                Expanded(
+                Flexible(
                   flex: 1,
+                  fit: FlexFit.loose,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 6,
@@ -373,198 +399,164 @@ class _JobManagementState extends State<JobManagement> {
                           color: isActive
                               ? Colors.green.shade700
                               : Colors.orange.shade700),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
-                Expanded(flex: 1, child: _hmApprovalChip(job)),
-                Expanded(
-                    flex: 2,
-                    child: Text(createdBy,
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 12,
-                            color: textColor),
-                        overflow: TextOverflow.ellipsis)),
-                // Recruitee Sync Status Column
-                Expanded(
+                Flexible(
                   flex: 1,
+                  fit: FlexFit.loose,
+                  child: _hmApprovalChip(job),
+                ),
+                Flexible(
+                  flex: 2,
+                  fit: FlexFit.loose,
+                  child: Text(createdBy,
+                      style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 12,
+                          color: textColor),
+                      overflow: TextOverflow.ellipsis),
+                ),
+                // Recruitee Sync Status Column
+                Flexible(
+                  flex: 2,
+                  fit: FlexFit.loose,
                   child: SyncStatusBadge(job: job),
                 ),
-                SizedBox(
-                  width: 200, // Increased width to accommodate more buttons
+                // Actions Column
+                Flexible(
+                  flex: 2,
+                  fit: FlexFit.loose,
                   child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      // Show approve/decline buttons for pending jobs
-                      if (job['approval_status'] == 'pending') ...[
+                      // Sync now button (only if approved and sync enabled)
+                      if (job['approval_status'] == 'approved' &&
+                          job['sync_to_recruitee'] == true)
+                        _SyncNowButton(job: job, onSyncComplete: fetchJobs),
+                      // View in Recruitee link
+                      if (job['recruitee_url'] != null)
                         IconButton(
                           icon: const Icon(
-                            Icons.check_circle,
+                            Icons.open_in_new,
                             color: Colors.green,
-                            size: 20,
+                            size: 18,
                           ),
-                          onPressed: () =>
-                              _approveJob(jobId, job['title'] ?? 'Job'),
-                          tooltip: 'Approve',
+                          onPressed: () => _launchUrl(job['recruitee_url']),
+                          tooltip: 'View in Recruitee',
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 32,
+                            minWidth: 28,
+                            minHeight: 28,
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.cancel,
-                            color: Colors.orange,
-                            size: 20,
-                          ),
-                          onPressed: () =>
-                              _declineJob(jobId, job['title'] ?? 'Job'),
-                          tooltip: 'Decline',
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 32,
-                          ),
-                        ),
-                        const SizedBox(width: 8), // Spacer before other actions
-                      ],
-                      IconButton(
-                        icon: const Icon(
-                          Icons.edit,
-                          color: Colors.blueAccent,
-                          size: 20,
-                        ),
-                        onPressed: () => openJobForm(job: job),
-                        tooltip: 'Edit',
+                      // Popup menu for secondary actions
+                      PopupMenuButton<String>(
+                        icon: Icon(Icons.more_vert, size: 18, color: textColor),
+                        onSelected: (value) =>
+                            _handleMenuAction(value, job, jobId),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 32,
+                          minWidth: 28,
+                          minHeight: 28,
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.delete,
-                          color: Colors.redAccent,
-                          size: 20,
-                        ),
-                        onPressed: () async {
-                          try {
-                            await admin.deleteJob(jobId);
-                            fetchJobs();
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    "Error deleting job: $e",
-                                    style: const TextStyle(
-                                      fontFamily: 'Poppins',
-                                    ),
+                        itemBuilder: (context) => [
+                          if (job['approval_status'] == 'pending')
+                            const PopupMenuItem(
+                              value: 'approve',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.check_circle,
+                                      color: Colors.green, size: 18),
+                                  SizedBox(width: 8),
+                                  Text('Approve'),
+                                ],
+                              ),
+                            ),
+                          if (job['approval_status'] == 'pending')
+                            const PopupMenuItem(
+                              value: 'decline',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.cancel,
+                                      color: Colors.orange, size: 18),
+                                  SizedBox(width: 8),
+                                  Text('Decline'),
+                                ],
+                              ),
+                            ),
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit,
+                                    color: Colors.blueAccent, size: 18),
+                                SizedBox(width: 8),
+                                Text('Edit'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete,
+                                    color: Colors.redAccent, size: 18),
+                                SizedBox(width: 8),
+                                Text('Delete'),
+                              ],
+                            ),
+                          ),
+                          if (widget.onJobSelected != null)
+                            const PopupMenuItem(
+                              value: 'select',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.check_circle,
+                                      color: Colors.green, size: 18),
+                                  SizedBox(width: 8),
+                                  Text('Select Job'),
+                                ],
+                              ),
+                            ),
+                          if (job['approval_status'] == 'approved')
+                            PopupMenuItem(
+                              value: 'toggle_sync',
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    job['sync_to_recruitee'] == true
+                                        ? Icons.cloud_off
+                                        : Icons.cloud,
+                                    color: Colors.blue,
+                                    size: 18,
                                   ),
-                                ),
-                              );
-                            }
-                          }
-                        },
-                        tooltip: 'Delete',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 32,
-                        ),
+                                  const SizedBox(width: 8),
+                                  Text(job['sync_to_recruitee'] == true
+                                      ? 'Disable Sync'
+                                      : 'Enable Sync'),
+                                ],
+                              ),
+                            ),
+                          if (job['approval_status'] == 'approved')
+                            const PopupMenuItem(
+                              value: 'history',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.history,
+                                      color: Colors.grey, size: 18),
+                                  SizedBox(width: 8),
+                                  Text('Sync History'),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
-                      if (widget.onJobSelected != null)
-                        IconButton(
-                          icon: const Icon(
-                            Icons.check_circle,
-                            color: Colors.green,
-                            size: 20,
-                          ),
-                          onPressed: () => widget.onJobSelected!(jobId),
-                          tooltip: 'Select Job',
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 32,
-                          ),
-                        ),
-                      // Recruitee Sync Actions
-                      if (job['approval_status'] == 'approved') ...[
-                        // Toggle sync switch
-                        Tooltip(
-                          message: job['sync_to_recruitee'] == true
-                              ? 'Disable sync'
-                              : 'Enable sync',
-                          child: Switch(
-                            value: job['sync_to_recruitee'] ?? false,
-                            onChanged: (value) => _toggleJobSync(jobId, value),
-                            activeColor: Colors.blue,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        ),
-                        // Sync now button (only if enabled)
-                        if (job['sync_to_recruitee'] == true)
-                          IconButton(
-                            icon: Icon(
-                              Icons.cloud_upload,
-                              color: job['last_synced_source'] == 'recruitee'
-                                  ? Colors.grey
-                                  : Colors.blue,
-                              size: 20,
-                            ),
-                            onPressed: job['last_synced_source'] == 'recruitee'
-                                ? null // Disable if just synced from Recruitee
-                                : () => _syncJobToRecruitee(
-                                    jobId, job['title'] ?? 'Job'),
-                            tooltip: job['last_synced_source'] == 'recruitee'
-                                ? 'Synced from Recruitee - push disabled'
-                                : 'Sync to Recruitee',
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                              minWidth: 32,
-                              minHeight: 32,
-                            ),
-                          ),
-                        // View in Recruitee link
-                        if (job['recruitee_url'] != null)
-                          IconButton(
-                            icon: const Icon(
-                              Icons.open_in_new,
-                              color: Colors.green,
-                              size: 20,
-                            ),
-                            onPressed: () => _launchUrl(job['recruitee_url']),
-                            tooltip: 'View in Recruitee',
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(
-                              minWidth: 32,
-                              minHeight: 32,
-                            ),
-                          ),
-                        // View sync history
-                        IconButton(
-                          icon: const Icon(
-                            Icons.history,
-                            color: Colors.grey,
-                            size: 20,
-                          ),
-                          onPressed: () =>
-                              _showSyncHistory(jobId, job['title'] ?? 'Job'),
-                          tooltip: 'View sync history',
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 32,
-                          ),
-                        ),
-                      ],
                       Icon(
                         isExpanded ? Icons.expand_less : Icons.expand_more,
                         color: textColor,
-                        size: 22,
+                        size: 18,
                       ),
                     ],
                   ),
@@ -592,7 +584,6 @@ class _JobManagementState extends State<JobManagement> {
         themeProvider.isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300;
 
     return Container(
-      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: themeProvider.isDarkMode
@@ -1430,60 +1421,71 @@ class _JobManagementState extends State<JobManagement> {
                                             : Colors.grey.shade300,
                                       ),
                                     ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        // Table header
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 12),
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.grey.shade900
-                                              : Colors.grey.shade200,
-                                          child: Row(
-                                            children: [
-                                              _tableHeaderCell('Title',
-                                                  flex: 3,
-                                                  themeProvider: themeProvider),
-                                              _tableHeaderCell('Category',
-                                                  flex: 1,
-                                                  themeProvider: themeProvider),
-                                              _tableHeaderCell('Applications',
-                                                  flex: 1,
-                                                  themeProvider: themeProvider),
-                                              _tableHeaderCell('Status',
-                                                  flex: 1,
-                                                  themeProvider: themeProvider),
-                                              _tableHeaderCell('Approval',
-                                                  flex: 1,
-                                                  themeProvider: themeProvider),
-                                              _tableHeaderCell('Created by',
-                                                  flex: 2,
-                                                  themeProvider: themeProvider),
-                                              _tableHeaderCell('Recruitee',
-                                                  flex: 1,
-                                                  themeProvider: themeProvider),
-                                              SizedBox(
-                                                  width: 200,
-                                                  child: Text('Actions',
-                                                      style: TextStyle(
-                                                          fontFamily: 'Poppins',
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 14,
-                                                          color: themeProvider
-                                                                  .isDarkMode
-                                                              ? Colors.white
-                                                              : Colors
-                                                                  .black87))),
-                                            ],
-                                          ),
+                                    child: SingleChildScrollView(
+                                      scrollDirection: Axis.horizontal,
+                                      child: ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          minWidth:
+                                              MediaQuery.of(context).size.width,
                                         ),
-                                        // All job rows in column so whole screen scrolls together
-                                        ..._filteredJobs().map((job) =>
-                                            _buildExpandableJobRow(
-                                                job, themeProvider)),
-                                      ],
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            // Table header
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 12),
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.grey.shade900
+                                                  : Colors.grey.shade200,
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  _tableHeaderCell('Title',
+                                                      flex: 4,
+                                                      themeProvider:
+                                                          themeProvider),
+                                                  _tableHeaderCell('Category',
+                                                      flex: 2,
+                                                      themeProvider:
+                                                          themeProvider),
+                                                  _tableHeaderCell(
+                                                      'Applications',
+                                                      flex: 2,
+                                                      themeProvider:
+                                                          themeProvider),
+                                                  _tableHeaderCell('Status',
+                                                      flex: 1,
+                                                      themeProvider:
+                                                          themeProvider),
+                                                  _tableHeaderCell('Approval',
+                                                      flex: 1,
+                                                      themeProvider:
+                                                          themeProvider),
+                                                  _tableHeaderCell('Created by',
+                                                      flex: 2,
+                                                      themeProvider:
+                                                          themeProvider),
+                                                  _tableHeaderCell('Recruitee',
+                                                      flex: 2,
+                                                      themeProvider:
+                                                          themeProvider),
+                                                  _tableHeaderCell('Actions',
+                                                      flex: 2,
+                                                      themeProvider:
+                                                          themeProvider),
+                                                ],
+                                              ),
+                                            ),
+                                            // All job rows in column so whole screen scrolls together
+                                            ..._filteredJobs().map((job) =>
+                                                _buildExpandableJobRow(
+                                                    job, themeProvider)),
+                                          ],
+                                        ),
+                                      ),
                                     ),
                                   ),
                       ],
@@ -1493,6 +1495,100 @@ class _JobManagementState extends State<JobManagement> {
         ),
       ),
     );
+  }
+}
+
+// ---------------- Sync Now Button with Loading Indicator ----------------
+class _SyncNowButton extends StatefulWidget {
+  final Map<String, dynamic> job;
+  final VoidCallback? onSyncComplete;
+
+  const _SyncNowButton({required this.job, this.onSyncComplete});
+
+  @override
+  State<_SyncNowButton> createState() => _SyncNowButtonState();
+}
+
+class _SyncNowButtonState extends State<_SyncNowButton> {
+  bool _isSyncing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: _isSyncing
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.cloud_upload, size: 18),
+      onPressed: _isSyncing ? null : _sync,
+      tooltip: 'Sync to Recruitee',
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(
+        minWidth: 28,
+        minHeight: 28,
+      ),
+    );
+  }
+
+  Future<void> _sync() async {
+    setState(() => _isSyncing = true);
+    try {
+      final adminService = Provider.of<AdminService>(context, listen: false);
+      final result = await adminService.syncJobToRecruitee(widget.job['id']);
+
+      if (mounted) {
+        if (result['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✓ Synced successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          // Open Recruitee URL if available
+          if (result['recruitee_url'] != null) {
+            _launchUrl(result['recruitee_url']);
+          }
+        } else if (result['retry_scheduled'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠ Sync failed – retry scheduled'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✗ Error: ${result['error'] ?? 'Unknown error'}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+
+      widget.onSyncComplete?.call();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Network error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncing = false);
+      }
+    }
+  }
+
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 }
 

@@ -9,7 +9,8 @@ class RecruiteeIntegrationCard extends StatefulWidget {
   const RecruiteeIntegrationCard({Key? key}) : super(key: key);
 
   @override
-  State<RecruiteeIntegrationCard> createState() => _RecruiteeIntegrationCardState();
+  State<RecruiteeIntegrationCard> createState() =>
+      _RecruiteeIntegrationCardState();
 }
 
 class _RecruiteeIntegrationCardState extends State<RecruiteeIntegrationCard> {
@@ -48,14 +49,15 @@ class _RecruiteeIntegrationCardState extends State<RecruiteeIntegrationCard> {
     try {
       final adminService = Provider.of<AdminService>(context, listen: false);
       final result = await adminService.processRetries();
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Processed ${result['processed'] ?? 0} pending retries'),
+          content:
+              Text('Processed ${result['processed'] ?? 0} pending retries'),
           backgroundColor: Colors.green,
         ),
       );
-      
+
       // Refresh status
       _loadStatus();
     } catch (e) {
@@ -74,9 +76,7 @@ class _RecruiteeIntegrationCardState extends State<RecruiteeIntegrationCard> {
 
     return Card(
       elevation: 4,
-      color: themeProvider.isDarkMode 
-          ? const Color(0xFF14131E) 
-          : Colors.white,
+      color: themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -100,31 +100,37 @@ class _RecruiteeIntegrationCardState extends State<RecruiteeIntegrationCard> {
 
   Widget _buildErrorView() {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
-        const SizedBox(height: 16),
-        Text(
-          'Failed to load status',
-          style: GoogleFonts.inter(
-            fontWeight: FontWeight.w600,
-            color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
-          ),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 300),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
+            const SizedBox(height: 16),
+            Text(
+              'Failed to load status',
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w600,
+                color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _error!,
+              style: GoogleFonts.inter(color: Colors.red),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _loadStatus,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          _error!,
-          style: GoogleFonts.inter(color: Colors.red),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 16),
-        ElevatedButton.icon(
-          onPressed: _loadStatus,
-          icon: const Icon(Icons.refresh),
-          label: const Text('Retry'),
-        ),
-      ],
+      ),
     );
   }
 
@@ -181,7 +187,9 @@ class _RecruiteeIntegrationCardState extends State<RecruiteeIntegrationCard> {
                     style: GoogleFonts.poppins(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
-                      color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                      color: themeProvider.isDarkMode
+                          ? Colors.white
+                          : Colors.black87,
                     ),
                   ),
                   Row(
@@ -217,8 +225,8 @@ class _RecruiteeIntegrationCardState extends State<RecruiteeIntegrationCard> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: themeProvider.isDarkMode 
-                  ? const Color(0xFF1E1E1E) 
+              color: themeProvider.isDarkMode
+                  ? const Color(0xFF1E1E1E)
                   : Colors.grey.shade100,
               borderRadius: BorderRadius.circular(8),
             ),
@@ -227,16 +235,16 @@ class _RecruiteeIntegrationCardState extends State<RecruiteeIntegrationCard> {
                 Icon(
                   Icons.business,
                   size: 16,
-                  color: themeProvider.isDarkMode 
-                      ? Colors.grey.shade400 
+                  color: themeProvider.isDarkMode
+                      ? Colors.grey.shade400
                       : Colors.grey.shade600,
                 ),
                 const SizedBox(width: 8),
                 Text(
                   'Company ID: ',
                   style: GoogleFonts.inter(
-                    color: themeProvider.isDarkMode 
-                        ? Colors.grey.shade400 
+                    color: themeProvider.isDarkMode
+                        ? Colors.grey.shade400
                         : Colors.grey.shade600,
                   ),
                 ),
@@ -244,7 +252,9 @@ class _RecruiteeIntegrationCardState extends State<RecruiteeIntegrationCard> {
                   companyId,
                   style: GoogleFonts.inter(
                     fontWeight: FontWeight.w600,
-                    color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                    color: themeProvider.isDarkMode
+                        ? Colors.white
+                        : Colors.black87,
                   ),
                 ),
               ],
@@ -296,7 +306,8 @@ class _RecruiteeIntegrationCardState extends State<RecruiteeIntegrationCard> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
             ),
             ElevatedButton.icon(
@@ -311,11 +322,13 @@ class _RecruiteeIntegrationCardState extends State<RecruiteeIntegrationCard> {
               icon: const Icon(Icons.history, size: 18),
               label: const Text('View History'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: themeProvider.isDarkMode 
-                    ? const Color(0xFF1E1E1E) 
+                backgroundColor: themeProvider.isDarkMode
+                    ? const Color(0xFF1E1E1E)
                     : Colors.grey.shade200,
-                foregroundColor: themeProvider.isDarkMode ? Colors.white : Colors.black87,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                foregroundColor:
+                    themeProvider.isDarkMode ? Colors.white : Colors.black87,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
             ),
             if (connected)
@@ -326,7 +339,8 @@ class _RecruiteeIntegrationCardState extends State<RecruiteeIntegrationCard> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.orange,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 ),
               ),
           ],
