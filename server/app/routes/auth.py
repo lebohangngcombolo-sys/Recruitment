@@ -26,6 +26,7 @@ from werkzeug.utils import secure_filename
 import os
 import re
 import cloudinary.uploader
+from urllib.parse import quote
 
 
 
@@ -67,6 +68,13 @@ OAUTH_PROVIDERS = {
 def init_auth_routes(app):
 
     enrollment_schema = EnrollmentSchema()
+
+    def _frontend_login_error_redirect(message: str, status_code: int = 302):
+        """Send OAuth setup/runtime errors back to frontend login instead of raw JSON pages."""
+        frontend_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/")
+        if frontend_url:
+            return redirect(f"{frontend_url}/login?error={quote(message)}"), status_code
+        return jsonify({"error": message}), 500
 
     def _notify_all_hiring_managers_new_candidate(user, fallback_email=None):
         """Best-effort in-app alert for all hiring managers when a candidate user is created."""
@@ -235,20 +243,20 @@ def init_auth_routes(app):
     def google_login():
         try:
             if not current_app.config.get("GOOGLE_CLIENT_ID") or not current_app.config.get("GOOGLE_CLIENT_SECRET"):
-                return jsonify({"error": "Google OAuth not configured"}), 500
+                return _frontend_login_error_redirect("Google OAuth is not configured.")
             redirect_uri = url_for("google_callback", _external=True)
             # For Flutter Web, navigate in same tab
             return oauth.google.authorize_redirect(redirect_uri)
         except Exception as e:
             current_app.logger.error(f"Google login initiation error: {str(e)}", exc_info=True)
-            return jsonify({"error": "OAuth configuration error"}), 500
+            return _frontend_login_error_redirect("Google login is unavailable right now.")
 
     @app.route("/api/auth/google/callback")
     @limiter.limit("10 per minute")
     def google_callback():
         try:
             if not current_app.config.get("GOOGLE_CLIENT_ID") or not current_app.config.get("GOOGLE_CLIENT_SECRET"):
-                return jsonify({"error": "Google OAuth not configured"}), 500
+                return _frontend_login_error_redirect("Google OAuth is not configured.")
             oauth.google.authorize_access_token()
             user_info = oauth.google.get(OAUTH_PROVIDERS["google"]["userinfo"]["url"]).json()
         
@@ -257,7 +265,7 @@ def init_auth_routes(app):
 
         except Exception as e:
             current_app.logger.error(f"Google OAuth callback error: {str(e)}", exc_info=True)
-            return jsonify({"error": "Authentication failed"}), 400
+            return _frontend_login_error_redirect("Google authentication failed.")
 
 
     # ------------------- GITHUB LOGIN -------------------
@@ -266,19 +274,19 @@ def init_auth_routes(app):
     def github_login():
         try:
             if not current_app.config.get("GITHUB_CLIENT_ID") or not current_app.config.get("GITHUB_CLIENT_SECRET"):
-                return jsonify({"error": "GitHub OAuth not configured"}), 500
+                return _frontend_login_error_redirect("GitHub OAuth is not configured.")
             redirect_uri = url_for("github_callback", _external=True)
             return oauth.github.authorize_redirect(redirect_uri)
         except Exception as e:
             current_app.logger.error(f"GitHub login initiation error: {str(e)}", exc_info=True)
-            return jsonify({"error": "OAuth configuration error"}), 500
+            return _frontend_login_error_redirect("GitHub login is unavailable right now.")
 
     @app.route("/api/auth/github/callback")
     @limiter.limit("10 per minute")
     def github_callback():
         try:
             if not current_app.config.get("GITHUB_CLIENT_ID") or not current_app.config.get("GITHUB_CLIENT_SECRET"):
-                return jsonify({"error": "GitHub OAuth not configured"}), 500
+                return _frontend_login_error_redirect("GitHub OAuth is not configured.")
             oauth.github.authorize_access_token()
             user_info = oauth.github.get(OAUTH_PROVIDERS["github"]["userinfo"]["url"]).json()
             if not user_info.get("email"):
@@ -289,7 +297,7 @@ def init_auth_routes(app):
             return handle_oauth_callback("github", user_info)
         except Exception as e:
             current_app.logger.error(f"GitHub OAuth callback error: {str(e)}", exc_info=True)
-            return jsonify({"error": "Authentication failed"}), 400
+            return _frontend_login_error_redirect("GitHub authentication failed.")
 
     # ------------------- OAUTH CALLBACK HANDLER -------------------
     def handle_oauth_callback(provider: str, user_info: dict):
