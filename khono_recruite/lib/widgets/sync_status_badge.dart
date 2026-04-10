@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 /// Status badge for Recruitee sync status
 class SyncStatusBadge extends StatelessWidget {
@@ -11,7 +10,7 @@ class SyncStatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final approvalStatus = job['approval_status'] ?? 'draft';
     final syncToRecruitee = job['sync_to_recruitee'] ?? false;
-    final recruiteeId = job['recruitee_id'] as String?;
+    final recruiteeId = job['recruitee_id'];
     final lastSyncedSource = job['last_synced_source'];
 
     Color color;
@@ -20,19 +19,19 @@ class SyncStatusBadge extends StatelessWidget {
 
     if (approvalStatus != 'approved') {
       color = Colors.grey;
-      text = 'Needs Approval';
-      icon = Icons.lock;
+      text = 'Not approved';
+      icon = Icons.block;
     } else if (!syncToRecruitee) {
       color = Colors.grey;
-      text = 'Sync Disabled';
+      text = 'Sync off';
       icon = Icons.cloud_off;
     } else if (recruiteeId == null) {
       color = Colors.orange;
-      text = 'Ready to Sync';
+      text = 'Not synced';
       icon = Icons.cloud_upload;
     } else if (lastSyncedSource == 'recruitee') {
       color = Colors.blue;
-      text = 'From Recruitee';
+      text = 'From ATS';
       icon = Icons.sync;
     } else {
       color = Colors.green;
@@ -40,28 +39,22 @@ class SyncStatusBadge extends StatelessWidget {
       icon = Icons.check_circle;
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.3)),
+    // Use a Chip which handles overflow and small spaces gracefully
+    return Chip(
+      avatar: Icon(icon, size: 14, color: color),
+      label: Text(
+        text,
+        style: const TextStyle(
+            fontSize: 12, fontWeight: FontWeight.w500, color: Colors.black87),
+        overflow: TextOverflow.ellipsis,
+        softWrap: false,
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: color),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: GoogleFonts.inter(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ],
-      ),
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+      backgroundColor: color.withOpacity(0.1),
+      side: BorderSide(color: color.withOpacity(0.3)),
     );
   }
 }
