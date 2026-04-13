@@ -1,105 +1,49 @@
-"""
-Database migration to add Recruitee webhook logging table
-Run: python migrations/add_recruitee_webhook_logs.py
-"""
+"""Add RecruiteeWebhookLog table for webhook tracking
 
-from sqlalchemy import text
-from app import create_app, db
+Revision ID: 20260413_add_recruitee_webhook_logs
+Revises: 20260413_add_recruitee_sync_history
+Create Date: 2026-04-13 00:02:00.000000
 
-app = create_app()
+"""
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision = '20260413_add_recruitee_webhook_logs'
+down_revision = '20260413_add_recruitee_sync_history'
+branch_labels = None
+depends_on = None
 
 
 def upgrade():
-    """Add recruitee_webhook_logs table for tracking incoming webhooks"""
+    from sqlalchemy import inspect
     
-    with app.app_context():
-        try:
-            # Create recruitee_webhook_logs table
-            db.session.execute(text("""
-                CREATE TABLE IF NOT EXISTS recruitee_webhook_logs (
-                    id SERIAL PRIMARY KEY,
-                    event_id VARCHAR(100) UNIQUE NOT NULL,
-                    event_type VARCHAR(50) NOT NULL,
-                    raw_payload JSONB DEFAULT '{}'::jsonb,
-                    processed BOOLEAN DEFAULT FALSE NOT NULL,
-                    processing_status VARCHAR(20) DEFAULT 'pending',
-                    error_message TEXT,
-                    processed_at TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            print("✅ Created recruitee_webhook_logs table")
-            
-            # Create indexes
-            indexes = [
-                "idx_recruitee_webhook_logs_event_id",
-                "idx_recruitee_webhook_logs_event_type",
-                "idx_recruitee_webhook_logs_created_at"
-            ]
-            
-            # Map index names to correct column names
-            index_columns = {
-                'idx_recruitee_webhook_logs_event_id': 'event_id',
-                'idx_recruitee_webhook_logs_event_type': 'event_type',
-                'idx_recruitee_webhook_logs_created_at': 'created_at'
-            }
-            
-            for idx_name, col_name in index_columns.items():
-                try:
-                    db.session.execute(
-                        text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON recruitee_webhook_logs({col_name})")
-                    )
-                    print(f"✅ Created index {idx_name}")
-                except Exception as e:
-                    print(f"⚠️ Could not create index {idx_name}: {e}")
-            
-            db.session.commit()
-            print("\n✅ Recruitee webhook logging migration completed successfully!")
-            
-        except Exception as e:
-            db.session.rollback()
-            print(f"\n❌ Migration failed: {e}")
-            raise
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    
+    # Check if table already exists
+    existing_tables = inspector.get_table_names()
+    
+    if 'recruitee_webhook_logs' not in existing_tables:
+        op.create_table(
+            'recruitee_webhook_logs',
+            sa.Column('id', sa.Integer(), nullable=False, primary_key=True),
+            sa.Column('event_id', sa.String(100), nullable=False, unique=True),  # Recruitee's event ID for idempotency
+            sa.Column('event_type', sa.String(50), nullable=False),  # e.g., 'offer.created', 'candidate.updated'
+            sa.Column('raw_payload', sa.JSON(), nullable=True, server_default='{}'),  # Full webhook payload JSON
+            sa.Column('processed', sa.Boolean(), nullable=False, server_default='false'),
+            sa.Column('processing_status', sa.String(20), nullable=False, server_default='pending'),  # pending, success, failed
+            sa.Column('error_message', sa.Text(), nullable=True),
+            sa.Column('processed_at', sa.DateTime(), nullable=True),
+            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        )
+        
+        # Create indexes
+        op.create_index('ix_recruitee_webhook_logs_event_id', 'recruitee_webhook_logs', ['event_id'], unique=True)
+        op.create_index('ix_recruitee_webhook_logs_event_type', 'recruitee_webhook_logs', ['event_type'], unique=False)
+        op.create_index('ix_recruitee_webhook_logs_created_at', 'recruitee_webhook_logs', ['created_at'], unique=False)
 
 
 def downgrade():
-    """Remove recruitee_webhook_logs table"""
-    
-    with app.app_context():
-        try:
-            # Drop indexes first
-            indexes = [
-                "idx_recruitee_webhook_logs_event_id",
-                "idx_recruitee_webhook_logs_event_type",
-                "idx_recruitee_webhook_logs_created_at"
-            ]
-            
-            for idx_name in indexes:
-                try:
-                    db.session.execute(text(f"DROP INDEX IF EXISTS {idx_name}"))
-                    print(f"✅ Dropped index {idx_name}")
-                except Exception as e:
-                    print(f"⚠️ Could not drop index {idx_name}: {e}")
-            
-            # Drop table
-            db.session.execute(text("DROP TABLE IF EXISTS recruitee_webhook_logs"))
-            print("✅ Dropped recruitee_webhook_logs table")
-            
-            db.session.commit()
-            print("\n✅ Recruitee webhook logging table removed")
-            
-        except Exception as e:
-            db.session.rollback()
-            print(f"\n❌ Downgrade failed: {e}")
-            raise
-
-
-if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == "downgrade":
-        print("Running downgrade...")
-        downgrade()
-    else:
-        print("Running upgrade...")
-        upgrade()
+    op.drop_table('recruitee_webhook_logs')

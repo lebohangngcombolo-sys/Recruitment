@@ -1,136 +1,79 @@
-"""
-Database migration to add Recruitee ATS integration fields
-Run: python migrations/add_recruitee_integration.py
-"""
+"""Add Recruitee ATS integration columns to requisitions and candidates
 
-from sqlalchemy import text
-from app import create_app, db
+Revision ID: 20260413_add_recruitee_integration
+Revises: 20260402_final_merge
+Create Date: 2026-04-13 00:00:00.000000
 
-app = create_app()
+"""
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision = '20260413_add_recruitee_integration'
+down_revision = '20260402_final_merge'
+branch_labels = None
+depends_on = None
 
 
 def upgrade():
-    """Add Recruitee integration columns to requisitions and candidates tables"""
+    from sqlalchemy import inspect
     
-    with app.app_context():
-        try:
-            # Add columns to requisitions table
-            columns_to_add = [
-                ("recruitee_id", "VARCHAR(100)"),
-                ("sync_to_recruitee", "BOOLEAN DEFAULT FALSE"),
-                ("last_synced_at", "TIMESTAMP"),
-                ("last_synced_source", "VARCHAR(20)"),
-            ]
-            
-            for col_name, col_type in columns_to_add:
-                try:
-                    db.session.execute(
-                        text(f"ALTER TABLE requisitions ADD COLUMN {col_name} {col_type}")
-                    )
-                    print(f"✅ Added {col_name} to requisitions table")
-                except Exception as e:
-                    if "already exists" in str(e).lower():
-                        print(f"ℹ️ {col_name} already exists in requisitions")
-                    else:
-                        print(f"⚠️ Could not add {col_name}: {e}")
-            
-            # Add columns to candidates table
-            for col_name, col_type in columns_to_add:
-                try:
-                    db.session.execute(
-                        text(f"ALTER TABLE candidates ADD COLUMN {col_name} {col_type}")
-                    )
-                    print(f"✅ Added {col_name} to candidates table")
-                except Exception as e:
-                    if "already exists" in str(e).lower():
-                        print(f"ℹ️ {col_name} already exists in candidates")
-                    else:
-                        print(f"⚠️ Could not add {col_name}: {e}")
-            
-            # Create indexes for performance
-            indexes = [
-                ("requisitions", "idx_requisitions_recruitee_id", "recruitee_id"),
-                ("candidates", "idx_candidates_recruitee_id", "recruitee_id"),
-                ("requisitions", "idx_requisitions_sync_flag", "sync_to_recruitee"),
-                ("candidates", "idx_candidates_sync_flag", "sync_to_recruitee"),
-            ]
-            
-            for table, idx_name, col_name in indexes:
-                try:
-                    db.session.execute(
-                        text(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {table}({col_name})")
-                    )
-                    print(f"✅ Created index {idx_name}")
-                except Exception as e:
-                    print(f"⚠️ Could not create index {idx_name}: {e}")
-            
-            db.session.commit()
-            print("\n✅ Recruitee integration migration completed successfully!")
-            print("\nNext steps:")
-            print("1. Add RECRUITEE_API_TOKEN to your .env file")
-            print("2. Set RECRUITEE_ENABLED=true to enable the integration")
-            print("3. Run the app and test connection via /api/admin/integrations/recruitee/status")
-            
-        except Exception as e:
-            db.session.rollback()
-            print(f"\n❌ Migration failed: {e}")
-            raise
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    
+    # Get existing columns
+    req_columns = [col['name'] for col in inspector.get_columns('requisitions')]
+    cand_columns = [col['name'] for col in inspector.get_columns('candidates')]
+    
+    # Add Recruitee columns to requisitions table if they don't exist
+    if 'recruitee_id' not in req_columns:
+        op.add_column('requisitions', sa.Column('recruitee_id', sa.String(100), nullable=True))
+    
+    if 'sync_to_recruitee' not in req_columns:
+        op.add_column('requisitions', sa.Column('sync_to_recruitee', sa.Boolean(), nullable=False, server_default='false'))
+    
+    if 'last_synced_at' not in req_columns:
+        op.add_column('requisitions', sa.Column('last_synced_at', sa.DateTime(), nullable=True))
+    
+    if 'last_synced_source' not in req_columns:
+        op.add_column('requisitions', sa.Column('last_synced_source', sa.String(20), nullable=True))
+    
+    # Create index for requisitions if it doesn't exist
+    existing_indexes = [idx['name'] for idx in inspector.get_indexes('requisitions')]
+    if 'ix_requisitions_recruitee_id' not in existing_indexes and 'recruitee_id' in req_columns:
+        op.create_index('ix_requisitions_recruitee_id', 'requisitions', ['recruitee_id'], unique=False)
+    
+    # Add Recruitee columns to candidates table if they don't exist
+    if 'recruitee_id' not in cand_columns:
+        op.add_column('candidates', sa.Column('recruitee_id', sa.String(100), nullable=True))
+    
+    if 'sync_to_recruitee' not in cand_columns:
+        op.add_column('candidates', sa.Column('sync_to_recruitee', sa.Boolean(), nullable=False, server_default='false'))
+    
+    if 'last_synced_at' not in cand_columns:
+        op.add_column('candidates', sa.Column('last_synced_at', sa.DateTime(), nullable=True))
+    
+    if 'last_synced_source' not in cand_columns:
+        op.add_column('candidates', sa.Column('last_synced_source', sa.String(20), nullable=True))
+    
+    # Create index for candidates if it doesn't exist
+    existing_cand_indexes = [idx['name'] for idx in inspector.get_indexes('candidates')]
+    if 'ix_candidates_recruitee_id' not in existing_cand_indexes and 'recruitee_id' in cand_columns:
+        op.create_index('ix_candidates_recruitee_id', 'candidates', ['recruitee_id'], unique=False)
 
 
 def downgrade():
-    """Remove Recruitee integration columns"""
+    # Drop columns from requisitions
+    op.drop_index('ix_requisitions_recruitee_id', table_name='requisitions')
+    op.drop_column('requisitions', 'last_synced_source')
+    op.drop_column('requisitions', 'last_synced_at')
+    op.drop_column('requisitions', 'sync_to_recruitee')
+    op.drop_column('requisitions', 'recruitee_id')
     
-    with app.app_context():
-        try:
-            columns_to_remove = [
-                "recruitee_id",
-                "sync_to_recruitee", 
-                "last_synced_at",
-                "last_synced_source",
-            ]
-            
-            for col_name in columns_to_remove:
-                try:
-                    db.session.execute(
-                        text(f"ALTER TABLE requisitions DROP COLUMN IF EXISTS {col_name}")
-                    )
-                    db.session.execute(
-                        text(f"ALTER TABLE candidates DROP COLUMN IF EXISTS {col_name}")
-                    )
-                    print(f"✅ Removed {col_name}")
-                except Exception as e:
-                    print(f"⚠️ Could not remove {col_name}: {e}")
-            
-            # Drop indexes
-            indexes = [
-                "idx_requisitions_recruitee_id",
-                "idx_candidates_recruitee_id",
-                "idx_requisitions_sync_flag",
-                "idx_candidates_sync_flag",
-            ]
-            
-            for idx_name in indexes:
-                try:
-                    db.session.execute(text(f"DROP INDEX IF EXISTS {idx_name}"))
-                    print(f"✅ Dropped index {idx_name}")
-                except Exception as e:
-                    print(f"⚠️ Could not drop index {idx_name}: {e}")
-            
-            db.session.commit()
-            print("\n✅ Recruitee integration columns removed")
-            
-        except Exception as e:
-            db.session.rollback()
-            print(f"\n❌ Downgrade failed: {e}")
-            raise
-
-
-if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == "downgrade":
-        print("Running downgrade...")
-        downgrade()
-    else:
-        print("Running upgrade...")
-        upgrade()
+    # Drop columns from candidates
+    op.drop_index('ix_candidates_recruitee_id', table_name='candidates')
+    op.drop_column('candidates', 'last_synced_source')
+    op.drop_column('candidates', 'last_synced_at')
+    op.drop_column('candidates', 'sync_to_recruitee')
+    op.drop_column('candidates', 'recruitee_id')

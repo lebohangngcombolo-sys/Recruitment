@@ -17,6 +17,10 @@ depends_on = None
 
 
 def upgrade():
+    # Drop foreign key constraint first
+    op.drop_constraint('fk_candidates_last_cv_analysis', 'candidates', type_='foreignkey')
+    
+    # Change column type
     op.alter_column('candidates', 'last_cv_analysis_id',
                existing_type=sa.Integer(),
                type_=sa.String(length=255),

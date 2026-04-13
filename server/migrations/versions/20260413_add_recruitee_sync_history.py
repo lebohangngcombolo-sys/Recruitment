@@ -1,82 +1,57 @@
-"""
-Migration: Add Recruitee sync history table for audit tracking
-Run: python migrations/add_recruitee_sync_history.py
-"""
+"""Add RecruiteeSyncHistory table for audit logging
 
-from sqlalchemy import text
-from app import create_app, db
+Revision ID: 20260413_add_recruitee_sync_history
+Revises: 20260413_add_recruitee_integration
+Create Date: 2026-04-13 00:01:00.000000
 
-app = create_app()
+"""
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision = '20260413_add_recruitee_sync_history'
+down_revision = '20260413_add_recruitee_integration'
+branch_labels = None
+depends_on = None
 
 
 def upgrade():
-    """Create sync history table"""
+    from sqlalchemy import inspect
     
-    with app.app_context():
-        try:
-            # Create sync history table
-            db.session.execute(text("""
-                CREATE TABLE IF NOT EXISTS recruitee_sync_history (
-                    id SERIAL PRIMARY KEY,
-                    entity_type VARCHAR(20) NOT NULL,  -- 'job' or 'candidate'
-                    entity_id INTEGER NOT NULL,        -- local requisition_id or candidate_id
-                    recruitee_id VARCHAR(100),         -- Recruitee's ID
-                    action VARCHAR(20) NOT NULL,       -- 'create', 'update', 'delete', 'retry'
-                    status VARCHAR(20) NOT NULL,     -- 'success', 'failed', 'pending', 'skipped'
-                    error_message TEXT,                -- error details if failed
-                    retry_count INTEGER DEFAULT 0,     -- number of retry attempts
-                    max_retries INTEGER DEFAULT 3,   -- max retry attempts allowed
-                    next_retry_at TIMESTAMP,           -- scheduled retry time
-                    request_data JSONB,                -- data sent to Recruitee
-                    response_data JSONB,               -- response from Recruitee
-                    synced_by INTEGER REFERENCES users(id),  -- admin who triggered sync
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    completed_at TIMESTAMP             -- when sync completed
-                )
-            """))
-            print("✅ Created recruitee_sync_history table")
-            
-            # Create indexes for performance
-            indexes = [
-                "CREATE INDEX IF NOT EXISTS idx_sync_history_entity ON recruitee_sync_history(entity_type, entity_id)",
-                "CREATE INDEX IF NOT EXISTS idx_sync_history_status ON recruitee_sync_history(status)",
-                "CREATE INDEX IF NOT EXISTS idx_sync_history_retry ON recruitee_sync_history(status, next_retry_at)",
-                "CREATE INDEX IF NOT EXISTS idx_sync_history_created ON recruitee_sync_history(created_at DESC)",
-            ]
-            
-            for idx_sql in indexes:
-                db.session.execute(text(idx_sql))
-            print("✅ Created sync history indexes")
-            
-            db.session.commit()
-            print("\n✅ Sync history migration completed!")
-            
-        except Exception as e:
-            db.session.rollback()
-            print(f"\n❌ Migration failed: {e}")
-            raise
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    
+    # Check if table already exists
+    existing_tables = inspector.get_table_names()
+    
+    if 'recruitee_sync_history' not in existing_tables:
+        # Create table with all columns matching the model
+        op.create_table(
+            'recruitee_sync_history',
+            sa.Column('id', sa.Integer(), nullable=False, primary_key=True),
+            sa.Column('entity_type', sa.String(20), nullable=False),  # 'job' or 'candidate'
+            sa.Column('entity_id', sa.Integer(), nullable=False),  # local requisition_id or candidate_id
+            sa.Column('recruitee_id', sa.String(100), nullable=True),  # Recruitee's ID
+            sa.Column('action', sa.String(20), nullable=False),  # 'create', 'update', 'delete', 'retry'
+            sa.Column('status', sa.String(20), nullable=False, server_default='pending'),  # 'success', 'failed', 'pending', 'skipped'
+            sa.Column('error_message', sa.Text(), nullable=True),
+            sa.Column('retry_count', sa.Integer(), nullable=False, server_default='0'),
+            sa.Column('max_retries', sa.Integer(), nullable=False, server_default='3'),
+            sa.Column('next_retry_at', sa.DateTime(), nullable=True),
+            sa.Column('request_data', sa.JSON(), nullable=False, server_default='{}'),
+            sa.Column('response_data', sa.JSON(), nullable=False, server_default='{}'),
+            sa.Column('synced_by', sa.Integer(), sa.ForeignKey('users.id'), nullable=True),
+            sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+            sa.Column('completed_at', sa.DateTime(), nullable=True),
+        )
+        
+        # Create indexes
+        op.create_index('ix_recruitee_sync_history_entity', 'recruitee_sync_history', ['entity_type', 'entity_id'], unique=False)
+        op.create_index('ix_recruitee_sync_history_status', 'recruitee_sync_history', ['status'], unique=False)
+        op.create_index('ix_recruitee_sync_history_created_at', 'recruitee_sync_history', ['created_at'], unique=False)
+        op.create_index('ix_recruitee_sync_history_recruitee_id', 'recruitee_sync_history', ['recruitee_id'], unique=False)
 
 
 def downgrade():
-    """Remove sync history table"""
-    
-    with app.app_context():
-        try:
-            db.session.execute(text("DROP TABLE IF EXISTS recruitee_sync_history"))
-            db.session.commit()
-            print("✅ Sync history table removed")
-        except Exception as e:
-            db.session.rollback()
-            print(f"❌ Downgrade failed: {e}")
-            raise
-
-
-if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == "downgrade":
-        print("Running downgrade...")
-        downgrade()
-    else:
-        print("Running upgrade...")
-        upgrade()
+    op.drop_table('recruitee_sync_history')
