@@ -1,6 +1,6 @@
 🔍 Inspecting Database: recruitement_deploy
 ============================================================
-✅ Found 37 tables.
+✅ Found 39 tables.
 
 📦 TABLE: candidates
    - id (INTEGER)
@@ -39,6 +39,10 @@
    - cv_analysis_status (VARCHAR(20))
    - cv_analysis_promoted_at (TIMESTAMP)
    - last_cv_analysis_id (VARCHAR(255))
+   - recruitee_id (VARCHAR(100))
+   - sync_to_recruitee (BOOLEAN)
+   - last_synced_at (TIMESTAMP)
+   - last_synced_source (VARCHAR(20))
 ------------------------------
 📦 TABLE: cv_analyses
    - id (UUID)

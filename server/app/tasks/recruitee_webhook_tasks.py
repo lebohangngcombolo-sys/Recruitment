@@ -1,11 +1,10 @@
 """
-Celery tasks for Recruitee webhook processing.
-Allows async processing of webhook events to avoid blocking responses.
+Synchronous tasks for Recruitee webhook processing.
+Processes webhook events directly within the application context.
 """
 from __future__ import annotations
 
 import logging
-from celery import shared_task
 from app import db
 from app.models import RecruiteeWebhookLog
 from app.services.recruitee_webhook_processor import RecruiteeWebhookProcessor
@@ -13,9 +12,8 @@ from app.services.recruitee_webhook_processor import RecruiteeWebhookProcessor
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, max_retries=3)
-def process_recruitee_webhook(self, event_type: str, data: dict, event_id: str, log_id: int = None):
-    """Process Recruitee webhook asynchronously
+def process_recruitee_webhook(event_type: str, data: dict, event_id: str, log_id: int = None):
+    """Process Recruitee webhook synchronously
     
     Args:
         event_type: Recruitee event type (candidate.created, candidate.updated, etc.)
@@ -26,7 +24,7 @@ def process_recruitee_webhook(self, event_type: str, data: dict, event_id: str, 
     Returns:
         Dict with processing result
     """
-    logger.info(f"Processing Recruitee webhook task: {event_type} (event_id: {event_id})")
+    logger.info(f"Processing Recruitee webhook: {event_type} (event_id: {event_id})")
     
     # Get webhook log record if provided
     webhook_log = None
@@ -44,6 +42,7 @@ def process_recruitee_webhook(self, event_type: str, data: dict, event_id: str, 
             error = result.get('error') if not result.get('success') else None
             webhook_log.mark_processed(status=status, error=error)
         
+        db.session.commit()
         logger.info(f"Webhook processed successfully: {event_type}")
         return result
         
@@ -53,11 +52,9 @@ def process_recruitee_webhook(self, event_type: str, data: dict, event_id: str, 
         # Update webhook log with error
         if webhook_log:
             webhook_log.mark_processed(status='failed', error=str(e))
+            db.session.commit()
         
-        # Retry with exponential backoff
-        if self.request.retries < self.max_retries:
-            raise self.retry(countdown=60 * (2 ** self.request.retries))
-        
+        # Retries are handled via manual retry endpoint or periodic cleanup if needed
         return {
             'success': False,
             'error': str(e),
@@ -66,7 +63,6 @@ def process_recruitee_webhook(self, event_type: str, data: dict, event_id: str, 
         }
 
 
-@shared_task
 def cleanup_old_webhook_logs(days_old: int = 30):
     """Clean up old webhook logs to prevent database bloat
     
@@ -93,11 +89,8 @@ def cleanup_old_webhook_logs(days_old: int = 30):
         return {'error': str(e)}
 
 
-@shared_task
 def retry_failed_webhooks():
     """Retry webhooks that failed to process
-    
-    This task should be scheduled periodically (e.g., every 5 minutes)
     """
     try:
         # Find failed webhooks that haven't been retried too many times
@@ -120,8 +113,8 @@ def retry_failed_webhooks():
             log.error_message = None
             log.processed_at = None
             
-            # Queue for processing
-            process_recruitee_webhook.delay(event_type, data, event_id, log.id)
+            # Execute synchronously
+            process_recruitee_webhook(event_type, data, event_id, log.id)
             retried_count += 1
         
         db.session.commit()
