@@ -419,7 +419,7 @@ def create_job():
         emit_job_status_changed({
             "id": job.id,
             "title": job.title,
-            "department": job.department,
+            "department": job.category,
             "status": job.approval_status,
             "old_status": None,
             "updated_at": datetime.utcnow().isoformat()
@@ -476,7 +476,7 @@ def update_job(job_id):
         emit_job_status_changed({
             "id": job.id,
             "title": job.title,
-            "department": job.department,
+            "department": job.category,
             "status": job.approval_status,
             "old_status": None,
             "updated_at": datetime.utcnow().isoformat()
@@ -623,7 +623,7 @@ def approve_job(job_id):
         emit_job_status_changed({
             "id": job.id,
             "title": job.title,
-            "department": job.department,
+            "department": job.category,
             "status": job.approval_status,
             "old_status": "pending",
             "updated_at": datetime.utcnow().isoformat()
@@ -656,7 +656,7 @@ def reject_job(job_id):
         emit_job_status_changed({
             "id": job.id,
             "title": job.title,
-            "department": job.department,
+            "department": job.category,
             "status": job.approval_status,
             "old_status": "pending",
             "updated_at": datetime.utcnow().isoformat()
