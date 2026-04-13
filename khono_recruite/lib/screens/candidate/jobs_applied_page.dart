@@ -14,13 +14,19 @@ enum _DisplayStatus { inProgress, applied, interview, offer, rejected }
 
 class JobsAppliedPage extends StatefulWidget {
   final String token;
-  const JobsAppliedPage({super.key, required this.token});
+  final List<Map<String, dynamic>>? initialApplications;
+  const JobsAppliedPage({
+    super.key,
+    required this.token,
+    this.initialApplications,
+  });
 
   @override
   State<JobsAppliedPage> createState() => _JobsAppliedPageState();
 }
 
 class _JobsAppliedPageState extends State<JobsAppliedPage> {
+  static List<Map<String, dynamic>>? _cachedTrackableApplications;
   List<Map<String, dynamic>> applications = [];
   bool loading = true;
   int _selectedTabIndex = 0; // 0=All, 1=In Progress, 2=Offers, 3=Unsuccessful
@@ -37,6 +43,19 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
   @override
   void initState() {
     super.initState();
+    final initial = widget.initialApplications;
+    if (initial != null && initial.isNotEmpty) {
+      applications = List<Map<String, dynamic>>.from(initial);
+      loading = false;
+      _cachedTrackableApplications = List<Map<String, dynamic>>.from(initial);
+    }
+    final cached = _cachedTrackableApplications;
+    if ((initial == null || initial.isEmpty) &&
+        cached != null &&
+        cached.isNotEmpty) {
+      applications = List<Map<String, dynamic>>.from(cached);
+      loading = false;
+    }
     _fetchApplications();
   }
 
@@ -128,6 +147,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
           _currentPage = 0;
         });
       }
+      _cachedTrackableApplications = List<Map<String, dynamic>>.from(trackable);
     } catch (e) {
       debugPrint("Error fetching applications: $e");
       if (mounted) setState(() => applications = []);
@@ -365,7 +385,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
   }
 
   Widget _buildContent() {
-    if (loading) {
+    if (loading && applications.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(
           valueColor: AlwaysStoppedAnimation<Color>(_accentRed),

@@ -202,19 +202,29 @@ class _RegisterScreenState extends State<RegisterScreen>
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
+    final themeProvider = context.watch<ThemeProvider>();
+    final isDark = themeProvider.isDarkMode;
+    final onBg = isDark ? Colors.white : const Color(0xFF1A1A1A);
+    final onBgMuted = isDark ? Colors.white70 : const Color(0xFF5C5C5C);
+    final fieldLabelColor = onBg;
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
       body: Stack(
         children: [
-          // Background
           Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               image: DecorationImage(
-                image: AssetImage("assets/images/dark.png"),
+                image: AssetImage(themeProvider.backgroundImage),
                 fit: BoxFit.cover,
               ),
+            ),
+          ),
+          Positioned.fill(
+            child: Container(
+              color: isDark
+                  ? Colors.black.withOpacity(0.28)
+                  : Colors.black.withOpacity(0.06),
             ),
           ),
 
@@ -247,14 +257,16 @@ class _RegisterScreenState extends State<RegisterScreen>
                                   style: GoogleFonts.poppins(
                                     fontSize: 32,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    shadows: [
-                                      Shadow(
-                                        color: Colors.black26,
-                                        blurRadius: 4,
-                                        offset: Offset(2, 2),
-                                      )
-                                    ],
+                                    color: onBg,
+                                    shadows: isDark
+                                        ? [
+                                            const Shadow(
+                                              color: Colors.black26,
+                                              blurRadius: 4,
+                                              offset: Offset(2, 2),
+                                            )
+                                          ]
+                                        : null,
                                   ),
                                 ),
                                 const SizedBox(height: 24),
@@ -263,7 +275,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                   style: GoogleFonts.poppins(
                                     fontSize: 20,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.white,
+                                    color: onBg,
                                   ),
                                 ),
                                 const SizedBox(height: 24),
@@ -274,7 +286,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                   backgroundColor: Colors.white,
                                   textColor: Colors.black,
                                   borderColor: Colors.grey.shade300,
-                                  labelColor: Colors.white,
+                                  labelColor: fieldLabelColor,
                                   margin: EdgeInsets.zero,
                                   textInputAction: TextInputAction.next,
                                 ),
@@ -285,7 +297,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                   backgroundColor: Colors.white,
                                   textColor: Colors.black,
                                   borderColor: Colors.grey.shade300,
-                                  labelColor: Colors.white,
+                                  labelColor: fieldLabelColor,
                                   margin: EdgeInsets.zero,
                                   textInputAction: TextInputAction.next,
                                 ),
@@ -297,7 +309,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                   backgroundColor: Colors.white,
                                   textColor: Colors.black,
                                   borderColor: Colors.grey.shade300,
-                                  labelColor: Colors.white,
+                                  labelColor: fieldLabelColor,
                                   margin: EdgeInsets.zero,
                                   textInputAction: TextInputAction.next,
                                 ),
@@ -312,7 +324,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                   backgroundColor: Colors.white,
                                   textColor: Colors.black,
                                   borderColor: Colors.grey.shade300,
-                                  labelColor: Colors.white,
+                                  labelColor: fieldLabelColor,
                                   margin: EdgeInsets.zero,
                                   textInputAction: TextInputAction.done,
                                   onSubmitted: (_) => register(),
@@ -380,7 +392,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                     Text(
                                       "Already have an account? ",
                                       style: GoogleFonts.poppins(
-                                        color: Colors.white70,
+                                        color: onBgMuted,
                                       ),
                                     ),
                                     GestureDetector(
@@ -388,7 +400,9 @@ class _RegisterScreenState extends State<RegisterScreen>
                                       child: Text(
                                         "Login",
                                         style: GoogleFonts.poppins(
-                                          color: Colors.white,
+                                          color: isDark
+                                              ? Colors.white
+                                              : const Color(0xFFC10D00),
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
@@ -403,7 +417,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                                     themeProvider.isDarkMode
                                         ? Icons.light_mode
                                         : Icons.dark_mode,
-                                    color: Colors.white,
+                                    color: onBg,
                                   ),
                                   onPressed: () => themeProvider.toggleTheme(),
                                 ),
@@ -431,8 +445,8 @@ class _RegisterScreenState extends State<RegisterScreen>
                 child: Row(
                   children: [
                     IconButton(
-                      icon: const Icon(Icons.arrow_back,
-                          color: Colors.white, size: 28),
+                      icon: Icon(Icons.arrow_back,
+                          color: onBg, size: 28),
                       onPressed: () => context.go('/'),
                     ),
                     const SizedBox(width: 12),
@@ -451,8 +465,10 @@ class _RegisterScreenState extends State<RegisterScreen>
           ),
 
           if (loading)
-            const Center(
-              child: CircularProgressIndicator(color: Colors.white),
+            Center(
+              child: CircularProgressIndicator(
+                color: isDark ? Colors.white : const Color(0xFFC10D00),
+              ),
             ),
         ],
       ),
