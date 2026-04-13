@@ -81,3 +81,4 @@ khono_recruite/android/gradlew.bat
 .DS_Store
 Thumbs.db
 server/scratch/
+server/inspect_tables.py
