@@ -48,6 +48,18 @@ class AuditService:
             db.session.add(log_entry)
             db.session.commit()
 
+            # WebSocket emit for real-time dashboard updates
+            from app.websocket_handler import emit_audit_created
+            emit_audit_created({
+                "id": log_entry.id,
+                "action": log_entry.action,
+                "user": f"Admin {admin_id}",
+                "user_id": admin_id,
+                "target": str(target_user_id) if target_user_id else None,
+                "details": details,
+                "timestamp": log_entry.timestamp.isoformat() if log_entry.timestamp else datetime.utcnow().isoformat()
+            }, user_id=str(admin_id))
+
             logger.info(f"Audit recorded: {action} by admin_id={admin_id}")
 
         except Exception as e:

@@ -380,9 +380,11 @@ def handle_recruitee_webhook():
             return jsonify({'error': 'Invalid webhook signature'}), 401
     
     payload = request.get_json() or {}
-    event_type = payload.get('event') or payload.get('type') or payload.get('event_type')
+    event_type = payload.get('event') or payload.get('type') or payload.get('event_type') or 'unknown'
     data = payload.get('data', payload)
-    event_id = payload.get('event_id') or payload.get('id') or f"{event_type}_{datetime.utcnow().timestamp()}"
+    
+    # Use provided event ID, or generate a safe one for verification/unknown events
+    event_id = payload.get('event_id') or payload.get('id') or f"evt_{datetime.utcnow().timestamp()}"
     
     current_app.logger.info(f"Recruitee webhook received: {event_type} (event_id: {event_id})")
     
@@ -403,17 +405,22 @@ def handle_recruitee_webhook():
         db.session.add(webhook_log)
         db.session.commit()
         
-        # Queue async processing with Celery
-        task = process_recruitee_webhook.delay(event_type, data, event_id, webhook_log.id)
-        
-        current_app.logger.info(f"Webhook queued for async processing: task_id={task.id}")
+        # Queue async processing or run immediately in eager mode
+        if current_app.config.get('CELERY_TASK_ALWAYS_EAGER'):
+            current_app.logger.info("Running webhook task synchronously (CELERY_TASK_ALWAYS_EAGER=true)")
+            process_recruitee_webhook(event_type, data, event_id, webhook_log.id)
+            task_id = f"local_{event_id}"
+        else:
+            task = process_recruitee_webhook.delay(event_type, data, event_id, webhook_log.id)
+            task_id = task.id
+            current_app.logger.info(f"Webhook queued for async processing: task_id={task_id}")
         
         # Return 200 OK immediately - Recruitee doesn't need to wait
         return jsonify({
             'success': True,
             'event': event_type,
-            'queued': True,
-            'task_id': task.id
+            'queued': not current_app.config.get('CELERY_TASK_ALWAYS_EAGER'),
+            'task_id': task_id
         }), 200
         
     except Exception as e:

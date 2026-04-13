@@ -32,11 +32,11 @@ class ThemedSurfaceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
-    final defaultBorderRadius = borderRadius ?? 20.0;
+    final defaultBorderRadius = borderRadius ?? 12.0;
     final defaultBackgroundColor = backgroundColor ??
         (themeProvider.isDarkMode
-            ? const Color(0xFF14131E).withValues(alpha: 0.9)
-            : Colors.white.withValues(alpha: 0.9));
+            ? const Color(0xFF14131E)
+            : const Color(0xFFF2F2F2));
 
     final defaultBoxShadow = boxShadow ??
         [

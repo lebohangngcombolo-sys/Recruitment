@@ -25,12 +25,19 @@ def requisition_to_offer(requisition: Any, previous_data: Optional[Dict] = None)
     }
     
     # Map employment type to Recruitee format
+    # Valid values often vary but common ones are: full-time, part-time, contract, internship, freelance
     employment_map = {
-        "full_time": "full_time",
+        "full_time": "fulltime_permanent",
+        "full-time": "fulltime_permanent",
+        "full": "fulltime_permanent",
+        "fulltime_permanent": "fulltime_permanent",
+        "full time": "fulltime_permanent",
         "part_time": "part_time",
+        "part-time": "part_time",
         "contract": "contract",
         "internship": "internship",
         "temporary": "temporary",
+        "freelance": "freelance",
     }
     
     # Build current data
@@ -38,6 +45,7 @@ def requisition_to_offer(requisition: Any, previous_data: Optional[Dict] = None)
         "title": requisition.title,
         "status": status_map.get(requisition.is_active, "published"),
         "external_id": str(requisition.id),
+        "kind": "job",
     }
     
     # Add optional fields if they exist
@@ -47,43 +55,63 @@ def requisition_to_offer(requisition: Any, previous_data: Optional[Dict] = None)
     if requisition.location:
         current_data["location"] = requisition.location
     
-    if requisition.category:
-        current_data["department"] = requisition.category
+    # Department mapping (based on account inspection)
+    dept_map = {
+        "engineering": 490849,
+        "marketing": 490848,
+        "sales": 490850,
+        "human_resources": 490851,
+        "hr": 490851,
+    }
     
+    if requisition.category:
+        norm_cat = requisition.category.lower().replace(" ", "_")
+        if norm_cat in dept_map:
+            current_data["department_id"] = dept_map[norm_cat]
+        else:
+            current_data["department"] = requisition.category
+    
+    # NEW: Mandatory Location and Work Model fields for Job Sync
+    # Using 'Amsterdam' (ID: 278139) as the default active location from inspection
+    current_data["location_ids"] = [278139]
+    
+    # Work Model assignment (Defaulting to on-site for now)
+    current_data["work_model"] = "on_site"
+    current_data["remote"] = False
+    current_data["hybrid"] = False
+    current_data["on_site"] = True
+    
+    # Employment type mapping to Recruitee format
+    # Valid values: "full", "part", "contract", "temporary", "internship", "freelance"
     if requisition.employment_type:
-        mapped_employment = employment_map.get(
-            requisition.employment_type.lower().replace(" ", "_"),
-            "full_time"
-        )
+        normalized = requisition.employment_type.lower().replace(" ", "_").replace("-", "_")
+        mapped_employment = employment_map.get(normalized, "fulltime_permanent")
         current_data["employment_type"] = mapped_employment
     
-    # Format salary if available
+    # Salary as structured object (Recruitee API format)
     if requisition.salary_min or requisition.salary_max:
-        salary_parts = []
-        currency = requisition.salary_currency or "ZAR"
-        
-        if requisition.salary_min:
-            salary_parts.append(f"{currency} {requisition.salary_min:,.0f}")
-        if requisition.salary_max:
-            if salary_parts:
-                salary_parts.append(" - ")
-            salary_parts.append(f"{requisition.salary_max:,.0f}")
-        
-        current_data["salary"] = "".join(salary_parts) if salary_parts else None
+        current_data["salary"] = {
+            "min": requisition.salary_min,
+            "max": requisition.salary_max,
+            "currency": requisition.salary_currency or "ZAR",
+            "period": "month"  # singular "month" for Recruitee API
+        }
     
-    # Add qualifications/requirements as custom fields or in description
+    # Add qualifications/requirements to description
+    
+    # Add qualifications/requirements as HTML in description
     if requisition.qualifications:
-        qual_text = "\n\n**Qualifications:**\n" + "\n".join(
-            f"- {q}" for q in requisition.qualifications
-        )
-        current_data["description"] = (current_data.get("description") or "") + qual_text
+        qual_html = "<br><br><strong>Qualifications:</strong><ul>" + "".join(
+            f"<li>{q}</li>" for q in requisition.qualifications
+        ) + "</ul>"
+        current_data["description"] = (current_data.get("description") or "") + qual_html
     
-    # Add required skills
+    # Add required skills as HTML
     if requisition.required_skills:
-        skills_text = "\n\n**Required Skills:**\n" + "\n".join(
-            f"- {s}" for s in requisition.required_skills
-        )
-        current_data["description"] = (current_data.get("description") or "") + skills_text
+        skills_html = "<br><br><strong>Required Skills:</strong><ul>" + "".join(
+            f"<li>{s}</li>" for s in requisition.required_skills
+        ) + "</ul>"
+        current_data["description"] = (current_data.get("description") or "") + skills_html
     
     # If previous data provided, compute diff for partial update
     if previous_data:
@@ -138,16 +166,22 @@ def offer_to_requisition(offer: Dict[str, Any],
     status = offer_data.get("status", "published")
     req.is_active = status == "published"
     
-    # Map employment type
-    emp_type = offer_data.get("employment_type", "full_time")
+    # Map employment type (Recruitee returns: full_time, part_time, etc.)
+    emp_type = offer_data.get("employment_type", "fulltime_permanent")
     employment_map = {
+        "full": "full_time",
+        "full-time": "full_time",
         "full_time": "full_time",
-        "part_time": "part_time", 
+        "fulltime_permanent": "full_time",
+        "part": "part_time",
+        "part-time": "part_time",
+        "part_time": "part_time",
         "contract": "contract",
         "internship": "internship",
-        "temporary": "temporary"
+        "temporary": "temporary",
+        "freelance": "freelance"
     }
-    req.employment_type = employment_map.get(emp_type, "full_time")
+    req.employment_type = employment_map.get(emp_type.lower(), "full_time")
     
     return req
 

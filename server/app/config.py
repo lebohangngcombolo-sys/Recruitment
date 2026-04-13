@@ -156,6 +156,9 @@ class Config:
     RECRUITEE_API_TOKEN = os.getenv('RECRUITEE_API_TOKEN', '')
     RECRUITEE_WEBHOOK_SECRET = os.getenv('RECRUITEE_WEBHOOK_SECRET', '')
     RECRUITEE_BASE_URL = f"https://api.recruitee.com/c/{RECRUITEE_COMPANY_ID}" if RECRUITEE_COMPANY_ID else ""
+    
+    # Celery Eager Mode (for local runs without workers)
+    CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_TASK_ALWAYS_EAGER', 'false').lower() == 'true'
 
     
 class DevelopmentConfig(Config):

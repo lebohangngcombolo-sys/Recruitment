@@ -119,6 +119,9 @@ class RecruiteeService:
             offer_data = requisition_to_offer(requisition)
             history.request_data = offer_data
             
+            # Log the data being sent
+            logger.info(f"Job {requisition.id} - Prepared offer data: {offer_data}")
+            
             # Execute API call first (before any DB changes)
             if requisition.recruitee_id:
                 logger.info(f"Updating Recruitee offer {requisition.recruitee_id} for job {requisition.id}")
@@ -126,6 +129,7 @@ class RecruiteeService:
                 action = 'updated'
             else:
                 logger.info(f"Creating new Recruitee offer for job {requisition.id}")
+                logger.info(f"Request payload: {{'offer': {offer_data}}}")
                 result = self.client.create_offer(offer_data)
                 action = 'created'
             
