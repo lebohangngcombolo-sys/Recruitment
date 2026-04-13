@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../providers/theme_provider.dart';
 import '../../services/auth_service.dart';
 import '../../utils/app_version.dart';
 import 'mfa_verification_screen.dart'; // 🆕 Import MFA screen
@@ -39,9 +41,6 @@ class _LoginScreenState extends State<LoginScreen>
   static const double _subtitleBlockHeight = 44;
   static const double _inputHeight = 38;
   static const double _buttonHeight = 38;
-  static const Color _panelColor = Color(0xFF1F1F26);
-  static const Color _fieldColor = Color(0xFF3D3F40);
-  static const Color _mutedGrey = Color(0xFFA8ABB2);
 
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
@@ -280,14 +279,41 @@ class _LoginScreenState extends State<LoginScreen>
       );
     }
 
+    final themeProvider = context.watch<ThemeProvider>();
+    final isDark = themeProvider.isDarkMode;
+
+    final panelColor = isDark
+        ? const Color(0xFF1F1F26).withOpacity(0.92)
+        : Colors.white.withOpacity(0.94);
+    final fieldFill = isDark ? const Color(0xFF3D3F40) : const Color(0xFFECECEF);
+    final fieldText = isDark ? const Color(0xFFA8ABB2) : const Color(0xFF2C2C2C);
+    final hintColor =
+        isDark ? const Color(0xFFA8ABB2) : const Color(0xFF6B6B6B);
+    final titleColor = isDark ? const Color(0xFFF2F4F8) : const Color(0xFF1A1A1A);
+    final subtitleColor = isDark ? const Color(0xFFD0D4DB) : const Color(0xFF5C5C5C);
+    final panelBorder =
+        isDark ? Colors.white10 : Colors.black.withOpacity(0.08);
+    final panelShadowOpacity = isDark ? 0.45 : 0.12;
+
     return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.redAccent,
+        onPressed: themeProvider.toggleTheme,
+        tooltip: themeProvider.isDarkMode
+            ? 'Switch to light mode'
+            : 'Switch to dark mode',
+        child: Icon(
+          themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+          color: Colors.white,
+        ),
+      ),
       body: Stack(
         children: [
           Positioned.fill(
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 image: DecorationImage(
-                  image: AssetImage("assets/images/dark.png"),
+                  image: AssetImage(themeProvider.backgroundImage),
                   fit: BoxFit.cover,
                   alignment: Alignment(0.12, 0.0),
                 ),
@@ -295,7 +321,11 @@ class _LoginScreenState extends State<LoginScreen>
             ),
           ),
           Positioned.fill(
-            child: Container(color: Colors.black.withOpacity(0.28)),
+            child: Container(
+              color: isDark
+                  ? Colors.black.withOpacity(0.28)
+                  : Colors.black.withOpacity(0.06),
+            ),
           ),
 
           Center(
@@ -318,12 +348,12 @@ class _LoginScreenState extends State<LoginScreen>
                     Container(
                       width: _panelWidth,
                       decoration: BoxDecoration(
-                        color: _panelColor.withOpacity(0.92),
+                        color: panelColor,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white10, width: 1),
+                        border: Border.all(color: panelBorder, width: 1),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.45),
+                            color: Colors.black.withOpacity(panelShadowOpacity),
                             blurRadius: 24,
                             offset: const Offset(0, 12),
                           ),
@@ -343,7 +373,7 @@ class _LoginScreenState extends State<LoginScreen>
                                       "Automated Recruitment Workflow",
                                       textAlign: TextAlign.center,
                                       style: GoogleFonts.poppins(
-                                        color: const Color(0xFFF2F4F8),
+                                        color: titleColor,
                                         fontSize: 15.5,
                                         fontWeight: FontWeight.w600,
                                         height: 1.1,
@@ -358,7 +388,7 @@ class _LoginScreenState extends State<LoginScreen>
                                     "Enter your user details to sign in as directed below.",
                                     textAlign: TextAlign.center,
                                     style: GoogleFonts.poppins(
-                                      color: const Color(0xFFD0D4DB),
+                                      color: subtitleColor,
                                       fontSize: 9,
                                       fontWeight: FontWeight.w600,
                                       height: 1.3,
@@ -370,6 +400,9 @@ class _LoginScreenState extends State<LoginScreen>
                                   controller: emailController,
                                   hint: "Email",
                                   action: TextInputAction.next,
+                                  fillColor: fieldFill,
+                                  textColor: fieldText,
+                                  hintColor: hintColor,
                                 ),
                                 const SizedBox(height: 10),
                                 _buildInput(
@@ -378,12 +411,17 @@ class _LoginScreenState extends State<LoginScreen>
                                   action: TextInputAction.done,
                                   obscure: _obscurePassword,
                                   onSubmitted: (_) => _login(),
+                                  fillColor: fieldFill,
+                                  textColor: fieldText,
+                                  hintColor: hintColor,
                                   suffix: IconButton(
                                     icon: Icon(
                                       _obscurePassword
                                           ? Icons.visibility_off
                                           : Icons.visibility,
-                                      color: Colors.white54,
+                                      color: isDark
+                                          ? Colors.white54
+                                          : Colors.grey.shade600,
                                       size: 16,
                                     ),
                                     onPressed: () => setState(
@@ -488,7 +526,9 @@ class _LoginScreenState extends State<LoginScreen>
                                         child: ElevatedButton(
                                           onPressed: () => context.go('/'),
                                           style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.white54,
+                                            backgroundColor: isDark
+                                                ? Colors.white54
+                                                : Colors.grey.shade300,
                                             foregroundColor: Colors.black87,
                                             shape: RoundedRectangleBorder(
                                               borderRadius:
@@ -514,9 +554,13 @@ class _LoginScreenState extends State<LoginScreen>
                                           onPressed: () =>
                                               context.push('/forgot-password'),
                                           style: OutlinedButton.styleFrom(
-                                            foregroundColor: Colors.white,
-                                            side: const BorderSide(
-                                              color: Colors.white70,
+                                            foregroundColor: isDark
+                                                ? Colors.white
+                                                : const Color(0xFF1A1A1A),
+                                            side: BorderSide(
+                                              color: isDark
+                                                  ? Colors.white70
+                                                  : Colors.black45,
                                               width: 1.1,
                                             ),
                                             shape: RoundedRectangleBorder(
@@ -579,14 +623,19 @@ class _LoginScreenState extends State<LoginScreen>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.65),
+                color: isDark
+                    ? Colors.black.withOpacity(0.65)
+                    : Colors.white.withOpacity(0.9),
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: Colors.white24, width: 0.8),
+                border: Border.all(
+                  color: isDark ? Colors.white24 : Colors.black12,
+                  width: 0.8,
+                ),
               ),
               child: Text(
                 kDisplayVersion,
                 style: GoogleFonts.poppins(
-                  color: const Color(0xFFD0D4DB),
+                  color: subtitleColor,
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
                 ),
@@ -602,6 +651,9 @@ class _LoginScreenState extends State<LoginScreen>
     required TextEditingController controller,
     required String hint,
     required TextInputAction action,
+    required Color fillColor,
+    required Color textColor,
+    required Color hintColor,
     bool obscure = false,
     Widget? suffix,
     ValueChanged<String>? onSubmitted,
@@ -615,20 +667,20 @@ class _LoginScreenState extends State<LoginScreen>
         textInputAction: action,
         onSubmitted: onSubmitted,
         style: GoogleFonts.poppins(
-          color: _mutedGrey,
+          color: textColor,
           fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
         decoration: InputDecoration(
           hintText: hint,
           hintStyle: GoogleFonts.poppins(
-            color: _mutedGrey,
+            color: hintColor,
             fontSize: 8.5,
             fontWeight: FontWeight.w500,
           ),
           suffixIcon: suffix,
           filled: true,
-          fillColor: _fieldColor,
+          fillColor: fillColor,
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(18),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
 // Import screens
@@ -10,9 +9,12 @@ import 'screens/auth/register_screen.dart';
 import 'screens/auth/forgot_password_screen.dart';
 import 'screens/candidate/candidate_dashboard.dart';
 import 'screens/candidate/saved_application_screen.dart';
+import 'screens/candidate/jobs_applied_page.dart';
 import 'screens/candidate/assessment_page.dart';
 import 'screens/candidate/assessments_results_screen.dart';
 import 'screens/candidate/user_profile_page.dart';
+import 'screens/candidate/my_interviews_page.dart';
+import 'screens/candidate/saved_jobs_screen.dart';
 import 'screens/admin/admin_dashboard.dart';
 import 'screens/hr/hr_dashboard.dart';
 import 'screens/hiring_manager/hiring_manager_dashboard.dart';
@@ -23,45 +25,26 @@ import 'screens/candidate/redirect_to_assessment_page.dart';
 import 'services/auth_service.dart';
 import 'providers/theme_provider.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize SharedPreferences
-  await SharedPreferences.getInstance();
-  
-  // Check for existing authentication
-  final token = await AuthService.getAccessToken();
-  final role = await AuthService.getRole();
-  
-  runApp(MyApp(
-    initialToken: token,
-    initialRole: role,
-  ));
+String _dashboardRouteForRole(String? role) {
+  switch (role) {
+    case 'admin':
+      return '/admin-dashboard';
+    case 'hr':
+      return '/hr-dashboard';
+    case 'hiring_manager':
+      return '/hiring-manager-dashboard';
+    case 'candidate':
+      return '/candidate-dashboard';
+    default:
+      return '/login';
+  }
 }
 
-class MyApp extends StatelessWidget {
-  final String? initialToken;
-  final String? initialRole;
-  
-  const MyApp({
-    super.key,
-    this.initialToken,
-    this.initialRole,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
-      child: Consumer<ThemeProvider>(
-        builder: (context, themeProvider, _) {
-          return MaterialApp.router(
-            title: 'Khono Recruitment',
-            debugShowCheckedModeBanner: false,
-            theme: themeProvider.themeData,
-            routerConfig: GoRouter(
-        initialLocation: initialToken != null && initialToken!.trim().isNotEmpty
-            ? _getInitialRoute(initialRole)
+/// Single instance so changing theme does not recreate the router or drop navigation.
+GoRouter _createAppRouter({required String? initialToken, required String? initialRole}) {
+  return GoRouter(
+        initialLocation: initialToken != null && initialToken.trim().isNotEmpty
+            ? _dashboardRouteForRole(initialRole)
             : '/',
         redirect: (context, state) {
           final token = initialToken;
@@ -91,7 +74,7 @@ class MyApp extends StatelessWidget {
             redirect: (context, state) {
               final t = initialToken;
               if (t != null && t.trim().isNotEmpty) {
-                return _getInitialRoute(initialRole);
+                return _dashboardRouteForRole(initialRole);
               }
               return null;
             },
@@ -139,6 +122,22 @@ class MyApp extends StatelessWidget {
             ),
           ),
           GoRoute(
+            path: '/jobs-applied',
+            builder: (context, state) {
+              final extra = state.extra;
+              final initial = extra is List
+                  ? extra
+                        .whereType<Map>()
+                        .map((e) => Map<String, dynamic>.from(e))
+                        .toList()
+                  : null;
+              return JobsAppliedPage(
+                token: state.uri.queryParameters['token'] ?? '',
+                initialApplications: initial,
+              );
+            },
+          ),
+          GoRoute(
             path: '/assessment',
             builder: (context, state) => AssessmentPage(
               applicationId: int.tryParse(state.uri.queryParameters['applicationId'] ?? '0') ?? 0,
@@ -148,6 +147,18 @@ class MyApp extends StatelessWidget {
           GoRoute(
             path: '/assessment-results',
             builder: (context, state) => AssessmentResultsPage(
+              token: state.uri.queryParameters['token'] ?? '',
+            ),
+          ),
+          GoRoute(
+            path: '/my-interviews',
+            builder: (context, state) => MyInterviewsPage(
+              token: state.uri.queryParameters['token'] ?? '',
+            ),
+          ),
+          GoRoute(
+            path: '/saved-jobs',
+            builder: (context, state) => SavedJobsScreen(
               token: state.uri.queryParameters['token'] ?? '',
             ),
           ),
@@ -203,26 +214,54 @@ class MyApp extends StatelessWidget {
             child: Text('Page not found'),
           ),
         ),
-      ),
+      );
+}
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final token = await AuthService.getAccessToken();
+  final role = await AuthService.getRole();
+  final initialThemeDark = await ThemeProvider.loadSavedIsDark();
+  final router = _createAppRouter(initialToken: token, initialRole: role);
+
+  runApp(MyApp(
+    initialToken: token,
+    initialRole: role,
+    initialThemeDark: initialThemeDark,
+    routerConfig: router,
+  ));
+}
+
+class MyApp extends StatelessWidget {
+  final String? initialToken;
+  final String? initialRole;
+  final bool initialThemeDark;
+  final GoRouter routerConfig;
+
+  const MyApp({
+    super.key,
+    this.initialToken,
+    this.initialRole,
+    required this.initialThemeDark,
+    required this.routerConfig,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) => ThemeProvider(initialIsDark: initialThemeDark),
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, _) {
+          return MaterialApp.router(
+            title: 'Khono Recruitment',
+            debugShowCheckedModeBanner: false,
+            theme: themeProvider.themeData,
+            routerConfig: routerConfig,
           );
         },
       ),
     );
-  }
-  
-  String _getInitialRoute(String? role) {
-    switch (role) {
-      case 'admin':
-        return '/admin-dashboard';
-      case 'hr':
-        return '/hr-dashboard';
-      case 'hiring_manager':
-        return '/hiring-manager-dashboard';
-      case 'candidate':
-        return '/candidate-dashboard';
-      default:
-        return '/login';
-    }
   }
 }
 

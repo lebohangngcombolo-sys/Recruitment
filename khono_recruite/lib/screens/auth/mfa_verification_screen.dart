@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-// <-- needed for ImageFilter
+import 'package:provider/provider.dart';
+
+import '../../providers/theme_provider.dart';
 
 class MfaVerificationScreen extends StatefulWidget {
   final String mfaSessionToken;
@@ -77,16 +79,27 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    final isDark = themeProvider.isDarkMode;
+    final onBg = isDark ? Colors.white : const Color(0xFF1A1A1A);
+    final onBgMuted = isDark ? Colors.white70 : const Color(0xFF424242);
+
     return Scaffold(
       body: Stack(
         children: [
-          // Background (same as login)
           Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               image: DecorationImage(
-                image: AssetImage("assets/images/dark.png"),
+                image: AssetImage(themeProvider.backgroundImage),
                 fit: BoxFit.cover,
               ),
+            ),
+          ),
+          Positioned.fill(
+            child: Container(
+              color: isDark
+                  ? Colors.black.withOpacity(0.28)
+                  : Colors.black.withOpacity(0.06),
             ),
           ),
 
@@ -97,7 +110,7 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  icon: Icon(Icons.arrow_back, color: onBg),
                   onPressed: widget.isLoading ? null : widget.onBack,
                 ),
               ),
@@ -117,26 +130,26 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const SizedBox(height: 16),
-                    const Icon(
+                    Icon(
                       Icons.security,
                       size: 64,
-                      color: Colors.white,
+                      color: onBg,
                     ),
                     const SizedBox(height: 16),
-                    const Text(
+                    Text(
                       "Two-Factor Authentication",
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                        color: onBg,
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
+                    Text(
                       "Enter the 6-digit code from your authenticator app",
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: Colors.white70,
+                        color: onBgMuted,
                         fontSize: 16,
                       ),
                     ),
@@ -273,7 +286,11 @@ class _MfaVerificationScreenState extends State<MfaVerificationScreen> {
           ),
 
           if (widget.isLoading)
-            const Center(child: CircularProgressIndicator(color: Colors.white)),
+            Center(
+              child: CircularProgressIndicator(
+                color: isDark ? Colors.white : const Color(0xFFC10D00),
+              ),
+            ),
         ],
       ),
     );

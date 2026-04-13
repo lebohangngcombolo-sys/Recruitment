@@ -3,7 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/theme_provider.dart';
 import '../../utils/app_version.dart';
 
 class SplashLandingPage extends StatefulWidget {
@@ -129,21 +131,43 @@ class _SplashLandingPageState extends State<SplashLandingPage>
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    final isDark = themeProvider.isDarkMode;
+
+    final titleColor = isDark ? Colors.white : const Color(0xFF1A1A1A);
+    final subtitleColor = isDark
+        ? Colors.white.withOpacity(0.92)
+        : const Color(0xFF424242).withOpacity(0.95);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF14131E),
+      backgroundColor:
+          isDark ? const Color(0xFF14131E) : const Color(0xFFF5F5F7),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.redAccent,
+        onPressed: themeProvider.toggleTheme,
+        tooltip: themeProvider.isDarkMode
+            ? 'Switch to light mode'
+            : 'Switch to dark mode',
+        child: Icon(
+          themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+          color: Colors.white,
+        ),
+      ),
       body: Stack(
         fit: StackFit.expand,
         children: [
           Positioned.fill(
             child: Image.asset(
-              'assets/images/dark.png',
+              themeProvider.backgroundImage,
               fit: BoxFit.cover,
               alignment: const Alignment(0.12, 0.0),
             ),
           ),
           Positioned.fill(
             child: Container(
-              color: Colors.black.withOpacity(0.32),
+              color: isDark
+                  ? Colors.black.withOpacity(0.32)
+                  : Colors.black.withOpacity(0.06),
             ),
           ),
           AnimatedBuilder(
@@ -190,7 +214,7 @@ class _SplashLandingPageState extends State<SplashLandingPage>
                             'Automated Recruitment Workflow',
                             textAlign: TextAlign.center,
                             style: GoogleFonts.montserrat(
-                              color: Colors.white,
+                              color: titleColor,
                               fontSize: _titleFontSize,
                               fontWeight: FontWeight.w600,
                               height: 24.6 / _titleFontSize,
@@ -205,7 +229,7 @@ class _SplashLandingPageState extends State<SplashLandingPage>
                             'Accelerate hiring with structured, criteria-driven talent acquisition.',
                             textAlign: TextAlign.center,
                             style: GoogleFonts.montserrat(
-                              color: Colors.white.withOpacity(0.92),
+                              color: subtitleColor,
                               fontSize: _subtitleFontSize,
                               fontWeight: FontWeight.w600,
                               height: 24.6 / _subtitleFontSize,
@@ -255,9 +279,13 @@ class _SplashLandingPageState extends State<SplashLandingPage>
                                       child: OutlinedButton(
                                         onPressed: () {},
                                         style: OutlinedButton.styleFrom(
-                                          foregroundColor: Colors.white,
-                                          side: const BorderSide(
-                                            color: Colors.white70,
+                                          foregroundColor: isDark
+                                              ? Colors.white
+                                              : const Color(0xFF1A1A1A),
+                                          side: BorderSide(
+                                            color: isDark
+                                                ? Colors.white70
+                                                : Colors.black45,
                                             width: 1.2,
                                           ),
                                           padding: EdgeInsets.zero,
@@ -288,7 +316,9 @@ class _SplashLandingPageState extends State<SplashLandingPage>
                           child: Transform.rotate(
                             angle: rotation,
                             child: Image.asset(
-                              'assets/images/discs.png',
+                              isDark
+                                  ? 'assets/images/discs.png'
+                                  : 'assets/images/logo.png',
                               width: _discSize,
                               height: _discSize,
                               fit: BoxFit.contain,
@@ -308,17 +338,21 @@ class _SplashLandingPageState extends State<SplashLandingPage>
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
               decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.65),
+                color: isDark
+                    ? Colors.black.withOpacity(0.65)
+                    : Colors.white.withOpacity(0.85),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white24),
+                border: Border.all(
+                  color: isDark ? Colors.white24 : Colors.black12,
+                ),
               ),
               child: Text(
                 kDisplayVersion,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'monospace',
                   fontSize: 10,
                   fontWeight: FontWeight.w500,
-                  color: Colors.white70,
+                  color: isDark ? Colors.white70 : Colors.black54,
                 ),
               ),
             ),
