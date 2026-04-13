@@ -184,6 +184,20 @@ def parse_cv():
         db.session.rollback()
         logger.exception("Failed to create admin notifications")
 
+    # WebSocket emit for real-time dashboard updates
+    try:
+        from app.websocket_handler import emit_cv_review_completed
+        emit_cv_review_completed({
+            "id": analysis.id if 'analysis' in dir() else None,
+            "candidate_name": candidate.full_name if hasattr(candidate, 'full_name') and candidate.full_name else user.email,
+            "candidate_id": candidate.id,
+            "score": final_score,
+            "status": "completed",
+            "reviewed_at": datetime.datetime.utcnow().isoformat()
+        })
+    except Exception:
+        logger.exception("Failed to emit CV review WebSocket event")
+
     return jsonify({
         "message": "Analysis completed",
         "parser_result": parser_result,

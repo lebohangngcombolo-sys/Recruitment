@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 
@@ -29,13 +30,10 @@ class AdminSidebar extends StatelessWidget {
         return Container(
           width: animation.value,
           decoration: BoxDecoration(
-            color:
-                themeProvider.isDarkMode ? Colors.grey.shade900 : Colors.white,
+            color: const Color(0xFF2A2A2A),
             border: Border(
               right: BorderSide(
-                color: themeProvider.isDarkMode
-                    ? Colors.grey.shade800
-                    : Colors.grey.shade200,
+                color: Colors.white.withValues(alpha: 0.1),
               ),
             ),
           ),
@@ -85,68 +83,41 @@ class AdminSidebar extends StatelessWidget {
 
   Widget _buildHeader(ThemeProvider themeProvider) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: themeProvider.isDarkMode
-                ? Colors.grey.shade800
-                : Colors.grey.shade200,
-          ),
-        ),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+      child: Column(
         children: [
-          if (!collapsed) ...[
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: const Color(0xFFC10D00),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.admin_panel_settings,
-                color: Colors.white,
-                size: 20,
-              ),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1A1A),
+              borderRadius: BorderRadius.circular(8),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Admin Panel',
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color:
-                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
-                ),
-              ),
-            ),
-          ] else
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: const Color(0xFFC10D00),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(
-                Icons.admin_panel_settings,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-          IconButton(
-            onPressed: onToggleSidebar,
-            icon: Icon(
-              collapsed ? Icons.expand_more : Icons.expand_less,
-              size: 20,
-              color: themeProvider.isDarkMode
-                  ? Colors.grey.shade400
-                  : Colors.grey.shade600,
+            child: Column(
+              children: [
+                if (!collapsed) ...[
+                  Text(
+                    'KHONOLOGY',
+                    style: GoogleFonts.poppins(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Automated Recruitment\nWorkflow',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white70,
+                      height: 1.2,
+                    ),
+                  ),
+                ] else
+                  const Icon(Icons.auto_awesome, color: Colors.white, size: 24),
+              ],
             ),
           ),
         ],
@@ -197,9 +168,7 @@ class AdminSidebar extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: isSelected
-                  ? const Color(0xFFC10D00).withValues(alpha: 0.1)
-                  : Colors.transparent,
+              color: isSelected ? const Color(0xFFC10D00) : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
@@ -207,11 +176,7 @@ class AdminSidebar extends StatelessWidget {
                 Icon(
                   item.icon,
                   size: 20,
-                  color: isSelected
-                      ? const Color(0xFFC10D00)
-                      : themeProvider.isDarkMode
-                          ? Colors.grey.shade400
-                          : Colors.grey.shade600,
+                  color: Colors.white,
                 ),
                 if (!collapsed) ...[
                   const SizedBox(width: 12),
@@ -223,11 +188,7 @@ class AdminSidebar extends StatelessWidget {
                         fontSize: 14,
                         fontWeight:
                             isSelected ? FontWeight.w600 : FontWeight.w500,
-                        color: isSelected
-                            ? const Color(0xFFC10D00)
-                            : themeProvider.isDarkMode
-                                ? Colors.grey.shade300
-                                : Colors.grey.shade700,
+                        color: Colors.white,
                       ),
                     ),
                   ),
@@ -242,49 +203,37 @@ class AdminSidebar extends StatelessWidget {
 
   Widget _buildFooter(ThemeProvider themeProvider) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(
-            color: themeProvider.isDarkMode
-                ? Colors.grey.shade800
-                : Colors.grey.shade200,
-          ),
-        ),
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         children: [
+          const CircleAvatar(
+            radius: 20,
+            backgroundColor: Color(0xFFC10D00),
+            child: Icon(Icons.person, color: Colors.white),
+          ),
           if (!collapsed) ...[
+            const SizedBox(height: 8),
             Text(
-              'Khono Recruit',
-              style: TextStyle(
-                fontFamily: 'Poppins',
+              'Hello,',
+              style: GoogleFonts.poppins(
+                fontSize: 10,
+                color: Colors.white70,
+              ),
+            ),
+            Text(
+              'Admin User',
+              style: GoogleFonts.poppins(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: themeProvider.isDarkMode
-                    ? Colors.grey.shade400
-                    : Colors.grey.shade600,
+                color: Colors.white,
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Admin Dashboard v1.0',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 10,
-                color: themeProvider.isDarkMode
-                    ? Colors.grey.shade500
-                    : Colors.grey.shade500,
-              ),
-            ),
-          ] else
-            Icon(
-              Icons.admin_panel_settings,
-              size: 20,
-              color: themeProvider.isDarkMode
-                  ? Colors.grey.shade400
-                  : Colors.grey.shade600,
-            ),
+          ],
         ],
       ),
     );

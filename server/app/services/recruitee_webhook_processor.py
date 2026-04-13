@@ -137,27 +137,28 @@ class RecruiteeWebhookProcessor:
             Processing result
         """
         candidate_data = data.get('candidate', data)
-        recruitee_candidate_id = str(candidate_data.get('id', ''))
+        candidate_id = str(candidate_data.get('id', ''))
         email = candidate_data.get('email', '')
         
-        logger.info(f"Processing candidate.updated for email: {email}, recruitee_id: {recruitee_candidate_id}")
+        logger.info(f"Processing candidate.updated for email: {email}, recruitee_id: {candidate_id}")
         
-        # Find candidate by Recruitee ID or email
-        candidate = Candidate.query.filter_by(recruitee_id=recruitee_candidate_id).first()
-        if not candidate:
+        # Find candidate by recruitee_id or fallback to email
+        candidate = Candidate.query.filter_by(recruitee_id=str(candidate_id)).first()
+        
+        if not candidate and email:
             candidate = Candidate.query.filter_by(email=email).first()
+            if candidate:
+                logger.info(f"Matched Recruitee candidate {candidate_id} to existing local candidate by email: {email}")
+                candidate.recruitee_id = str(candidate_id)
         
         if not candidate:
-            logger.warning(f"Candidate not found for update: {email}")
-            return {
-                'success': False,
-                'error': 'Candidate not found',
-                'email': email
-            }
+            logger.info(f"Candidate {candidate_id} ({email}) not found locally, creating new record")
+            candidate = recruitee_candidate_to_local(candidate_data)
+            candidate.last_synced_source = 'recruitee'
+            db.session.add(candidate)
         
-        # Update candidate data
+        # Update candidate info
         updated_candidate = recruitee_candidate_to_local(candidate_data, existing=candidate)
-        updated_candidate.recruitee_id = recruitee_candidate_id
         updated_candidate.last_synced_source = 'recruitee'
         updated_candidate.last_synced_at = datetime.utcnow()
         
@@ -169,7 +170,7 @@ class RecruiteeWebhookProcessor:
             'success': True,
             'action': 'updated',
             'candidate_id': candidate.id,
-            'recruitee_id': recruitee_candidate_id
+            'recruitee_id': candidate_id
         }
     
     def handle_candidate_moved(self, data: Dict[str, Any], event_id: str) -> Dict[str, Any]:
@@ -189,10 +190,22 @@ class RecruiteeWebhookProcessor:
         
         logger.info(f"Processing candidate.moved: candidate_id={candidate_id}, offer_id={offer_id}, stage={stage}")
         
-        # Find local candidate by Recruitee ID
+        # Find local candidate by Recruitee ID or email
         candidate = Candidate.query.filter_by(recruitee_id=candidate_id).first()
+        
+        # In moved events, candidate email is nested sometimes, but Recruitee gives 'candidate' object
+        cad_info = data.get('candidate', {})
+        email = cad_info.get('email')
+        
+        if not candidate and email:
+            candidate = Candidate.query.filter_by(email=email).first()
+            if candidate:
+                logger.info(f"Matched moved Recruitee candidate {candidate_id} via email: {email}")
+                candidate.recruitee_id = candidate_id
+        
         if not candidate:
             logger.warning(f"Candidate not found for move: {candidate_id}")
+            # Optional: We could create them here, but 'move' events usually follow 'created' events
             return {
                 'success': False,
                 'error': 'Candidate not found',
@@ -270,15 +283,69 @@ class RecruiteeWebhookProcessor:
                 'recruitee_id': recruitee_offer_id
             }
         
-        # For now, just log - full bi-directional sync would create requisition here
-        logger.info(f"Offer created in Recruitee: {title} - skipping local creation (one-way sync)")
-        
-        return {
-            'success': True,
-            'action': 'skipped',
-            'reason': 'One-way sync (Recruitee → App) not enabled',
-            'recruitee_id': recruitee_offer_id
-        }
+        # Create local requisition from Recruitee offer data
+        try:
+            from app.models import Requisition
+            from app import db
+            
+            # Map employment type
+            emp_type_map = {
+                'full': 'full_time',
+                'full-time': 'full_time',
+                'full_time': 'full_time',
+                'fulltime_permanent': 'full_time',
+                'part': 'part_time',
+                'part-time': 'part_time',
+                'part_time': 'part_time',
+                'contract': 'contract',
+                'internship': 'internship',
+                'temporary': 'temporary',
+                'freelance': 'freelance'
+            }
+            
+            # Create new requisition
+            req = Requisition(
+                title=offer_data.get('title', 'Untitled Job'),
+                description=offer_data.get('description', ''),
+                location=offer_data.get('location', ''),
+                category=offer_data.get('department', 'General'),
+                employment_type=emp_type_map.get(offer_data.get('employment_type'), 'full_time'),
+                is_active=offer_data.get('status') == 'published',
+                recruitee_id=recruitee_offer_id,
+                recruitee_sync_enabled=True,
+                approval_status='approved',  # Auto-approve jobs from Recruitee
+                sync_to_recruitee=True,
+                last_synced_source='recruitee',
+                recruitee_synced_at=datetime.utcnow()
+            )
+            
+            # Map salary if present
+            salary_data = offer_data.get('salary')
+            if salary_data and isinstance(salary_data, dict):
+                req.salary_min = salary_data.get('min')
+                req.salary_max = salary_data.get('max')
+                req.salary_currency = salary_data.get('currency', 'ZAR')
+            
+            db.session.add(req)
+            db.session.commit()
+            
+            logger.info(f"Created requisition {req.id} from Recruitee offer {recruitee_offer_id}")
+            
+            return {
+                'success': True,
+                'action': 'created',
+                'requisition_id': req.id,
+                'recruitee_id': recruitee_offer_id
+            }
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Failed to create requisition from Recruitee offer: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'recruitee_offer_id': recruitee_offer_id
+            }
     
     def handle_offer_updated(self, data: Dict[str, Any], event_id: str) -> Dict[str, Any]:
         """Handle offer.updated event - sync job updates
@@ -306,15 +373,90 @@ class RecruiteeWebhookProcessor:
                 'recruitee_offer_id': recruitee_offer_id
             }
         
-        # For now, just log - full bi-directional sync would update requisition here
-        logger.info(f"Offer updated in Recruitee - skipping local update (one-way sync)")
+        # Get offer data from webhook payload
+        offer_data = data.get('offer', {})
+        if not offer_data:
+            logger.warning(f"No offer data in webhook payload for {recruitee_offer_id}")
+            return {
+                'success': False,
+                'error': 'No offer data in payload',
+                'recruitee_offer_id': recruitee_offer_id
+            }
         
-        return {
-            'success': True,
-            'action': 'skipped',
-            'reason': 'One-way sync (Recruitee → App) not enabled',
-            'requisition_id': requisition.id
-        }
+        # Check if this change came from our system (loop prevention)
+        last_source = getattr(requisition, 'last_synced_source', None)
+        if last_source == 'manual':
+            logger.info(f"Offer {recruitee_offer_id} was recently synced from local - skipping webhook update to prevent loop")
+            return {
+                'success': True,
+                'action': 'skipped',
+                'reason': 'Loop prevention - recent manual sync',
+                'requisition_id': requisition.id
+            }
+        
+        # Update local requisition from Recruitee data
+        try:
+            # Map basic fields
+            if offer_data.get('title'):
+                requisition.title = offer_data['title']
+            if offer_data.get('description'):
+                requisition.description = offer_data['description']
+            if offer_data.get('location'):
+                requisition.location = offer_data['location']
+            if offer_data.get('department'):
+                requisition.category = offer_data['department']
+            
+            # Map employment type (Recruitee uses "full", "part" etc.)
+            if offer_data.get('employment_type'):
+                emp_map = {
+                    'full': 'full_time',
+                    'full-time': 'full_time',
+                    'full_time': 'full_time',
+                    'fulltime_permanent': 'full_time',
+                    'part': 'part_time',
+                    'part-time': 'part_time',
+                    'part_time': 'part_time',
+                    'contract': 'contract',
+                    'internship': 'internship',
+                    'temporary': 'temporary',
+                    'freelance': 'freelance'
+                }
+                requisition.employment_type = emp_map.get(offer_data['employment_type'], 'full_time')
+            
+            # Map status (Recruitee: published/closed/draft -> Our: active/inactive)
+            if offer_data.get('status'):
+                requisition.is_active = offer_data['status'] == 'published'
+            
+            # Map salary if present
+            salary_data = offer_data.get('salary')
+            if salary_data and isinstance(salary_data, dict):
+                requisition.salary_min = salary_data.get('min')
+                requisition.salary_max = salary_data.get('max')
+                requisition.salary_currency = salary_data.get('currency', 'ZAR')
+            
+            # Mark as synced from Recruitee to prevent outbound sync loop
+            requisition.last_synced_source = 'recruitee'
+            requisition.recruitee_synced_at = datetime.utcnow()
+            
+            db.session.commit()
+            
+            logger.info(f"Updated requisition {requisition.id} from Recruitee offer {recruitee_offer_id}")
+            
+            return {
+                'success': True,
+                'action': 'updated',
+                'requisition_id': requisition.id,
+                'changes': list(offer_data.keys())
+            }
+            
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Failed to update requisition from Recruitee: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'recruitee_offer_id': recruitee_offer_id
+            }
     
     def handle_placement_created(self, data: Dict[str, Any], event_id: str) -> Dict[str, Any]:
         """Handle placement.created event - new application to a job

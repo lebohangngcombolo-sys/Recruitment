@@ -20,6 +20,7 @@ class RecruiteeAPIError(Exception):
     """Custom exception for Recruitee API errors"""
     def __init__(self, message: str, status_code: int = None, response_body: str = None):
         super().__init__(message)
+        self.message = message
         self.status_code = status_code
         self.response_body = response_body
 
@@ -111,10 +112,16 @@ class RecruiteeClient:
             
             # Handle other errors
             if not response.ok:
+                error_body = response.text[:1000] if response.text else "No response body"
+                request_body = kwargs.get('json', kwargs.get('data', 'No request body'))
+                logger.error(f"Recruitee API Error {response.status_code}:")
+                logger.error(f"  Request: {method} {url}")
+                logger.error(f"  Request body: {request_body}")
+                logger.error(f"  Response: {error_body}")
                 raise RecruiteeAPIError(
-                    f"{method} {path} failed: {response.status_code}",
+                    f"{method} {path} failed: {response.status_code} - {error_body}",
                     status_code=response.status_code,
-                    response_body=response.text[:500]
+                    response_body=error_body
                 )
             
             # Return None for 204 No Content

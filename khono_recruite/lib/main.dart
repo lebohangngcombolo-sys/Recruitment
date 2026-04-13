@@ -21,18 +21,22 @@ import 'screens/candidate/redirect_to_assessment_page.dart';
 
 // Import services
 import 'services/auth_service.dart';
+import 'services/cache_service.dart';
 import 'providers/theme_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize SharedPreferences
   await SharedPreferences.getInstance();
-  
+
+  // Initialize CacheService for offline support
+  await CacheService().initialize();
+
   // Check for existing authentication
   final token = await AuthService.getAccessToken();
   final role = await AuthService.getRole();
-  
+
   runApp(MyApp(
     initialToken: token,
     initialRole: role,
@@ -42,12 +46,167 @@ void main() async {
 class MyApp extends StatelessWidget {
   final String? initialToken;
   final String? initialRole;
-  
-  const MyApp({
+  late final GoRouter _router;
+
+  MyApp({
     super.key,
     this.initialToken,
     this.initialRole,
-  });
+  }) {
+    _router = GoRouter(
+      initialLocation: initialToken != null && initialToken!.trim().isNotEmpty
+          ? _getInitialRoute(initialRole)
+          : '/',
+      redirect: (context, state) async {
+        // Fetch current auth state dynamically (not from initialToken)
+        final currentToken = await AuthService.getAccessToken();
+        final rawPath = state.uri.path;
+        final path = rawPath.isEmpty ? '/' : rawPath;
+        final tokenFromQuery = state.uri.queryParameters['token'];
+
+        final isAuthed =
+            (currentToken != null && currentToken.trim().isNotEmpty) ||
+                (tokenFromQuery != null && tokenFromQuery.trim().isNotEmpty);
+
+        if (!isAuthed) {
+          final allowedUnauth = path == '/' ||
+              path.startsWith('/login') ||
+              path.startsWith('/register') ||
+              path.startsWith('/forgot-password') ||
+              path.startsWith('/oauth-callback');
+          if (!allowedUnauth) {
+            return '/';
+          }
+        }
+        return null;
+      },
+      routes: [
+        // Splash (root): first screen before auth; same URL as "Home" from login/register.
+        GoRoute(
+          path: '/',
+          redirect: (context, state) async {
+            // Fetch current auth state dynamically
+            final currentToken = await AuthService.getAccessToken();
+            final currentRole = await AuthService.getRole();
+            if (currentToken != null && currentToken.trim().isNotEmpty) {
+              return _getInitialRoute(currentRole);
+            }
+            return null;
+          },
+          builder: (context, state) => const SplashLandingPage(),
+        ),
+        // Legacy / direct link compatibility
+        GoRoute(
+          path: '/landing',
+          redirect: (context, state) => '/',
+        ),
+        // Authentication routes
+        GoRoute(
+          path: '/login',
+          builder: (context, state) => LoginScreen(),
+        ),
+        GoRoute(
+          path: '/register',
+          builder: (context, state) => RegisterScreen(),
+        ),
+        GoRoute(
+          path: '/forgot-password',
+          builder: (context, state) => ForgotPasswordScreen(),
+        ),
+        GoRoute(
+          path: '/oauth-callback',
+          builder: (context, state) => OAuthCallbackPage(
+            accessToken: state.uri.queryParameters['access_token'],
+            refreshToken: state.uri.queryParameters['refresh_token'],
+            role: state.uri.queryParameters['role'],
+            dashboard: state.uri.queryParameters['dashboard'],
+          ),
+        ),
+
+        // Candidate routes
+        GoRoute(
+          path: '/candidate-dashboard',
+          builder: (context, state) => CandidateDashboard(
+            token: state.uri.queryParameters['token'] ?? '',
+          ),
+        ),
+        GoRoute(
+          path: '/saved-applications',
+          builder: (context, state) => SavedApplicationsScreen(
+            token: state.uri.queryParameters['token'] ?? '',
+          ),
+        ),
+        GoRoute(
+          path: '/assessment',
+          builder: (context, state) => AssessmentPage(
+            applicationId: int.tryParse(
+                    state.uri.queryParameters['applicationId'] ?? '0') ??
+                0,
+            draftData: state.extra as Map<String, dynamic>?,
+          ),
+        ),
+        GoRoute(
+          path: '/assessment-results',
+          builder: (context, state) => AssessmentResultsPage(
+            token: state.uri.queryParameters['token'] ?? '',
+          ),
+        ),
+        GoRoute(
+          path: '/profile',
+          builder: (context, state) => ProfilePage(
+            token: state.uri.queryParameters['token'] ?? '',
+          ),
+        ),
+        GoRoute(
+          path: '/job-details',
+          builder: (context, state) {
+            final job = state.extra as Map<String, dynamic>?;
+            return JobDetailsPage(
+              job: job ?? {},
+            );
+          },
+        ),
+        GoRoute(
+          path: '/redirect-to-assessment',
+          builder: (context, state) => RedirectToAssessmentPage(
+            applicationId: int.tryParse(
+                    state.uri.queryParameters['applicationId'] ?? '0') ??
+                0,
+            jobTitle: state.uri.queryParameters['jobTitle'],
+          ),
+        ),
+
+        // Admin routes
+        GoRoute(
+          path: '/admin-dashboard',
+          builder: (context, state) => AdminDashboard(
+            token: state.uri.queryParameters['token'] ?? '',
+          ),
+        ),
+
+        // HR routes
+        GoRoute(
+          path: '/hr-dashboard',
+          builder: (context, state) => HRDashboard(
+            token: state.uri.queryParameters['token'] ?? '',
+          ),
+        ),
+
+        // Hiring Manager routes
+        GoRoute(
+          path: '/hiring-manager-dashboard',
+          builder: (context, state) => HMMainDashboard(
+            token: state.uri.queryParameters['token'] ?? '',
+          ),
+        ),
+      ],
+      errorBuilder: (context, state) => Scaffold(
+        body: Center(
+          child: Text('Page not found'),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,157 +218,13 @@ class MyApp extends StatelessWidget {
             title: 'Khono Recruitment',
             debugShowCheckedModeBanner: false,
             theme: themeProvider.themeData,
-            routerConfig: GoRouter(
-        initialLocation: initialToken != null && initialToken!.trim().isNotEmpty
-            ? _getInitialRoute(initialRole)
-            : '/',
-        redirect: (context, state) {
-          final token = initialToken;
-          final rawPath = state.uri.path;
-          final path = rawPath.isEmpty ? '/' : rawPath;
-          final tokenFromQuery = state.uri.queryParameters['token'];
-
-          final isAuthed = (token != null && token.trim().isNotEmpty) ||
-              (tokenFromQuery != null && tokenFromQuery.trim().isNotEmpty);
-
-          if (!isAuthed) {
-            final allowedUnauth = path == '/' ||
-                path.startsWith('/login') ||
-                path.startsWith('/register') ||
-                path.startsWith('/forgot-password') ||
-                path.startsWith('/oauth-callback');
-            if (!allowedUnauth) {
-              return '/';
-            }
-          }
-          return null;
-        },
-        routes: [
-          // Splash (root): first screen before auth; same URL as "Home" from login/register.
-          GoRoute(
-            path: '/',
-            redirect: (context, state) {
-              final t = initialToken;
-              if (t != null && t.trim().isNotEmpty) {
-                return _getInitialRoute(initialRole);
-              }
-              return null;
-            },
-            builder: (context, state) => const SplashLandingPage(),
-          ),
-          // Legacy / direct link compatibility
-          GoRoute(
-            path: '/landing',
-            redirect: (context, state) => '/',
-          ),
-          // Authentication routes
-          GoRoute(
-            path: '/login',
-            builder: (context, state) => LoginScreen(),
-          ),
-          GoRoute(
-            path: '/register',
-            builder: (context, state) => RegisterScreen(),
-          ),
-          GoRoute(
-            path: '/forgot-password',
-            builder: (context, state) => ForgotPasswordScreen(),
-          ),
-          GoRoute(
-            path: '/oauth-callback',
-            builder: (context, state) => OAuthCallbackPage(
-              accessToken: state.uri.queryParameters['access_token'],
-              refreshToken: state.uri.queryParameters['refresh_token'],
-              role: state.uri.queryParameters['role'],
-              dashboard: state.uri.queryParameters['dashboard'],
-            ),
-          ),
-          
-          // Candidate routes
-          GoRoute(
-            path: '/candidate-dashboard',
-            builder: (context, state) => CandidateDashboard(
-              token: state.uri.queryParameters['token'] ?? '',
-            ),
-          ),
-          GoRoute(
-            path: '/saved-applications',
-            builder: (context, state) => SavedApplicationsScreen(
-              token: state.uri.queryParameters['token'] ?? '',
-            ),
-          ),
-          GoRoute(
-            path: '/assessment',
-            builder: (context, state) => AssessmentPage(
-              applicationId: int.tryParse(state.uri.queryParameters['applicationId'] ?? '0') ?? 0,
-              draftData: state.extra as Map<String, dynamic>?,
-            ),
-          ),
-          GoRoute(
-            path: '/assessment-results',
-            builder: (context, state) => AssessmentResultsPage(
-              token: state.uri.queryParameters['token'] ?? '',
-            ),
-          ),
-          GoRoute(
-            path: '/profile',
-            builder: (context, state) => ProfilePage(
-              token: state.uri.queryParameters['token'] ?? '',
-            ),
-          ),
-          GoRoute(
-            path: '/job-details',
-            builder: (context, state) {
-              final job = state.extra as Map<String, dynamic>?;
-              return JobDetailsPage(
-                job: job ?? {},
-              );
-            },
-          ),
-          GoRoute(
-            path: '/redirect-to-assessment',
-            builder: (context, state) => RedirectToAssessmentPage(
-              applicationId: int.tryParse(state.uri.queryParameters['applicationId'] ?? '0') ?? 0,
-              jobTitle: state.uri.queryParameters['jobTitle'],
-            ),
-          ),
-          
-          // Admin routes
-          GoRoute(
-            path: '/admin-dashboard',
-            builder: (context, state) => AdminDashboard(
-              token: state.uri.queryParameters['token'] ?? '',
-            ),
-          ),
-          
-          // HR routes
-          GoRoute(
-            path: '/hr-dashboard',
-            builder: (context, state) => HRDashboard(
-              token: state.uri.queryParameters['token'] ?? '',
-            ),
-          ),
-
-          // Hiring Manager routes
-          GoRoute(
-            path: '/hiring-manager-dashboard',
-            builder: (context, state) => HMMainDashboard(
-              token: state.uri.queryParameters['token'] ?? '',
-            ),
-          ),
-        ],
-        errorBuilder: (context, state) => Scaffold(
-          body: Center(
-            child: Text('Page not found'),
-          ),
-        ),
-      ),
+            routerConfig: _router,
           );
         },
       ),
     );
   }
-  
+
   String _getInitialRoute(String? role) {
     switch (role) {
       case 'admin':
@@ -272,7 +287,8 @@ class _OAuthCallbackPageState extends State<OAuthCallbackPage> {
       'admin' => '/admin-dashboard?token=$encodedToken',
       'hiring_manager' => '/hiring-manager-dashboard?token=$encodedToken',
       'hr' => '/hr-dashboard?token=$encodedToken',
-      'candidate' when dashboard == '/enrollment' => '/enrollment?token=$encodedToken',
+      'candidate' when dashboard == '/enrollment' =>
+        '/enrollment?token=$encodedToken',
       _ => '/candidate-dashboard?token=$encodedToken',
     };
     context.go(nextPath);
