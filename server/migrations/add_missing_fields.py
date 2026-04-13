@@ -91,4 +91,7 @@ def upgrade():
         raise
 
 if __name__ == "__main__":
-    upgrade()
+    from app import create_app
+    app = create_app()
+    with app.app_context():
+        upgrade()

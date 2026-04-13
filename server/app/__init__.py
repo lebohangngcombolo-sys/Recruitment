@@ -61,32 +61,37 @@ def create_app():
         ping_timeout=60,
         ping_interval=25
     )
-    # In production, restrict CORS to FRONTEND_URL when set; in local dev allow all origins (Flutter web uses random localhost ports).
+    # CORS Configuration
+    # In production, restrict to FRONTEND_URL. In dev (including local production testing), allow all localhost.
     _cors_origins = ["*"]
     if app.config.get("FLASK_ENV") == "production":
         _frontend = (app.config.get("FRONTEND_URL") or "").strip().rstrip("/")
         if _frontend:
-            _cors_origins = [_frontend]
+            # Allow the specific frontend URL + any localhost ports for easier debugging
+            _cors_origins = [_frontend, "http://localhost:*", "http://127.0.0.1:*"]
         else:
             _cors_origins = ["*"]
+    
     cors.init_app(
         app,
         origins=_cors_origins,
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"],
-        supports_credentials=False,  # Required when using origins="*"; auth uses header not cookies
-        automatic_options=True  # Ensure automatic OPTIONS handling
+        supports_credentials=False,
+        automatic_options=True
     )
 
-    # Ensure CORS headers on every response (including 4xx/5xx and errors). When Render free tier
-    # wakes from sleep, gateway timeouts may not reach the app; when the app does respond, CORS must be present.
     @app.after_request
     def _add_cors_headers(response):
         from flask import request
         if "Access-Control-Allow-Origin" not in response.headers:
             origin = request.environ.get("HTTP_ORIGIN")
+            is_localhost = origin and (origin.startswith("http://localhost:") or origin.startswith("http://127.0.0.1:") or origin == "http://localhost" or origin == "http://127.0.0.1")
+            
             if _cors_origins and "*" in _cors_origins:
                 response.headers["Access-Control-Allow-Origin"] = "*"
+            elif is_localhost:
+                response.headers["Access-Control-Allow-Origin"] = origin
             elif origin and _cors_origins and origin in _cors_origins:
                 response.headers["Access-Control-Allow-Origin"] = origin
             elif _cors_origins:

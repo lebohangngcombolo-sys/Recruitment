@@ -34,6 +34,7 @@ def healthz():
 
     payload = {
         "status": "ok",
+        "app_version": current_app.config.get("APP_VERSION", "unknown"),
         "git_sha": git_sha,
         "alembic_revision": alembic_revision,
     }

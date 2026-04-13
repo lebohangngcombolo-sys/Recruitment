@@ -74,9 +74,16 @@ def main() -> None:
     dow_num = now.isoweekday()  # 1=Mon .. 7=Sun
     today_iso = now.strftime("%Y-%m-%d")
 
-    # Week of month: 1->A .. 6->F
-    week_num = min(6, (day_of_month - 1) // 7 + 1)
-    week_letter = chr(64 + week_num)
+    # Week of month (Mon-Sun): 1->A, 2->B, etc.
+    # We find the week number of the month by counting how many Mondays have passed.
+    first_of_month = now.replace(day=1)
+    # ISO week of current day vs ISO week of 1st of month
+    week_num = now.isocalendar()[1] - first_of_month.isocalendar()[1] + 1
+    # Adjust for edge case where month starts late in an ISO week
+    if first_of_month.weekday() > 4: # If month starts Fri/Sat/Sun, ISO might treat it as prev year week
+         if week_num < 1: week_num = 1
+    
+    week_letter = chr(64 + min(6, week_num))
     # Day of week: 1=Mon -> A .. 7=Sun -> G
     day_letter = chr(64 + dow_num)
 
