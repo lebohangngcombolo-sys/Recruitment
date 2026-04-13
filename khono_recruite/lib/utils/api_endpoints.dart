@@ -1,8 +1,8 @@
 class ApiEndpoints {
   // ------------------- Base URLs -------------------
   static const baseUrl = String.fromEnvironment(
-    'API_BASE_URL',
-    defaultValue: 'http://127.0.0.1:5000',
+    'API_BASE',
+    defaultValue: 'https://recruitment-api-zovg.onrender.com',
   );
 
   static const authBase = "$baseUrl/api/auth";

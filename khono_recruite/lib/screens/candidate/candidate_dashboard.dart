@@ -19,6 +19,7 @@ import 'assessments_results_screen.dart';
 import '../../screens/candidate/user_profile_page.dart';
 import 'saved_application_screen.dart';
 import '../../services/auth_service.dart';
+import '../../utils/app_config.dart';
 
 class CandidateDashboard extends StatefulWidget {
   final String token;
@@ -46,7 +47,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   final Color primaryColor = Color(0xFF991A1A);
   final Color strokeColor = Color(0xFFC10D00);
   final Color fillColor = Color(0xFFf2f2f2).withValues(alpha: 0.2);
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  final String apiBase = "${AppConfig.apiBase}/api/candidate";
   final GlobalKey _jobsSectionKey = GlobalKey();
 
   List<Map<String, dynamic>> notifications = [];
@@ -167,11 +168,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     _safeSetState(() => _loadingJobs = true);
     try {
       // Use the widget token directly instead of relying on storage
-      final token = widget.token.trim().isNotEmpty ? widget.token : await AuthService.getAccessToken();
+      final token = widget.token.trim().isNotEmpty
+          ? widget.token
+          : await AuthService.getAccessToken();
       if (token == null || token.isEmpty) {
         throw Exception('No authentication token available');
       }
-      
+
       final list = await UnifiedApiService.getJobsWithToken(token).timeout(
         _jobsFetchTimeout,
         onTimeout: () => <Map<String, dynamic>>[],
@@ -222,6 +225,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
 
   /// Form submitted but assessment not done (status 'applied') — show "Applied" on job cards, not in Continue section.
   List<Map<String, dynamic>> _appliedOnlyApplications = [];
+
   /// All application records (irrespective of status) so we can reliably hide already-applied jobs
   /// from Recommended Jobs even when backend status values vary.
   List<Map<String, dynamic>> _allApplications = [];
@@ -422,12 +426,15 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   Future<void> _fetchNotifications() async {
     try {
       // Use the widget token directly instead of relying on storage
-      final token = widget.token.trim().isNotEmpty ? widget.token : await AuthService.getAccessToken();
+      final token = widget.token.trim().isNotEmpty
+          ? widget.token
+          : await AuthService.getAccessToken();
       if (token == null || token.isEmpty) {
         throw Exception('No authentication token available');
       }
-      
-      final notificationList = await UnifiedApiService.getNotificationsWithToken(token);
+
+      final notificationList =
+          await UnifiedApiService.getNotificationsWithToken(token);
       if (mounted) {
         _safeSetState(() {
           notifications = notificationList;
@@ -723,14 +730,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                                           : Colors.transparent,
                                       border: Border(
                                         bottom: BorderSide(
-                                          color:
-                                              active ? strokeColor : Colors.black12,
+                                          color: active
+                                              ? strokeColor
+                                              : Colors.black12,
                                           width: active ? 2 : 1,
                                         ),
                                       ),
                                     ),
                                     child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: [
                                         Text(
                                           label,
@@ -752,7 +761,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                                             color: active
                                                 ? strokeColor
                                                 : Colors.black12,
-                                            borderRadius: BorderRadius.circular(10),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
                                           ),
                                           child: Text(
                                             '$count',
@@ -782,8 +792,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                                       label: 'Unread',
                                       count: unread.length,
                                       active: showUnreadTab,
-                                      onTap: () =>
-                                          setDialogState(() => showUnreadTab = true),
+                                      onTap: () => setDialogState(
+                                          () => showUnreadTab = true),
                                     ),
                                     tabButton(
                                       label: 'Read',

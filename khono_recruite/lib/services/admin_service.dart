@@ -3,6 +3,7 @@ import 'dart:convert' as convert;
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import '../utils/api_endpoints.dart';
+import '../utils/app_config.dart';
 import 'auth_service.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 
@@ -2396,7 +2397,7 @@ class AdminService {
     };
 
     final res = await http.post(
-      Uri.parse('http://127.0.0.1:5000/api/admin/offers/review'),
+      Uri.parse('${AppConfig.apiBase}/api/admin/offers/review'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token'

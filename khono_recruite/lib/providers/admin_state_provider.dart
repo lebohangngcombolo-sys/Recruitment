@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
+import 'dart:convert';
 import '../models/application.dart';
 import '../models/offer.dart';
 import '../services/admin_service.dart';
 import '../services/auth_service.dart';
+import '../utils/app_config.dart';
 import 'package:http/http.dart' as http;
 
 /// Unified state management provider for admin screens
@@ -225,7 +227,7 @@ class AdminStateProvider extends ChangeNotifier {
       }
 
       final response = await http.get(
-        Uri.parse('http://127.0.0.1:5000/api/admin/recent-activities'),
+        Uri.parse('${AppConfig.apiBase}/api/admin/recent-activities'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -261,7 +263,7 @@ class AdminStateProvider extends ChangeNotifier {
       }
 
       final response = await http.get(
-        Uri.parse('http://127.0.0.1:5000/api/admin/powerbi/status'),
+        Uri.parse('${AppConfig.apiBase}/api/admin/powerbi/status'),
         headers: {
           'Content-Type': 'application/json',
           'Authorization': 'Bearer $token',
@@ -346,7 +348,7 @@ class AdminStateProvider extends ChangeNotifier {
         'sort_order': _jobsSortOrder,
       };
 
-      final uri = Uri.parse('http://127.0.0.1:5000/api/admin/jobs')
+      final uri = Uri.parse('${AppConfig.apiBase}/api/admin/jobs')
           .replace(queryParameters: queryParams);
 
       final token = await AuthService.getAccessToken();
@@ -579,7 +581,7 @@ class AdminStateProvider extends ChangeNotifier {
         if (_auditLogsSearchQuery != null) "q": _auditLogsSearchQuery!,
       };
 
-      final uri = Uri.parse("http://127.0.0.1:5000/api/admin/audits")
+      final uri = Uri.parse("${AppConfig.apiBase}/api/admin/audits")
           .replace(queryParameters: queryParams);
 
       final response = await http.get(
