@@ -1,4 +1,4 @@
-// ignore_for_file: dead_code, deprecated_member_use
+// ignore_for_file: unused_element, dead_code, deprecated_member_use
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -12,11 +12,32 @@ import '../../services/test_pack_service.dart';
 import '../../models/test_pack.dart';
 import '../../widgets/save_test_pack_dialog.dart';
 import '../../providers/theme_provider.dart';
+import '../../services/auth_service.dart';
+
+/// Khonology palette for Hiring Manager Job Management.
+const Color _jmRed = Color(0xFFCF2030);
+const Color _jmWhite = Color(0xFFFFFFFF);
+const Color _jmInk = Color(0xFF090812);
+const Color _jmCharcoal = Color(0xFF3D3F40);
+const Color _jmSteel = Color(0xFF727576);
+const Color _jmSilver = Color(0xFFB0B6BB);
+const Color _jmCanvas = Color(0xFFF8F6F3);
+const Color _jmPurple = Color(0xFF5C389D);
+const Color _jmBlue = Color(0xFF6095CC);
+const Color _jmOrange = Color(0xFFEA990C);
+const Color _jmGreen = Color(0xFF6CA510);
 
 class JobManagement extends StatefulWidget {
   final Function(int jobId)? onJobSelected;
+  final VoidCallback? onOpenTeamCollaboration;
+  final VoidCallback? onOpenNotifications;
 
-  const JobManagement({super.key, this.onJobSelected});
+  const JobManagement({
+    super.key,
+    this.onJobSelected,
+    this.onOpenTeamCollaboration,
+    this.onOpenNotifications,
+  });
 
   @override
   _JobManagementState createState() => _JobManagementState();
@@ -119,16 +140,57 @@ class _JobManagementState extends State<JobManagement> {
     });
   }
 
-  Widget _tableHeaderCell(String label, {required int flex, required ThemeProvider themeProvider}) {
+  Color _jmTextPrimary(ThemeProvider tp) =>
+      tp.isDarkMode ? _jmWhite : _jmInk;
+
+  Color _jmTextMuted(ThemeProvider tp) =>
+      tp.isDarkMode ? _jmSilver : _jmSteel;
+
+  /// Card chrome: 60% opacity in dark and light so background shows through (per HM spec).
+  Color _jmCardSurface(ThemeProvider tp) =>
+      tp.isDarkMode
+          ? _jmCharcoal.withValues(alpha: 0.6)
+          : _jmCanvas.withValues(alpha: 0.6);
+
+  Color _jmOverviewStripBg(ThemeProvider tp) =>
+      tp.isDarkMode
+          ? _jmCharcoal.withValues(alpha: 0.6)
+          : const Color(0xFFECECEC).withValues(alpha: 0.6);
+
+  Color _jmHeaderDivider(ThemeProvider tp) =>
+      tp.isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.shade300;
+
+  Color _jmTableHeaderBg(ThemeProvider tp) =>
+      tp.isDarkMode
+          ? _jmCharcoal.withValues(alpha: 0.6)
+          : _jmSilver.withValues(alpha: 0.6);
+
+  /// Search pill & similar: 60% tint, distinct from card via border / hue.
+  Color _jmSearchPillFill(ThemeProvider tp) =>
+      tp.isDarkMode
+          ? _jmInk.withValues(alpha: 0.6)
+          : _jmWhite.withValues(alpha: 0.6);
+
+  /// Nested list rows / metrics (still slightly lifted from 60% card).
+  Color _jmInnerSurface(ThemeProvider tp) =>
+      tp.isDarkMode
+          ? _jmWhite.withValues(alpha: 0.08)
+          : _jmCanvas.withValues(alpha: 0.6);
+
+  Widget _tableHeaderCell(String label,
+      {required int flex, required ThemeProvider themeProvider}) {
     return Expanded(
       flex: flex,
-      child: Text(
-        label,
-        style: TextStyle(
-          fontFamily: 'Poppins',
-          fontWeight: FontWeight.bold,
-          fontSize: 14,
-          color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.bold,
+            fontSize: 12,
+            color: _jmTextPrimary(themeProvider),
+          ),
         ),
       ),
     );
@@ -138,94 +200,211 @@ class _JobManagementState extends State<JobManagement> {
     final jobId = job['id'] as int;
     final isExpanded = _expandedJobIds.contains(jobId);
     final createdBy = job['created_by_user'] != null
-        ? (job['created_by_user']['name'] ?? job['created_by_user']['email'] ?? 'Unknown')
+        ? (job['created_by_user']['name'] ??
+            job['created_by_user']['email'] ??
+            'Unknown')
         : '—';
     final isActive = job['is_active'] == true;
-    final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
+    final textColor = _jmTextPrimary(themeProvider);
+    final muted = _jmTextMuted(themeProvider);
+    final title = (job['title'] ?? '—').toString();
+    final category = (job['category'] ?? '—').toString();
+    final pendingApproval =
+        (job['approval_status'] ?? 'pending').toString() == 'pending';
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        InkWell(
-          onTap: () => _toggleJobExpanded(jobId),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: isExpanded && themeProvider.isDarkMode
-                  ? Colors.grey.shade800.withValues(alpha: 0.5)
-                  : isExpanded
-                      ? Colors.grey.shade100
-                      : null,
-              border: Border(
-                bottom: BorderSide(
-                  color: themeProvider.isDarkMode ? Colors.grey.shade800 : Colors.grey.shade300,
+        Material(
+          color: isExpanded
+              ? (themeProvider.isDarkMode
+                  ? _jmWhite.withValues(alpha: 0.08)
+                  : _jmSilver.withValues(alpha: 0.25))
+              : Colors.transparent,
+          child: InkWell(
+            onTap: () => _toggleJobExpanded(jobId),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: _jmHeaderDivider(themeProvider),
+                  ),
                 ),
               ),
-            ),
-            child: Row(
-              children: [
-                Expanded(flex: 3, child: Text(job['title'] ?? '—', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: textColor), overflow: TextOverflow.ellipsis)),
-                Expanded(flex: 1, child: Text(job['category'] ?? '—', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: textColor), overflow: TextOverflow.ellipsis)),
-                Expanded(flex: 1, child: Text('${job['application_count'] ?? 0}', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: textColor))),
-                Expanded(
-                  flex: 1,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: isActive ? Colors.green.withValues(alpha: 0.2) : Colors.orange.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      isActive ? 'Active' : 'Inactive',
-                      style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 11, color: isActive ? Colors.green.shade700 : Colors.orange.shade700),
-                    ),
-                  ),
-                ),
-                Expanded(flex: 1, child: _hmApprovalChip(job)),
-                Expanded(flex: 2, child: Text(createdBy, style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: textColor), overflow: TextOverflow.ellipsis)),
-                SizedBox(
-                  width: 120,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blueAccent, size: 20),
-                        onPressed: () => openJobForm(job: job),
-                        tooltip: 'Edit',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.redAccent, size: 20),
-                        onPressed: () async {
-                          try {
-                            await admin.deleteJob(jobId);
-                            fetchJobs();
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                content: Text("Error deleting job: $e", style: const TextStyle(fontFamily: 'Poppins')),
-                              ));
-                            }
-                          }
-                        },
-                        tooltip: 'Delete',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                      ),
-                      if (widget.onJobSelected != null)
-                        IconButton(
-                          icon: const Icon(Icons.check_circle, color: Colors.green, size: 20),
-                          onPressed: () => widget.onJobSelected!(jobId),
-                          tooltip: 'Select Job',
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: Image.asset(
+                            'assets/images/Task_Management_White_Badge_Red.png',
+                            width: 28,
+                            height: 28,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              width: 28,
+                              height: 28,
+                              decoration: const BoxDecoration(
+                                color: _jmRed,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.work_outline,
+                                  size: 16, color: _jmWhite),
+                            ),
+                          ),
                         ),
-                      Icon(isExpanded ? Icons.expand_less : Icons.expand_more, color: textColor, size: 22),
-                    ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: textColor,
+                                ),
+                              ),
+                              Text(
+                                category,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 10,
+                                  fontStyle: FontStyle.italic,
+                                  color: muted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  Expanded(
+                    flex: 1,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${job['application_count'] ?? 0}',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 12,
+                          color: textColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 1,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _hmJobActivePill(isActive),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 1,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _hmApprovalChip(job),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      createdBy,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 11,
+                        color: textColor,
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 268,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _jmActionPill(
+                            label: 'EDIT',
+                            backgroundColor: themeProvider.isDarkMode
+                                ? _jmSteel
+                                : _jmCharcoal,
+                            foregroundColor: _jmWhite,
+                            onPressed: () => openJobForm(job: job),
+                          ),
+                          const SizedBox(width: 6),
+                          _jmActionPill(
+                            label: 'DELETE',
+                            backgroundColor: _jmRed,
+                            foregroundColor: _jmWhite,
+                            onPressed: () async {
+                              try {
+                                await admin.deleteJob(jobId);
+                                fetchJobs();
+                              } catch (e) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Error deleting job: $e',
+                                        style: const TextStyle(
+                                            fontFamily: 'Poppins'),
+                                      ),
+                                    ),
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                          if (pendingApproval) ...[
+                            const SizedBox(width: 6),
+                            _jmActionPill(
+                              label: 'APPROVE',
+                              backgroundColor: _jmInk,
+                              foregroundColor: _jmWhite,
+                              borderColor: _jmWhite,
+                              onPressed: () => _approveJob(job),
+                            ),
+                          ],
+                          if (widget.onJobSelected != null) ...[
+                            const SizedBox(width: 6),
+                            _jmActionPill(
+                              label: 'SELECT',
+                              backgroundColor: _jmGreen,
+                              foregroundColor: _jmWhite,
+                              onPressed: () => widget.onJobSelected!(jobId),
+                            ),
+                          ],
+                          const SizedBox(width: 4),
+                          Icon(
+                            isExpanded
+                                ? Icons.expand_less
+                                : Icons.expand_more,
+                            color: textColor,
+                            size: 22,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -237,14 +416,17 @@ class _JobManagementState extends State<JobManagement> {
   Widget _buildExpandedApplicantsSection(int jobId, Map<String, dynamic> job, ThemeProvider themeProvider) {
     final applications = _applicationsByJob[jobId];
     final loading = _loadingApplications.contains(jobId);
-    final textColor = themeProvider.isDarkMode ? Colors.white70 : Colors.black54;
-    final borderColor = themeProvider.isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300;
+    final textColor = _jmTextMuted(themeProvider);
+    final headingColor = _jmTextPrimary(themeProvider);
+    final borderColor = themeProvider.isDarkMode
+        ? _jmSteel.withValues(alpha: 0.4)
+        : _jmSilver;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: themeProvider.isDarkMode ? Colors.grey.shade900.withValues(alpha: 0.6) : Colors.grey.shade50,
+        color: _jmInnerSurface(themeProvider),
         border: Border(bottom: BorderSide(color: borderColor)),
       ),
       child: Column(
@@ -253,7 +435,12 @@ class _JobManagementState extends State<JobManagement> {
         children: [
           Text(
             'Candidates & metrics',
-            style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 14, color: themeProvider.isDarkMode ? Colors.white : Colors.black87),
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: headingColor,
+            ),
           ),
           const SizedBox(height: 8),
           if ((job['approval_status'] ?? '') == 'rejected') ...[
@@ -261,12 +448,13 @@ class _JobManagementState extends State<JobManagement> {
               padding: const EdgeInsets.only(bottom: 8),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, size: 18, color: Colors.red.shade700),
+                  const Icon(Icons.info_outline, size: 18, color: _jmRed),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Rejection reason: ${job['rejection_reason'] ?? 'Not provided'}',
-                      style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: Colors.red.shade700),
+                      style: const TextStyle(
+                          fontFamily: 'Poppins', fontSize: 13, color: _jmRed),
                     ),
                   ),
                   TextButton.icon(
@@ -332,12 +520,12 @@ class _JobManagementState extends State<JobManagement> {
                               ? 'Hold'
                               : recommendation);
               final Color recColor = recLabel == 'Proceed'
-                  ? Colors.green
+                  ? _jmGreen
                   : recLabel == 'Reject'
-                      ? Colors.red
+                      ? _jmRed
                       : recLabel == 'Hold'
-                          ? Colors.orange
-                          : (themeProvider.isDarkMode ? Colors.grey : Colors.black54);
+                          ? _jmOrange
+                          : _jmSteel;
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -364,12 +552,20 @@ class _JobManagementState extends State<JobManagement> {
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: Colors.blue.withValues(alpha: 0.15),
+                            color: _jmBlue.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Text('$status', style: TextStyle(fontFamily: 'Poppins', fontSize: 11, color: themeProvider.isDarkMode ? Colors.blue.shade200 : Colors.blue.shade800)),
+                          child: Text(
+                            '$status',
+                            style: const TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 11,
+                              color: _jmBlue,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -382,32 +578,63 @@ class _JobManagementState extends State<JobManagement> {
     );
   }
 
+  Widget _hmJobActivePill(bool isActive) {
+    final bg = isActive ? _jmGreen : _jmBlue;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        isActive ? 'Active' : 'Inactive',
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          fontWeight: FontWeight.w600,
+          fontSize: 10,
+          color: _jmWhite,
+        ),
+      ),
+    );
+  }
+
   Widget _hmApprovalChip(Map<String, dynamic> job) {
     final status = (job['approval_status'] ?? 'pending').toString();
-    Color color;
+    Color bg;
     String label;
     switch (status) {
       case 'approved':
-        color = Colors.green;
+        bg = _jmGreen;
         label = 'Approved';
         break;
       case 'rejected':
-        color = Colors.red;
+        bg = _jmRed;
         label = 'Rejected';
         break;
+      case 'draft':
+        bg = _jmPurple;
+        label = 'Draft';
+        break;
       default:
-        color = Colors.orange;
-        label = 'Pending';
+        bg = _jmOrange;
+        label = 'Pending Approval';
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(8),
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         label,
-        style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 11, color: color),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          fontFamily: 'Poppins',
+          fontWeight: FontWeight.w600,
+          fontSize: 9,
+          color: _jmWhite,
+        ),
       ),
     );
   }
@@ -416,15 +643,36 @@ class _JobManagementState extends State<JobManagement> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: themeProvider.isDarkMode ? Colors.grey.shade800 : Colors.white,
+        color: themeProvider.isDarkMode
+            ? _jmWhite.withValues(alpha: 0.08)
+            : _jmCanvas,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: themeProvider.isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300),
+        border: Border.all(
+          color: themeProvider.isDarkMode
+              ? Colors.white.withValues(alpha: 0.1)
+              : _jmSilver,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('$label: ', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.black54)),
-          Text(value, style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 12, color: themeProvider.isDarkMode ? Colors.white : Colors.black87)),
+          Text(
+            '$label: ',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              color: _jmTextMuted(themeProvider),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              color: _jmTextPrimary(themeProvider),
+            ),
+          ),
         ],
       ),
     );
@@ -435,7 +683,9 @@ class _JobManagementState extends State<JobManagement> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: themeProvider.isDarkMode ? Colors.grey.shade800 : Colors.grey.shade200,
+        color: themeProvider.isDarkMode
+            ? _jmWhite.withValues(alpha: 0.08)
+            : _jmSilver.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
@@ -473,298 +723,804 @@ class _JobManagementState extends State<JobManagement> {
     }
   }
 
+  Future<void> _approveJob(Map<String, dynamic> job) async {
+    try {
+      await admin.approveJob(job['id'] as int);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Job approved',
+                style: TextStyle(fontFamily: 'Poppins')),
+            backgroundColor: _jmGreen,
+          ),
+        );
+        fetchJobs();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error approving job: $e',
+                style: const TextStyle(fontFamily: 'Poppins')),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Same pattern as [HMMainDashboard._hmDashboardHeaderIconButton]: asset only, 48 tap / 40 graphic.
+  Widget _jmHeaderCircleButton({
+    required String assetPath,
+    required VoidCallback? onTap,
+  }) {
+    if (onTap == null) return const SizedBox.shrink();
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Center(
+            child: Image.asset(
+              assetPath,
+              width: 40,
+              height: 40,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => Icon(
+                Icons.image_not_supported_outlined,
+                size: 32,
+                color: _jmSteel,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _jmActionPill({
+    required String label,
+    required Color backgroundColor,
+    required Color foregroundColor,
+    VoidCallback? onPressed,
+    Color? borderColor,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(20),
+            border: borderColor != null
+                ? Border.all(color: borderColor, width: 1)
+                : null,
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w700,
+              fontSize: 9,
+              color: foregroundColor,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _jmCategoryFilterLabel() {
+    if (_categoryFilter == null) return 'All';
+    return _categoryFilter!;
+  }
+
+  String _jmStatusFilterLabel() {
+    switch (_statusFilter) {
+      case 'inactive':
+        return 'Inactive';
+      case 'all':
+        return 'All';
+      default:
+        return 'Active';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final _displayName =
+        AuthService.getCachedDisplayName()?.trim() ?? '';
+    final welcomeName =
+        _displayName.isNotEmpty ? _displayName : 'Hiring Manager';
 
     return DefaultTextStyle(
       style: TextStyle(
         fontFamily: 'Poppins',
-        color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+        color: _jmTextPrimary(themeProvider),
       ),
       child: Scaffold(
-      // 🌆 Dynamic background implementation
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage(themeProvider.backgroundImage),
-            fit: BoxFit.cover,
+        body: Container(
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage(themeProvider.backgroundImage),
+              fit: BoxFit.cover,
+            ),
           ),
-        ),
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: loading
-              ? const Center(
-                  child: CircularProgressIndicator(color: Colors.redAccent))
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Header
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Job Management",
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 26,
-                              fontWeight: FontWeight.bold,
-                              color: themeProvider.isDarkMode
-                                  ? Colors.white
-                                  : Colors.black87,
-                            ),
-                          ),
-                          CustomButton(
-                            text: "Add Job",
-                            onPressed: () => openJobForm(),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Divider(
-                          color: themeProvider.isDarkMode
-                              ? Colors.grey.shade800
-                              : Colors.grey),
-                      const SizedBox(height: 16),
-
-                      // Search bar
-                      ValueListenableBuilder<TextEditingValue>(
-                        valueListenable: _searchController,
-                        builder: (_, value, __) {
-                          final hasText = value.text.isNotEmpty;
-                          final borderColor = themeProvider.isDarkMode
-                              ? Colors.grey.shade700
-                              : Colors.grey.shade400;
-                          final inputBorder = OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: borderColor),
-                          );
-                          return Row(
-                            children: [
-                              Expanded(
-                                child: TextField(
-                                  controller: _searchController,
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    color: themeProvider.isDarkMode
-                                        ? Colors.white
-                                        : Colors.black87,
-                                    fontSize: 14,
-                                  ),
-                                  decoration: InputDecoration(
-                                    hintText: 'Search jobs by title, description...',
-                                    hintStyle: TextStyle(
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: loading
+                ? const Center(
+                    child: CircularProgressIndicator(color: _jmRed),
+                  )
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Hiring Job Management',
+                                    style: TextStyle(
                                       fontFamily: 'Poppins',
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.grey.shade500
-                                          : Colors.grey.shade600,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w700,
+                                      color: _jmTextPrimary(themeProvider),
                                     ),
-                                    prefixIcon: const Icon(Icons.search, color: Colors.grey),
-                                    suffixIcon: hasText
-                                        ? IconButton(
-                                            icon: const Icon(Icons.clear, size: 20),
-                                            onPressed: () {
-                                              _searchController.clear();
-                                              setState(() {});
-                                            },
-                                          )
-                                        : null,
-                                    border: inputBorder,
-                                    enabledBorder: inputBorder,
-                                    focusedBorder: inputBorder,
-                                    filled: true,
-                                    fillColor: themeProvider.isDarkMode
-                                        ? Colors.grey.shade900.withValues(alpha: 0.5)
-                                        : Colors.grey.shade50,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 12),
                                   ),
-                                  onSubmitted: (_) => _applySearch(),
-                                ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Hello, $welcomeName',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: _jmTextMuted(themeProvider),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 12),
-                              IconButton.filled(
-                                onPressed: _applySearch,
-                                icon: const Icon(Icons.search),
-                                tooltip: 'Search',
-                                style: IconButton.styleFrom(
-                                  backgroundColor: Colors.redAccent,
-                                  foregroundColor: Colors.white,
-                                ),
+                            ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (widget.onOpenTeamCollaboration !=
+                                    null)
+                                  _jmHeaderCircleButton(
+                                    assetPath: 'assets/images/message.png',
+                                    onTap: widget.onOpenTeamCollaboration,
+                                  ),
+                                if (widget.onOpenNotifications != null) ...[
+                                  if (widget.onOpenTeamCollaboration != null)
+                                    const SizedBox(width: 4),
+                                  _jmHeaderCircleButton(
+                                    assetPath:
+                                        'assets/images/blue_bell.png',
+                                    onTap: widget.onOpenNotifications,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: _jmCardSurface(themeProvider),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: _jmHeaderDivider(themeProvider),
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 16,
+                                offset: const Offset(0, 6),
                               ),
                             ],
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 12),
-
-                      // Filters
-                      Row(
-                        children: [
-                          Text(
-                            'Category:',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 14,
-                              color: themeProvider.isDarkMode
-                                  ? Colors.grey.shade400
-                                  : Colors.black54,
-                            ),
                           ),
-                          const SizedBox(width: 8),
-                          DropdownButton<String?>(
-                            value: _categoryFilter,
-                            hint: Text('All', style: TextStyle(fontFamily: 'Poppins', color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.black54)),
-                            underline: const SizedBox(),
-                            borderRadius: BorderRadius.circular(8),
-                            dropdownColor: themeProvider.isDarkMode
-                                ? const Color(0xFF14131E)
-                                : Colors.white,
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
-                              fontSize: 14,
-                            ),
-                            items: [
-                              DropdownMenuItem<String?>(
-                                value: null,
-                                child: Text('All', style: TextStyle(fontFamily: 'Poppins', color: themeProvider.isDarkMode ? Colors.white : Colors.black87)),
-                              ),
-                              ..._categoryOptions.map((c) => DropdownMenuItem<String?>(
-                                value: c,
-                                child: Text(c, style: TextStyle(fontFamily: 'Poppins', color: themeProvider.isDarkMode ? Colors.white : Colors.black87)),
-                              )),
-                            ],
-                            onChanged: (v) {
-                              setState(() {
-                                _categoryFilter = v;
-                                fetchJobs();
-                              });
-                            },
-                          ),
-                          const SizedBox(width: 24),
-                          Text(
-                            'Status:',
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontSize: 14,
-                              color: themeProvider.isDarkMode
-                                  ? Colors.grey.shade400
-                                  : Colors.black54,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          DropdownButton<String>(
-                            value: _statusFilter,
-                            underline: const SizedBox(),
-                            borderRadius: BorderRadius.circular(8),
-                            dropdownColor: themeProvider.isDarkMode
-                                ? const Color(0xFF14131E)
-                                : Colors.white,
-                            style: TextStyle(
-                              fontFamily: 'Poppins',
-                              color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
-                              fontSize: 14,
-                            ),
-                            items: [
-                              DropdownMenuItem(value: 'active', child: Text('Active', style: TextStyle(fontFamily: 'Poppins', color: themeProvider.isDarkMode ? Colors.white : Colors.black87))),
-                              DropdownMenuItem(value: 'inactive', child: Text('Inactive', style: TextStyle(fontFamily: 'Poppins', color: themeProvider.isDarkMode ? Colors.white : Colors.black87))),
-                              DropdownMenuItem(value: 'all', child: Text('All', style: TextStyle(fontFamily: 'Poppins', color: themeProvider.isDarkMode ? Colors.white : Colors.black87))),
-                            ],
-                            onChanged: (v) {
-                              if (v != null) {
-                                setState(() {
-                                  _statusFilter = v;
-                                  fetchJobs();
-                                });
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Table with expandable rows (scrolls with the whole screen)
-                      jobs.isEmpty
-                          ? Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 48),
-                              child: Center(
-                                child: Text(
-                                  loading ? '' : "No jobs found",
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    color: themeProvider.isDarkMode
-                                        ? Colors.grey.shade400
-                                        : Colors.black54,
-                                    fontSize: 16,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.fromLTRB(
+                                    14, 14, 14, 12),
+                                decoration: BoxDecoration(
+                                  color: _jmOverviewStripBg(themeProvider),
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: _jmHeaderDivider(themeProvider),
+                                      width: 1,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            )
-                          : _filteredJobs().isEmpty
-                              ? Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 48),
-                                  child: Center(
-                                    child: Text(
-                                      "No jobs match your search",
-                                      style: TextStyle(
-                                        fontFamily: 'Poppins',
-                                        color: themeProvider.isDarkMode
-                                            ? Colors.grey.shade400
-                                            : Colors.black54,
-                                        fontSize: 16,
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.center,
+                                  children: [
+                                    Image.asset(
+                                      'assets/images/Task_Management_White_Badge_Red.png',
+                                      width: 48,
+                                      height: 48,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (_, __, ___) =>
+                                          Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: const BoxDecoration(
+                                          color: _jmRed,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(Icons.settings,
+                                            color: _jmWhite, size: 24),
                                       ),
                                     ),
-                                  ),
-                                )
-                              : Container(
-                                  decoration: BoxDecoration(
-                                    color: (themeProvider.isDarkMode
-                                            ? const Color(0xFF14131E)
-                                            : Colors.white)
-                                        .withValues(alpha: 0.95),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.grey.shade800
-                                          : Colors.grey.shade300,
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Job Management Overview',
+                                            style: TextStyle(
+                                              fontFamily: 'Poppins',
+                                              fontWeight: FontWeight.w700,
+                                              fontSize: 15,
+                                              color: _jmTextPrimary(
+                                                  themeProvider),
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Search, filter, and manage your requisitions and approvals.',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontFamily: 'Poppins',
+                                              fontSize: 11,
+                                              color: _jmTextMuted(
+                                                  themeProvider),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      // Table header
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                                        color: themeProvider.isDarkMode
-                                            ? Colors.grey.shade900
-                                            : Colors.grey.shade200,
-                                        child: Row(
-                                          children: [
-                                            _tableHeaderCell('Title', flex: 3, themeProvider: themeProvider),
-                                            _tableHeaderCell('Category', flex: 1, themeProvider: themeProvider),
-                                            _tableHeaderCell('Applications', flex: 1, themeProvider: themeProvider),
-                                            _tableHeaderCell('Status', flex: 1, themeProvider: themeProvider),
-                                            _tableHeaderCell('Approval', flex: 1, themeProvider: themeProvider),
-                                            _tableHeaderCell('Created by', flex: 2, themeProvider: themeProvider),
-                                            SizedBox(width: 120, child: Text('Actions', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.bold, fontSize: 14, color: themeProvider.isDarkMode ? Colors.white : Colors.black87))),
-                                          ],
+                                    TextButton(
+                                      onPressed: () => openJobForm(),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: _jmRed,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 6),
+                                      ),
+                                      child: const Text(
+                                        'Add Job',
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontWeight: FontWeight.w700,
+                                          fontSize: 13,
                                         ),
                                       ),
-                                      // All job rows in column so whole screen scrolls together
-                                      ..._filteredJobs().map((job) => _buildExpandableJobRow(job, themeProvider)),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-                    ],
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                    14, 16, 16, 16),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    LayoutBuilder(
+                                      builder: (context, constraints) {
+                                        return SizedBox(
+                                          width: constraints.maxWidth,
+                                          child: ValueListenableBuilder<
+                                              TextEditingValue>(
+                                            valueListenable: _searchController,
+                                            builder: (_, value, __) {
+                                              final hasText =
+                                                  value.text.isNotEmpty;
+                                              final searchPill = Container(
+                                                decoration: BoxDecoration(
+                                                  color: _jmSearchPillFill(
+                                                      themeProvider),
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                          28),
+                                                  border: Border.all(
+                                                    color: themeProvider
+                                                            .isDarkMode
+                                                        ? Colors.white
+                                                            .withValues(
+                                                                alpha: 0.1)
+                                                        : _jmSilver,
+                                                  ),
+                                                ),
+                                                child: Row(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment
+                                                          .center,
+                                                  children: [
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets
+                                                              .fromLTRB(
+                                                              8, 8, 4, 8),
+                                                      child: Container(
+                                                        width: 36,
+                                                        height: 36,
+                                                        decoration:
+                                                            const BoxDecoration(
+                                                          color: _jmRed,
+                                                          shape: BoxShape
+                                                              .circle,
+                                                        ),
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .all(6),
+                                                        child: Image.asset(
+                                                          'assets/images/SearchRed.png',
+                                                          fit: BoxFit.contain,
+                                                          errorBuilder: (_,
+                                                                  __,
+                                                                  ___) =>
+                                                              const Icon(
+                                                            Icons.search,
+                                                            color: _jmWhite,
+                                                            size: 20,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Expanded(
+                                                      child: TextField(
+                                                        controller:
+                                                            _searchController,
+                                                        style: TextStyle(
+                                                          fontFamily:
+                                                              'Poppins',
+                                                          fontSize: 14,
+                                                          color: _jmTextPrimary(
+                                                              themeProvider),
+                                                        ),
+                                                        decoration:
+                                                            InputDecoration(
+                                                          hintText:
+                                                              'Search by Title or Description…',
+                                                          hintStyle:
+                                                              TextStyle(
+                                                            fontFamily:
+                                                                'Poppins',
+                                                            color: _jmTextMuted(
+                                                                themeProvider),
+                                                            fontSize: 13,
+                                                          ),
+                                                          suffixIcon: hasText
+                                                              ? IconButton(
+                                                                  icon: Icon(
+                                                                    Icons
+                                                                        .clear,
+                                                                    size: 20,
+                                                                    color: _jmTextMuted(
+                                                                        themeProvider),
+                                                                  ),
+                                                                  onPressed:
+                                                                      () {
+                                                                    _searchController
+                                                                        .clear();
+                                                                    setState(
+                                                                        () {});
+                                                                  },
+                                                                )
+                                                              : null,
+                                                          filled: false,
+                                                          border:
+                                                              InputBorder
+                                                                  .none,
+                                                          focusedBorder:
+                                                              InputBorder
+                                                                  .none,
+                                                          enabledBorder:
+                                                              InputBorder
+                                                                  .none,
+                                                          contentPadding:
+                                                              const EdgeInsets
+                                                                  .symmetric(
+                                                            horizontal: 8,
+                                                            vertical: 14,
+                                                          ),
+                                                        ),
+                                                        onSubmitted: (_) =>
+                                                            _applySearch(),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+
+                                              final categoryFilter =
+                                                  PopupMenuButton<String?>(
+                                                offset:
+                                                    const Offset(0, 44),
+                                                color: themeProvider
+                                                        .isDarkMode
+                                                    ? _jmCharcoal.withValues(
+                                                        alpha: 0.95)
+                                                    : _jmWhite,
+                                                onSelected: (v) {
+                                                  setState(() {
+                                                    _categoryFilter = v;
+                                                    fetchJobs();
+                                                  });
+                                                },
+                                                itemBuilder: (context) => [
+                                                  const PopupMenuItem<
+                                                      String?>(
+                                                    value: null,
+                                                    child: Text('All',
+                                                        style: TextStyle(
+                                                            fontFamily:
+                                                                'Poppins')),
+                                                  ),
+                                                  ..._categoryOptions.map(
+                                                    (c) =>
+                                                        PopupMenuItem<
+                                                            String?>(
+                                                      value: c,
+                                                      child: Text(c,
+                                                          style: const TextStyle(
+                                                              fontFamily:
+                                                                  'Poppins')),
+                                                    ),
+                                                  ),
+                                                ],
+                                                child: Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 10,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: themeProvider
+                                                            .isDarkMode
+                                                        ? _jmInk.withValues(
+                                                            alpha: 0.6)
+                                                        : _jmWhite.withValues(
+                                                            alpha: 0.6),
+                                                    borderRadius:
+                                                        BorderRadius
+                                                            .circular(24),
+                                                    border: Border.all(
+                                                      color: themeProvider
+                                                              .isDarkMode
+                                                          ? Colors.white
+                                                              .withValues(
+                                                                  alpha:
+                                                                      0.1)
+                                                          : _jmSteel
+                                                              .withValues(
+                                                                  alpha:
+                                                                      0.5),
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Text(
+                                                        'Category: ${_jmCategoryFilterLabel()}',
+                                                        style: TextStyle(
+                                                          fontFamily:
+                                                              'Poppins',
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight
+                                                                  .w600,
+                                                          color: _jmTextPrimary(
+                                                              themeProvider),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(
+                                                          width: 4),
+                                                      Icon(
+                                                        Icons.expand_more,
+                                                        color: _jmTextPrimary(
+                                                            themeProvider),
+                                                        size: 18,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              );
+
+                                              final statusFilter =
+                                                  PopupMenuButton<String>(
+                                                offset:
+                                                    const Offset(0, 44),
+                                                color: themeProvider
+                                                        .isDarkMode
+                                                    ? _jmCharcoal.withValues(
+                                                        alpha: 0.95)
+                                                    : _jmWhite,
+                                                onSelected: (v) {
+                                                  setState(() {
+                                                    _statusFilter = v;
+                                                    fetchJobs();
+                                                  });
+                                                },
+                                                itemBuilder: (context) => [
+                                                  PopupMenuItem(
+                                                    value: 'active',
+                                                    child: Text('Active',
+                                                        style: TextStyle(
+                                                            fontFamily:
+                                                                'Poppins',
+                                                            color: _jmTextPrimary(
+                                                                themeProvider))),
+                                                  ),
+                                                  PopupMenuItem(
+                                                    value: 'inactive',
+                                                    child: Text('Inactive',
+                                                        style: TextStyle(
+                                                            fontFamily:
+                                                                'Poppins',
+                                                            color: _jmTextPrimary(
+                                                                themeProvider))),
+                                                  ),
+                                                  PopupMenuItem(
+                                                    value: 'all',
+                                                    child: Text('All',
+                                                        style: TextStyle(
+                                                            fontFamily:
+                                                                'Poppins',
+                                                            color: _jmTextPrimary(
+                                                                themeProvider))),
+                                                  ),
+                                                ],
+                                                child: Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 14,
+                                                    vertical: 10,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: _statusFilter ==
+                                                            'active'
+                                                        ? _jmRed
+                                                        : (themeProvider
+                                                                .isDarkMode
+                                                            ? _jmInk.withValues(
+                                                                alpha: 0.6)
+                                                            : _jmWhite
+                                                                .withValues(
+                                                                    alpha:
+                                                                        0.6)),
+                                                    borderRadius:
+                                                        BorderRadius
+                                                            .circular(24),
+                                                    border: Border.all(
+                                                      color: _statusFilter ==
+                                                              'active'
+                                                          ? _jmRed
+                                                          : (themeProvider
+                                                                  .isDarkMode
+                                                              ? Colors.white
+                                                                  .withValues(
+                                                                      alpha:
+                                                                          0.1)
+                                                              : _jmSteel
+                                                                  .withValues(
+                                                                      alpha:
+                                                                          0.5)),
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Text(
+                                                        'Status: ${_jmStatusFilterLabel()}',
+                                                        style: TextStyle(
+                                                          fontFamily:
+                                                              'Poppins',
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight
+                                                                  .w600,
+                                                          color: _statusFilter ==
+                                                                  'active'
+                                                              ? _jmWhite
+                                                              : _jmTextPrimary(
+                                                                  themeProvider),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(
+                                                          width: 4),
+                                                      Icon(
+                                                        Icons.expand_more,
+                                                        color: _statusFilter ==
+                                                                'active'
+                                                            ? _jmWhite
+                                                            : _jmTextPrimary(
+                                                                themeProvider),
+                                                        size: 18,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              );
+
+                                              return Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment
+                                                        .center,
+                                                children: [
+                                                  Expanded(
+                                                      child: searchPill),
+                                                  const SizedBox(width: 12),
+                                                  categoryFilter,
+                                                  const SizedBox(width: 10),
+                                                  statusFilter,
+                                                ],
+                                              );
+                                            },
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(height: 18),
+                                    jobs.isEmpty
+                                        ? Padding(
+                                            padding: const EdgeInsets
+                                                .symmetric(vertical: 32),
+                                            child: Center(
+                                              child: Text(
+                                                loading
+                                                    ? ''
+                                                    : 'No jobs found',
+                                                style: TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 15,
+                                                  color: _jmTextMuted(
+                                                      themeProvider),
+                                                ),
+                                              ),
+                                            ),
+                                          )
+                                        : _filteredJobs().isEmpty
+                                            ? Padding(
+                                                padding:
+                                                    const EdgeInsets
+                                                        .symmetric(
+                                                        vertical: 32),
+                                                child: Center(
+                                                  child: Text(
+                                                    'No jobs match your search',
+                                                    style: TextStyle(
+                                                      fontFamily: 'Poppins',
+                                                      fontSize: 15,
+                                                      color: _jmTextMuted(
+                                                          themeProvider),
+                                                    ),
+                                                  ),
+                                                ),
+                                              )
+                                            : ClipRRect(
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                        12),
+                                                child: Column(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Container(
+                                                      width:
+                                                          double.infinity,
+                                                      padding:
+                                                          const EdgeInsets
+                                                              .symmetric(
+                                                        horizontal: 14,
+                                                        vertical: 12,
+                                                      ),
+                                                      color:
+                                                          _jmTableHeaderBg(
+                                                              themeProvider),
+                                                      child: Row(
+                                                        children: [
+                                                          _tableHeaderCell(
+                                                            'Title & Category',
+                                                            flex: 3,
+                                                            themeProvider:
+                                                                themeProvider,
+                                                          ),
+                                                          _tableHeaderCell(
+                                                            'Applications',
+                                                            flex: 1,
+                                                            themeProvider:
+                                                                themeProvider,
+                                                          ),
+                                                          _tableHeaderCell(
+                                                            'Status',
+                                                            flex: 1,
+                                                            themeProvider:
+                                                                themeProvider,
+                                                          ),
+                                                          _tableHeaderCell(
+                                                            'Approval',
+                                                            flex: 1,
+                                                            themeProvider:
+                                                                themeProvider,
+                                                          ),
+                                                          _tableHeaderCell(
+                                                            'Created By',
+                                                            flex: 2,
+                                                            themeProvider:
+                                                                themeProvider,
+                                                          ),
+                                                          SizedBox(
+                                                            width: 268,
+                                                            child: Align(
+                                                              alignment:
+                                                                  Alignment
+                                                                      .centerLeft,
+                                                              child: Text(
+                                                                'Actions',
+                                                                style:
+                                                                    TextStyle(
+                                                                  fontFamily:
+                                                                      'Poppins',
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
+                                                                  fontSize:
+                                                                      12,
+                                                                  color: _jmTextPrimary(
+                                                                      themeProvider),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    ..._filteredJobs().map(
+                                                      (job) =>
+                                                          _buildExpandableJobRow(
+                                                              job,
+                                                              themeProvider),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+          ),
         ),
       ),
-    ),
     );
   }
 }

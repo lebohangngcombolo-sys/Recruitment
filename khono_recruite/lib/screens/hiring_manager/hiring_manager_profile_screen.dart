@@ -157,9 +157,11 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
   }
 
   Future<void> _loadUserData() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     try {
       final data = await AuthService.getUserProfile(widget.token);
+      if (!mounted) return;
       final user = data['user'] as Map<String, dynamic>?;
       if (user == null) return;
 
@@ -196,6 +198,7 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
         }
       }
 
+      if (!mounted) return;
       setState(() {
         _firstNameController.text = firstName;
         _surnameController.text = lastName;
@@ -274,6 +277,7 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
     final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       if (kIsWeb) _profileImageBytes = await pickedFile.readAsBytes();
+      if (!mounted) return;
       setState(() => _profileImage = pickedFile);
       await _uploadProfileImage();
     }
@@ -304,6 +308,7 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
 
       if (response.statusCode == 200 && respJson['success'] == true) {
         final url = respJson['data']?['profile_picture']?.toString() ?? '';
+        if (!mounted) return;
         setState(() {
           _profileImageUrl = url.isNotEmpty ? url : null;
           _profileImage = null;
