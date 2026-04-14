@@ -1,7 +1,7 @@
-from flask import Flask
+from flask import Flask, request, jsonify
 from .extensions import db, jwt, mail, cloudinary_client, mongo_client, migrate, cors, bcrypt, oauth, limiter, socketio
 from .models import *
-from .routes import auth, admin_routes, candidate_routes, ai_routes, mfa_routes, sso_routes, analytics_routes, chat_routes, offer_routes, public_routes, test_pack_routes
+from .routes import auth, admin_routes, candidate_routes, ai_routes, mfa_routes, sso_routes, analytics_routes, chat_routes, offer_routes, public_routes, test_pack_routes, cv_analyser_routes, recruitee_routes
 from .websocket_handler import register_websocket_handlers
 import firebase_admin
 from firebase_admin import credentials
@@ -10,6 +10,13 @@ import os
 def create_app():
     app = Flask(__name__)
     app.config.from_object("app.config.Config")
+
+    # Warn if CV analyser proxy is not configured.
+    if not (os.getenv("CV_ANALYSER_SIGNING_SECRET") or os.getenv("SIGNING_SECRET")):
+        app.logger.warning(
+            "CV analyser proxy is enabled but no signing secret found. "
+            "Set CV_ANALYSER_SIGNING_SECRET (recommended) or SIGNING_SECRET."
+        )
 
     # ---------------- Initialize Extensions ----------------
     db.init_app(app)
@@ -54,29 +61,37 @@ def create_app():
         ping_timeout=60,
         ping_interval=25
     )
-    # In production, restrict CORS to FRONTEND_URL when set; otherwise allow all (e.g. local dev)
+    # CORS Configuration
+    # In production, restrict to FRONTEND_URL. In dev (including local production testing), allow all localhost.
     _cors_origins = ["*"]
     if app.config.get("FLASK_ENV") == "production":
         _frontend = (app.config.get("FRONTEND_URL") or "").strip().rstrip("/")
         if _frontend:
-            _cors_origins = [_frontend]
+            # Allow the specific frontend URL + any localhost ports for easier debugging
+            _cors_origins = [_frontend, "http://localhost:*", "http://127.0.0.1:*"]
+        else:
+            _cors_origins = ["*"]
+    
     cors.init_app(
         app,
         origins=_cors_origins,
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept"],
-        supports_credentials=False,  # Required when using origins="*"; auth uses header not cookies
+        supports_credentials=False,
+        automatic_options=True
     )
 
-    # Ensure CORS headers on every response (including 4xx/5xx and errors). When Render free tier
-    # wakes from sleep, gateway timeouts may not reach the app; when the app does respond, CORS must be present.
     @app.after_request
     def _add_cors_headers(response):
         from flask import request
         if "Access-Control-Allow-Origin" not in response.headers:
             origin = request.environ.get("HTTP_ORIGIN")
+            is_localhost = origin and (origin.startswith("http://localhost:") or origin.startswith("http://127.0.0.1:") or origin == "http://localhost" or origin == "http://127.0.0.1")
+            
             if _cors_origins and "*" in _cors_origins:
                 response.headers["Access-Control-Allow-Origin"] = "*"
+            elif is_localhost:
+                response.headers["Access-Control-Allow-Origin"] = origin
             elif origin and _cors_origins and origin in _cors_origins:
                 response.headers["Access-Control-Allow-Origin"] = origin
             elif _cors_origins:
@@ -100,6 +115,10 @@ def create_app():
     app.register_blueprint(chat_routes.chat_bp, url_prefix="/api/chat")
     app.register_blueprint(offer_routes.offer_bp, url_prefix="/api/offer")
     app.register_blueprint(public_routes.public_bp, url_prefix="/api/public")
+    app.register_blueprint(cv_analyser_routes.cv_analyser_bp, url_prefix="/api")
+    
+    # ---------------- Register Recruitee Integration Blueprint ----------------
+    app.register_blueprint(recruitee_routes.recruitee_bp)
 
     # ---------------- Register SSO Blueprint ----------------
     sso_routes.register_sso_provider(app)      # initialize Auth0 / SSO provider

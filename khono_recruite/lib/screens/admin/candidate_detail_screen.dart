@@ -7,12 +7,15 @@ import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import '../../services/admin_service.dart';
+import '../../services/cv_analyser_service.dart';
+import '../../screens/admin/analysis_screen.dart';
 import '../../widgets/custom_button.dart';
 import 'interview_schedule_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../utils/api_endpoints.dart';
+import 'package:file_picker/file_picker.dart';
 
 class CandidateDetailScreen extends StatefulWidget {
   final int candidateId;
@@ -30,6 +33,7 @@ class CandidateDetailScreen extends StatefulWidget {
 
 class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
   final AdminService admin = AdminService();
+  final CVAnalyserService cvAnalyser = CVAnalyserService();
   final storage = const FlutterSecureStorage();
 
   Map<String, dynamic>? candidateData;
@@ -37,6 +41,9 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
   List<Map<String, dynamic>> candidateApplications = [];
   bool loading = true;
   String? errorMessage;
+
+  bool _analysisInProgress = false;
+  String? _analysisStatusText;
 
   @override
   void initState() {
@@ -172,7 +179,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
       }
 
       final response = await http.get(
-        Uri.parse('${ApiEndpoints.adminBase}/applications/$applicationId/download-cv'),
+        Uri.parse(
+            '${ApiEndpoints.adminBase}/applications/$applicationId/download-cv'),
         headers: {
           'Authorization': 'Bearer $jwtToken',
           'Content-Type': 'application/json',
@@ -180,7 +188,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
       );
 
       if (response.statusCode != 200) {
-        if (kDebugMode) debugPrint("Backend error: ${response.statusCode} ${response.body}");
+        if (kDebugMode)
+          debugPrint("Backend error: ${response.statusCode} ${response.body}");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Failed to get CV URL from backend")),
         );
@@ -569,6 +578,45 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
         _buildScoreRow(
             "CV Score", candidateData!['cv_score'].toDouble(), isDark),
         const SizedBox(height: 12),
+        if (_analysisInProgress || _analysisStatusText != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                if (_analysisInProgress)
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                if (_analysisInProgress) const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _analysisStatusText ?? 'Analysing…',
+                    style: TextStyle(
+                      color:
+                          isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _analysisInProgress ? null : _runCvAnalysis,
+                icon: const Icon(Icons.auto_awesome, size: 16),
+                label: const Text('Analyse CV'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
         Text(
           "Click the download icon to get the candidate's CV",
           style: TextStyle(
@@ -579,6 +627,97 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _runCvAnalysis() async {
+    if (_analysisInProgress) return;
+    try {
+      final picked = await FilePicker.platform.pickFiles(
+        allowMultiple: false,
+        withData: true,
+        type: FileType.custom,
+        allowedExtensions: const [
+          'pdf',
+          'doc',
+          'docx',
+          'txt',
+          'png',
+          'jpg',
+          'jpeg',
+        ],
+      );
+      if (picked == null || picked.files.isEmpty) return;
+
+      final file = picked.files.first;
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception('Could not read file bytes');
+      }
+
+      const maxBytes = 15 * 1024 * 1024;
+      if (bytes.length > maxBytes) {
+        throw Exception('File too large. Max size is 15MB');
+      }
+
+      final filename = file.name;
+      final ext = (file.extension ?? '').toLowerCase();
+      final contentType = _inferContentType(ext);
+
+      setState(() {
+        _analysisInProgress = true;
+        _analysisStatusText = 'Uploading…';
+      });
+
+      final result = await cvAnalyser.uploadAndPoll(
+        bytes: bytes,
+        filename: filename,
+        contentType: contentType,
+        onStatus: (status) {
+          if (!mounted) return;
+          setState(() {
+            _analysisStatusText = 'Status: ${status.status}';
+          });
+        },
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _analysisInProgress = false;
+        _analysisStatusText = null;
+      });
+
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => AnalysisScreen(result: result)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _analysisInProgress = false;
+        _analysisStatusText = null;
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('CV analysis failed: $e')));
+    }
+  }
+
+  String _inferContentType(String ext) {
+    switch (ext) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'doc':
+        return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'txt':
+        return 'text/plain';
+      case 'png':
+        return 'image/png';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      default:
+        return 'application/octet-stream';
+    }
   }
 
   Widget _buildEducationCard(bool isDark) {
@@ -640,7 +779,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
             final job = item['job'] as Map<String, dynamic>? ?? {};
             final title = job['title'] ?? 'Unknown role';
             final company = job['company'] ?? '';
-            final empType = (job['employment_type'] ?? '').toString().replaceAll('_', ' ');
+            final empType =
+                (job['employment_type'] ?? '').toString().replaceAll('_', ' ');
             final status = app['status'] ?? '';
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -675,7 +815,9 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
                           company,
                           style: TextStyle(
                             fontSize: 12,
-                            color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                            color: isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600,
                           ),
                         ),
                       ),
@@ -684,7 +826,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
                       children: [
                         if (empType.isNotEmpty)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
                               color: Colors.redAccent.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
@@ -698,12 +841,15 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
                               ),
                             ),
                           ),
-                        if (empType.isNotEmpty && status.isNotEmpty) const SizedBox(width: 8),
+                        if (empType.isNotEmpty && status.isNotEmpty)
+                          const SizedBox(width: 8),
                         if (status.isNotEmpty)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
-                              color: _getStatusColor(status).withValues(alpha: 0.15),
+                              color: _getStatusColor(status)
+                                  .withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(

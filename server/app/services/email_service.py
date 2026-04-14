@@ -98,6 +98,85 @@ class EmailService:
         EmailService.send_async_email(subject, [email], html)
 
     @staticmethod
+    def send_job_pending_approval_to_admins(job_title: str, company: str, created_by_name: str, created_by_email: str, created_at: str, recipients: list[str]):
+        subject = f"Job pending approval: {job_title or 'New job'}"
+        app_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/") or "http://localhost:3000"
+        admin_jobs_url = f"{app_url}/admin/jobs"
+        try:
+            html = render_template(
+                "email_templates/job_pending_admin.html",
+                job_title=job_title,
+                company=company or "",
+                created_by_name=created_by_name or "",
+                created_by_email=created_by_email or "",
+                created_at=created_at or "",
+                admin_jobs_url=admin_jobs_url,
+            )
+        except Exception:
+            logging.error("Failed to render job_pending_admin template", exc_info=True)
+            html = (
+                f"<p>New job pending approval.</p>"
+                f"<p><b>Title:</b> {job_title}<br/><b>Company:</b> {company}<br/>"
+                f"<b>Created by:</b> {created_by_name} ({created_by_email})<br/>"
+                f"<b>Created at:</b> {created_at}</p>"
+                f"<p>Review: <a href=\"{admin_jobs_url}\">{admin_jobs_url}</a></p>"
+            )
+        if recipients:
+            EmailService.send_async_email(subject, recipients, html)
+
+    @staticmethod
+    def send_job_approved_to_hiring_manager(job_title: str, company: str, approved_by_name: str, approved_by_email: str, approved_at: str, recipient: str, note: str | None = None):
+        subject = f"Job approved: {job_title or 'Job'}"
+        try:
+            html = render_template(
+                "email_templates/job_approved_hm.html",
+                job_title=job_title,
+                company=company or "",
+                approved_by_name=approved_by_name or "",
+                approved_by_email=approved_by_email or "",
+                approved_at=approved_at or "",
+                note=note,
+            )
+        except Exception:
+            logging.error("Failed to render job_approved_hm template", exc_info=True)
+            html = (
+                f"<p>Your job was approved.</p>"
+                f"<p><b>Title:</b> {job_title}<br/><b>Company:</b> {company}<br/>"
+                f"<b>Approved by:</b> {approved_by_name} ({approved_by_email})<br/>"
+                f"<b>Approved at:</b> {approved_at}</p>"
+            )
+            if note:
+                html += f"<p><b>Note:</b> {note}</p>"
+        if recipient:
+            EmailService.send_async_email(subject, [recipient], html)
+
+    @staticmethod
+    def send_job_rejected_to_hiring_manager(job_title: str, company: str, rejected_by_name: str, rejected_by_email: str, reason: str, recipient: str, note: str | None = None):
+        subject = f"Job rejected: {job_title or 'Job'}"
+        try:
+            html = render_template(
+                "email_templates/job_rejected_hm.html",
+                job_title=job_title,
+                company=company or "",
+                rejected_by_name=rejected_by_name or "",
+                rejected_by_email=rejected_by_email or "",
+                reason=reason or "Not provided",
+                note=note,
+            )
+        except Exception:
+            logging.error("Failed to render job_rejected_hm template", exc_info=True)
+            html = (
+                f"<p>Your job was rejected.</p>"
+                f"<p><b>Title:</b> {job_title}<br/><b>Company:</b> {company}<br/>"
+                f"<b>Rejected by:</b> {rejected_by_name} ({rejected_by_email})<br/>"
+                f"<b>Reason:</b> {reason}</p>"
+            )
+            if note:
+                html += f"<p><b>Note:</b> {note}</p>"
+        if recipient:
+            EmailService.send_async_email(subject, [recipient], html)
+
+    @staticmethod
     def send_verification_email_sync(email, verification_code):
         """
         Send verification email synchronously. Returns True if sent, False if failed

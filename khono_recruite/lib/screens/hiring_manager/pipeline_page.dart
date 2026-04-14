@@ -46,7 +46,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
 
   Future<void> _loadInitialData() async {
     try {
-      setState(() => _isLoading = true);
+      if (mounted) setState(() => _isLoading = true);
 
       final pipelineData = await _recruitmentService.loadPipelineData(
         filter: _selectedFilter == 'all' ? null : _selectedFilter,
@@ -55,135 +55,167 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
       final requisitionsData = await _recruitmentService.loadRequisitionsData();
       final analyticsData = await _recruitmentService.loadAnalyticsData();
 
-      setState(() {
-        _quickStats = pipelineData['quickStats'] ?? {};
-        _pipelineStages =
-            List<Map<String, dynamic>>.from(pipelineData['stages'] ?? []);
-        _applications = List<Map<String, dynamic>>.from(
-            pipelineData['applications']?['applications'] ?? []);
-        _totalApplications =
-            pipelineData['applications']?['total'] ?? _applications.length;
-        _interviews =
-            List<Map<String, dynamic>>.from(pipelineData['interviews'] ?? []);
-        _offers = List<Map<String, dynamic>>.from(pipelineData['offers'] ?? []);
+      if (mounted) {
+        setState(() {
+          _quickStats = pipelineData['quickStats'] ?? {};
+          _pipelineStages = List<Map<String, dynamic>>.from(
+            pipelineData['stages'] ?? [],
+          );
+          _applications = List<Map<String, dynamic>>.from(
+            pipelineData['applications']?['applications'] ?? [],
+          );
+          _totalApplications =
+              pipelineData['applications']?['total'] ?? _applications.length;
+          _interviews = List<Map<String, dynamic>>.from(
+            pipelineData['interviews'] ?? [],
+          );
+          _offers =
+              List<Map<String, dynamic>>.from(pipelineData['offers'] ?? []);
 
-        _requisitions =
-            List<Map<String, dynamic>>.from(requisitionsData['jobs'] ?? []);
-        _activeJobs =
-            _requisitions.where((r) => r['status'] == 'active').length;
-        _offersSent = _offers.length;
+          _requisitions = List<Map<String, dynamic>>.from(
+            requisitionsData['jobs'] ?? [],
+          );
+          _activeJobs =
+              _requisitions.where((r) => r['status'] == 'active').length;
+          _offersSent = _offers.length;
 
-        _analytics = analyticsData;
+          _analytics = analyticsData;
 
-        _isLoading = false;
-      });
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error loading initial data: $e');
       _showErrorSnackbar('Failed to load data. Please try again.');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _refreshData() async {
     try {
-      setState(() => _isRefreshing = true);
+      if (mounted) setState(() => _isRefreshing = true);
 
       final refreshedData = await _recruitmentService.refreshAllData();
 
-      setState(() {
-        _applications = List<Map<String, dynamic>>.from(
-            refreshedData['applications'] ?? []);
-        _interviews =
-            List<Map<String, dynamic>>.from(refreshedData['interviews'] ?? []);
-        _offers =
-            List<Map<String, dynamic>>.from(refreshedData['offers'] ?? []);
-        _requisitions =
-            List<Map<String, dynamic>>.from(refreshedData['jobs'] ?? []);
+      if (mounted) {
+        setState(() {
+          _applications = List<Map<String, dynamic>>.from(
+            refreshedData['applications'] ?? [],
+          );
+          _interviews = List<Map<String, dynamic>>.from(
+            refreshedData['interviews'] ?? [],
+          );
+          _offers = List<Map<String, dynamic>>.from(
+            refreshedData['offers'] ?? [],
+          );
+          _requisitions = List<Map<String, dynamic>>.from(
+            refreshedData['jobs'] ?? [],
+          );
 
-        _activeJobs =
-            _requisitions.where((r) => r['status'] == 'active').length;
-        _offersSent = _offers.length;
-        _totalApplications = _applications.length;
+          _activeJobs =
+              _requisitions.where((r) => r['status'] == 'active').length;
+          _offersSent = _offers.length;
+          _totalApplications = _applications.length;
 
-        _isRefreshing = false;
-      });
+          _isRefreshing = false;
+        });
+      }
 
       _showSuccessSnackbar('Data refreshed successfully');
     } catch (e) {
       debugPrint('Error refreshing data: $e');
       _showErrorSnackbar('Failed to refresh data');
-      setState(() => _isRefreshing = false);
+      if (mounted) setState(() => _isRefreshing = false);
     }
   }
 
   Future<void> _loadTabData(int tabIndex) async {
     try {
-      setState(() => _isLoading = true);
+      if (mounted) setState(() => _isLoading = true);
 
       switch (tabIndex) {
         case 0: // Pipeline
           final pipelineData = await _recruitmentService.loadPipelineData(
             filter: _selectedFilter == 'all' ? null : _selectedFilter,
           );
-          setState(() {
-            _quickStats = pipelineData['quickStats'] ?? {};
-            _pipelineStages =
-                List<Map<String, dynamic>>.from(pipelineData['stages'] ?? []);
-            _applications = List<Map<String, dynamic>>.from(
-                pipelineData['applications']?['applications'] ?? []);
-            _interviews = List<Map<String, dynamic>>.from(
-                pipelineData['interviews'] ?? []);
-            _offers =
-                List<Map<String, dynamic>>.from(pipelineData['offers'] ?? []);
-          });
+          if (mounted) {
+            setState(() {
+              _quickStats = pipelineData['quickStats'] ?? {};
+              _pipelineStages = List<Map<String, dynamic>>.from(
+                pipelineData['stages'] ?? [],
+              );
+              _applications = List<Map<String, dynamic>>.from(
+                pipelineData['applications']?['applications'] ?? [],
+              );
+              _interviews = List<Map<String, dynamic>>.from(
+                pipelineData['interviews'] ?? [],
+              );
+              _offers = List<Map<String, dynamic>>.from(
+                pipelineData['offers'] ?? [],
+              );
+            });
+          }
           break;
 
         case 1: // Requisitions
           final requisitionsData =
               await _recruitmentService.loadRequisitionsData();
-          setState(() {
-            _requisitions =
-                List<Map<String, dynamic>>.from(requisitionsData['jobs'] ?? []);
-            _activeJobs =
-                _requisitions.where((r) => r['status'] == 'active').length;
-          });
+          if (mounted) {
+            setState(() {
+              _requisitions = List<Map<String, dynamic>>.from(
+                requisitionsData['jobs'] ?? [],
+              );
+              _activeJobs =
+                  _requisitions.where((r) => r['status'] == 'active').length;
+            });
+          }
           break;
 
         case 2: // Calendar
           final calendarData = await _recruitmentService.loadCalendarData();
-          setState(() {
-            _interviews = List<Map<String, dynamic>>.from(
-                calendarData['todayInterviews'] ?? []);
-            // Note: You might want to load upcoming and past interviews separately
-          });
+          if (mounted) {
+            setState(() {
+              _interviews = List<Map<String, dynamic>>.from(
+                calendarData['todayInterviews'] ?? [],
+              );
+              // Note: You might want to load upcoming and past interviews separately
+            });
+          }
           break;
 
         case 3: // Analytics
           final analyticsData = await _recruitmentService.loadAnalyticsData();
-          setState(() {
-            _analytics = analyticsData;
-          });
+          if (mounted) {
+            setState(() {
+              _analytics = analyticsData;
+            });
+          }
           break;
       }
 
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     } catch (e) {
       debugPrint('Error loading tab data: $e');
       _showErrorSnackbar('Failed to load data');
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _updateApplicationStatus(
-      int applicationId, String status) async {
+    int applicationId,
+    String status,
+  ) async {
     try {
       final success = await _recruitmentService.updateApplicationStatus(
-          applicationId, status);
+        applicationId,
+        status,
+      );
       if (success) {
         _showSuccessSnackbar('Status updated successfully');
         // Refresh the applications list
-        final index =
-            _applications.indexWhere((app) => app['id'] == applicationId);
+        final index = _applications.indexWhere(
+          (app) => app['id'] == applicationId,
+        );
         if (index != -1) {
           setState(() {
             _applications[index]['status'] = status;
@@ -204,7 +236,9 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Future<void> _handleRecommendationAction(
-      int applicationId, String action) async {
+    int applicationId,
+    String action,
+  ) async {
     try {
       String recommendation;
       String? newStatus;
@@ -220,27 +254,33 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         return;
       }
       final recOk = await _recruitmentService.updateApplicationRecommendation(
-          applicationId, recommendation);
+        applicationId,
+        recommendation,
+      );
       if (!recOk) {
         _showErrorSnackbar('Failed to update recommendation');
         return;
       }
       if (newStatus != null) {
         final statusOk = await _recruitmentService.updateApplicationStatus(
-            applicationId, newStatus);
+          applicationId,
+          newStatus,
+        );
         if (!statusOk) {
           _showErrorSnackbar('Recommendation set; status update failed');
           return;
         }
       }
       _showSuccessSnackbar(
-          action == 'rec_proceed'
-              ? 'Moved to Final Interview'
-              : action == 'rec_hold'
-                  ? 'Recommendation set to Hold'
-                  : 'Rejected');
-      final index =
-          _applications.indexWhere((app) => app['id'] == applicationId);
+        action == 'rec_proceed'
+            ? 'Moved to Final Interview'
+            : action == 'rec_hold'
+                ? 'Recommendation set to Hold'
+                : 'Rejected',
+      );
+      final index = _applications.indexWhere(
+        (app) => app['id'] == applicationId,
+      );
       if (index != -1) {
         setState(() {
           _applications[index]['recommendation'] = recommendation;
@@ -264,8 +304,12 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
       context,
       MaterialPageRoute(
         builder: (_) => CandidateDetailScreen(
-          candidateId: candidateId is int ? candidateId : int.tryParse(candidateId.toString()) ?? 0,
-          applicationId: applicationId is int ? applicationId : int.tryParse(applicationId.toString()) ?? 0,
+          candidateId: candidateId is int
+              ? candidateId
+              : int.tryParse(candidateId.toString()) ?? 0,
+          applicationId: applicationId is int
+              ? applicationId
+              : int.tryParse(applicationId.toString()) ?? 0,
         ),
       ),
     );
@@ -274,7 +318,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
     }
   }
 
-  Future<void> _openInterviewFlow({int? applicationId, int? candidateId}) async {
+  Future<void> _openInterviewFlow(
+      {int? applicationId, int? candidateId}) async {
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -305,7 +350,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   void _handleAppMenuAction(Map<String, dynamic> app, String value) {
-    final appId = app['id'] is int ? app['id'] as int : int.tryParse('${app['id']}');
+    final appId =
+        app['id'] is int ? app['id'] as int : int.tryParse('${app['id']}');
     final candidateId = app['candidate_id'] is int
         ? app['candidate_id'] as int
         : int.tryParse('${app['candidate_id']}');
@@ -321,7 +367,9 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
       _openOfferFlow(applicationId: appId);
       return;
     }
-    if (value == 'rec_proceed' || value == 'rec_hold' || value == 'rec_reject') {
+    if (value == 'rec_proceed' ||
+        value == 'rec_hold' ||
+        value == 'rec_reject') {
       _handleRecommendationAction(appId ?? 0, value);
       return;
     }
@@ -329,21 +377,19 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   void _showErrorSnackbar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.red,
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
+      );
+    }
   }
 
   void _showSuccessSnackbar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: Colors.green,
-      ),
-    );
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.green),
+      );
+    }
   }
 
   List<Map<String, dynamic>> _getFilteredApplications() {
@@ -356,9 +402,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final backgroundAsset = isDark
-        ? "assets/images/dark.png"
-        : "assets/images/light_mode_bg.png";
+    final backgroundAsset =
+        isDark ? "assets/images/dark.png" : "assets/images/light_mode_bg.png";
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
@@ -491,11 +536,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                     Colors.blueAccent,
                   ),
                   const SizedBox(width: 12),
-                  _buildStatCard(
-                    'Offers Sent',
-                    '$_offersSent',
-                    Colors.green,
-                  ),
+                  _buildStatCard('Offers Sent', '$_offersSent', Colors.green),
                 ],
               ),
             ],
@@ -656,11 +697,16 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             },
             itemBuilder: (context) => [
               const PopupMenuItem(value: 'all', child: Text('All Candidates')),
+              const PopupMenuItem(value: 'applied', child: Text('Applied')),
               const PopupMenuItem(value: 'screening', child: Text('Screening')),
               const PopupMenuItem(
-                  value: 'assessment', child: Text('Assessment')),
+                value: 'assessment',
+                child: Text('Assessment'),
+              ),
               const PopupMenuItem(
-                  value: 'recommended', child: Text('Recommended')),
+                value: 'recommended',
+                child: Text('Recommended'),
+              ),
               const PopupMenuItem(value: 'interview', child: Text('Interview')),
               const PopupMenuItem(value: 'offer', child: Text('Offer Stage')),
               const PopupMenuItem(value: 'hired', child: Text('Hired')),
@@ -675,8 +721,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.filter_alt_outlined,
-                      color: Colors.grey.shade600, size: 18),
+                  Icon(
+                    Icons.filter_alt_outlined,
+                    color: Colors.grey.shade600,
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     _selectedFilter == 'all' ? 'All Status' : _selectedFilter,
@@ -687,8 +736,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Icon(Icons.arrow_drop_down,
-                      color: Colors.grey.shade600, size: 20),
+                  Icon(
+                    Icons.arrow_drop_down,
+                    color: Colors.grey.shade600,
+                    size: 20,
+                  ),
                 ],
               ),
             ),
@@ -700,9 +752,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => JobManagement(),
-                ),
+                MaterialPageRoute(builder: (_) => JobManagement()),
               ).then((_) => _loadInitialData());
             },
             style: ElevatedButton.styleFrom(
@@ -792,8 +842,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 children: _pipelineStages.map((stage) {
-                  final stageName =
-                      stage['stage_name'] ?? stage['name'] ?? '';
+                  final stageName = stage['stage_name'] ?? stage['name'] ?? '';
                   final count = stage['count'] ?? 0;
                   final color = _getStageColor(stageName);
                   final icon = _getStageIcon(stageName);
@@ -809,17 +858,47 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                 scrollDirection: Axis.horizontal,
                 children: [
                   _buildPipelineStage(
-                      'Screening', Icons.filter_list, 0, Colors.blue),
+                    'Screening',
+                    Icons.filter_list,
+                    0,
+                    Colors.blue,
+                  ),
                   _buildPipelineStage(
-                      'Assessment', Icons.assessment, 0, Colors.orange),
+                    'Assessment',
+                    Icons.assessment,
+                    0,
+                    Colors.orange,
+                  ),
                   _buildPipelineStage(
-                      'Recommended', Icons.how_to_vote, 0, Colors.deepPurple),
+                    'Recommended',
+                    Icons.how_to_vote,
+                    0,
+                    Colors.deepPurple,
+                  ),
                   _buildPipelineStage(
-                      'Interview', Icons.video_call, 0, Colors.purple),
+                    'Recommended',
+                    Icons.how_to_vote,
+                    0,
+                    Colors.deepPurple,
+                  ),
                   _buildPipelineStage(
-                      'Offer', Icons.work_outline, 0, Colors.green),
-                  _buildPipelineStage('Hired', Icons.check_circle, 0,
-                      const Color.fromARGB(255, 135, 20, 20)),
+                    'Interview',
+                    Icons.video_call,
+                    0,
+                    Colors.purple,
+                  ),
+                  _buildPipelineStage(
+                    'Offer',
+                    Icons.work_outline,
+                    0,
+                    Colors.green,
+                  ),
+                  _buildPipelineStage(
+                    'Hired',
+                    Icons.check_circle,
+                    0,
+                    const Color.fromARGB(255, 135, 20, 20),
+                  ),
                 ],
               ),
             ),
@@ -862,7 +941,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildPipelineStage(
-      String title, IconData icon, int count, Color color) {
+    String title,
+    IconData icon,
+    int count,
+    Color color,
+  ) {
     return Container(
       width: 200,
       margin: const EdgeInsets.only(right: 16),
@@ -901,10 +984,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           const SizedBox(height: 8),
           Text(
             '$count candidates',
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: Colors.grey.shade600,
-            ),
+            style: GoogleFonts.inter(fontSize: 14, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 16),
           LinearProgressIndicator(
@@ -973,8 +1053,10 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -989,8 +1071,10 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: recommendationColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -1050,39 +1134,56 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                   onSelected: (value) => _handleAppMenuAction(app, value),
                   itemBuilder: (context) => [
                     const PopupMenuItem(
-                        value: 'open_candidate', child: Text('Open Candidate Detail')),
+                        value: 'open_candidate',
+                        child: Text('Open Candidate Detail')),
                     const PopupMenuItem(
-                        value: 'open_interviews', child: Text('Open Interviews')),
+                        value: 'open_interviews',
+                        child: Text('Open Interviews')),
                     const PopupMenuItem(
                         value: 'open_offer', child: Text('Open Offers')),
                     const PopupMenuDivider(),
                     const PopupMenuItem(
                         value: 'screening', child: Text('Move to Screening')),
                     const PopupMenuItem(
-                        value: 'assessment',
-                        child: Text('Move to Assessment')),
+                      value: 'assessment',
+                      child: Text('Move to Assessment'),
+                    ),
                     const PopupMenuItem(
-                        value: 'recommended',
-                        child: Text('Move to Recommended')),
+                      value: 'recommended',
+                      child: Text('Move to Recommended'),
+                    ),
                     const PopupMenuItem(
-                        value: 'interview', child: Text('Move to Interview')),
+                      value: 'recommended',
+                      child: Text('Move to Recommended'),
+                    ),
                     const PopupMenuItem(
-                        value: 'offer', child: Text('Move to Offer')),
+                      value: 'interview',
+                      child: Text('Move to Interview'),
+                    ),
                     const PopupMenuItem(
-                        value: 'hired', child: Text('Mark as Hired')),
+                      value: 'offer',
+                      child: Text('Move to Offer'),
+                    ),
                     const PopupMenuItem(
-                        value: 'rejected', child: Text('Reject')),
+                      value: 'rejected',
+                      child: Text('Reject'),
+                    ),
                     const PopupMenuDivider(),
                     const PopupMenuItem(
-                        value: 'rec_proceed',
-                        child: Text('Proceed to Final Interview')),
+                      value: 'rec_proceed',
+                      child: Text('Proceed to Final Interview'),
+                    ),
+                    const PopupMenuItem(value: 'rec_hold', child: Text('Hold')),
                     const PopupMenuItem(
-                        value: 'rec_hold', child: Text('Hold')),
-                    const PopupMenuItem(
-                        value: 'rec_reject', child: Text('Reject')),
+                      value: 'rec_reject',
+                      child: Text('Reject'),
+                    ),
                   ],
-                  child: Icon(Icons.more_vert,
-                      color: Colors.grey.shade500, size: 20),
+                  child: Icon(
+                    Icons.more_vert,
+                    color: Colors.grey.shade500,
+                    size: 20,
+                  ),
                 ),
               ],
             ),
@@ -1126,123 +1227,141 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
     return InkWell(
       onTap: () => _openCandidateDetail(app),
       child: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color.fromARGB(255, 135, 20, 20)
-                      .withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Text(
-                    candidateName.substring(0, 2).toUpperCase(),
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: const Color.fromARGB(255, 135, 20, 20),
-                    ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color.fromARGB(
+                      255,
+                      135,
+                      20,
+                      20,
+                    ).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      candidateName,
+                  child: Center(
+                    child: Text(
+                      candidateName.substring(0, 2).toUpperCase(),
                       style: GoogleFonts.poppins(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
-                        color: Colors.black,
+                        color: const Color.fromARGB(255, 135, 20, 20),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      jobTitle,
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        color: Colors.grey.shade600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  _capitalize(status),
-                  style: GoogleFonts.inter(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: statusColor,
                   ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Text(
-                '$overallScore%',
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.black,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        candidateName,
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        jobTitle,
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              PopupMenuButton<String>(
-                onSelected: (value) => _handleAppMenuAction(app, value),
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                      value: 'open_candidate', child: Text('Open Candidate Detail')),
-                  const PopupMenuItem(
-                      value: 'open_interviews', child: Text('Open Interviews')),
-                  const PopupMenuItem(
-                      value: 'open_offer', child: Text('Open Offers')),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem(
-                      value: 'screening', child: Text('Move to Screening')),
-                  const PopupMenuItem(
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    _capitalize(status),
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: statusColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  '$overallScore%',
+                  style: GoogleFonts.poppins(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.black,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                PopupMenuButton<String>(
+                  onSelected: (value) => _handleAppMenuAction(app, value),
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                        value: 'open_candidate',
+                        child: Text('Open Candidate Detail')),
+                    const PopupMenuItem(
+                        value: 'open_interviews',
+                        child: Text('Open Interviews')),
+                    const PopupMenuItem(
+                        value: 'open_offer', child: Text('Open Offers')),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                        value: 'screening', child: Text('Move to Screening')),
+                    const PopupMenuItem(
                       value: 'assessment',
-                      child: Text('Move to Assessment')),
-                  const PopupMenuItem(
+                      child: Text('Move to Assessment'),
+                    ),
+                    const PopupMenuItem(
                       value: 'recommended',
-                      child: Text('Move to Recommended')),
-                  const PopupMenuItem(
-                      value: 'interview', child: Text('Move to Interview')),
-                  const PopupMenuItem(
-                      value: 'offer', child: Text('Move to Offer')),
-                  const PopupMenuItem(
-                      value: 'hired', child: Text('Mark as Hired')),
-                  const PopupMenuItem(
-                      value: 'rejected', child: Text('Reject')),
-                  const PopupMenuDivider(),
-                  const PopupMenuItem(
+                      child: Text('Move to Recommended'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'recommended',
+                      child: Text('Move to Recommended'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'interview',
+                      child: Text('Move to Interview'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'hired',
+                      child: Text('Mark as Hired'),
+                    ),
+                    const PopupMenuItem(
+                        value: 'rejected', child: Text('Reject')),
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
                       value: 'rec_proceed',
-                      child: Text('Proceed to Final Interview')),
-                  const PopupMenuItem(
-                      value: 'rec_hold', child: Text('Hold')),
-                  const PopupMenuItem(
-                      value: 'rec_reject', child: Text('Reject')),
-                ],
-                child: Icon(Icons.more_vert, color: Colors.grey.shade500),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Divider(color: Colors.grey.shade200, height: 1),
-        ],
-      ),
+                      child: Text('Proceed to Final Interview'),
+                    ),
+                    const PopupMenuItem(value: 'rec_hold', child: Text('Hold')),
+                    const PopupMenuItem(
+                      value: 'rec_reject',
+                      child: Text('Reject'),
+                    ),
+                  ],
+                  child: Icon(Icons.more_vert, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Divider(color: Colors.grey.shade200, height: 1),
+          ],
+        ),
       ),
     );
   }
@@ -1254,7 +1373,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
       'recommended',
       'interview',
       'offer',
-      'hired'
+      'hired',
     ];
 
     return SizedBox(
@@ -1270,7 +1389,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           return Container(
             width: 320,
             margin: EdgeInsets.only(
-                right: columnIndex < columns.length - 1 ? 16 : 0),
+              right: columnIndex < columns.length - 1 ? 16 : 0,
+            ),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.grey.shade50,
@@ -1293,7 +1413,9 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color.fromARGB(255, 135, 20, 20),
                         borderRadius: BorderRadius.circular(12),
@@ -1310,9 +1432,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                     const Spacer(),
                     IconButton(
                       onPressed: () {},
-                      icon: Icon(Icons.add,
-                          color: const Color.fromARGB(255, 135, 20, 20),
-                          size: 20),
+                      icon: Icon(
+                        Icons.add,
+                        color: const Color.fromARGB(255, 135, 20, 20),
+                        size: 20,
+                      ),
                     ),
                   ],
                 ),
@@ -1382,10 +1506,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           const SizedBox(height: 8),
           Text(
             jobTitle,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-            ),
+            style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -1395,8 +1516,12 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color.fromARGB(255, 135, 20, 20)
-                      .withValues(alpha: 0.1),
+                  color: const Color.fromARGB(
+                    255,
+                    135,
+                    20,
+                    20,
+                  ).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -1412,12 +1537,16 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               if (nextInterview != null)
                 Row(
                   children: [
-                    Icon(Icons.calendar_today,
-                        size: 12, color: Colors.grey.shade500),
+                    Icon(
+                      Icons.calendar_today,
+                      size: 12,
+                      color: Colors.grey.shade500,
+                    ),
                     const SizedBox(width: 4),
                     Text(
-                      DateFormat('MMM dd')
-                          .format(DateTime.parse(nextInterview)),
+                      DateFormat(
+                        'MMM dd',
+                      ).format(DateTime.parse(nextInterview)),
                       style: GoogleFonts.inter(
                         fontSize: 11,
                         color: Colors.grey.shade600,
@@ -1530,7 +1659,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildRequisitionStatCard(
-      String title, String value, Color color, IconData icon) {
+    String title,
+    String value,
+    Color color,
+    IconData icon,
+  ) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -1615,12 +1748,18 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: isActive
-                        ? const Color.fromARGB(255, 135, 20, 20)
-                            .withValues(alpha: 0.1)
+                        ? const Color.fromARGB(
+                            255,
+                            135,
+                            20,
+                            20,
+                          ).withValues(alpha: 0.1)
                         : Colors.grey.shade100,
                     borderRadius: BorderRadius.circular(20),
                   ),
@@ -1637,8 +1776,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                 ),
                 IconButton(
                   onPressed: () {},
-                  icon: Icon(Icons.more_vert,
-                      color: Colors.grey.shade500, size: 20),
+                  icon: Icon(
+                    Icons.more_vert,
+                    color: Colors.grey.shade500,
+                    size: 20,
+                  ),
                 ),
               ],
             ),
@@ -1666,7 +1808,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               value: progress / 100,
               backgroundColor: Colors.grey.shade200,
               valueColor: AlwaysStoppedAnimation<Color>(
-                  const Color.fromARGB(255, 135, 20, 20)),
+                const Color.fromARGB(255, 135, 20, 20),
+              ),
               borderRadius: BorderRadius.circular(4),
             ),
             const SizedBox(height: 12),
@@ -1675,8 +1818,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.people_outline,
-                        size: 16, color: Colors.grey.shade500),
+                    Icon(
+                      Icons.people_outline,
+                      size: 16,
+                      color: Colors.grey.shade500,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       '$applicationsCount applicants',
@@ -1689,8 +1835,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                 ),
                 Row(
                   children: [
-                    Icon(Icons.work_outline,
-                        size: 16, color: Colors.grey.shade500),
+                    Icon(
+                      Icons.work_outline,
+                      size: 16,
+                      color: Colors.grey.shade500,
+                    ),
                     const SizedBox(width: 6),
                     Text(
                       '$vacancy vacancy',
@@ -1740,8 +1889,10 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                   children: [
                     IconButton(
                       onPressed: () {},
-                      icon:
-                          Icon(Icons.chevron_left, color: Colors.grey.shade600),
+                      icon: Icon(
+                        Icons.chevron_left,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                     Text(
                       DateFormat('MMMM yyyy').format(DateTime.now()),
@@ -1753,8 +1904,10 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                     ),
                     IconButton(
                       onPressed: () {},
-                      icon: Icon(Icons.chevron_right,
-                          color: Colors.grey.shade600),
+                      icon: Icon(
+                        Icons.chevron_right,
+                        color: Colors.grey.shade600,
+                      ),
                     ),
                   ],
                 ),
@@ -1802,8 +1955,10 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           if (_offers.isEmpty) _buildEmptyState('No pending offers'),
 
           ..._offers
-              .where((offer) =>
-                  offer['status'] == 'pending' || offer['status'] == 'sent')
+              .where(
+                (offer) =>
+                    offer['status'] == 'pending' || offer['status'] == 'sent',
+              )
               .map((offer) => _buildOfferCard(offer)),
         ],
       ),
@@ -1842,9 +1997,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
         'Unknown Candidate';
     final interviewType =
         interview['interview_type'] ?? interview['type'] ?? 'Interview';
-    final scheduledTime = DateTime.parse(interview['scheduled_time'] ??
-        interview['interview_date'] ??
-        DateTime.now().toIso8601String());
+    final scheduledTime = DateTime.parse(
+      interview['scheduled_time'] ??
+          interview['interview_date'] ??
+          DateTime.now().toIso8601String(),
+    );
     final interviewer = interview['interviewer'] ??
         interview['interviewer_name'] ??
         'Unknown Interviewer';
@@ -1869,8 +2026,12 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color:
-                  const Color.fromARGB(255, 135, 20, 20).withValues(alpha: 0.1),
+              color: const Color.fromARGB(
+                255,
+                135,
+                20,
+                20,
+              ).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Column(
@@ -1896,8 +2057,12 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
-                    color: const Color.fromARGB(255, 135, 20, 20)
-                        .withValues(alpha: 0.8),
+                    color: const Color.fromARGB(
+                      255,
+                      135,
+                      20,
+                      20,
+                    ).withValues(alpha: 0.8),
                   ),
                 ),
               ],
@@ -1927,8 +2092,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Icon(Icons.access_time,
-                        size: 14, color: Colors.grey.shade500),
+                    Icon(
+                      Icons.access_time,
+                      size: 14,
+                      color: Colors.grey.shade500,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       DateFormat('h:mm a').format(scheduledTime),
@@ -1938,8 +2106,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Icon(Icons.person_outline,
-                        size: 14, color: Colors.grey.shade500),
+                    Icon(
+                      Icons.person_outline,
+                      size: 14,
+                      color: Colors.grey.shade500,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       interviewer,
@@ -1958,8 +2129,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
               onPressed: () {
                 // Launch meeting link
               },
-              icon: Icon(Icons.video_call,
-                  color: const Color.fromARGB(255, 135, 20, 20), size: 24),
+              icon: Icon(
+                Icons.video_call,
+                color: const Color.fromARGB(255, 135, 20, 20),
+                size: 24,
+              ),
             ),
         ],
       ),
@@ -2029,8 +2203,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Icon(Icons.attach_money,
-                        size: 14, color: Colors.grey.shade500),
+                    Icon(
+                      Icons.attach_money,
+                      size: 14,
+                      color: Colors.grey.shade500,
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       baseSalary,
@@ -2099,10 +2276,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
           const SizedBox(height: 4),
           Text(
             'Track recruitment performance and metrics',
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: Colors.grey.shade600,
-            ),
+            style: GoogleFonts.inter(fontSize: 14, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 32),
 
@@ -2173,10 +2347,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                         ),
                       ),
                       const SizedBox(height: 20),
-                      SizedBox(
-                        height: 200,
-                        child: _buildDummyChart(),
-                      ),
+                      SizedBox(height: 200, child: _buildDummyChart()),
                     ],
                   ),
                 ),
@@ -2209,8 +2380,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
                       ),
                       const SizedBox(height: 20),
                       ..._applications
-                          .where((app) =>
-                              (app['overall_score'] ?? app['score'] ?? 0) >= 80)
+                          .where(
+                            (app) =>
+                                (app['overall_score'] ?? app['score'] ?? 0) >=
+                                80,
+                          )
                           .take(5)
                           .map((app) => _buildTopPerformerCard(app)),
                     ],
@@ -2225,7 +2399,12 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildAnalyticsCard(
-      String title, String value, IconData icon, Color color, String subtitle) {
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+    String subtitle,
+  ) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -2321,8 +2500,12 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color:
-                  const Color.fromARGB(255, 135, 20, 20).withValues(alpha: 0.1),
+              color: const Color.fromARGB(
+                255,
+                135,
+                20,
+                20,
+              ).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Center(
@@ -2380,15 +2563,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   }
 
   Widget _buildTeamView() {
-    return const Center(
-      child: Text('Team View - Coming Soon'),
-    );
+    return const Center(child: Text('Team View - Coming Soon'));
   }
 
   Widget _buildSettingsView() {
-    return const Center(
-      child: Text('Settings View - Coming Soon'),
-    );
+    return const Center(child: Text('Settings View - Coming Soon'));
   }
 
   Widget _buildEmptyState(String message) {
@@ -2408,18 +2587,11 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
       ),
       child: Column(
         children: [
-          Icon(
-            Icons.inbox_outlined,
-            size: 64,
-            color: Colors.grey.shade400,
-          ),
+          Icon(Icons.inbox_outlined, size: 64, color: Colors.grey.shade400),
           const SizedBox(height: 16),
           Text(
             message,
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              color: Colors.grey.shade600,
-            ),
+            style: GoogleFonts.inter(fontSize: 16, color: Colors.grey.shade600),
           ),
         ],
       ),
@@ -2442,10 +2614,7 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
+          style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600),
         ),
         const SizedBox(height: 4),
         Row(
@@ -2486,6 +2655,8 @@ class _RecruitmentPipelinePageState extends State<RecruitmentPipelinePage> {
   // Helper methods
   Color _getStatusColor(String status) {
     switch (status) {
+      case 'applied':
+        return Colors.cyan;
       case 'screening':
         return Colors.blue;
       case 'assessment':

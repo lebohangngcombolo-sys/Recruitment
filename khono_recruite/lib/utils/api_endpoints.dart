@@ -1,22 +1,40 @@
 class ApiEndpoints {
   // ------------------- Base URLs -------------------
-  static const authBase = "http://127.0.0.1:5000/api/auth";
-  static const candidateBase = "http://127.0.0.1:5000/api/candidate";
-  static const adminBase = "http://127.0.0.1:5000/api/admin";
-  static const chatbotBase = "http://127.0.0.1:5000/api/chatbot";
-  static const hmBase = "http://127.0.0.1:5000/api/admin";
-  static const chatBase = "http://127.0.0.1:5000/api/chat";
-  static const analyticsBase = "http://127.0.0.1:5000/api/analytics";
-  static const aiBase = "http://127.0.0.1:5000/api/ai";
+  static const baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://127.0.0.1:5000',
+  );
+
+  static const authBase = "$baseUrl/api/auth";
+  static const candidateBase = "$baseUrl/api/candidate";
+  static const adminBase = "$baseUrl/api/admin";
+  static const hmBase = "$baseUrl/api/hm";
+  static const analyticsBase = "$baseUrl/api/analytics";
+  static const chatBase = "$baseUrl/api/chat";
+  static const aiBase = "$baseUrl/api/ai";
   static const generateJobDetails = "$aiBase/generate_job_details";
   static const generateQuestions = "$aiBase/generate_questions";
 
-  // NEW: Offer management base URL (matches your Flask blueprint)
-  static const offerBase = "http://127.0.0.1:5000/api/offer";
+  // ------------------- CV Analyser (proxied via recruitment backend) -------------------
+  static const cvAnalyserUpload = "$baseUrl/api/cv-analyser/upload";
+  static String cvAnalyserStatus(String analysisId) =>
+      "$baseUrl/api/cv-analyser/analyses/$analysisId/status";
+  static String cvAnalyserResult(String analysisId) =>
+      "$baseUrl/api/cv-analyser/analyses/$analysisId/result";
 
-  // WebSocket URL (for real-time chat)
-  static const webSocketUrl =
-      "ws://127.0.0.1:5000"; // Use wss:// for production with SSL
+  // NEW: Offer management base URL (matches your Flask blueprint)
+  static const offerBase = "$baseUrl/api/offer";
+
+  // Socket.IO base URL (for real-time chat)
+  // Note: socket_io_client expects http(s) here, not ws(s).
+  static const webSocketUrl = baseUrl;
+
+  static String get webSocketWsUrl {
+    final isHttps = baseUrl.toLowerCase().startsWith('https://');
+    final rest =
+        baseUrl.replaceFirst(RegExp(r'^https?://', caseSensitive: false), '');
+    return '${isHttps ? 'wss' : 'ws'}://$rest';
+  }
 
   // ------------------- Auth -------------------
   static const register = "$authBase/register";
@@ -32,7 +50,7 @@ class ApiEndpoints {
   static const adminEnroll = "$authBase/admin-enroll";
   static const firebaseLogin = "$authBase/firebase-login";
   static const updateAuthProfile = "$authBase/profile";
-  static const uploadAuthProfilePicture = "$authBase/profile/picture";
+  static const uploadAuthProfilePicture = "$authBase/upload_profile_picture";
 
   // ------------------- OAuth (UPDATED FOR SUPABASE) -------------------
   static const googleOAuth = "$authBase/google";
@@ -57,7 +75,7 @@ class ApiEndpoints {
   static const String parserCV = "$authBase/cv/parse"; // POST Multipart
 
   // ------------------- Public (no auth) -------------------
-  static const publicBase = "http://127.0.0.1:5000/api/public";
+  static const publicBase = "$baseUrl/api/public";
   static const getPublicJobs = "$publicBase/jobs";
 
   // ------------------- Candidate -------------------
@@ -74,11 +92,14 @@ class ApiEndpoints {
   static const saveDraft = "$candidateBase/apply/save_draft";
   static const getDrafts = "$candidateBase/applications/drafts";
   static const submitDraft = "$candidateBase/applications/submit_draft";
+
   /// GET – Candidate's interviews (same as getInterviews in service)
   static const getCandidateInterviewsList = "$candidateBase/interviews";
+
   /// POST – Candidate accepts an interview invite
   static String acceptInterviewInvite(int interviewId) =>
       "$candidateBase/interviews/$interviewId/accept";
+
   /// POST – Candidate declines an interview invite
   static String declineInterviewInvite(int interviewId) =>
       "$candidateBase/interviews/$interviewId/decline";
@@ -107,8 +128,10 @@ class ApiEndpoints {
   static const getJobsWithStats = "$adminBase/jobs/with-stats";
 
   // ------------------- Analytics / Demographics -------------------
-  static const getGenderDistribution = "$adminBase/analytics/gender-distribution";
-  static const getEthnicityDistribution = "$adminBase/analytics/ethnicity-distribution";
+  static const getGenderDistribution =
+      "$adminBase/analytics/gender-distribution";
+  static const getEthnicityDistribution =
+      "$adminBase/analytics/ethnicity-distribution";
 
   // ------------------- CVs -------------------
   static const allCVs = "$adminBase/cvs";
@@ -117,8 +140,10 @@ class ApiEndpoints {
   static const getInterviewsForCalendar = "$adminBase/interviews/calendar";
   static const getInterviewsAll = "$adminBase/interviews/all";
   static const getInterviewSlots = "$adminBase/interview-slots";
-  static const getInterviewSlotsAvailable = "$adminBase/interview-slots/available";
-  static String rescheduleInterview(int id) => "$adminBase/interviews/reschedule/$id";
+  static const getInterviewSlotsAvailable =
+      "$adminBase/interview-slots/available";
+  static String rescheduleInterview(int id) =>
+      "$adminBase/interviews/reschedule/$id";
   static String cancelInterview(int id) => "$adminBase/interviews/cancel/$id";
   static String approveInterview(int interviewId) =>
       "$adminBase/interviews/$interviewId/approve";
@@ -168,6 +193,8 @@ class ApiEndpoints {
   static String getJobActivity(int id) => "$adminBase/jobs/$id/activity";
   static String getJobApplications(int id) =>
       "$adminBase/jobs/$id/applications";
+  static const bulkApproveJobs = "$adminBase/jobs/bulk-approve";
+  static const bulkRejectJobs = "$adminBase/jobs/bulk-reject";
   static const getApplicationsForMyJobs =
       "$adminBase/jobs/applications/for-my-jobs";
   static String getJobStats = "$adminBase/jobs/stats";
@@ -181,6 +208,7 @@ class ApiEndpoints {
       "$adminBase/candidates/$candidateId/applications";
   static String shortlistCandidates(int jobId) =>
       "$adminBase/jobs/$jobId/shortlist";
+
   /// GET – Export shortlist as CSV (returns file attachment)
   static String shortlistExport(int jobId) =>
       "$adminBase/jobs/$jobId/shortlist/export";
@@ -191,6 +219,7 @@ class ApiEndpoints {
   static const getAllInterviews = "$adminBase/interviews";
   static const getNotifications = "$adminBase/notifications";
   static const auditLogs = "$adminBase/audits";
+
   /// Pipeline activity (application status changes) for HM audit trail / admin
   static const pipelineActivity = "$adminBase/activity/pipeline";
   static const parseResume = "$adminBase/cv/parse";
@@ -355,8 +384,10 @@ class ApiEndpoints {
   static const getUpcomingMeetings = "$adminBase/meetings/upcoming";
 
   // ------------------- Notification preferences (admin/HM: status changes, upcoming interviews) -------------------
-  static const getNotificationPreferences = "$adminBase/notification-preferences";
-  static const updateNotificationPreferences = "$adminBase/notification-preferences";
+  static const getNotificationPreferences =
+      "$adminBase/notification-preferences";
+  static const updateNotificationPreferences =
+      "$adminBase/notification-preferences";
 
   // ------------------- Interview Calendar (Google Calendar) -------------------
   /// GET – Sync & compare upcoming interviews with Google Calendar
@@ -373,10 +404,6 @@ class ApiEndpoints {
   /// GET – Get calendar status for a specific interview
   static String getInterviewCalendarStatus(int interviewId) =>
       "$adminBase/interviews/$interviewId/calendar/status";
-
-  // ------------------- AI Chatbot -------------------
-  static const parseCV = "$chatbotBase/parse_cv";
-  static const askBot = "$chatbotBase/ask";
 
   // ==================== CHAT FEATURE ENDPOINTS ====================
 
@@ -447,7 +474,10 @@ class ApiEndpoints {
   static const getOfferAnalytics = "$offerBase/analytics";
 
   // Candidate's own offers
-  static String myOffer() => "$offerBase/my-offers";
+  static const myOffers = "$offerBase/my-offers";
+
+  // Team collaboration endpoint (admin/hiring managers)
+  static const teamCollaboration = "$adminBase/team-collaboration";
 
   // ==================== APPLICATION ENDPOINTS ====================
 
@@ -480,22 +510,15 @@ class ApiEndpoints {
       "$analyticsBase/conversion/interview-to-offer";
   static const getStageDropoff = "$analyticsBase/dropoff";
   static const getTimePerStage = "$analyticsBase/time-per-stage";
-  static const getMonthlyApplications =
-      "$analyticsBase/applications/monthly";
-  static const getCVScreeningDrop =
-      "$analyticsBase/cv-screening-drop";
-  static const getAssessmentPassRate =
-      "$analyticsBase/assessments/pass-rate";
-  static const getInterviewScheduling =
-      "$analyticsBase/interviews/scheduled";
-  static const getOffersByCategory =
-      "$analyticsBase/offers-by-category";
-  static const getAvgCVScore =
-      "$analyticsBase/candidate/avg-cv-score";
+  static const getMonthlyApplications = "$analyticsBase/applications/monthly";
+  static const getCVScreeningDrop = "$analyticsBase/cv-screening-drop";
+  static const getAssessmentPassRate = "$analyticsBase/assessments/pass-rate";
+  static const getInterviewScheduling = "$analyticsBase/interviews/scheduled";
+  static const getOffersByCategory = "$analyticsBase/offers-by-category";
+  static const getAvgCVScore = "$analyticsBase/candidate/avg-cv-score";
   static const getAvgAssessmentScore =
       "$analyticsBase/candidate/avg-assessment-score";
-  static const getSkillsFrequency =
-      "$analyticsBase/candidate/skills-frequency";
+  static const getSkillsFrequency = "$analyticsBase/candidate/skills-frequency";
   static const getExperienceDistribution =
       "$analyticsBase/candidate/experience-distribution";
 
@@ -513,6 +536,8 @@ class ApiEndpoints {
   static const deactivateCandidateAccount =
       "$candidateBase/settings/deactivate";
   static const getCandidateNotifications = "$candidateBase/notifications";
+  static String markCandidateNotificationRead(int notificationId) =>
+      "$candidateBase/notifications/$notificationId/read";
 
   // ==================== HELPER METHODS ====================
 

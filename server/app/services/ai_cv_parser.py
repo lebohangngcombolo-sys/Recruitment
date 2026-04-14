@@ -1,4 +1,4 @@
-﻿# app/services/ai_cv_parser.py
+# app/services/ai_cv_parser.py
 import logging
 import re
 from typing import Dict, Any
@@ -123,9 +123,17 @@ class AIParser:
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}" if ext else "") as tmp:
             temp_path = tmp.name
+        
         try:
+            # Important: Reset stream pointer before saving
+            if hasattr(cv_file, "seek"):
+                cv_file.seek(0)
             cv_file.save(temp_path)
 
+            # Ensure data was actually written
+            if os.path.exists(temp_path) and os.path.getsize(temp_path) == 0:
+                 logger.warning(f"File saved to {temp_path} is empty. Was the stream already consumed?")
+            
             # First try hybrid OCR/text extraction.
             try:
                 svc = AdvancedOCRService()

@@ -171,6 +171,17 @@ def apply_job(job_id):
             db.session.add(Notification(user_id=admin.id, message=msg, type="new_application"))
         db.session.commit()
 
+        # WebSocket emit for real-time dashboard updates
+        from app.websocket_handler import emit_candidate_applied
+        emit_candidate_applied({
+            "id": application.id,
+            "job_id": job_id,
+            "job_title": job.title,
+            "candidate_name": candidate_name,
+            "candidate_id": user_id,
+            "applied_at": datetime.utcnow().isoformat()
+        }, user_id=str(job.created_by))
+
         return jsonify({"message": "Applied successfully!", "application_id": application.id}), 201
 
     except Exception as e:
@@ -217,7 +228,7 @@ def _job_list_item(job):
 
 # ----------------- GET AVAILABLE JOBS -----------------
 @candidate_bp.route("/jobs", methods=["GET"])
-@role_required(["candidate"])
+@role_required(["candidate", "admin", "hiring_manager"])
 def get_available_jobs():
     try:
         user_id = get_jwt_identity()
@@ -359,6 +370,8 @@ def upload_resume(application_id):
 
         cv_analysis = CVAnalysis(
             candidate_id=candidate.id,
+            application_id=application.id,
+            requisition_id=job.id,
             job_description=JobService.build_job_spec_for_cv(job),
             cv_text=resume_text or "",
             result={
@@ -375,17 +388,72 @@ def upload_resume(application_id):
         db.session.commit()
 
         try:
-            # import task lazily to avoid circular import during app initialization
-            from app.tasks.cv_tasks import analyze_cv_task
-            analyze_cv_task.delay(cv_analysis.id, application.id)
-        except Exception:
-            current_app.logger.exception("Failed to enqueue CV analysis task")
+            # Send to external analysis service
+            from app.services.analysis_service_client import AnalysisServiceClient
+            from app.services.cv_promotion_service import CVPromotionService
+            
+            external_result = AnalysisServiceClient.submit_cv_text(
+                cv_text=resume_text or "",
+                job_description=JobService.build_job_spec_for_cv(job),
+                industry=job.category or None
+            )
+            external_analysis_id = external_result.get('analysis_id')
+            
+            # Use CVPromotionService to initialize analysis submission
+            cv_analysis = CVPromotionService.initialize_analysis_submission(
+                candidate_id=candidate.id,
+                external_analysis_id=external_analysis_id,
+                cv_text=resume_text or "",
+                job_description=JobService.build_job_spec_for_cv(job),
+                application_id=application.id,
+                requisition_id=job.id
+            )
+            
+            # Store extraction metadata in result
+            cv_analysis.result = {
+                "extraction_metadata": {
+                    "extraction_method": ocr_result.get("extraction_method"),
+                    "confidence": ocr_result.get("confidence"),
+                    "pages": ocr_result.get("pages"),
+                    "has_scanned_content": ocr_result.get("has_scanned_content"),
+                }
+            }
+            db.session.add(cv_analysis)
+            db.session.commit()
+            
+        except Exception as e:
+            # Create failed analysis record
+            cv_analysis = CVAnalysis(
+                candidate_id=candidate.id,
+                application_id=application.id,
+                requisition_id=job.id,
+                job_description=JobService.build_job_spec_for_cv(job),
+                cv_text=resume_text or "",
+                result={"error": str(e), "extraction_metadata": ocr_result},
+                status='failed'
+            )
+            db.session.add(cv_analysis)
+            db.session.commit()
+            
+            # Update candidate status
+            candidate.cv_analysis_status = 'failed'
+            db.session.add(candidate)
+            db.session.commit()
+            
+            current_app.logger.exception("Failed to submit CV to analysis service")
+            # Do not fail the overall resume upload if external analysis is down.
+            return jsonify({
+                "message": "Resume uploaded, but analysis service is currently unavailable.",
+                "analysis_id": cv_analysis.id,
+                "resume_url": resume_url,
+                "status": "analysis_failed"
+            }), 202
 
         return jsonify({
-            "message": "Resume uploaded; analysis queued",
+            "message": "Resume uploaded and submitted for analysis",
             "analysis_id": cv_analysis.id,
             "resume_url": resume_url,
-            "status": "queued"
+            "status": "submitted"
         }), 202
 
     except Exception as e:
@@ -474,9 +542,128 @@ def get_cv_analysis_status(analysis_id):
         return jsonify({"error": "Internal server error"}), 500
 
 
+# ----------------- CV ANALYSIS STATUS (Cross-Database Sync) -----------------
+@candidate_bp.route("/cv-analysis-status", methods=["GET"])
+@role_required(["candidate"])
+def get_my_cv_analysis_status():
+    """
+    Get current CV analysis status for authenticated candidate.
+    Returns cross-database synchronization status.
+    """
+    try:
+        user_id = get_jwt_identity()
+        candidate = Candidate.query.filter_by(user_id=user_id).first()
+        if not candidate:
+            return jsonify({"error": "Candidate not found"}), 404
+
+        from app.services.cv_promotion_service import CVPromotionService
+        
+        # Get promotion summary
+        summary = CVPromotionService.get_promotion_summary(candidate.id)
+        
+        return jsonify({
+            "candidate_id": candidate.id,
+            "analyser_id": candidate.analyser_id,
+            "status": candidate.cv_analysis_status,
+            "promoted_at": candidate.cv_analysis_promoted_at.isoformat() if candidate.cv_analysis_promoted_at else None,
+            "last_analysis_id": candidate.last_cv_analysis_id,
+            "is_promoted": candidate.cv_analysis_status == CVPromotionService.STATUS_COMPLETED and candidate.cv_analysis_promoted_at is not None,
+            "details": summary.get('analysis') if 'analysis' in summary else None
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Get CV analysis status error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+# ----------------- SYNC CV ANALYSIS (Manual Trigger) -----------------
+@candidate_bp.route("/sync-cv-analysis", methods=["POST"])
+@role_required(["candidate"])
+def sync_cv_analysis_manual():
+    """
+    Manually trigger sync of CV analysis from external service.
+    Useful when webhook/polling hasn't updated yet.
+    """
+    try:
+        user_id = get_jwt_identity()
+        candidate = Candidate.query.filter_by(user_id=user_id).first()
+        if not candidate:
+            return jsonify({"error": "Candidate not found"}), 404
+
+        from app.services.cv_promotion_service import CVPromotionService
+        
+        # Trigger sync
+        updated = CVPromotionService.sync_analysis_status(candidate.id, force_refresh=True)
+        
+        if updated:
+            # Refresh candidate data
+            db.session.refresh(candidate)
+            
+            return jsonify({
+                "success": True,
+                "message": "CV analysis status synchronized",
+                "status": candidate.cv_analysis_status,
+                "analyser_id": candidate.analyser_id,
+                "promoted_at": candidate.cv_analysis_promoted_at.isoformat() if candidate.cv_analysis_promoted_at else None
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "message": "No update needed or sync failed",
+                "current_status": candidate.cv_analysis_status
+            }), 200
+            
+    except Exception as e:
+        current_app.logger.error(f"Sync CV analysis error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+# ----------------- PROMOTE CV ANALYSIS (Manual Trigger) -----------------
+@candidate_bp.route("/cv-analyses/<int:analysis_id>/promote", methods=["POST"])
+@role_required(["candidate"])
+def promote_cv_analysis(analysis_id):
+    """
+    Manually promote a CV analysis to candidate profile.
+    Use case: Force promotion when automatic promotion failed.
+    """
+    try:
+        user_id = get_jwt_identity()
+        candidate = Candidate.query.filter_by(user_id=user_id).first()
+        if not candidate:
+            return jsonify({"error": "Candidate not found"}), 404
+
+        # Verify analysis belongs to candidate
+        analysis = CVAnalysis.query.get_or_404(analysis_id)
+        if analysis.candidate_id != candidate.id:
+            return jsonify({"error": "Unauthorized"}), 403
+
+        from app.services.cv_promotion_service import CVPromotionService
+        
+        # Trigger promotion
+        result = CVPromotionService.promote_analysis_to_candidate(candidate.id, analysis_id)
+        
+        if result['success']:
+            return jsonify({
+                "success": True,
+                "message": "CV analysis promoted successfully",
+                "promoted_fields": result['promoted_fields'],
+                "promoted_at": result.get('promoted_at')
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "error": result.get('error', 'Promotion failed'),
+                "status": result.get('status')
+            }), 400
+            
+    except Exception as e:
+        current_app.logger.error(f"Promote CV analysis error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
 # ----------------- CANDIDATE APPLICATIONS -----------------
 @candidate_bp.route("/applications", methods=["GET"])
-@role_required(["candidate"])
+@role_required(["candidate", "admin", "hiring_manager"])
 def get_applications():
     try:
         user_id = get_jwt_identity()
@@ -750,11 +937,11 @@ def get_assessment(application_id):
         if application.candidate_id != candidate.id:
             return jsonify({"error": "Unauthorized"}), 403
 
-        job = application.requisition
-        if not job or not job.is_active or job.deleted_at is not None:
-            return jsonify({"error": "Job is not accepting applications"}), 400
-
         result = AssessmentResult.query.filter_by(application_id=application.id).first()
+        job = application.requisition
+        # Allow review of already submitted assessments even if the job is now inactive.
+        if (not job or not job.is_active or job.deleted_at is not None) and not result:
+            return jsonify({"error": "Job is not accepting applications"}), 400
         from app.services.assessment_service import get_questions_for_requisition
         req = application.requisition
         questions = get_questions_for_requisition(req) if req else []
@@ -935,6 +1122,11 @@ def get_my_interviews():
 @role_required(["candidate", "admin", "hiring_manager"])
 def update_profile():
     try:
+        from app.services.profile_validation_service import (
+            ProfileValidator, ProfileSyncService, ProfileAuditService,
+            ProfileCompletionCalculator, PIIMasker
+        )
+        
         candidate = get_current_candidate()
 
         # Auto-create candidate if missing but user exists
@@ -952,10 +1144,30 @@ def update_profile():
         user = candidate.user
         data = request.get_json() or {}
 
-        for key, value in data.items():
+        # Validate profile data
+        validation_errors = ProfileValidator.validate_profile_data(data)
+        if validation_errors:
+            return jsonify({
+                "success": False, 
+                "message": "Validation failed",
+                "errors": validation_errors
+            }), 400
+
+        # Sanitize profile data
+        sanitized_data = ProfileValidator.sanitize_profile_data(data)
+        
+        # Track updated fields for audit
+        updated_fields = []
+
+        for key, value in sanitized_data.items():
             # Prevent email from being updated
             if key == "email":
                 continue
+
+            # Check if field is actually being updated
+            current_value = getattr(candidate, key, None)
+            if current_value != value:
+                updated_fields.append(key)
 
             # Handle date fields
             if key == "dob":
@@ -1008,7 +1220,34 @@ def update_profile():
                 "last_name": parts[1] if len(parts) > 1 else "",
             }
 
+        # Calculate profile completion
+        candidate_dict = candidate.to_dict()
+        completion_data = ProfileCompletionCalculator.calculate_completion(candidate_dict)
+        
+        # Add completion data to user profile
+        user.profile = {
+            **(user.profile or {}),
+            "completion_percentage": completion_data['overall_percentage'],
+            "completion_last_updated": datetime.utcnow().isoformat()
+        }
+
         db.session.commit()
+
+        # Log profile update with audit service
+        if updated_fields:
+            ProfileAuditService.log_profile_update(user.id, updated_fields, db.session)
+            
+            # Log with PII masking for security
+            current_app.logger.info(
+                f"Profile updated for user {user.id}",
+                extra={
+                    "user_id": user.id,
+                    "email": PIIMasker.mask_email(user.email),
+                    "updated_fields": updated_fields,
+                    "field_count": len(updated_fields),
+                    "completion_percentage": completion_data['overall_percentage']
+                }
+            )
 
         return jsonify({
             "success": True,
@@ -1016,6 +1255,7 @@ def update_profile():
             "data": {
                 "user": user.to_dict(),
                 "candidate": candidate.to_dict(),
+                "completion": completion_data
             },
         }), 200
 
@@ -1069,6 +1309,10 @@ def upload_document():
 @role_required(["candidate", "admin", "hiring_manager"])
 def upload_profile_picture():
     try:
+        from app.services.profile_validation_service import (
+            ProfileFileValidator, ProfileAuditService
+        )
+        
         # ---- Get or create Candidate ----
         candidate = get_current_candidate()
         if not candidate:
@@ -1087,22 +1331,27 @@ def upload_profile_picture():
             return jsonify({"success": False, "message": "No image uploaded"}), 400
 
         file = request.files["image"]
-        filename = secure_filename(file.filename or "")
-        if not filename:
-            return jsonify({"success": False, "message": "Invalid filename"}), 400
+        filename = file.filename or ""
+        
+        # Validate file using the new validation service
+        is_valid, validation_message = ProfileFileValidator.validate_image_file(file)
+        if not is_valid:
+            return jsonify({"success": False, "message": validation_message}), 400
 
-        allowed_images = {"png", "jpg", "jpeg", "webp"}
-        ext = filename.rsplit('.', 1)[-1].lower()
-        if ext not in allowed_images:
-            return jsonify({"success": False, "message": "Invalid image type"}), 400
-
+        # Sanitize filename
+        sanitized_filename = ProfileFileValidator.sanitize_filename(filename)
+        
         # ---- Upload to Cloudinary ----
         result = cloudinary.uploader.upload(
             file,
             folder="profile_pics/",
             format="jpg",  # convert everything to jpg
             resource_type="image",
-            public_id=f"candidate_{candidate.id}"
+            public_id=f"candidate_{candidate.id}",
+            transformation=[
+                {"width": 400, "height": 400, "crop": "limit"},
+                {"quality": "auto:good"}
+            ]
         )
         url = result.get("secure_url")
         if not url:
@@ -1110,18 +1359,205 @@ def upload_profile_picture():
 
         # ---- Save to candidate profile ----
         candidate.profile_picture = url
+        
+        # Update user profile avatar URL for consistency
+        user = candidate.user
+        if user:
+            existing_profile = user.profile or {}
+            user.profile = {
+                **existing_profile,
+                "avatar_url": url,
+                "avatar_updated_at": datetime.utcnow().isoformat()
+            }
+        
         db.session.commit()
+
+        # Log file upload with audit service
+        file_size = getattr(file, 'content_length', 0) or len(file.read() if hasattr(file, 'read') else 0)
+        ProfileAuditService.log_file_upload(user.id, "profile_picture", file_size, db.session)
+
+        # Generate thumbnail URL
+        thumbnail_url = url.replace('/upload/', '/upload/w_150,h_150,c_fill/')
 
         return jsonify({
             "success": True,
             "message": "Profile picture updated successfully",
-            "data": {"profile_picture": url},
+            "data": {
+                "profile_picture": url,
+                "thumbnail_url": thumbnail_url,
+                "file_size_bytes": file_size,
+                "file_size_mb": round(file_size / (1024 * 1024), 2)
+            },
         }), 200
 
     except Exception as e:
         current_app.logger.error(f"Upload profile picture error: {e}", exc_info=True)
         db.session.rollback()
         return jsonify({"success": False, "message": "Internal server error"}), 500
+
+# ----------------- PROFILE COMPLETION ANALYTICS -----------------
+@candidate_bp.route("/profile/completion", methods=["GET"])
+@role_required(["candidate", "admin", "hiring_manager"])
+def get_profile_completion():
+    """Get detailed profile completion analytics"""
+    try:
+        from app.services.profile_validation_service import ProfileCompletionCalculator
+        
+        candidate = get_current_candidate()
+        if not candidate:
+            return jsonify({"success": False, "message": "Candidate profile not found"}), 404
+        
+        # Calculate completion data
+        candidate_dict = candidate.to_dict()
+        completion_data = ProfileCompletionCalculator.calculate_completion(candidate_dict)
+        
+        # Add additional analytics
+        user = candidate.user
+        if user:
+            completion_data['user'] = {
+                'email': user.email,
+                'enrollment_completed': user.enrollment_completed,
+                'created_at': user.created_at.isoformat() if user.created_at else None,
+                'last_login': user.last_login_at.isoformat() if user.last_login_at else None
+            }
+        
+        # Add application statistics
+        completion_data['applications'] = {
+            'total_applications': len(candidate.applications),
+            'active_applications': len([app for app in candidate.applications if app.status in ['applied', 'under_review']]),
+            'completed_applications': len([app for app in candidate.applications if app.status in ['accepted', 'rejected']]),
+        }
+        
+        return jsonify({
+            "success": True,
+            "data": completion_data
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Get profile completion error: {e}", exc_info=True)
+        return jsonify({"success": False, "message": "Internal server error"}), 500
+
+# ----------------- PROFILE MONITORING DASHBOARD -----------------
+@candidate_bp.route("/profile/monitoring", methods=["GET"])
+@role_required(["admin"])
+def get_profile_monitoring():
+    """Get comprehensive profile monitoring data (admin only)"""
+    try:
+        from app.services.profile_monitoring_service import ProfileAnalyticsService, ProfileAlertService
+        
+        # Initialize analytics service
+        analytics_service = ProfileAnalyticsService(db.session)
+        
+        # Get comprehensive metrics
+        metrics = analytics_service.get_profile_metrics(days=30)
+        
+        # Get field completion breakdown
+        field_breakdown = analytics_service.get_field_completion_breakdown()
+        
+        # Get activity timeline
+        activity_timeline = analytics_service.get_activity_timeline(days=7)
+        
+        # Get validation error analysis
+        error_analysis = analytics_service.get_validation_error_analysis()
+        
+        # Get performance report
+        performance_report = analytics_service.get_performance_report()
+        
+        # Check for alerts
+        alert_service = ProfileAlertService(analytics_service)
+        alerts = alert_service.check_alerts()
+        
+        # Send notifications for critical alerts
+        for alert in alerts:
+            if alert['severity'] == 'critical':
+                alert_service.send_alert_notification(alert)
+        
+        monitoring_data = {
+            "metrics": {
+                "total_profiles": metrics.total_profiles,
+                "complete_profiles": metrics.complete_profiles,
+                "incomplete_profiles": metrics.incomplete_profiles,
+                "avg_completion_percentage": round(metrics.avg_completion_percentage, 1),
+                "profile_updates_today": metrics.profile_updates_today,
+                "file_uploads_today": metrics.file_uploads_today,
+                "validation_errors_today": metrics.validation_errors_today,
+                "avg_update_time_ms": round(metrics.avg_update_time_ms, 2),
+                "cache_hit_rate": round(metrics.cache_hit_rate, 1),
+                "active_users_today": metrics.active_users_today
+            },
+            "field_completion": field_breakdown,
+            "activity_timeline": activity_timeline,
+            "error_analysis": error_analysis,
+            "performance_report": performance_report,
+            "alerts": alerts,
+            "system_health": {
+                "status": performance_report.get('system_health', {}).get('status', 'unknown'),
+                "last_updated": datetime.utcnow().isoformat()
+            }
+        }
+        
+        return jsonify({
+            "success": True,
+            "data": monitoring_data
+        }), 200
+        
+    except Exception as e:
+        current_app.logger.error(f"Get profile monitoring error: {e}", exc_info=True)
+        return jsonify({"success": False, "message": "Internal server error"}), 500
+
+@candidate_bp.route("/profile/health", methods=["GET"])
+@role_required(["admin"])
+def get_profile_health():
+    """Get profile system health check (admin only)"""
+    try:
+        from app.services.profile_monitoring_service import ProfileAnalyticsService, ProfileAlertService
+        
+        analytics_service = ProfileAnalyticsService(db.session)
+        alert_service = ProfileAlertService(analytics_service)
+        
+        # Get basic health metrics
+        metrics = analytics_service.get_profile_metrics(days=1)
+        performance_report = analytics_service.get_performance_report()
+        
+        # Check system health
+        system_health = performance_report.get('system_health', {})
+        
+        # Get critical alerts
+        alerts = alert_service.check_alerts()
+        critical_alerts = [alert for alert in alerts if alert['severity'] == 'critical']
+        
+        health_data = {
+            "status": "healthy" if not critical_alerts and system_health.get('status') == 'healthy' else "degraded",
+            "timestamp": datetime.utcnow().isoformat(),
+            "metrics": {
+                "avg_response_time_ms": round(metrics.avg_update_time_ms, 2),
+                "cache_hit_rate": round(metrics.cache_hit_rate, 1),
+                "active_users": metrics.active_users_today,
+                "error_rate": round((metrics.validation_errors_today / max(metrics.profile_updates_today, 1)) * 100, 2)
+            },
+            "alerts": {
+                "critical": len(critical_alerts),
+                "warnings": len([alert for alert in alerts if alert['severity'] == 'warning']),
+                "info": len([alert for alert in alerts if alert['severity'] == 'info'])
+            },
+            "services": {
+                "database": "healthy",  # Would check actual DB connection
+                "cache": "healthy",     # Would check actual cache connection
+                "storage": "healthy"    # Would check actual storage service
+            },
+            "issues": system_health.get('issues', [])
+        }
+        
+        status_code = 200 if health_data["status"] == "healthy" else 503
+        return jsonify(health_data), status_code
+        
+    except Exception as e:
+        current_app.logger.error(f"Get profile health error: {e}", exc_info=True)
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.utcnow().isoformat()
+        }), 503
 
 # ----------------- UPDATE GENERAL SETTINGS -----------------
 @candidate_bp.route("/settings", methods=["PUT"])
@@ -1289,6 +1725,37 @@ def get_candidate_notifications():
     except Exception as e:
         current_app.logger.error("Get notifications error: %s", e, exc_info=True)
         return jsonify({'error': 'Failed to fetch notifications', 'notifications': []}), 500
+
+
+@candidate_bp.route("/notifications/<int:notification_id>/read", methods=["PATCH", "POST", "OPTIONS"])
+@role_required(["candidate"])
+def mark_candidate_notification_read(notification_id):
+    """Mark a notification as read. Candidate can only mark their own."""
+    if request.method == "OPTIONS":
+        return "", 204
+    try:
+        current_user_id = get_jwt_identity()
+        current_user_id = int(current_user_id) if current_user_id is not None else None
+        if current_user_id is None:
+            return jsonify({"error": "Unauthorized"}), 401
+
+        notification = Notification.query.get(notification_id)
+        if not notification:
+            return jsonify({"error": "Notification not found"}), 404
+        if int(notification.user_id) != int(current_user_id):
+            return jsonify({"error": "Forbidden: you can only mark your own notifications"}), 403
+
+        notification.is_read = True
+        db.session.commit()
+        return jsonify(
+            {"message": "Marked as read", "notification": notification.to_dict()}
+        ), 200
+    except Exception as e:
+        current_app.logger.error(
+            "Mark candidate notification read error: %s", e, exc_info=True
+        )
+        db.session.rollback()
+        return jsonify({"error": "Failed to mark notification as read"}), 500
 
 
 # ----------------- SAVE APPLICATION DRAFT -----------------

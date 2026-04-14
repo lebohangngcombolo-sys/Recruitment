@@ -24,7 +24,9 @@ from app.services.ai_cv_parser import AIParser
 from marshmallow import ValidationError
 from werkzeug.utils import secure_filename
 import os
+import re
 import cloudinary.uploader
+from urllib.parse import quote
 
 
 
@@ -66,6 +68,13 @@ OAUTH_PROVIDERS = {
 def init_auth_routes(app):
 
     enrollment_schema = EnrollmentSchema()
+
+    def _frontend_login_error_redirect(message: str, status_code: int = 302):
+        """Send OAuth setup/runtime errors back to frontend login instead of raw JSON pages."""
+        frontend_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/")
+        if frontend_url:
+            return redirect(f"{frontend_url}/login?error={quote(message)}"), status_code
+        return jsonify({"error": message}), 500
 
     def _notify_all_hiring_managers_new_candidate(user, fallback_email=None):
         """Best-effort in-app alert for all hiring managers when a candidate user is created."""
@@ -234,20 +243,20 @@ def init_auth_routes(app):
     def google_login():
         try:
             if not current_app.config.get("GOOGLE_CLIENT_ID") or not current_app.config.get("GOOGLE_CLIENT_SECRET"):
-                return jsonify({"error": "Google OAuth not configured"}), 500
+                return _frontend_login_error_redirect("Google OAuth is not configured.")
             redirect_uri = url_for("google_callback", _external=True)
             # For Flutter Web, navigate in same tab
             return oauth.google.authorize_redirect(redirect_uri)
         except Exception as e:
             current_app.logger.error(f"Google login initiation error: {str(e)}", exc_info=True)
-            return jsonify({"error": "OAuth configuration error"}), 500
+            return _frontend_login_error_redirect("Google login is unavailable right now.")
 
     @app.route("/api/auth/google/callback")
     @limiter.limit("10 per minute")
     def google_callback():
         try:
             if not current_app.config.get("GOOGLE_CLIENT_ID") or not current_app.config.get("GOOGLE_CLIENT_SECRET"):
-                return jsonify({"error": "Google OAuth not configured"}), 500
+                return _frontend_login_error_redirect("Google OAuth is not configured.")
             oauth.google.authorize_access_token()
             user_info = oauth.google.get(OAUTH_PROVIDERS["google"]["userinfo"]["url"]).json()
         
@@ -256,7 +265,7 @@ def init_auth_routes(app):
 
         except Exception as e:
             current_app.logger.error(f"Google OAuth callback error: {str(e)}", exc_info=True)
-            return jsonify({"error": "Authentication failed"}), 400
+            return _frontend_login_error_redirect("Google authentication failed.")
 
 
     # ------------------- GITHUB LOGIN -------------------
@@ -265,19 +274,19 @@ def init_auth_routes(app):
     def github_login():
         try:
             if not current_app.config.get("GITHUB_CLIENT_ID") or not current_app.config.get("GITHUB_CLIENT_SECRET"):
-                return jsonify({"error": "GitHub OAuth not configured"}), 500
+                return _frontend_login_error_redirect("GitHub OAuth is not configured.")
             redirect_uri = url_for("github_callback", _external=True)
             return oauth.github.authorize_redirect(redirect_uri)
         except Exception as e:
             current_app.logger.error(f"GitHub login initiation error: {str(e)}", exc_info=True)
-            return jsonify({"error": "OAuth configuration error"}), 500
+            return _frontend_login_error_redirect("GitHub login is unavailable right now.")
 
     @app.route("/api/auth/github/callback")
     @limiter.limit("10 per minute")
     def github_callback():
         try:
             if not current_app.config.get("GITHUB_CLIENT_ID") or not current_app.config.get("GITHUB_CLIENT_SECRET"):
-                return jsonify({"error": "GitHub OAuth not configured"}), 500
+                return _frontend_login_error_redirect("GitHub OAuth is not configured.")
             oauth.github.authorize_access_token()
             user_info = oauth.github.get(OAUTH_PROVIDERS["github"]["userinfo"]["url"]).json()
             if not user_info.get("email"):
@@ -288,7 +297,7 @@ def init_auth_routes(app):
             return handle_oauth_callback("github", user_info)
         except Exception as e:
             current_app.logger.error(f"GitHub OAuth callback error: {str(e)}", exc_info=True)
-            return jsonify({"error": "Authentication failed"}), 400
+            return _frontend_login_error_redirect("GitHub authentication failed.")
 
     # ------------------- OAUTH CALLBACK HANDLER -------------------
     def handle_oauth_callback(provider: str, user_info: dict):
@@ -781,6 +790,24 @@ def init_auth_routes(app):
             if not data or not isinstance(data.get("profile"), dict):
                 return jsonify({"error": "Body must include 'profile' object"}), 400
             new_profile = data["profile"]
+
+            # Optional: update email in users.email (source of truth for login)
+            # If provided, validate and ensure uniqueness.
+            if "email" in new_profile:
+                email_raw = (new_profile.get("email") or "").strip().lower()
+                if not email_raw:
+                    return jsonify({"error": "Email cannot be empty"}), 400
+                if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email_raw):
+                    return jsonify({"error": "Invalid email format"}), 400
+                if email_raw != (user.email or "").strip().lower():
+                    existing_user = User.query.filter(
+                        db.func.lower(User.email) == email_raw,
+                        User.id != user.id,
+                    ).first()
+                    if existing_user:
+                        return jsonify({"error": "Email is already in use"}), 409
+                    user.email = email_raw
+
             existing = dict(user.profile or {})
             allowed = {
                 "full_name", "first_name", "last_name", "phone", "profile_picture",
@@ -791,7 +818,11 @@ def init_auth_routes(app):
                     existing[key] = new_profile[key]
             user.profile = existing
             db.session.commit()
-            return jsonify({"message": "Profile updated", "profile": user.profile}), 200
+            return jsonify({
+                "message": "Profile updated",
+                "user": user.to_dict(),
+                "profile": user.profile,
+            }), 200
         except Exception as e:
             current_app.logger.error(f"Update profile error: {str(e)}", exc_info=True)
             return jsonify({"error": "Internal server error"}), 500
@@ -1082,8 +1113,175 @@ def init_auth_routes(app):
 
             cv_file = request.files["cv"]
 
-            # Use hybrid parser (Gemini + offline fallback)
+            # Option A: Single source of truth (Hugging Face)
+            from app.services.analysis_service_client import AnalysisServiceClient
+            from app.services.enrollment_service import EnrollmentService
+            from app.services.ai_cv_parser import AIParser
+            
+            if hasattr(cv_file, "seek"):
+                cv_file.seek(0)
+            file_content = cv_file.read()
+            filename = cv_file.filename
+            
+            job_description = request.form.get("job_description", "General candidate profile analysis for enrollment autofill")
+            
+            try:
+                # 1. Submit file to HF
+                submit_resp = AnalysisServiceClient.submit_cv_file(
+                    file_content=file_content,
+                    filename=filename,
+                    job_description=job_description
+                )
+                analysis_id = (submit_resp or {}).get("analysis_id")
+                if not analysis_id:
+                    raise Exception("No analysis_id returned from HF")
+                
+                # 2. Poll for completion
+                result = AnalysisServiceClient.wait_for_result(analysis_id)
+                if not result:
+                    raise Exception("HF Analysis timeout or failed")
+                
+                # 3. Map to flat fields for registration/enrollment UI
+                mapped_data = EnrollmentService.map_cv_analysis_to_form_fields(result)
+                
+                # Ensure cv_text and debug info are passed back
+                if "cv_text" not in mapped_data and result.get("cv_text"):
+                    mapped_data["cv_text"] = result["cv_text"]
+                if "extraction_debug" in result:
+                    mapped_data["extraction_metadata"] = result["extraction_debug"]
+                
+                return jsonify(mapped_data), 200
+                
+            except Exception as e:
+                current_app.logger.warning(f"HF unified extraction failed, falling back to local: {e}")
+                if hasattr(cv_file, "seek"):
+                    cv_file.seek(0)
+                return jsonify(AIParser.extract_cv_data(cv_file)), 200
+
+            # If enhanced parsing succeeded, still try to get AI analysis for additional insights
+            if extracted_data and not extracted_data.get("error"):
+                try:
+                    from app.services.analysis_service_client import AnalysisServiceClient
+                    
+                    # Ensure we have the raw file content for Hugging Face OCR
+                    if hasattr(cv_file, "seek"):
+                        cv_file.seek(0)
+                        file_content = cv_file.read()
+                        filename = getattr(cv_file, "filename", "cv.pdf")
+                        
+                        # Use file-based submission so Hugging Face can perform its own OCR
+                        submit = AnalysisServiceClient.submit_cv_file(
+                            file_content=file_content,
+                            filename=filename,
+                            job_description=job_description
+                        )
+                    else:
+                        # Fallback to text submission if file stream is unavailable
+                        submit = AnalysisServiceClient.submit_cv_text(cv_text=extracted_data.get("cv_text") or "")
+                        
+                    external_id = submit.get("analysis_id")
+                    if external_id:
+                        import time
+                        max_attempts = int(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_ATTEMPTS", "6") or "6")
+                        sleep_seconds = float(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_SLEEP", "0.8") or "0.8")
+                        for _ in range(max_attempts):
+                            status = AnalysisServiceClient.get_analysis_status(external_id)
+                            if (status or {}).get("status") == "completed":
+                                result = AnalysisServiceClient.get_analysis_result(external_id) or {}
+                                structured = result.get("structured_data") if isinstance(result, dict) else None
+
+                                # Merge AI insights with enhanced extraction
+                                if isinstance(structured, dict):
+                                    personal = structured.get("personal_details") or {}
+                                    education = structured.get("education_details") or {}
+                                    professional = structured.get("professional_details") or {}
+
+                                    # Only override if enhanced extraction didn't find the field
+                                    if not extracted_data.get("full_name") and personal.get("full_name"):
+                                        extracted_data["full_name"] = personal.get("full_name")
+                                    if not extracted_data.get("email") and personal.get("email"):
+                                        extracted_data["email"] = personal.get("email")
+                                    if not extracted_data.get("phone") and personal.get("phone"):
+                                        extracted_data["phone"] = personal.get("phone")
+                                    # Add any additional fields from AI that weren't in enhanced extraction
+                                    extracted_data["ai_insights"] = {
+                                        "match_score": structured.get("match_score"),
+                                        "missing_skills": structured.get("missing_skills"),
+                                        "suggestions": structured.get("suggestions")
+                                    }
+                                break
+                            if (status or {}).get("status") == "failed":
+                                break
+                            time.sleep(sleep_seconds)
+                except Exception as e:
+                    current_app.logger.warning(f"AI analysis integration failed: {e}")
+                    # Continue with enhanced extraction results
+
+            # If enhanced parsing failed, try original AI analysis as fallback
+            if extracted_data.get("error") or not extracted_data.get("full_name"):
+                try:
+                    from app.services.analysis_service_client import AnalysisServiceClient
+                    submit = AnalysisServiceClient.submit_cv_text(cv_text=cv_text)
+                    external_id = submit.get("analysis_id")
+                    if external_id:
+                        import time
+                        max_attempts = int(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_ATTEMPTS", "6") or "6")
+                        sleep_seconds = float(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_SLEEP", "0.8") or "0.8")
+                        for _ in range(max_attempts):
+                            status = AnalysisServiceClient.get_analysis_status(external_id)
+                            if (status or {}).get("status") == "completed":
+                                result = AnalysisServiceClient.get_analysis_result(external_id) or {}
+                                structured = result.get("structured_data") if isinstance(result, dict) else None
+
+                                # Map analyser structured_data -> enrollment autofill keys
+                                if isinstance(structured, dict):
+                                    personal = structured.get("personal_details") or {}
+                                    education = structured.get("education_details") or {}
+                                    professional = structured.get("professional_details") or {}
+
+                                    extracted_data = {
+                                        "full_name": personal.get("full_name") or "",
+                                        "email": personal.get("email") or "",
+                                        "phone": personal.get("phone") or "",
+                                        "address": personal.get("address") or "",
+                                        "dob": personal.get("dob") or "",
+                                        "linkedin": personal.get("linkedin") or "",
+                                        "github": personal.get("github") or "",
+                                        "portfolio": personal.get("portfolio") or "",
+                                        "education": education.get("education") or [],
+                                        "skills": professional.get("skills") or [],
+                                        "certifications": education.get("certifications") or [],
+                                        "languages": education.get("languages") or [],
+                                        "experience": professional.get("experience") or "",
+                                        "position": professional.get("position") or "",
+                                        "previous_companies": professional.get("previous_companies") or [],
+                                        "bio": professional.get("bio") or "",
+                                        "cv_text": cv_text,
+                                    }
+
+                                    return jsonify(extracted_data), 200
+
+                                break
+
+                            if (status or {}).get("status") == "failed":
+                                break
+                            time.sleep(sleep_seconds)
+                except Exception:
+                    # Analyzer integration is best-effort for autofill; fall back below.
+                    pass
+
+            # Return enhanced parsing results if successful
+            if extracted_data and not extracted_data.get("error"):
+                return jsonify(extracted_data), 200
+
+            # Fallback: Use local hybrid parser (LLM + offline regex) for autofill.
+            if hasattr(cv_file, "seek"): cv_file.seek(0)
             extracted_data = AIParser.extract_cv_data(cv_file)
+            try:
+                if isinstance(extracted_data, dict) and cv_text and not extracted_data.get("cv_text"):
+                    extracted_data["cv_text"] = cv_text
+            except Exception:
+                pass
 
             return jsonify(extracted_data), 200
 

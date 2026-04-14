@@ -139,7 +139,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   int candidatePerPage = 200;
   List<Map<String, dynamic>> candidates = [];
   String? candidateSearchQuery;
-  String? candidateStatusFilter;
 
   // Chart data variables
   bool loadingChartData = true;
@@ -265,19 +264,17 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     }
 
     try {
-      final data = await admin.getCandidatesWithDetails(
+      final list = await admin.getCandidatesWithDetails(
         page: candidatePage,
         perPage: candidatePerPage,
         search: candidateSearchQuery,
-        status: candidateStatusFilter,
       );
 
       setState(() {
         if (refresh || candidatePage == 1) {
-          candidates = List<Map<String, dynamic>>.from(data['candidates']);
+          candidates = List<Map<String, dynamic>>.from(list);
         } else {
-          candidates
-              .addAll(List<Map<String, dynamic>>.from(data['candidates']));
+          candidates.addAll(List<Map<String, dynamic>>.from(list));
         }
         loadingCandidates = false;
       });

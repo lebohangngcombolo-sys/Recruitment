@@ -8,7 +8,9 @@ import '../../utils/api_endpoints.dart';
 
 class ScheduleInterviewPage extends StatefulWidget {
   final int candidateId;
-  const ScheduleInterviewPage({Key? key, required this.candidateId})
+  final int? applicationId;
+  const ScheduleInterviewPage(
+      {Key? key, required this.candidateId, this.applicationId})
       : super(key: key);
 
   @override
@@ -29,6 +31,7 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
 
   bool isSubmitting = false;
   String message = "";
+  TextEditingController notesController = TextEditingController();
 
   Future<void> _openManageAvailability() async {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
@@ -42,9 +45,12 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
         jobId: () {
           if (selectedApplication == null) return null;
           for (final a in applications) {
-            if (a is Map && a["application_id"].toString() == selectedApplication) {
+            if (a is Map &&
+                a["application_id"].toString() == selectedApplication) {
               final j = a["job_id"];
-              return j is int ? j : (j != null ? int.tryParse(j.toString()) : null);
+              return j is int
+                  ? j
+                  : (j != null ? int.tryParse(j.toString()) : null);
             }
           }
           return null;
@@ -96,7 +102,9 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
     setState(() => loadingSlots = true);
     try {
       final slots = await _admin.getAvailableInterviewSlots(
-        requisitionId: jobId is int ? jobId : (jobId != null ? int.tryParse(jobId.toString()) : null),
+        requisitionId: jobId is int
+            ? jobId
+            : (jobId != null ? int.tryParse(jobId.toString()) : null),
       );
       setState(() {
         availableSlots = List<Map<String, dynamic>>.from(slots);
@@ -140,7 +148,8 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
 
     final useSlot = selectedSlotId != null;
     if (!useSlot && selectedDateTime == null) {
-      setState(() => message = "Pick an available slot or choose a date & time.");
+      setState(
+          () => message = "Pick an available slot or choose a date & time.");
       return;
     }
 
@@ -163,7 +172,20 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
     }
 
     try {
-      final result = await _admin.scheduleInterview(data);
+      if (widget.applicationId == null) {
+        setState(() => message = "Error: Application ID is required");
+        setState(() => isSubmitting = false);
+        return;
+      }
+
+      final result = await _admin.scheduleInterviewNamed(
+        applicationId: widget.applicationId!,
+        scheduledTime: selectedDateTime ?? DateTime.now(),
+        interviewType: interviewType,
+        notes: notesController.text.trim().isEmpty
+            ? null
+            : notesController.text.trim(),
+      );
       final serverMsg = (result["message"] ?? "").toString().trim();
       setState(() => message = serverMsg.isNotEmpty
           ? serverMsg
@@ -492,7 +514,8 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
                                       ),
                                       TextButton.icon(
                                         onPressed: _openManageAvailability,
-                                        icon: Icon(Icons.add, size: 18, color: primaryRed),
+                                        icon: Icon(Icons.add,
+                                            size: 18, color: primaryRed),
                                         label: Text(
                                           "Manage availability",
                                           style: GoogleFonts.inter(
@@ -545,11 +568,11 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
                                           slot["interview_type"] ?? "Online";
                                       final link =
                                           slot["meeting_link"] as String?;
-                                      final selected = id != null &&
-                                          selectedSlotId == id;
+                                      final selected =
+                                          id != null && selectedSlotId == id;
                                       return Padding(
-                                        padding: const EdgeInsets.only(
-                                            bottom: 8.0),
+                                        padding:
+                                            const EdgeInsets.only(bottom: 8.0),
                                         child: Material(
                                           color: Colors.transparent,
                                           child: InkWell(
@@ -563,13 +586,13 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
                                               padding: const EdgeInsets.all(12),
                                               decoration: BoxDecoration(
                                                 color: selected
-                                                    ? primaryRed
-                                                        .withValues(alpha: 0.15)
+                                                    ? primaryRed.withValues(
+                                                        alpha: 0.15)
                                                     : (themeProvider.isDarkMode
                                                             ? const Color(
                                                                 0xFF14131E)
-                                                            : Colors.grey
-                                                                .shade50)
+                                                            : Colors
+                                                                .grey.shade50)
                                                         .withValues(alpha: 0.9),
                                                 borderRadius:
                                                     BorderRadius.circular(12),
@@ -579,8 +602,8 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
                                                       : (themeProvider
                                                               .isDarkMode
                                                           ? Colors.grey.shade800
-                                                          : Colors.grey
-                                                              .shade300),
+                                                          : Colors
+                                                              .grey.shade300),
                                                   width: selected ? 2 : 1,
                                                 ),
                                               ),
@@ -608,8 +631,8 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
                                                           startDt != null
                                                               ? "${startDt.toLocal()}"
                                                               : "Slot",
-                                                          style: GoogleFonts
-                                                              .inter(
+                                                          style:
+                                                              GoogleFonts.inter(
                                                             fontWeight:
                                                                 FontWeight.w500,
                                                             color: themeProvider
@@ -627,11 +650,9 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
                                                               fontSize: 12,
                                                               color: themeProvider
                                                                       .isDarkMode
-                                                                  ? Colors
-                                                                      .grey
+                                                                  ? Colors.grey
                                                                       .shade400
-                                                                  : Colors
-                                                                      .grey
+                                                                  : Colors.grey
                                                                       .shade600,
                                                             ),
                                                           ),
@@ -653,11 +674,9 @@ class _ScheduleInterviewPageState extends State<ScheduleInterviewPage> {
                                                               fontSize: 11,
                                                               color: themeProvider
                                                                       .isDarkMode
-                                                                  ? Colors
-                                                                      .grey
+                                                                  ? Colors.grey
                                                                       .shade400
-                                                                  : Colors
-                                                                      .grey
+                                                                  : Colors.grey
                                                                       .shade600,
                                                             ),
                                                             maxLines: 1,
@@ -1024,17 +1043,19 @@ class _ManageSlotsDialogState extends State<_ManageSlotsDialog> {
         requisitionId: widget.jobId,
         fromNow: true,
       );
-      if (mounted) setState(() {
-        _slots = slots;
-        _loading = false;
-        _error = null;
-      });
+      if (mounted)
+        setState(() {
+          _slots = slots;
+          _loading = false;
+          _error = null;
+        });
     } catch (e) {
-      if (mounted) setState(() {
-        _slots = [];
-        _loading = false;
-        _error = e.toString();
-      });
+      if (mounted)
+        setState(() {
+          _slots = [];
+          _loading = false;
+          _error = e.toString();
+        });
     }
   }
 
@@ -1069,8 +1090,10 @@ class _ManageSlotsDialogState extends State<_ManageSlotsDialog> {
       initialTime: TimeOfDay(hour: endHour, minute: endMin),
     );
     if (endTime == null || !mounted) return;
-    final start = DateTime(date.year, date.month, date.day, startTime.hour, startTime.minute);
-    var end = DateTime(date.year, date.month, date.day, endTime.hour, endTime.minute);
+    final start = DateTime(
+        date.year, date.month, date.day, startTime.hour, startTime.minute);
+    var end =
+        DateTime(date.year, date.month, date.day, endTime.hour, endTime.minute);
     if (end.isBefore(start) || end.isAtSameMomentAs(start)) {
       end = start.add(const Duration(minutes: 30));
     }
@@ -1103,10 +1126,15 @@ class _ManageSlotsDialogState extends State<_ManageSlotsDialog> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete slot?'),
-        content: const Text('This slot will be removed from your availability.'),
+        content:
+            const Text('This slot will be removed from your availability.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete')),
         ],
       ),
     );
@@ -1147,7 +1175,8 @@ class _ManageSlotsDialogState extends State<_ManageSlotsDialog> {
                       padding: const EdgeInsets.only(bottom: 12),
                       child: Text(
                         _error!,
-                        style: GoogleFonts.inter(color: Colors.red, fontSize: 13),
+                        style:
+                            GoogleFonts.inter(color: Colors.red, fontSize: 13),
                       ),
                     ),
                   ..._slots.map((slot) {
@@ -1182,7 +1211,8 @@ class _ManageSlotsDialogState extends State<_ManageSlotsDialog> {
                     icon: Icon(Icons.add, size: 20, color: primaryRed),
                     label: Text(
                       'Add slot',
-                      style: GoogleFonts.inter(color: primaryRed, fontWeight: FontWeight.w600),
+                      style: GoogleFonts.inter(
+                          color: primaryRed, fontWeight: FontWeight.w600),
                     ),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: primaryRed,

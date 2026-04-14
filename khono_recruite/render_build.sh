@@ -38,7 +38,7 @@ flutter config --enable-web
 flutter pub get
 
 # Use BACKEND_URL (or API_BASE) at build time so the web app calls the deployed API.
-API_BASE="${API_BASE:-${BACKEND_URL:-http://127.0.0.1:5001}}"
+API_BASE="${API_BASE:-${BACKEND_URL:-https://recruitment-api-zovg.onrender.com}}"
 PUBLIC_BASE="${PUBLIC_API_BASE:-${API_BASE}}"
 if [ -z "${BACKEND_URL:-}" ]; then
   echo "WARNING: BACKEND_URL is not set for recruitment-web. Build will use API_BASE=${API_BASE}. Set BACKEND_URL in Render (Environment) to your API URL (e.g. https://recruitment-api-zovg.onrender.com) and redeploy."

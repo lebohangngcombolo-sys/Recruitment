@@ -1,4 +1,14 @@
 """
-Gunicorn config for Render. We use gthread worker (see render_start.sh), not eventlet,
-to avoid RLock/lock errors with SQLAlchemy and Flask. Add hooks or options here if needed.
+Gunicorn config for Render. We use gthread worker to avoid RLock/lock errors
+with SQLAlchemy and Flask. Gthread handles concurrency without eventlet.
 """
+
+import os
+
+bind = f"0.0.0.0:{os.environ.get('PORT', '5000')}"
+workers = 2
+threads = 4
+worker_class = "gthread"
+timeout = 120
+keepalive = 5
+preload_app = False
