@@ -126,34 +126,45 @@ class CVPatternMatcher:
             "portfolio": ""
         }
         
+        # SA Pattern: SURNAME and NAMES labels
+        surname_match = re.search(r'(?i)(?:SURNAME|LAST\s*NAME)[:\-]?\s*([A-Z\s\-]{2,40})', t)
+        names_match = re.search(r'(?i)(?:NAMES|GIVEN\s*NAMES|FIRST\s*NAME|FORENAMES)[:\-]?\s*([A-Z\s\-]{2,60})', t)
+        
+        if surname_match and names_match:
+            # Combine to get full name if both found
+            s = surname_match.group(1).strip()
+            n = names_match.group(1).strip()
+            # Normalize case: MABUNDA KATEKO ROSE -> Kateko Rose Mabunda (handled by final return if needed, but let's keep raw for now)
+            details["full_name"] = f"{n} {s}"
+        
         # Extract date of birth
         dob_match = re.search(
-            r'(?:Date\s*of\s*Birth|DOB|Birth\s*Date)[:\-]?\s*([\d\-\./]{8,12})',
-            t, re.I
+            r'(?i)(?:Date\s*of\s*Birth|DOB|Birth\s*Date)[:\-]?\s*([\d\-\./]{8,12})',
+            t
         )
         if dob_match:
             details["dob"] = dob_match.group(1).strip()
         
         # Extract gender
         gender_match = re.search(
-            r'(?:Gender|Sex)[:\-]?\s*(Male|Female|Other|M|F)',
-            t, re.I
+            r'(?i)(?:Gender|Sex)[:\-]?\s*(Male|Female|Other|M|F)',
+            t
         )
         if gender_match:
             details["gender"] = gender_match.group(1).strip()
         
         # Extract nationality
         nationality_match = re.search(
-            r'(?:Nationality|Citizenship|Country)[:\-]?\s*([A-Za-z\s]{2,30})',
-            t, re.I
+            r'(?i)(?:Nationality|Citizenship|Country)[:\-]?\s*([A-Z\s]{2,40})',
+            t
         )
         if nationality_match:
             details["nationality"] = nationality_match.group(1).strip()
         
-        # Extract ID number (South African format)
+        # Extract ID number (South African 13-digit format)
         id_match = re.search(
-            r'(?:ID|Identity\s*Number|ID\s*No|ID\s*Number)[:\-]?\s*(\d{13})',
-            t, re.I
+            r'(?i)(?:ID|Identity\s*Number|ID\s*No|ID\s*Number)[:\-]?\s*(\d{13})',
+            t
         )
         if id_match:
             details["id_number"] = id_match.group(1).strip()
@@ -188,16 +199,35 @@ class CVPatternMatcher:
         m = re.search(pattern, t, re.I)
         return (m.group(0) or "").strip() if m else ""
 
-    def _guess_name(self, t: str) -> str:
-        lines = [ln.strip() for ln in (t or "").splitlines() if ln.strip()]
-        for ln in lines[:10]:
-            if re.search(r"@|\d", ln):
+        # Rule 1: Look for "KATEKO ROSE MABUNDA" (all caps, start of document)
+        if lines:
+            first_line = lines[0]
+            # If first line is all caps and 2-4 words, it's likely a name
+            if re.match(r'^[A-Z][A-Z\s\-]{5,50}$', first_line) and 2 <= len(first_line.split()) <= 5:
+                return first_line.title()
+                
+        # Rule 2: Look for "Curriculum Vitae of [Name]" pattern
+        for ln in lines[:20]:
+            cv_match = re.search(r'(?i)(?:Curriculum\s*Vitae|CV|Resume)\s*(?:of|for)?[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})', ln)
+            if cv_match:
+                return cv_match.group(1).strip()
+
+        # Fallback: find first line that looks like a name
+        for ln in lines[:15]:
+            # Skip lines with common non-name tokens
+            if re.search(r"@|\d|\||/|\\", ln):
                 continue
+            # Skip lines that are likely section headers or keywords
+            if ln.lower() in ["curriculum vitae", "resume", "cv", "personal details", "profile", "summary", "personal information"]:
+                continue
+                
             parts = ln.split()
-            if 2 <= len(parts) <= 4 and sum(1 for p in parts if p[:1].isupper()) >= 2:
+            # Most names have 2-4 parts, and at least 2 parts start with capital letters
+            if 2 <= len(parts) <= 5 and sum(1 for p in parts if p[:1].isupper()) >= 2:
+                # Avoid common false positives like "South Africa"
+                if "south africa" in ln.lower() or "johannesburg" in ln.lower() or "capetown" in ln.lower():
+                    continue
                 return ln
-        m = re.search(r"\b([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b", t)
-        return m.group(1) if m else ""
 
     def _extract_section_text(self, t: str, headers: List[str], stop_words: List[str]) -> str:
         """Extract text between section headers"""
@@ -619,6 +649,8 @@ class CVPatternMatcher:
                 "qualifications",
                 "educational qualifications",
                 "tertiary qualifications",
+                "tertiary qualifictions",  # Common typo in SA CVs
+                "higher education",
             ],
             limit=15,
         )

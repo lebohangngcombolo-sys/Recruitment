@@ -73,8 +73,11 @@ class EnrollmentService:
     )
 
     CV_TEXT_MIN_LENGTH = 120
-    HF_ANALYSIS_URL = "https://dzunisani007-cv-analyser.hf.space/api/v1/analyze"
-    HF_HEALTH_URL = "https://dzunisani007-cv-analyser.hf.space/health"
+    @staticmethod
+    def _get_analysis_url():
+        from flask import current_app
+        base = current_app.config.get("ANALYSIS_SERVICE_URL", "http://localhost:8000")
+        return f"{base.rstrip('/')}/api/v1/analyze"
 
     # -----------------------------
     # Helpers
@@ -196,7 +199,8 @@ class EnrollmentService:
             }
 
             # Submit analysis
-            response = requests.post(EnrollmentService.HF_ANALYSIS_URL, json=payload, timeout=30)
+            analysis_url = EnrollmentService._get_analysis_url()
+            response = requests.post(analysis_url, json=payload, timeout=30)
             if response.status_code != 200:
                 return None
 
@@ -207,13 +211,13 @@ class EnrollmentService:
 
             # Poll for results
             for _ in range(30):
-                status_response = requests.get(f"{EnrollmentService.HF_ANALYSIS_URL}/{external_analysis_id}/status", timeout=10)
+                status_response = requests.get(f"{analysis_url}/{external_analysis_id}/status", timeout=10)
                 if status_response.status_code == 200:
                     status = status_response.json()
                     status_code = status.get("status")
 
                     if status_code == "completed":
-                        result_response = requests.get(f"{EnrollmentService.HF_ANALYSIS_URL}/{external_analysis_id}/result", timeout=30)
+                        result_response = requests.get(f"{analysis_url}/{external_analysis_id}/result", timeout=30)
                         if result_response.status_code == 200:
                             result_payload = result_response.json()
                             result_payload["external_analysis_id"] = external_analysis_id
@@ -238,54 +242,105 @@ class EnrollmentService:
         """
         Map HuggingFace CV analysis results to enrollment form fields
         Returns dict with field names as keys and extracted values
+        Prefer autofill_data if available, otherwise fallback to structured_data.
         """
         if not cv_analysis_data or not isinstance(cv_analysis_data, dict):
             return {}
 
+        # 1. Prefer autofill_data (pre-normalized)
+        autofill = cv_analysis_data.get("autofill_data") or {}
         structured_data = cv_analysis_data.get("structured_data", {}) or {}
         match_analysis = cv_analysis_data.get("match_analysis", {}) or {}
 
         mapped_fields = {}
 
-        # Personal Details
-        personal_info = structured_data.get("personal_details") or structured_data.get("personal_info") or {}
-        mapped_fields["full_name"] = personal_info.get("full_name") or personal_info.get("name") or ""
-        mapped_fields["phone"] = personal_info.get("phone") or personal_info.get("contact") or ""
-        mapped_fields["email"] = personal_info.get("email") or personal_info.get("email_address") or ""
-        mapped_fields["address"] = personal_info.get("address") or ""
-        mapped_fields["linkedin"] = personal_info.get("linkedin") or ""
-        mapped_fields["github"] = personal_info.get("github") or ""
-        mapped_fields["portfolio"] = personal_info.get("portfolio") or personal_info.get("website") or ""
-        mapped_fields["bio"] = structured_data.get("professional_summary") or structured_data.get("summary") or personal_info.get("bio") or ""
+        # Helper to get field with fallback
+        def get_field(path, default=""):
+            parts = path.split('.')
+            val = autofill
+            for part in parts:
+                if isinstance(val, dict):
+                    val = val.get(part)
+                else:
+                    val = None
+                    break
+            return val or default
 
-        if personal_info.get("dob"):
-            dob = EnrollmentService._normalize_date(personal_info.get("dob"))
+        # Personal Details
+        mapped_fields["full_name"] = get_field("personal.full_name") or \
+                                     structured_data.get("personal_details", {}).get("full_name") or \
+                                     structured_data.get("personal_info", {}).get("name") or ""
+        
+        mapped_fields["phone"] = get_field("personal.phone") or \
+                                 structured_data.get("personal_details", {}).get("phone") or ""
+        
+        mapped_fields["email"] = get_field("personal.email") or \
+                                 structured_data.get("personal_details", {}).get("email") or ""
+        
+        mapped_fields["address"] = get_field("personal.address") or \
+                                   structured_data.get("personal_details", {}).get("address") or ""
+        
+        mapped_fields["linkedin"] = get_field("personal.linkedin") or ""
+        mapped_fields["github"] = get_field("personal.github") or ""
+        mapped_fields["portfolio"] = get_field("personal.portfolio") or ""
+        
+        mapped_fields["bio"] = get_field("personal.summary") or \
+                               structured_data.get("professional_summary") or \
+                               structured_data.get("summary") or ""
+        
+        # Gender extraction
+        mapped_fields["gender"] = get_field("personal.gender") or \
+                                  structured_data.get("personal_details", {}).get("gender") or ""
+
+        dob_val = get_field("personal.dob")
+        if dob_val:
+            dob = EnrollmentService._normalize_date(dob_val)
             if dob:
                 mapped_fields["dob"] = dob.isoformat()
 
-        # Education
-        education_data = structured_data.get("education") or []
+        # Education - transform to frontend-compatible format
+        education_data = autofill.get("education") or structured_data.get("education") or []
         if isinstance(education_data, list):
-            mapped_fields["education"] = education_data
-            if education_data:
-                latest = education_data[0]
-                if isinstance(latest, dict):
-                    mapped_fields["university"] = latest.get("institution") or latest.get("school") or ""
-                    mapped_fields["graduation_year"] = latest.get("year") or latest.get("graduation_year") or ""
+            # Transform HF keys (degree, university, year) to frontend keys (level, institution, graduation_year)
+            transformed_education = []
+            for edu in education_data:
+                if isinstance(edu, dict):
+                    transformed_education.append({
+                        "level": edu.get("degree") or edu.get("level") or "",
+                        "institution": edu.get("university") or edu.get("institution") or edu.get("school") or "",
+                        "graduation_year": edu.get("year") or edu.get("graduation_year") or ""
+                    })
+            mapped_fields["education"] = transformed_education
+            
+            if transformed_education:
+                latest = transformed_education[0]
+                mapped_fields["university"] = latest.get("institution") or ""
+                mapped_fields["graduation_year"] = latest.get("graduation_year") or ""
         elif isinstance(education_data, str):
-            mapped_fields["education"] = [education_data]
+            mapped_fields["education"] = [{"level": education_data, "institution": "", "graduation_year": ""}]
 
-        # Work experience
-        experience_data = structured_data.get("work_experience") or structured_data.get("experience") or []
+        # Work experience - transform to frontend-compatible format
+        experience_data = autofill.get("experience") or structured_data.get("work_experience") or structured_data.get("experience") or []
         if isinstance(experience_data, list):
-            mapped_fields["work_experience"] = experience_data
-            companies = [e.get("company") for e in experience_data if isinstance(e, dict) and e.get("company")]
-            titles = [e.get("title") for e in experience_data if isinstance(e, dict) and e.get("title")]
-            descriptions = [e.get("description") for e in experience_data if isinstance(e, dict) and e.get("description")]
+            # Transform HF keys (title) to frontend keys (position)
+            transformed_experience = []
+            for exp in experience_data:
+                if isinstance(exp, dict):
+                    transformed_experience.append({
+                        "position": exp.get("title") or exp.get("position") or "",
+                        "company": exp.get("company") or "",
+                        "description": exp.get("description") or "",
+                        "period": exp.get("period") or f"{exp.get('start_date', '')} - {exp.get('end_date', 'Present')}"
+                    })
+            mapped_fields["work_experience"] = transformed_experience
+            
+            companies = [e.get("company") for e in transformed_experience if e.get("company")]
+            positions = [e.get("position") for e in transformed_experience if e.get("position")]
+            descriptions = [e.get("description") for e in transformed_experience if e.get("description")]
             if companies:
                 mapped_fields["previous_companies"] = ", ".join(dict.fromkeys(companies))
-            if titles:
-                mapped_fields["position"] = titles[0]
+            if positions:
+                mapped_fields["position"] = positions[0]
             if descriptions:
                 mapped_fields["experience"] = "\n\n".join(descriptions)
         elif isinstance(experience_data, str):
@@ -293,20 +348,20 @@ class EnrollmentService:
             mapped_fields["experience"] = experience_data
 
         # Skills & dedupe
-        extracted_skills = structured_data.get("skills", [])
+        extracted_skills = autofill.get("skills") or structured_data.get("skills", [])
         matched_skills = (match_analysis.get("matched_skills") if isinstance(match_analysis.get("matched_skills"), list) else [])
         merged_skills = EnrollmentService._dedupe_skills(extracted_skills, matched_skills)
         if merged_skills:
             mapped_fields["skills"] = merged_skills
 
         # Certifications / languages
-        certs = structured_data.get("certifications") or []
+        certs = autofill.get("certifications") or structured_data.get("certifications") or []
         if isinstance(certs, list):
             mapped_fields["certifications"] = certs
         elif isinstance(certs, str):
             mapped_fields["certifications"] = [s.strip() for s in certs.split(",") if s.strip()]
 
-        langs = structured_data.get("languages") or []
+        langs = autofill.get("languages") or structured_data.get("languages") or []
         if isinstance(langs, list):
             mapped_fields["languages"] = langs
         elif isinstance(langs, str):
@@ -326,12 +381,9 @@ class EnrollmentService:
     def save_candidate_enrollment(user_id, payload, cv_file=None):
         """
         Create or update candidate enrollment.
-
-        :param user_id: Authenticated user ID
-        :param payload: dict of form fields (multipart safe)
-        :param cv_file: optional file path to CV
-        :return: (response_dict, http_status)
+        Uses HF CV-analyser as single source of extraction (Option A).
         """
+        from app.services.analysis_service_client import AnalysisServiceClient
 
         try:
             user = db.session.get(User, user_id)
@@ -340,71 +392,49 @@ class EnrollmentService:
 
             candidate = EnrollmentService._get_or_create_candidate(user.id)
 
-            # ------------------------------------
-            # Enhanced CV Processing with HuggingFace
-            # ------------------------------------
-            cv_analysis_data = None
-            
             if cv_file:
                 try:
-                    # Step 1: Extract CV text
-                    cv_text = AIParser.read_cv_file(cv_file)
-                    if cv_text and cv_text.strip():
-                        # Step 2: Analyze with HuggingFace
-                        cv_analysis_data = EnrollmentService.analyze_cv_with_hf(cv_text)
-                        
-                        if cv_analysis_data:
-                            # Step 3: Map to form fields
-                            hf_mapped_fields = EnrollmentService.map_cv_analysis_to_form_fields(cv_analysis_data)
-                            # Manual input takes precedence over AI
-                            payload = {**hf_mapped_fields, **payload}
+                    # Single source of truth: Upload file to HF
+                    import os
+                    filename = os.path.basename(cv_file)
+                    with open(cv_file, 'rb') as f:
+                        file_content = f.read()
 
-                            # Persist CV analysis for audit/tracing
-                            try:
-                                cv_analysis_result = cv_analysis_data if isinstance(cv_analysis_data, dict) else {}
-                                cv_analysis = CVAnalysis(
-                                    candidate_id=candidate.id,
-                                    job_description="Enrollment autofill analysis",
-                                    cv_text=cv_text,
-                                    result=cv_analysis_result,
-                                    status="completed" if cv_analysis_data else "failed",
-                                    external_analysis_id=(cv_analysis_data or {}).get("external_analysis_id"),
-                                    started_at=datetime.utcnow(),
-                                    finished_at=datetime.utcnow(),
-                                )
-                                db.session.add(cv_analysis)
-                            except Exception as e:
-                                print(f"Warning: unable to record CVAnalysis: {e}")
+                    job_desc = payload.get("job_description") or "Enrollment program application"
+                    
+                    submit = AnalysisServiceClient.submit_cv_file(
+                        file_content,
+                        filename,
+                        job_description=job_desc
+                    )
+                    
+                    external_id = (submit or {}).get("analysis_id")
+                    if external_id:
+                        # Wait for result
+                        result = AnalysisServiceClient.wait_for_result(external_id)
+                        if result:
+                            # Map result to form fields
+                            hf_mapped = EnrollmentService.map_cv_analysis_to_form_fields(result)
+                            # Manual input takes precedence
+                            payload = {**hf_mapped, **payload}
 
-                        # Step 4: Fallback to local AI parser
-                        ai_data = AIParser.extract_cv_data(cv_file) or {}
-                        
-                        # Use AI to structure raw experience into multiple work_experience entries
-                        work_structured = None
-                        try:
-                            raw_exp = (ai_data.get("experience") or "") if isinstance(ai_data.get("experience"), str) else ""
-                            if raw_exp and len(raw_exp.strip()) > 20:
-                                ai = AIService()
-                                work_structured = ai.structure_cv_experience(
-                                    raw_exp,
-                                    position_hint=ai_data.get("position") or "",
-                                    companies_hint=ai_data.get("previous_companies")
-                                    if isinstance(ai_data.get("previous_companies"), list)
-                                    else None,
-                                )
-                        except Exception:
-                            work_structured = None
-
-                        # Map extraction keys to Candidate fields
-                        candidate_mapped = map_extraction_to_candidate(
-                            ai_data, work_experience_structured=work_structured
-                        )
-                        # Manual input takes precedence over AI
-                        payload = {**candidate_mapped, **payload}
-                        
+                            # Persist analysis record
+                            cv_analysis = CVAnalysis(
+                                candidate_id=candidate.id,
+                                job_description=job_desc,
+                                cv_text=result.get("cv_text", ""),
+                                result=result,
+                                status="completed",
+                                external_analysis_id=external_id,
+                                started_at=datetime.utcnow(),
+                                finished_at=datetime.utcnow(),
+                            )
+                            db.session.add(cv_analysis)
+                    
                 except Exception as e:
-                    print(f"CV processing failed: {e}")
-                    # Continue without CV processing
+                    print(f"Option A CV processing failed: {e}")
+                    # Fallback to local AI parser ONLY if HF fails and user explicitly wants a fallback
+                    # For now, let's keep it simple and just log error.
 
             saved_fields = set()
 

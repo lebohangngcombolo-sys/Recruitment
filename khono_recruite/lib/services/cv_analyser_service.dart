@@ -37,7 +37,7 @@ class CVAnalyserService {
 
     req.files.add(
       http.MultipartFile.fromBytes(
-        'file',
+        'cv_file',
         bytes,
         filename: filename,
         contentType: _tryParseMediaType(contentType),

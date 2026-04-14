@@ -10,7 +10,7 @@ cv_analyser_bp = Blueprint("cv_analyser", __name__)
 
 
 def _get_cv_analyser_base_url() -> str:
-    return (os.getenv("CV_ANALYSER_BASE_URL") or "https://cv-analyser-kt1u.onrender.com").rstrip("/")
+    return (os.getenv("CV_ANALYSER_BASE_URL") or "https://dzunisani007-cv-analyser.hf.space").rstrip("/")
 
 
 def _get_cv_analyser_signing_secret() -> str | None:
@@ -102,10 +102,9 @@ def proxy_upload():
     if not signing_secret:
         return jsonify({"detail": "CV analyser signing secret not configured"}), 500
 
-    if "file" not in request.files:
+    f = request.files.get("cv_file") or request.files.get("file")
+    if not f:
         return jsonify({"detail": "Missing file"}), 400
-
-    f = request.files["file"]
     if not f or not getattr(f, "filename", None):
         return jsonify({"detail": "Missing file"}), 400
 
@@ -133,7 +132,7 @@ def proxy_upload():
     current_user_id = get_jwt_identity()
 
     base_url = _get_cv_analyser_base_url()
-    upstream_url = f"{base_url}/upload"
+    upstream_url = f"{base_url}/api/v1/analyze-file"
 
     data = {}
     if job_description:
@@ -142,7 +141,7 @@ def proxy_upload():
         data["uploaded_by"] = str(current_user_id)
 
     files = {
-        "file": (f.filename, f.stream, mimetype or "application/octet-stream"),
+        "cv_file": (f.filename, f.stream, mimetype or "application/octet-stream"),
     }
 
     try:
@@ -168,7 +167,7 @@ def proxy_status(analysis_id: str):
         return jsonify({"detail": "CV analyser signing secret not configured"}), 500
 
     base_url = _get_cv_analyser_base_url()
-    upstream_url = f"{base_url}/analyses/{analysis_id}/status"
+    upstream_url = f"{base_url}/api/v1/analyze/{analysis_id}/status"
 
     try:
         resp = _get_upstream_with_auth_fallback(
@@ -191,7 +190,7 @@ def proxy_result(analysis_id: str):
         return jsonify({"detail": "CV analyser signing secret not configured"}), 500
 
     base_url = _get_cv_analyser_base_url()
-    upstream_url = f"{base_url}/analyses/{analysis_id}/result"
+    upstream_url = f"{base_url}/api/v1/analyze/{analysis_id}/result"
 
     try:
         resp = _get_upstream_with_auth_fallback(
