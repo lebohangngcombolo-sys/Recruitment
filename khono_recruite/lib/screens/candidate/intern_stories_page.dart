@@ -258,9 +258,9 @@ class _StorySection extends StatelessWidget {
 
     final isAsset = imageUrl.startsWith('assets/') || (!imageUrl.startsWith('http') && imageUrl.isNotEmpty);
     final assetPath = isAsset ? (imageUrl.startsWith('assets/') ? imageUrl : 'assets/$imageUrl') : imageUrl;
-    // On web, Image.asset can request assets/assets/... (404). Load via network URL with single "assets/" instead.
+    // On web, avoid Uri.base.path (e.g. /login): that yields HTML, not image bytes.
     final String? assetWebUrl = (kIsWeb && isAsset)
-        ? '${Uri.base.origin}${Uri.base.path.endsWith('/') ? Uri.base.path : '${Uri.base.path}/'}$assetPath'
+        ? '${Uri.base.origin}/${assetPath.startsWith('/') ? assetPath.substring(1) : assetPath}'
         : null;
     Widget imageBlock = ClipRRect(
       borderRadius: BorderRadius.horizontal(
