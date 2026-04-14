@@ -142,17 +142,6 @@ class _SplashLandingPageState extends State<SplashLandingPage>
     return Scaffold(
       backgroundColor:
           isDark ? const Color(0xFF14131E) : const Color(0xFFF5F5F7),
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Colors.redAccent,
-        onPressed: themeProvider.toggleTheme,
-        tooltip: themeProvider.isDarkMode
-            ? 'Switch to light mode'
-            : 'Switch to dark mode',
-        child: Icon(
-          themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
-          color: Colors.white,
-        ),
-      ),
       body: Stack(
         fit: StackFit.expand,
         children: [

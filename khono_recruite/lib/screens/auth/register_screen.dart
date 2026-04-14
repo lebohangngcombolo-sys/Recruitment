@@ -1,13 +1,11 @@
-import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
-import '../../services/auth_service.dart';
-import '../../widgets/custom_button.dart';
-import '../../widgets/custom_textfield.dart';
 import '../../providers/theme_provider.dart';
+import '../../services/auth_service.dart';
+import '../../utils/app_version.dart';
 
 /// Hides the scrollbar while keeping scroll behavior (e.g. for auth screens).
 class _NoScrollbarScrollBehavior extends ScrollBehavior {
@@ -27,8 +25,7 @@ class RegisterScreen extends StatefulWidget {
   _RegisterScreenState createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen>
-    with SingleTickerProviderStateMixin {
+class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final TextEditingController emailController = TextEditingController();
@@ -39,64 +36,13 @@ class _RegisterScreenState extends State<RegisterScreen>
   bool _obscurePassword = true;
   bool loading = false;
 
-  String passwordStrength = '';
-  Color passwordStrengthColor = Colors.red;
-
-  late AnimationController _animationController;
-  late Animation<double> _scaleAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 150),
-      lowerBound: 0.95,
-      upperBound: 1.0,
-    );
-
-    _scaleAnimation =
-        CurvedAnimation(parent: _animationController, curve: Curves.easeOut);
-  }
-
   @override
   void dispose() {
-    _animationController.dispose();
     emailController.dispose();
     passwordController.dispose();
     firstNameController.dispose();
     lastNameController.dispose();
     super.dispose();
-  }
-
-  void checkPasswordStrength(String password) {
-    if (password.isEmpty) {
-      passwordStrength = '';
-      passwordStrengthColor = Colors.red;
-    } else if (password.length < 6) {
-      passwordStrength = 'Weak';
-      passwordStrengthColor = Colors.red;
-    } else {
-      int strengthPoints = 0;
-      if (RegExp(r'[A-Z]').hasMatch(password)) strengthPoints++;
-      if (RegExp(r'[a-z]').hasMatch(password)) strengthPoints++;
-      if (RegExp(r'[0-9]').hasMatch(password)) strengthPoints++;
-      if (RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password))
-        strengthPoints++;
-
-      if (strengthPoints <= 2) {
-        passwordStrength = 'Weak';
-        passwordStrengthColor = Colors.red;
-      } else if (strengthPoints == 3) {
-        passwordStrength = 'Medium';
-        passwordStrengthColor = Colors.orange;
-      } else {
-        passwordStrength = 'Strong';
-        passwordStrengthColor = Colors.green;
-      }
-    }
-    setState(() {});
   }
 
   Future<void> register() async {
@@ -204,266 +150,328 @@ class _RegisterScreenState extends State<RegisterScreen>
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
     final isDark = themeProvider.isDarkMode;
-    final onBg = isDark ? Colors.white : const Color(0xFF1A1A1A);
-    final onBgMuted = isDark ? Colors.white70 : const Color(0xFF5C5C5C);
-    final fieldLabelColor = onBg;
     final size = MediaQuery.of(context).size;
+    final contentWidth = size.width > 840 ? 410.0 : size.width * 0.92;
+    final logoWidth = size.width > 840 ? 360.0 : contentWidth;
+    final logoHeight = size.width > 840 ? 68.0 : 56.0;
+    const headingFontSize = 17.21;
+    const headingLineHeight = 24.6;
+    const headingLetterSpacing = 0.17; // ~1% at 17.21
+    const buttonWidth = 199.11;
+    const buttonHeight = 32.22;
+    const buttonGap = 10.16;
+    const lightInk = Color(0xFF090812);
+    final onSurface = isDark ? Colors.white : lightInk;
+    final onSurfaceMuted = isDark
+        ? Colors.white.withValues(alpha: 0.78)
+        : lightInk.withValues(alpha: 0.72);
 
     return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.redAccent,
+        onPressed: themeProvider.toggleTheme,
+        tooltip: themeProvider.isDarkMode
+            ? 'Switch to light mode'
+            : 'Switch to dark mode',
+        child: Icon(
+          themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+          color: Colors.white,
+        ),
+      ),
       body: Stack(
+        fit: StackFit.expand,
         children: [
-          Container(
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage(themeProvider.backgroundImage),
-                fit: BoxFit.cover,
-              ),
-            ),
+          Positioned.fill(
+            child: Image.asset(themeProvider.backgroundImage, fit: BoxFit.cover),
           ),
           Positioned.fill(
             child: Container(
               color: isDark
-                  ? Colors.black.withOpacity(0.28)
-                  : Colors.black.withOpacity(0.06),
+                  ? Colors.black.withValues(alpha: 0.36)
+                  : Colors.black.withValues(alpha: 0.05),
             ),
           ),
-
-          // Main Content - scroll fills screen so scroll works from anywhere
-          Center(
-            child: SizedBox.expand(
-              child: ScrollConfiguration(
-                behavior: _NoScrollbarScrollBehavior(),
-                child: SingleChildScrollView(
-                  child: Center(
-                    child: MouseRegion(
-                      onEnter:
-                          kIsWeb ? (_) => _animationController.forward() : null,
-                      onExit:
-                          kIsWeb ? (_) => _animationController.reverse() : null,
-                      child: ScaleTransition(
-                        scale: _scaleAnimation,
-                        child: Container(
-                          width: size.width > 800 ? 400 : size.width * 0.9,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 24, vertical: 32),
-                          child: Form(
-                            key: _formKey,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const SizedBox(height: 16),
-                                Text(
-                                  "GET STARTED",
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.bold,
-                                    color: onBg,
-                                    shadows: isDark
-                                        ? [
-                                            const Shadow(
-                                              color: Colors.black26,
-                                              blurRadius: 4,
-                                              offset: Offset(2, 2),
-                                            )
-                                          ]
-                                        : null,
-                                  ),
-                                ),
-                                const SizedBox(height: 24),
-                                Text(
-                                  "Register Account",
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: onBg,
-                                  ),
-                                ),
-                                const SizedBox(height: 24),
-                                // Text fields: same style as login (white background, grey border)
-                                CustomTextField(
-                                  label: "First Name",
-                                  controller: firstNameController,
-                                  backgroundColor: Colors.white,
-                                  textColor: Colors.black,
-                                  borderColor: Colors.grey.shade300,
-                                  labelColor: fieldLabelColor,
-                                  margin: EdgeInsets.zero,
-                                  textInputAction: TextInputAction.next,
-                                ),
-                                const SizedBox(height: 12),
-                                CustomTextField(
-                                  label: "Last Name",
-                                  controller: lastNameController,
-                                  backgroundColor: Colors.white,
-                                  textColor: Colors.black,
-                                  borderColor: Colors.grey.shade300,
-                                  labelColor: fieldLabelColor,
-                                  margin: EdgeInsets.zero,
-                                  textInputAction: TextInputAction.next,
-                                ),
-                                const SizedBox(height: 12),
-                                CustomTextField(
-                                  label: "Email",
-                                  controller: emailController,
-                                  inputType: TextInputType.emailAddress,
-                                  backgroundColor: Colors.white,
-                                  textColor: Colors.black,
-                                  borderColor: Colors.grey.shade300,
-                                  labelColor: fieldLabelColor,
-                                  margin: EdgeInsets.zero,
-                                  textInputAction: TextInputAction.next,
-                                ),
-                                const SizedBox(height: 12),
-
-                                // Password
-                                CustomTextField(
-                                  label: "Password",
-                                  controller: passwordController,
-                                  inputType: TextInputType.visiblePassword,
-                                  obscureText: _obscurePassword,
-                                  backgroundColor: Colors.white,
-                                  textColor: Colors.black,
-                                  borderColor: Colors.grey.shade300,
-                                  labelColor: fieldLabelColor,
-                                  margin: EdgeInsets.zero,
-                                  textInputAction: TextInputAction.done,
-                                  onSubmitted: (_) => register(),
-                                  suffixIcon: IconButton(
-                                    icon: Icon(
-                                      _obscurePassword
-                                          ? Icons.visibility_off
-                                          : Icons.visibility,
-                                      color: Colors.grey.shade600,
+          SafeArea(
+            child: ScrollConfiguration(
+              behavior: _NoScrollbarScrollBehavior(),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: size.height - 40),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: logoWidth,
+                        height: logoHeight,
+                        child: Image.asset(
+                          'assets/icons/khono.png',
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: contentWidth,
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Center(
+                                child: SizedBox(
+                                  width: contentWidth,
+                                  child: Text(
+                                    'Register your account details:',
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    style: GoogleFonts.poppins(
+                                      color: onSurface,
+                                      fontSize: headingFontSize,
+                                      height: headingLineHeight / headingFontSize,
+                                      letterSpacing: headingLetterSpacing,
+                                      fontWeight: FontWeight.w600,
                                     ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _obscurePassword = !_obscurePassword;
-                                      });
-                                    },
                                   ),
-                                  onChanged: checkPasswordStrength,
                                 ),
-
-                                // Password strength indicator
-                                if (passwordStrength.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                        top: 4.0, bottom: 12),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          child: Container(
-                                            height: 6,
-                                            decoration: BoxDecoration(
-                                              color: passwordStrengthColor,
-                                              borderRadius:
-                                                  BorderRadius.circular(3),
-                                            ),
+                              ),
+                              const SizedBox(height: 18),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildDarkTextField(
+                                      isDark: isDark,
+                                      label: 'First Name',
+                                      hint: 'Name',
+                                      controller: firstNameController,
+                                      action: TextInputAction.next,
+                                      validator: (value) => (value == null ||
+                                              value.trim().isEmpty)
+                                          ? 'First name is required'
+                                          : null,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _buildDarkTextField(
+                                      isDark: isDark,
+                                      label: 'Last Name',
+                                      hint: 'Surname',
+                                      controller: lastNameController,
+                                      action: TextInputAction.next,
+                                      validator: (value) => (value == null ||
+                                              value.trim().isEmpty)
+                                          ? 'Last name is required'
+                                          : null,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              _buildDarkTextField(
+                                isDark: isDark,
+                                label: 'Email Address',
+                                hint: 'name.surname@khonology.com',
+                                controller: emailController,
+                                action: TextInputAction.next,
+                                keyboardType: TextInputType.emailAddress,
+                                validator: (value) {
+                                  final v = value?.trim() ?? '';
+                                  if (v.isEmpty) return 'Email is required';
+                                  if (!v.contains('@')) return 'Enter a valid email';
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              _buildDarkTextField(
+                                isDark: isDark,
+                                label: 'Password',
+                                hint: '********',
+                                controller: passwordController,
+                                action: TextInputAction.done,
+                                obscure: _obscurePassword,
+                                onSubmitted: (_) => register(),
+                                suffix: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_off
+                                        : Icons.visibility,
+                                    color: onSurfaceMuted,
+                                    size: 18,
+                                  ),
+                                  onPressed: () =>
+                                      setState(() => _obscurePassword = !_obscurePassword),
+                                ),
+                                validator: (value) {
+                                  final v = value?.trim() ?? '';
+                                  if (v.isEmpty) return 'Password is required';
+                                  if (v.length < 6) return 'At least 6 characters';
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 18),
+                              Center(
+                                child: SizedBox(
+                                  width: size.width > 840
+                                      ? 2 * buttonWidth + buttonGap - 28
+                                      : contentWidth - 32,
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: SizedBox(
+                                          height: buttonHeight,
+                                          child: ElevatedButton(
+                                        onPressed: loading ? null : register,
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFFC10D00),
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          shadowColor: Colors.transparent,
+                                          minimumSize: Size.zero,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(20.32),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 20.32,
+                                            vertical: 0,
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          passwordStrength,
-                                          style: GoogleFonts.poppins(
-                                              color: passwordStrengthColor,
-                                              fontSize: 12),
+                                          child: loading
+                                              ? const SizedBox(
+                                                  width: 14,
+                                                  height: 14,
+                                                  child: CircularProgressIndicator(
+                                                    strokeWidth: 2,
+                                                    valueColor:
+                                                        AlwaysStoppedAnimation<Color>(
+                                                      Colors.white,
+                                                    ),
+                                                  ),
+                                                )
+                                              : Text(
+                                                  'REGISTER',
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 11.06,
+                                                    fontWeight: FontWeight.w700,
+                                                    letterSpacing: 0.11,
+                                                    height: 1,
+                                                  ),
+                                                ),
+                                          ),
                                         ),
-                                      ],
-                                    ),
-                                  ),
-
-                                const SizedBox(height: 20),
-
-                                // Register Button
-                                SizedBox(
-                                  width: 200,
-                                  height: 44,
-                                  child: CustomButton(
-                                    text: "Register",
-                                    onPressed: loading ? null : register,
+                                      ),
+                                      const SizedBox(width: buttonGap),
+                                      Expanded(
+                                        child: SizedBox(
+                                          height: buttonHeight,
+                                          child: ElevatedButton(
+                                        onPressed: () => context.go('/'),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFFA2A5AA),
+                                          foregroundColor: Colors.white,
+                                          elevation: 0,
+                                          shadowColor: Colors.transparent,
+                                          minimumSize: Size.zero,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(20.32),
+                                          ),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 20.32,
+                                            vertical: 0,
+                                          ),
+                                        ),
+                                          child: Text(
+                                            'BACK',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 11.06,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: 0.11,
+                                              height: 1,
+                                            ),
+                                          ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-
-                                const SizedBox(height: 24),
-
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
+                              ),
+                              const SizedBox(height: 14),
+                              Center(
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Text(
-                                      "Already have an account? ",
+                                      'Already have an account? ',
                                       style: GoogleFonts.poppins(
-                                        color: onBgMuted,
+                                        color: onSurfaceMuted,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
                                       ),
                                     ),
-                                    GestureDetector(
+                                    InkWell(
                                       onTap: () => context.go('/login'),
                                       child: Text(
-                                        "Login",
+                                        'Log In',
                                         style: GoogleFonts.poppins(
-                                          color: isDark
-                                              ? Colors.white
-                                              : const Color(0xFFC10D00),
-                                          fontWeight: FontWeight.w600,
+                                          color: const Color(0xFFC10D00),
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w700,
                                         ),
                                       ),
                                     ),
                                   ],
                                 ),
-
-                                const SizedBox(height: 12),
-
-                                IconButton(
-                                  icon: Icon(
-                                    themeProvider.isDarkMode
-                                        ? Icons.light_mode
-                                        : Icons.dark_mode,
-                                    color: onBg,
-                                  ),
-                                  onPressed: () => themeProvider.toggleTheme(),
-                                ),
-
-                                const SizedBox(height: 16),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 16),
+                      Opacity(
+                        opacity: 0.92,
+                        child: Image.asset(
+                          isDark ? 'assets/images/discs.png' : 'assets/images/logo.png',
+                          width: 120,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
           ),
-
-          // Top bar on top so back arrow and logo receive taps
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: Icon(Icons.arrow_back,
-                          color: onBg, size: 28),
-                      onPressed: () => context.go('/'),
-                    ),
-                    const SizedBox(width: 12),
-                    GestureDetector(
-                      onTap: () => context.go('/'),
-                      child: Image.asset(
-                        "assets/icons/khono.png",
-                        height: 40,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
-                  ],
+          Positioned(
+            left: 12,
+            bottom: 12,
+            child: SafeArea(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.black.withValues(alpha: 0.65)
+                      : Colors.white.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    width: 0.8,
+                  ),
+                ),
+                child: Text(
+                  kDisplayVersion,
+                  style: GoogleFonts.poppins(
+                    color: isDark ? Colors.white70 : onSurfaceMuted,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ),
           ),
-
           if (loading)
             Center(
               child: CircularProgressIndicator(
@@ -472,6 +480,96 @@ class _RegisterScreenState extends State<RegisterScreen>
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDarkTextField({
+    required bool isDark,
+    required String label,
+    required String hint,
+    required TextEditingController controller,
+    required TextInputAction action,
+    String? Function(String?)? validator,
+    TextInputType keyboardType = TextInputType.text,
+    bool obscure = false,
+    Widget? suffix,
+    ValueChanged<String>? onSubmitted,
+  }) {
+    const lightInk = Color(0xFF090812);
+    final labelColor =
+        isDark ? Colors.white.withValues(alpha: 0.78) : lightInk;
+    final textColor = isDark ? Colors.white : lightInk;
+    final hintColor = isDark
+        ? Colors.white.withValues(alpha: 0.6)
+        : lightInk.withValues(alpha: 0.6);
+    final borderColor =
+        isDark ? Colors.white.withValues(alpha: 0.64) : lightInk;
+    final focusedColor = isDark ? Colors.white : lightInk;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.poppins(
+            color: labelColor,
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          validator: validator,
+          keyboardType: keyboardType,
+          obscureText: obscure,
+          textInputAction: action,
+          onFieldSubmitted: onSubmitted,
+          style: GoogleFonts.poppins(
+            color: textColor,
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: GoogleFonts.poppins(
+              color: hintColor,
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+            ),
+            filled: true,
+            fillColor: Colors.transparent,
+            suffixIcon: suffix,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            errorStyle: GoogleFonts.poppins(
+              color: const Color(0xFFFF8E8E),
+              fontSize: 10,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: borderColor,
+                width: 1,
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: borderColor,
+                width: 1,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: focusedColor,
+                width: 1.2,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
