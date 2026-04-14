@@ -414,6 +414,17 @@ def create_job():
         if error:
             return jsonify(error), error.get('status_code', 400)
 
+        # WebSocket emit for real-time dashboard updates
+        from app.websocket_handler import emit_job_status_changed
+        emit_job_status_changed({
+            "id": job.id,
+            "title": job.title,
+            "department": job.category,
+            "status": job.approval_status,
+            "old_status": None,
+            "updated_at": datetime.utcnow().isoformat()
+        }, user_id=str(job.created_by))
+
         # Return response
         return jsonify({
             "message": "Job created successfully",
@@ -459,6 +470,17 @@ def update_job(job_id):
         
         if error:
             return jsonify(error), error.get('status_code', 400)
+        
+        # WebSocket emit for real-time dashboard updates
+        from app.websocket_handler import emit_job_status_changed
+        emit_job_status_changed({
+            "id": job.id,
+            "title": job.title,
+            "department": job.category,
+            "status": job.approval_status,
+            "old_status": None,
+            "updated_at": datetime.utcnow().isoformat()
+        }, user_id=str(job.created_by))
         
         return jsonify({
             "message": "Job updated successfully",
@@ -595,6 +617,18 @@ def approve_job(job_id):
         job, error = JobService.approve_job(job_id, current_user_id, note=note)
         if error:
             return jsonify(error), error.get("status_code", 400)
+        
+        # WebSocket emit for real-time dashboard updates
+        from app.websocket_handler import emit_job_status_changed
+        emit_job_status_changed({
+            "id": job.id,
+            "title": job.title,
+            "department": job.category,
+            "status": job.approval_status,
+            "old_status": "pending",
+            "updated_at": datetime.utcnow().isoformat()
+        }, user_id=str(job.created_by))
+        
         return jsonify({"message": "Job approved", "job": job_response_schema.dump(job)}), 200
     except Exception as e:
         current_app.logger.error(f"Approve job route error for job {job_id}: {str(e)}", exc_info=True)
@@ -616,6 +650,18 @@ def reject_job(job_id):
         job, error = JobService.reject_job(job_id, current_user_id, reason, note=note)
         if error:
             return jsonify(error), error.get("status_code", 400)
+        
+        # WebSocket emit for real-time dashboard updates
+        from app.websocket_handler import emit_job_status_changed
+        emit_job_status_changed({
+            "id": job.id,
+            "title": job.title,
+            "department": job.category,
+            "status": job.approval_status,
+            "old_status": "pending",
+            "updated_at": datetime.utcnow().isoformat()
+        }, user_id=str(job.created_by))
+        
         return jsonify({"message": "Job rejected", "job": job_response_schema.dump(job)}), 200
     except Exception as e:
         current_app.logger.error(f"Reject job route error for job {job_id}: {str(e)}", exc_info=True)
@@ -2443,17 +2489,6 @@ def manage_interviews():
 
             db.session.commit()
 
-            # Send email notification
-            if (not is_hm_creator) and candidate_profile and candidate_profile.user:
-                EmailService.send_interview_invitation(
-                    email=candidate_profile.user.email,
-                    candidate_name=candidate_profile.full_name,
-                    interview_date=scheduled_time.strftime("%A, %d %B %Y at %H:%M"),
-                    interview_type=interview_type,
-                    meeting_link=interview.meeting_link,
-                    calendar_link=google_calendar_event.get('html_link') if google_calendar_event else None
-                )
-
             # Return enriched interview data
             enriched_interview = {
                 "id": interview.id,
@@ -2474,6 +2509,21 @@ def manage_interviews():
                 "last_calendar_sync": interview.last_calendar_sync.isoformat() if interview.last_calendar_sync else None,
                 "created_at": interview.created_at.isoformat()
             }
+
+            # Send WebSocket dashboard event for real-time updates
+            from app.websocket_handler import emit_interview_created
+            emit_interview_created(enriched_interview, user_id=str(hiring_manager_id))
+
+            # Send email notification
+            if (not is_hm_creator) and candidate_profile and candidate_profile.user:
+                EmailService.send_interview_invitation(
+                    email=candidate_profile.user.email,
+                    candidate_name=candidate_profile.full_name,
+                    interview_date=scheduled_time.strftime("%A, %d %B %Y at %H:%M"),
+                    interview_type=interview_type,
+                    meeting_link=interview.meeting_link,
+                    calendar_link=google_calendar_event.get('html_link') if google_calendar_event else None
+                )
 
             return jsonify({
                 "message": "Interview scheduled and pending admin approval." if is_hm_creator else "Interview scheduled successfully.",
@@ -2583,6 +2633,19 @@ def approve_interview(interview_id):
             target_user_id=interview.candidate_id,
             details=f"Interview {interview.id} approved",
         )
+
+        # WebSocket emit for real-time dashboard updates
+        from app.websocket_handler import emit_interview_updated
+        emit_interview_updated({
+            "id": interview.id,
+            "job_title": job_title,
+            "candidate_name": candidate_profile.full_name if candidate_profile else None,
+            "candidate_id": interview.candidate_id,
+            "scheduled_time": interview.scheduled_time.isoformat(),
+            "status": interview.status,
+            "old_status": "pending",
+            "updated_at": interview.updated_at.isoformat() if interview.updated_at else None
+        }, user_id=str(interview.hiring_manager_id))
 
         return jsonify({
             "message": "Interview approved",
@@ -2941,6 +3004,19 @@ def reschedule_interview(interview_id):
             details=f"Interview {interview_id} rescheduled from {old_time} to {new_time}"
         )
 
+        # WebSocket emit for real-time dashboard updates
+        from app.websocket_handler import emit_interview_updated
+        emit_interview_updated({
+            "id": interview.id,
+            "job_title": interview.application.requisition.title if interview.application and interview.application.requisition else None,
+            "candidate_name": interview.candidate.full_name if interview.candidate else None,
+            "candidate_id": interview.candidate_id,
+            "scheduled_time": interview.scheduled_time.isoformat(),
+            "status": interview.status,
+            "old_status": "rescheduled",
+            "updated_at": interview.updated_at.isoformat() if interview.updated_at else datetime.utcnow().isoformat()
+        }, user_id=str(interview.hiring_manager_id))
+
         return jsonify({
             "message": "Interview rescheduled successfully.",
             "interview": interview.to_dict(),
@@ -3045,6 +3121,10 @@ def cancel_interview(interview_id):
             action="Interview Cancelled",
             details=f"Interview ID {interview_id} cancelled by admin/hiring manager"
         )
+
+        # WebSocket emit for real-time dashboard updates
+        from app.websocket_handler import emit_interview_deleted
+        emit_interview_deleted(interview_id, user_id=str(hiring_manager_id))
 
         # Return success response for frontend
         return jsonify({
@@ -3532,13 +3612,26 @@ def update_interview_status(interview_id):
         interview.updated_at = datetime.utcnow()
         db.session.commit()
         
+        # WebSocket emit for real-time dashboard updates
+        from app.websocket_handler import emit_interview_updated
+        emit_interview_updated({
+            "id": interview.id,
+            "job_title": interview.application.requisition.title if interview.application and interview.application.requisition else None,
+            "candidate_name": interview.candidate.full_name if interview.candidate else None,
+            "candidate_id": interview.candidate_id,
+            "scheduled_time": interview.scheduled_time.isoformat() if interview.scheduled_time else None,
+            "status": interview.status,
+            "old_status": old_status,
+            "updated_at": interview.updated_at.isoformat() if interview.updated_at else None
+        }, user_id=str(interview.hiring_manager_id))
+        
         # Audit log
         current_user_id = get_jwt_identity()
         AuditService.record_action(
             admin_id=current_user_id,
             action=f"Interview Status Updated to {new_status}",
             target_user_id=interview.candidate_id,
-            details=f"Interview {interview_id}: {old_status} ΓåÆ {new_status}"
+            details=f"Interview {interview_id}: {old_status} → {new_status}"
         )
         
         return jsonify({

@@ -171,6 +171,17 @@ def apply_job(job_id):
             db.session.add(Notification(user_id=admin.id, message=msg, type="new_application"))
         db.session.commit()
 
+        # WebSocket emit for real-time dashboard updates
+        from app.websocket_handler import emit_candidate_applied
+        emit_candidate_applied({
+            "id": application.id,
+            "job_id": job_id,
+            "job_title": job.title,
+            "candidate_name": candidate_name,
+            "candidate_id": user_id,
+            "applied_at": datetime.utcnow().isoformat()
+        }, user_id=str(job.created_by))
+
         return jsonify({"message": "Applied successfully!", "application_id": application.id}), 201
 
     except Exception as e:

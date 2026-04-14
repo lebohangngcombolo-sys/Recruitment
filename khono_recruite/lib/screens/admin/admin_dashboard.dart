@@ -10,15 +10,18 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/unified_api_service.dart';
 import '../../services/notification_service.dart';
+import '../../services/cache_service.dart';
+import '../../services/websocket_service.dart';
 import '../../utils/api_endpoints.dart';
 import '../../constants/brand_tokens.dart';
-import '../../widgets/pill_search_bar.dart';
-import '../../widgets/themed_surface_card.dart';
+import '../../widgets/admin_dashboard_components.dart';
 import '../../widgets/state_widgets.dart';
+import '../../widgets/themed_surface_card.dart';
 import 'candidate_management_screen.dart';
 import 'cv_reviews_screen.dart';
 import 'hm_team_collaboration_page.dart';
@@ -119,6 +122,14 @@ class _AdminDashboardState extends State<AdminDashboard>
   List<Appointment> _calendarAppointments = [];
   bool _calendarLoading = false;
 
+  // Team collaboration data
+  List<Map<String, dynamic>> _teamCollaborationItems = [];
+  bool _loadingTeamCollaboration = true;
+
+  // Department distribution data
+  List<DepartmentData> _departmentDistribution = [];
+  bool _loadingDepartments = true;
+
   String? _userName;
 
   /// Use role-based name when stored name is null, empty, or a placeholder (e.g. "Deployed Admin").
@@ -139,6 +150,8 @@ class _AdminDashboardState extends State<AdminDashboard>
     fetchProfileImage();
     fetchDashboardNotifications();
     _loadCalendarData();
+    _fetchTeamCollaboration();
+    _fetchDepartmentDistribution();
 
     _statusTimer = Timer.periodic(const Duration(seconds: 60), (_) {
       fetchPowerBIStatus();
@@ -150,6 +163,206 @@ class _AdminDashboardState extends State<AdminDashboard>
     );
     _sidebarWidthAnimation = Tween<double>(begin: 260, end: 72).animate(
       CurvedAnimation(parent: _sidebarAnimController, curve: Curves.easeInOut),
+    );
+
+    // Setup WebSocket listeners for real-time dashboard updates
+    _setupWebSocketListeners();
+  }
+
+  /// Setup WebSocket event listeners for real-time dashboard updates
+  void _setupWebSocketListeners() {
+    final wsService = WebSocketService();
+
+    // Subscribe to dashboard events
+    final userId = AuthService.getUserInfo().toString();
+    wsService.subscribeToDashboard(userId, role: 'admin');
+
+    // Handle interview created events
+    wsService.onInterviewCreated = (data) {
+      if (!mounted) return;
+      debugPrint('📊 Real-time: Interview created - $data');
+      setState(() {
+        interviewsCount++;
+        upcomingInterviews++;
+        // Add to calendar appointments
+        final appointment = _parseInterviewToAppointment(data);
+        if (appointment != null) {
+          _calendarAppointments.add(appointment);
+        }
+      });
+      _showRealTimeNotification('New interview scheduled');
+    };
+
+    // Handle interview updated events
+    wsService.onInterviewUpdated = (data) {
+      if (!mounted) return;
+      debugPrint('📊 Real-time: Interview updated - $data');
+      _updateCalendarAppointment(data);
+    };
+
+    // Handle interview deleted events
+    wsService.onInterviewDeleted = (data) {
+      if (!mounted) return;
+      debugPrint('📊 Real-time: Interview deleted - $data');
+      final interviewId = data['id'];
+      setState(() {
+        interviewsCount = (interviewsCount > 0) ? interviewsCount - 1 : 0;
+        upcomingInterviews =
+            (upcomingInterviews > 0) ? upcomingInterviews - 1 : 0;
+        _calendarAppointments.removeWhere((a) =>
+            a.subject.contains('Interview:') &&
+            a.subject.contains('$interviewId'));
+      });
+    };
+
+    // Handle meeting created events
+    wsService.onMeetingCreated = (data) {
+      if (!mounted) return;
+      debugPrint('📊 Real-time: Meeting created - $data');
+      setState(() {
+        final appointment = _parseMeetingToAppointment(data);
+        if (appointment != null) {
+          _calendarAppointments.add(appointment);
+        }
+      });
+      _showRealTimeNotification('New meeting scheduled');
+    };
+
+    // Handle job status changed events
+    wsService.onJobStatusChanged = (data) {
+      if (!mounted) return;
+      debugPrint('📊 Real-time: Job status changed - $data');
+      // Refresh stats to get updated counts
+      fetchStats();
+      _fetchDepartmentDistribution();
+    };
+
+    // Handle CV review completed events
+    wsService.onCvReviewCompleted = (data) {
+      if (!mounted) return;
+      debugPrint('📊 Real-time: CV review completed - $data');
+      setState(() {
+        cvReviewsCount++;
+      });
+      _showRealTimeNotification('CV review completed');
+    };
+
+    // Handle candidate applied events
+    wsService.onCandidateApplied = (data) {
+      if (!mounted) return;
+      debugPrint('📊 Real-time: Candidate applied - $data');
+      setState(() {
+        candidatesCount++;
+        cvReviewsCount++;
+      });
+      _showRealTimeNotification('New candidate application');
+    };
+
+    // Handle audit created events
+    wsService.onAuditCreated = (data) {
+      if (!mounted) return;
+      debugPrint('📊 Real-time: Audit created - $data');
+      setState(() {
+        auditsCount++;
+      });
+    };
+  }
+
+  /// Parse interview data to calendar Appointment
+  Appointment? _parseInterviewToAppointment(Map<String, dynamic> data) {
+    try {
+      final scheduledTimeStr = data['scheduled_time'] as String?;
+      if (scheduledTimeStr == null) return null;
+
+      final startTime = DateTime.parse(scheduledTimeStr);
+      final endTime = startTime.add(const Duration(hours: 1));
+      final jobTitle = data['job_title'] as String? ?? 'Interview';
+      final candidateName = data['candidate_name'] as String? ?? '';
+
+      return Appointment(
+        startTime: startTime,
+        endTime: endTime,
+        subject:
+            'Interview: $jobTitle${candidateName.isNotEmpty ? ' – $candidateName' : ''}',
+        color: Colors.deepOrange,
+      );
+    } catch (e) {
+      debugPrint('Error parsing interview data: $e');
+      return null;
+    }
+  }
+
+  /// Parse meeting data to calendar Appointment
+  Appointment? _parseMeetingToAppointment(Map<String, dynamic> data) {
+    try {
+      final startTimeStr = data['start_time'] as String?;
+      final endTimeStr = data['end_time'] as String?;
+      if (startTimeStr == null) return null;
+
+      final startTime = DateTime.parse(startTimeStr);
+      final endTime = endTimeStr != null
+          ? DateTime.parse(endTimeStr)
+          : startTime.add(const Duration(hours: 1));
+      final title = data['title'] as String? ?? 'Meeting';
+
+      return Appointment(
+        startTime: startTime,
+        endTime: endTime,
+        subject: title,
+        color: Colors.blue,
+      );
+    } catch (e) {
+      debugPrint('Error parsing meeting data: $e');
+      return null;
+    }
+  }
+
+  /// Update existing calendar appointment with new data
+  void _updateCalendarAppointment(Map<String, dynamic> data) {
+    try {
+      final id = data['id']?.toString();
+      if (id == null) return;
+
+      setState(() {
+        // Find and update the appointment
+        for (int i = 0; i < _calendarAppointments.length; i++) {
+          if (_calendarAppointments[i].subject.contains(id)) {
+            final updatedAppointment = _parseInterviewToAppointment(data);
+            if (updatedAppointment != null) {
+              _calendarAppointments[i] = updatedAppointment;
+            }
+            break;
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('Error updating calendar appointment: $e');
+    }
+  }
+
+  /// Show real-time notification to user
+  void _showRealTimeNotification(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: Colors.green,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(message),
+          ],
+        ),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: const Color(0xFF252525),
+      ),
     );
   }
 
@@ -258,6 +471,90 @@ class _AdminDashboardState extends State<AdminDashboard>
     }
   }
 
+  Future<void> _fetchTeamCollaboration() async {
+    setState(() => _loadingTeamCollaboration = true);
+    try {
+      final data = await admin.getTeamCollaborationUsers();
+      if (!mounted) return;
+
+      // Extract collaboration items from response
+      final items = data['collaboration_items'] ??
+          data['users'] ??
+          data['activities'] ??
+          [];
+
+      setState(() {
+        _teamCollaborationItems = List<Map<String, dynamic>>.from(items);
+        _loadingTeamCollaboration = false;
+      });
+    } catch (e) {
+      debugPrint('Team collaboration load error: $e');
+      if (!mounted) return;
+      setState(() => _loadingTeamCollaboration = false);
+    }
+  }
+
+  Future<void> _fetchDepartmentDistribution() async {
+    setState(() => _loadingDepartments = true);
+    try {
+      // Fetch jobs with stats to get department information
+      final data = await admin.listJobsEnhanced(perPage: 100);
+      if (!mounted) return;
+
+      final jobs = data['jobs'] as List<dynamic>? ?? [];
+      final departments = _calculateDepartmentDistribution(jobs);
+
+      setState(() {
+        _departmentDistribution = departments;
+        _loadingDepartments = false;
+      });
+    } catch (e) {
+      debugPrint('Department distribution load error: $e');
+      if (!mounted) return;
+      setState(() => _loadingDepartments = false);
+    }
+  }
+
+  List<DepartmentData> _calculateDepartmentDistribution(List<dynamic> jobs) {
+    // Group jobs by department and count
+    final Map<String, int> counts = {};
+    for (final job in jobs) {
+      if (job is Map<String, dynamic>) {
+        final dept = job['department'] ?? job['category'] ?? 'Unknown';
+        counts[dept] = (counts[dept] ?? 0) + 1;
+      }
+    }
+
+    if (counts.isEmpty) {
+      return [];
+    }
+
+    final total = counts.values.reduce((a, b) => a + b);
+    final colors = [
+      const Color(0xFF81829B),
+      const Color(0xFF6095CC),
+      const Color(0xFFEA990C),
+      const Color(0xFFE7BF2D),
+      const Color(0xFF6CA510),
+      const Color(0xFFC10D00),
+      const Color(0xFF9C27B0),
+      const Color(0xFF00BCD4),
+    ];
+
+    // Sort by count descending and take top 5
+    final sorted = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return sorted.take(5).map((e) {
+      final index = sorted.indexOf(e);
+      return DepartmentData(
+        e.key,
+        total > 0 ? e.value / total : 0.0,
+        colors[index % colors.length],
+      );
+    }).toList();
+  }
+
   Future<void> fetchDashboardNotifications() async {
     setState(() => loadingNotifications = true);
     try {
@@ -278,6 +575,12 @@ class _AdminDashboardState extends State<AdminDashboard>
     _sidebarAnimController.dispose();
     _statusTimer?.cancel();
     auditSearchController.dispose();
+
+    // Unsubscribe from WebSocket dashboard events
+    final wsService = WebSocketService();
+    final userId = AuthService.getUserInfo().toString();
+    wsService.unsubscribeFromDashboard(userId);
+
     super.dispose();
   }
 
@@ -354,7 +657,22 @@ class _AdminDashboardState extends State<AdminDashboard>
 
   // ---------- Dashboard Stats & PowerBI ----------
   Future<void> fetchStats() async {
-    if (mounted) setState(() => loadingStats = true);
+    // Try to load cached data first for instant UI
+    final cachedStats =
+        await CacheService().get<Map<String, dynamic>>('dashboard_stats');
+    final cachedActivities =
+        await CacheService().get<List<dynamic>>('recent_activities');
+
+    if (cachedStats != null && mounted) {
+      setState(() {
+        _applyDashboardStats(
+            cachedStats, cachedActivities?.cast<String>() ?? []);
+        // Don't set loadingStats to false yet - we're still fetching fresh data
+      });
+    } else if (mounted) {
+      setState(() => loadingStats = true);
+    }
+
     try {
       final counts = await UnifiedApiService.getDashboardCounts();
 
@@ -369,31 +687,46 @@ class _AdminDashboardState extends State<AdminDashboard>
         activities = List<String>.from(data["recent_activities"] ?? []);
       }
 
+      // Cache the fresh data
+      await CacheService().set('dashboard_stats', counts,
+          expiration: const Duration(minutes: 30));
+      await CacheService().set('recent_activities', activities,
+          expiration: const Duration(minutes: 30));
+
       if (mounted) {
         setState(() {
-          jobsCount = counts["jobs"] ?? 0;
-          candidatesCount = counts["candidates"] ?? 0;
-          interviewsCount = counts["interviews"] ?? 0;
-          cvReviewsCount = counts["cv_reviews"] ?? 0;
-          auditsCount = counts["audits"] ?? 0;
-
-          // Enhanced metrics
-          activeJobs = counts["active_jobs"] ?? 0;
-          candidatesWithCV = counts["candidates_with_cv"] ?? 0;
-          upcomingInterviews = counts["upcoming_interviews"] ?? 0;
-          newApplicationsWeek =
-              (counts["recent_activity"]?["new_applications"] ?? 0) as int;
-          offeredApplications = counts["offered_applications"] ?? 0;
-          acceptedOffers = counts["accepted_offers"] ?? 0;
-
-          recentActivities = activities;
+          _applyDashboardStats(counts, activities);
           loadingStats = false;
         });
       }
     } catch (e) {
-      if (mounted) setState(() => loadingStats = false);
+      // If we have cached data, stay in offline mode
+      if (cachedStats == null && mounted) {
+        setState(() => loadingStats = false);
+      }
       debugPrint("Error fetching dashboard stats: $e");
     }
+  }
+
+  /// Helper to apply dashboard stats to state
+  void _applyDashboardStats(
+      Map<String, dynamic> counts, List<String> activities) {
+    jobsCount = counts["jobs"] ?? 0;
+    candidatesCount = counts["candidates"] ?? 0;
+    interviewsCount = counts["interviews"] ?? 0;
+    cvReviewsCount = counts["cv_reviews"] ?? 0;
+    auditsCount = counts["audits"] ?? 0;
+
+    // Enhanced metrics
+    activeJobs = counts["active_jobs"] ?? 0;
+    candidatesWithCV = counts["candidates_with_cv"] ?? 0;
+    upcomingInterviews = counts["upcoming_interviews"] ?? 0;
+    newApplicationsWeek =
+        (counts["recent_activity"]?["new_applications"] ?? 0) as int;
+    offeredApplications = counts["offered_applications"] ?? 0;
+    acceptedOffers = counts["accepted_offers"] ?? 0;
+
+    recentActivities = activities;
   }
 
   Future<void> fetchPowerBIStatus() async {
@@ -535,11 +868,14 @@ class _AdminDashboardState extends State<AdminDashboard>
                     height: double.infinity,
                     decoration: BoxDecoration(
                       color: themeProvider.isDarkMode
-                          ? const Color(0xFF1F2840)
-                          : const Color.fromARGB(156, 255, 255, 255),
+                          ? const Color(0xFF1E1E1E)
+                          : Colors.white,
                       border: Border(
-                        right:
-                            BorderSide(color: Colors.grey.shade200, width: 1),
+                        right: BorderSide(
+                            color: themeProvider.isDarkMode
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : const Color(0xFFE0E0E0),
+                            width: 1),
                       ),
                       boxShadow: [
                         BoxShadow(
@@ -564,15 +900,146 @@ class _AdminDashboardState extends State<AdminDashboard>
                                   child: Align(
                                     alignment: Alignment.centerLeft,
                                     child: sidebarCollapsed
-                                        ? Image.asset(
-                                            'assets/images/icon.png',
-                                            height: 40,
-                                            fit: BoxFit.contain,
+                                        ? Container(
+                                            width: 44,
+                                            height: 44,
+                                            decoration: BoxDecoration(
+                                              color: themeProvider.isDarkMode
+                                                  ? const Color(0xFF2D2D2D)
+                                                  : Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withOpacity(0.08),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(0, 2),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Center(
+                                              child: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    'K',
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 18,
+                                                      fontWeight:
+                                                          FontWeight.w800,
+                                                      color: themeProvider
+                                                              .isDarkMode
+                                                          ? Colors.white
+                                                          : const Color(
+                                                              0xFF1A1A1A),
+                                                    ),
+                                                  ),
+                                                  Container(
+                                                    width: 14,
+                                                    height: 3,
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(
+                                                          0xFFC10D00),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              1),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
                                           )
-                                        : Image.asset(
-                                            'assets/images/logo2.png',
-                                            height: 40,
-                                            fit: BoxFit.contain,
+                                        : Container(
+                                            padding: const EdgeInsets.fromLTRB(
+                                                16, 14, 16, 14),
+                                            decoration: BoxDecoration(
+                                              color: themeProvider.isDarkMode
+                                                  ? const Color(0xFF2D2D2D)
+                                                  : Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black
+                                                      .withOpacity(0.08),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(0, 2),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    Column(
+                                                      children: [
+                                                        Text(
+                                                          'K',
+                                                          style: GoogleFonts
+                                                              .poppins(
+                                                            fontSize: 16,
+                                                            fontWeight:
+                                                                FontWeight.w800,
+                                                            color: themeProvider
+                                                                    .isDarkMode
+                                                                ? Colors.white
+                                                                : const Color(
+                                                                    0xFF1A1A1A),
+                                                          ),
+                                                        ),
+                                                        Container(
+                                                          width: 12,
+                                                          height: 3,
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: const Color(
+                                                                0xFFC10D00),
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        1),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    Text(
+                                                      'HONOLOGY',
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color: themeProvider
+                                                                .isDarkMode
+                                                            ? Colors.white
+                                                            : const Color(
+                                                                0xFF1A1A1A),
+                                                        letterSpacing: 2,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'Automated Recruitment\nWorkflow',
+                                                  textAlign: TextAlign.center,
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 8,
+                                                    fontWeight: FontWeight.w500,
+                                                    color:
+                                                        themeProvider.isDarkMode
+                                                            ? Colors.white60
+                                                            : const Color(
+                                                                0xFF666666),
+                                                    height: 1.3,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ),
                                   ),
                                 ),
@@ -714,6 +1181,32 @@ class _AdminDashboardState extends State<AdminDashboard>
                                   icon: const Icon(Icons.logout,
                                       color: Colors.grey),
                                 ),
+                              const SizedBox(height: 16),
+                              // Version label
+                              if (!sidebarCollapsed)
+                                Center(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                        color: themeProvider.isDarkMode
+                                            ? const Color(0xFF444444)
+                                            : const Color(0xFFE0E0E0),
+                                      ),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Text(
+                                      'Ver 2026.03.AA1_SIT',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 10,
+                                        color: themeProvider.isDarkMode
+                                            ? Colors.white54
+                                            : Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                             ],
                           ),
                         ),
@@ -727,94 +1220,97 @@ class _AdminDashboardState extends State<AdminDashboard>
                 child: Column(
                   children: [
                     Container(
-                      height: 72,
-                      color: themeProvider.isDarkMode
-                          ? const Color(0xFF14131E).withValues(alpha: 0.8)
-                          : Colors.white.withValues(alpha: 0.8),
+                      height: 80,
+                      decoration: BoxDecoration(
+                        color: Colors.transparent,
+                        border: Border(
+                          bottom: BorderSide(
+                            color: themeProvider.isDarkMode
+                                ? Colors.white.withValues(alpha: 0.05)
+                                : Colors.black.withValues(alpha: 0.05),
+                            width: 1,
+                          ),
+                        ),
+                      ),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
                         child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            // Search Bar - Using standardized pill search
-                            Expanded(
-                              child: PillSearchBar(
-                                hintText: "Search across platform...",
-                                onChanged: (value) {
-                                  // Handle search
-                                },
-                              ),
+                            // Greeting section
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "Admin Dashboard",
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w700,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.white
+                                        : const Color(0xFF1A1A1A),
+                                  ),
+                                ),
+                                Text(
+                                  "Hello, ${_effectiveWelcomeName(_userName)}",
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.white.withValues(alpha: 0.7)
+                                        : const Color(0xFF666666),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 16),
 
-                            Flexible(
-                              child: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
+                            // Action icons
+                            Row(
+                              children: [
+                                // Mail icon
+                                _buildTopBarIconButton(
+                                  icon: Icons.mail_outline,
+                                  onPressed: () {},
+                                  themeProvider: themeProvider,
+                                ),
+                                const SizedBox(width: 12),
+                                // Notification icon
+                                _buildTopBarIconButton(
+                                  icon: Icons.notifications_none_outlined,
+                                  onPressed: () => setState(
+                                      () => currentScreen = 'notifications'),
+                                  badgeCount: dashboardNotifications.length,
+                                  themeProvider: themeProvider,
+                                ),
+                                const SizedBox(width: 24),
+                                // Theme Toggle (relocated to right)
+                                Row(
                                   children: [
-                                    // ---------- Theme Toggle Switch ----------
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          themeProvider.isDarkMode
-                                              ? Icons.dark_mode
-                                              : Icons.light_mode,
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.amber
-                                              : Colors.grey.shade700,
-                                          size: 20,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Switch(
-                                          value: themeProvider.isDarkMode,
-                                          onChanged: (value) {
-                                            themeProvider.toggleTheme();
-                                          },
-                                          activeThumbColor: Colors.redAccent,
-                                          inactiveTrackColor:
-                                              Colors.grey.shade400,
-                                        ),
-                                      ],
+                                    Icon(
+                                      themeProvider.isDarkMode
+                                          ? Icons.dark_mode
+                                          : Icons.light_mode,
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.amber
+                                          : Colors.grey.shade700,
+                                      size: 18,
                                     ),
-                                    const SizedBox(width: 12),
-
-                                    // ---------- Power BI Status Icon ----------
-                                    Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: powerBIConnected
-                                            ? Colors.green
-                                            : Colors.red,
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: powerBIConnected
-                                                ? Colors.green.withOpacity(0.6)
-                                                : Colors.red.withOpacity(0.6),
-                                            blurRadius: 12,
-                                            spreadRadius: 2,
-                                          ),
-                                        ],
-                                      ),
-                                      child: Center(
-                                        child: checkingPowerBI
-                                            ? const SizedBox(
-                                                width: 16,
-                                                height: 16,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                  color: Colors.white,
-                                                  strokeWidth: 2,
-                                                ),
-                                              )
-                                            : const Icon(Icons.bar_chart,
-                                                color: Colors.white, size: 20),
-                                      ),
+                                    const SizedBox(width: 4),
+                                    Switch(
+                                      value: themeProvider.isDarkMode,
+                                      onChanged: (value) {
+                                        themeProvider.toggleTheme();
+                                      },
+                                      activeThumbColor: Colors.redAccent,
+                                      inactiveTrackColor: Colors.grey.shade300,
                                     ),
                                   ],
                                 ),
-                              ),
+                                const SizedBox(width: 12),
+                                // Power BI Status
+                                _buildPowerBIStatus(themeProvider),
+                              ],
                             ),
                           ],
                         ),
@@ -837,6 +1333,104 @@ class _AdminDashboardState extends State<AdminDashboard>
     );
   }
 
+  Widget _buildTopBarIconButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+    required ThemeProvider themeProvider,
+    int? badgeCount,
+  }) {
+    final isDark = themeProvider.isDarkMode;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.05)
+                : const Color(0xFFF5F5F7),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            icon: Icon(icon,
+                color: isDark ? Colors.white70 : const Color(0xFF666666)),
+            onPressed: onPressed,
+            tooltip: icon == Icons.mail_outline ? "Messages" : "Notifications",
+          ),
+        ),
+        if (badgeCount != null && badgeCount > 0)
+          Positioned(
+            right: -4,
+            top: -4,
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: const BoxDecoration(
+                color: Color(0xFFC10D00),
+                shape: BoxShape.circle,
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 18,
+                minHeight: 18,
+              ),
+              child: Text(
+                badgeCount > 9 ? '9+' : badgeCount.toString(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPowerBIStatus(ThemeProvider themeProvider) {
+    return InkWell(
+      onTap: fetchPowerBIStatus,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: (powerBIConnected ? Colors.green : Colors.red)
+              .withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: (powerBIConnected ? Colors.green : Colors.red)
+                .withValues(alpha: 0.2),
+          ),
+        ),
+        child: Row(
+          children: [
+            if (checkingPowerBI)
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.blue),
+              )
+            else
+              Icon(
+                Icons.bar_chart,
+                color: powerBIConnected ? Colors.green : Colors.red,
+                size: 16,
+              ),
+            const SizedBox(width: 8),
+            Text(
+              "Power BI",
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: powerBIConnected ? Colors.green : Colors.red,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void toggleSidebar() {
     setState(() {
       sidebarCollapsed = !sidebarCollapsed;
@@ -851,56 +1445,75 @@ class _AdminDashboardState extends State<AdminDashboard>
   Widget _sidebarEntry(dynamic icon, String label, String screenKey) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final selected = currentScreen == screenKey;
-    final iconColor = selected
-        ? const Color.fromRGBO(151, 18, 8, 1)
-        : themeProvider.isDarkMode
-            ? Colors.grey.shade400
-            : Colors.grey.shade800;
-    return InkWell(
-      onTap: () => setState(() => currentScreen = screenKey),
-      child: Container(
-        color: selected ? const Color(0xFFC10D00) : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Row(
-          children: [
-            icon is IconData
-                ? Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
+    final isDark = themeProvider.isDarkMode;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: InkWell(
+        onTap: () => setState(() => currentScreen = screenKey),
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFC10D00) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFFC10D00).withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    )
+                  ]
+                : null,
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              icon is IconData
+                  ? Icon(
+                      icon,
+                      size: 20,
                       color: selected
                           ? Colors.white
-                          : themeProvider.isDarkMode
-                              ? Colors.grey.shade700
-                              : Colors.grey.shade600,
-                    ),
-                    child: Icon(icon,
+                          : (isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade700),
+                    )
+                  : Image.asset(
+                      icon as String,
+                      width: 20,
+                      height: 20,
+                      color: selected
+                          ? Colors.white
+                          : (isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade700),
+                      errorBuilder: (context, error, stackTrace) => Icon(
+                        Icons.insert_drive_file_outlined,
                         size: 20,
-                        color:
-                            selected ? const Color(0xFFC10D00) : Colors.white),
-                  )
-                : Image.asset(icon as String, width: 32, height: 32,
-                    errorBuilder: (context, error, stackTrace) {
-                    return Icon(Icons.error, color: iconColor, size: 32);
-                  }),
-            const SizedBox(width: 12),
-            if (!sidebarCollapsed)
-              Expanded(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: selected
-                        ? Colors.white
-                        : themeProvider.isDarkMode
-                            ? Colors.grey.shade400
-                            : Colors.grey.shade800,
-                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                        color: selected ? Colors.white : Colors.grey,
+                      ),
+                    ),
+              if (!sidebarCollapsed) ...[
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                      color: selected
+                          ? Colors.white
+                          : (isDark
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade700),
+                    ),
                   ),
                 ),
-              ),
-          ],
+              ],
+            ],
+          ),
         ),
       ),
     );
@@ -953,7 +1566,7 @@ class _AdminDashboardState extends State<AdminDashboard>
       case "users":
         return const UserManagementScreen();
       default:
-        return dashboardOverview();
+        return dashboardOverview(context);
     }
   }
 
@@ -1269,165 +1882,182 @@ class _AdminDashboardState extends State<AdminDashboard>
     );
   }
 
-  Widget dashboardOverview() {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
+  Widget dashboardOverview(BuildContext context) {
     if (loadingStats) {
       return const ThemedLoadingState(
         message: "Loading dashboard statistics...",
       );
     }
 
-    final stats = [
-      {
-        "title": "Total Jobs",
-        "count": jobsCount,
-        "subtitle": "$activeJobs active",
-        "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/images/Approval_Red_Badge_White.png"
-      },
-      {
-        "title": "Candidates",
-        "count": candidatesCount,
-        "subtitle": "${candidatesWithCV} with CV",
-        "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/images/candidates.png"
-      },
-      {
-        "title": "Interviews",
-        "count": interviewsCount,
-        "subtitle": "$upcomingInterviews upcoming",
-        "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/images/red_Management_Red_Badge_White.png"
-      },
-      {
-        "title": "Applications",
-        "count": cvReviewsCount,
-        "subtitle": "$newApplicationsWeek this week",
-        "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/images/Goal_Target_White_Badge_Red_Badge_White.png"
-      },
-      {
-        "title": "Offers",
-        "count": offeredApplications,
-        "subtitle": "$acceptedOffers accepted",
-        "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/images/deadline.png"
-      },
-    ];
-    final departmentData = [
-      _DepartmentData('IT', 35, Colors.redAccent),
-      _DepartmentData('Finance', 28, Colors.redAccent.shade200),
-      _DepartmentData('Data Science', 22, Colors.redAccent.shade400),
-      _DepartmentData('Marketing', 18, Colors.redAccent.shade100),
-      _DepartmentData('HR', 15, Colors.red.shade300),
+    // Filter appointments for interviews specifically
+    final interviewsList = _calendarAppointments
+        .where((a) => a.subject.toLowerCase().contains('interview'))
+        .map((a) => {
+              'job_title': a.subject.replaceFirst('Interview: ', ''),
+              'candidate_name': '',
+              'scheduled_time':
+                  DateFormat('MMMM dd yyyy (HH:mm a)').format(a.startTime),
+              'is_new': a.startTime.difference(DateTime.now()).inDays <= 1,
+            })
+        .toList();
+
+    // Convert notifications to string list
+    final updatesList = dashboardNotifications
+        .map((n) => n['message'] as String? ?? 'New update')
+        .toList();
+
+    // Create CV trend data from real stats
+    final cvTrendList = [
+      CVData('Week 1', newApplicationsWeek),
+      CVData('Week 2', cvReviewsCount),
+      CVData('Week 3', interviewsCount),
+      CVData('Week 4', offeredApplications),
+      CVData('Week 5', acceptedOffers),
     ];
 
-    final candidateHistogramData = [
-      _HistogramData('Software Engineer', 45),
-      _HistogramData('Data Analyst', 32),
-      _HistogramData('Financial Analyst', 28),
-      _HistogramData('Marketing Manager', 22),
-      _HistogramData('HR Specialist', 18),
+    // Create interview status data
+    final interviewStatusDataList = [
+      StatusData('Scheduled', upcomingInterviews, const Color(0xFF81829B)),
+      StatusData('Pending', interviewsCount - upcomingInterviews,
+          const Color(0xFF6095CC)),
+      StatusData('Completed', 0, const Color(0xFF6CA510)),
     ];
 
-    final interviewData = [
-      _InterviewData('Scheduled', 25),
-      _InterviewData('Rescheduled', 12),
-      _InterviewData('Cancelled', 8),
-    ];
-
-    final cvReviewData = [
-      _CvReviewData('Week 1', 15, 12),
-      _CvReviewData('Week 2', 22, 18),
-      _CvReviewData('Week 3', 18, 15),
-      _CvReviewData('Week 4', 25, 20),
-      _CvReviewData('Week 5', 30, 25),
-    ];
-
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 8),
-            Text("Welcome Back, ${_effectiveWelcomeName(_userName)}!",
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: themeProvider.isDarkMode
-                        ? Colors.white
-                        : const Color.fromARGB(225, 20, 19, 30))),
-            const SizedBox(height: 12),
-
-            // KPI Cards
-            ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 160, maxHeight: 180),
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: stats.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 16),
-                itemBuilder: (_, index) {
-                  final item = stats[index];
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: (themeProvider.isDarkMode
-                              ? const Color(0xFF14131E)
-                              : Colors.white)
-                          .withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (item["color"] as Color).withValues(
-                            alpha: 0.1,
-                          ),
-                          blurRadius: 15,
-                          offset: const Offset(0, 6),
+    return Container(
+      color: Colors.transparent,
+      child: RefreshIndicator(
+        onRefresh: () async {
+          // Refresh all dashboard data
+          await fetchStats();
+          await _loadCalendarData();
+          await _fetchTeamCollaboration();
+          await _fetchDepartmentDistribution();
+          await fetchDashboardNotifications();
+        },
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Redundant header removed as it's now in the global TopBar
+              const SizedBox(height: 8),
+              // Row 1: Total Jobs, Candidates, Interviews
+              Row(
+                children: [
+                  Expanded(
+                    child: MetricCard(
+                      title: 'Total Jobs',
+                      value: jobsCount.toString(),
+                      subtitle:
+                          'Additional description information can be included.',
+                      icon: Icons.work_outline,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: MetricCard(
+                      title: 'Candidates',
+                      value: candidatesCount.toString(),
+                      subtitle:
+                          'Additional description information can be included.',
+                      icon: Icons.people_outline,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: MetricCard(
+                      title: 'Interviews',
+                      value: interviewsCount.toString(),
+                      subtitle:
+                          'Additional description information can be included.',
+                      icon: Icons.calendar_today_outlined,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // Row 2: Applications, Offers
+              Row(
+                children: [
+                  Expanded(
+                    flex: 1,
+                    child: MetricCard(
+                      title: 'Applications',
+                      value: cvReviewsCount.toString(),
+                      subtitle:
+                          'Additional description information can be included.',
+                      icon: Icons.send_outlined,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    flex: 1,
+                    child: MetricCard(
+                      title: 'Offers',
+                      value: offeredApplications.toString(),
+                      subtitle:
+                          'Additional description information can be included.',
+                      icon: Icons.trending_up,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  // Empty third slot to maintain 3-column alignment
+                  const Expanded(flex: 1, child: SizedBox.shrink()),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      children: [
+                        UpcomingInterviewsCard(
+                          interviews: interviewsList,
+                          onViewAll: () =>
+                              setState(() => currentScreen = 'interviews'),
+                        ),
+                        const SizedBox(height: 20),
+                        JobsByDepartmentCard(
+                          departments: _departmentDistribution,
+                          isLoading: _loadingDepartments,
+                        ),
+                        const SizedBox(height: 20),
+                        InterviewStatusCard(statuses: interviewStatusDataList),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 20),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        RecentUpdatesCard(
+                          updates: updatesList,
+                          onViewAll: () =>
+                              setState(() => currentScreen = 'notifications'),
+                        ),
+                        const SizedBox(height: 20),
+                        CVReviewTrendCard(weeklyData: cvTrendList),
+                        const SizedBox(height: 20),
+                        TeamCollaborationCard(
+                          items: _teamCollaborationItems,
+                          isLoading: _loadingTeamCollaboration,
+                          onViewAll: () => setState(
+                              () => currentScreen = 'team_collaboration'),
                         ),
                       ],
                     ),
-                    child: kpiCard(
-                      item["title"].toString(),
-                      item["count"] as int,
-                      item["color"] as Color,
-                      item["icon"] as String,
-                      subtitle: item["subtitle"] as String?,
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Notifications: status changes and upcoming interviews
-            _buildNotificationsFocusCard(themeProvider),
-            const SizedBox(height: 16),
-
-            // Grid layout
-            LayoutBuilder(builder: (context, constraints) {
-              int crossAxisCount = constraints.maxWidth > 900 ? 2 : 1;
-              double aspectRatio = constraints.maxWidth > 900 ? 1.8 : 1.6;
-              return GridView.count(
-                crossAxisCount: crossAxisCount,
-                shrinkWrap: true,
-                childAspectRatio: aspectRatio,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: const EdgeInsets.only(bottom: 20),
-                children: [
-                  departmentRadialChart(departmentData),
-                  candidateHistogram(candidateHistogramData),
-                  interviewColumnChart(interviewData),
-                  cvReviewsMixedChart(cvReviewData),
-                  modernCalendarCard(),
-                  activitiesCard(),
+                  ),
                 ],
-              );
-            }),
-          ],
+              ),
+              const SizedBox(height: 20),
+              DashboardCalendarCard(
+                focusedDay: focusedDay,
+                appointments: _calendarAppointments,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2002,177 +2632,6 @@ class _AdminDashboardState extends State<AdminDashboard>
         currentScreen = 'notifications';
       }
     });
-  }
-
-  String _notificationSectionLabel(Map<String, dynamic> notification) {
-    final type = (notification['type']?.toString() ?? '').toLowerCase();
-    if (type == 'new_application') return 'Applications';
-    if (type == 'new_candidate') return 'Candidates';
-    if (type == 'interview' ||
-        type == 'feedback_reminder' ||
-        type == 'feedback_received' ||
-        type == 'reminder' ||
-        type == 'reminder_urgent' ||
-        type == 'warning') {
-      return 'Interviews';
-    }
-    if (type == 'status_update') return 'Pipeline';
-    return 'General';
-  }
-
-  Widget _buildNotificationsFocusCard(ThemeProvider themeProvider) {
-    final notificationPreview =
-        dashboardNotifications.where((n) => n['is_read'] != true).toList();
-    final recentNotifications = (notificationPreview.isNotEmpty
-            ? notificationPreview
-            : dashboardNotifications)
-        .take(5)
-        .toList();
-    final upcomingFromCalendar = _calendarAppointments
-        .where((a) => a.startTime.isAfter(DateTime.now()))
-        .toList()
-      ..sort((a, b) => a.startTime.compareTo(b.startTime));
-    final upcomingList = upcomingFromCalendar.take(3).toList();
-    final bg =
-        (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-            .withValues(alpha: 0.9);
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.blue.withValues(alpha: 0.1),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Notifications",
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color:
-                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
-                ),
-              ),
-              TextButton(
-                onPressed: () =>
-                    setState(() => currentScreen = "notifications"),
-                child: const Text("View all", style: TextStyle(fontSize: 12)),
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color.fromARGB(255, 193, 13, 0),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Upcoming interviews",
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: themeProvider.isDarkMode ? Colors.white70 : Colors.black54,
-            ),
-          ),
-          const SizedBox(height: 4),
-          if (upcomingList.isEmpty)
-            Text(
-              "No upcoming interviews.",
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 11,
-                color: themeProvider.isDarkMode
-                    ? Colors.grey.shade400
-                    : Colors.grey.shade600,
-              ),
-            )
-          else
-            ...upcomingList.map(
-              (a) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  "${a.subject} — ${DateFormat.MMMd().add_Hm().format(a.startTime)}",
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 11,
-                    color: themeProvider.isDarkMode
-                        ? Colors.white70
-                        : Colors.black87,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-          const SizedBox(height: 10),
-          Text(
-            "Recent updates",
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: themeProvider.isDarkMode ? Colors.white70 : Colors.black54,
-            ),
-          ),
-          const SizedBox(height: 4),
-          if (recentNotifications.isEmpty)
-            Text(
-              "No recent notifications.",
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 11,
-                color: themeProvider.isDarkMode
-                    ? Colors.grey.shade400
-                    : Colors.grey.shade600,
-              ),
-            )
-          else
-            ...recentNotifications.take(3).map(
-                  (n) => Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _notificationSectionLabel(n),
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: const Color.fromARGB(255, 193, 13, 0),
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          n['message']?.toString() ?? 'Notification',
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 11,
-                            color: themeProvider.isDarkMode
-                                ? Colors.white70
-                                : Colors.black87,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-        ],
-      ),
-    );
   }
 
   Widget activitiesCard() {

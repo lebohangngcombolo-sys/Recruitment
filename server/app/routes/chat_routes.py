@@ -361,6 +361,18 @@ def create_meeting():
                     'meeting': meeting.to_dict()
                 }, room=f'user_{pid}')
         
+        # Emit dashboard event for meeting creation
+        from app.websocket_handler import emit_meeting_created
+        emit_meeting_created({
+            'id': meeting.id,
+            'title': meeting.title,
+            'start_time': meeting.scheduled_at.isoformat() if meeting.scheduled_at else None,
+            'end_time': meeting.scheduled_at.isoformat() if meeting.scheduled_at else None,
+            'organizer_id': meeting.created_by,
+            'participants': participant_ids,
+            'created_at': meeting.created_at.isoformat() if meeting.created_at else None
+        }, user_id=str(meeting.created_by))
+
         return jsonify({
             'success': True,
             'message': 'Meeting created successfully',
@@ -416,6 +428,17 @@ def respond_to_meeting(meeting_id):
                 'status': status,
                 'user_name': responder.full_name or responder.email
             }, room=f'user_{meeting.created_by}')
+            
+            # Emit dashboard event for meeting update
+            from app.websocket_handler import emit_meeting_updated
+            emit_meeting_updated({
+                'id': meeting.id,
+                'title': meeting.title,
+                'start_time': meeting.scheduled_at.isoformat() if meeting.scheduled_at else None,
+                'end_time': meeting.scheduled_at.isoformat() if meeting.scheduled_at else None,
+                'status': status,
+                'updated_at': datetime.utcnow().isoformat()
+            }, user_id=str(meeting.created_by))
         
         return jsonify({
             'success': True,

@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../widgets/weighting_configuration_widget.dart';
@@ -11,6 +12,9 @@ import '../../services/ai_service.dart';
 import '../../services/test_pack_service.dart';
 import '../../models/test_pack.dart';
 import '../../widgets/save_test_pack_dialog.dart';
+import '../../widgets/sync_status_badge.dart';
+import '../../widgets/bulk_sync_dialog.dart';
+import '../../screens/admin/sync_history_screen.dart';
 import '../../providers/theme_provider.dart';
 
 class JobManagement extends StatefulWidget {
@@ -137,248 +141,145 @@ class _JobManagementState extends State<JobManagement> {
     });
   }
 
-  Widget _tableHeaderCell(
-    String label, {
-    required int flex,
-    required ThemeProvider themeProvider,
-  }) {
-    return Expanded(
-      flex: flex,
-      child: Text(
-        label,
-        style: TextStyle(
-          fontFamily: 'Poppins',
-          fontWeight: FontWeight.bold,
-          fontSize: 14,
-          color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+  // ==================== RECRUITEE SYNC METHODS ====================
+
+  Future<void> _toggleJobSync(int jobId, bool enabled) async {
+    try {
+      await admin.toggleJobSync(jobId, enabled);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text(enabled ? 'Sync enabled for job' : 'Sync disabled for job'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      fetchJobs(); // Refresh to show updated state
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _launchUrl(String? url) async {
+    if (url == null || url.isEmpty) return;
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not launch URL: $url'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showSyncHistory(int jobId, String jobTitle) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SyncHistoryScreen(
+          jobId: jobId,
+          jobTitle: jobTitle,
         ),
       ),
     );
   }
 
-  Widget _buildExpandableJobRow(
-    Map<String, dynamic> job,
-    ThemeProvider themeProvider,
-  ) {
-    final jobId = job['id'] as int;
-    final isExpanded = _expandedJobIds.contains(jobId);
-    final createdBy = job['created_by_user'] != null
-        ? (job['created_by_user']['name'] ??
-            job['created_by_user']['email'] ??
-            'Unknown')
-        : '—';
-    final isActive = job['is_active'] == true;
-    final textColor = themeProvider.isDarkMode ? Colors.white : Colors.black87;
+  void _handleMenuAction(String action, Map<String, dynamic> job, int jobId) {
+    switch (action) {
+      case 'approve':
+        _approveJob(jobId, job['title'] ?? 'Job');
+        break;
+      case 'decline':
+        _declineJob(jobId, job['title'] ?? 'Job');
+        break;
+      case 'edit':
+        openJobForm(job: job);
+        break;
+      case 'delete':
+        _confirmDeleteJob(jobId, job['title'] ?? 'Job');
+        break;
+      case 'select':
+        if (widget.onJobSelected != null) {
+          widget.onJobSelected!(jobId);
+        }
+        break;
+      case 'toggle_sync':
+        _toggleJobSync(jobId, !(job['sync_to_recruitee'] ?? false));
+        break;
+      case 'history':
+        _showSyncHistory(jobId, job['title'] ?? 'Job');
+        break;
+    }
+  }
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        InkWell(
-          onTap: () => _toggleJobExpanded(jobId),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: isExpanded && themeProvider.isDarkMode
-                  ? Colors.grey.shade800.withValues(alpha: 0.5)
-                  : isExpanded
-                      ? Colors.grey.shade100
-                      : null,
-              border: Border(
-                bottom: BorderSide(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade800
-                      : Colors.grey.shade300,
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: Text(
-                    job['title'] ?? '—',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 13,
-                      color: textColor,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Expanded(
-                  flex: 1,
-                  child: Text(
-                    job['category'] ?? '—',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 13,
-                      color: textColor,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Expanded(
-                  flex: 1,
-                  child: Text(
-                    '${job['application_count'] ?? 0}',
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 13,
-                      color: textColor,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  flex: 1,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isActive
-                          ? Colors.green.withValues(alpha: 0.2)
-                          : Colors.orange.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      isActive ? 'Active' : 'Inactive',
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          fontWeight: FontWeight.w600,
-                          fontSize: 11,
-                          color: isActive
-                              ? Colors.green.shade700
-                              : Colors.orange.shade700),
-                    ),
-                  ),
-                ),
-                Expanded(flex: 1, child: _hmApprovalChip(job)),
-                Expanded(
-                    flex: 2,
-                    child: Text(createdBy,
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 12,
-                            color: textColor),
-                        overflow: TextOverflow.ellipsis)),
-                SizedBox(
-                  width: 200, // Increased width to accommodate more buttons
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Show approve/decline buttons for pending jobs
-                      if (job['approval_status'] == 'pending') ...[
-                        IconButton(
-                          icon: const Icon(
-                            Icons.check_circle,
-                            color: Colors.green,
-                            size: 20,
-                          ),
-                          onPressed: () =>
-                              _approveJob(jobId, job['title'] ?? 'Job'),
-                          tooltip: 'Approve',
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 32,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.cancel,
-                            color: Colors.orange,
-                            size: 20,
-                          ),
-                          onPressed: () =>
-                              _declineJob(jobId, job['title'] ?? 'Job'),
-                          tooltip: 'Decline',
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 32,
-                          ),
-                        ),
-                        const SizedBox(width: 8), // Spacer before other actions
-                      ],
-                      IconButton(
-                        icon: const Icon(
-                          Icons.edit,
-                          color: Colors.blueAccent,
-                          size: 20,
-                        ),
-                        onPressed: () => openJobForm(job: job),
-                        tooltip: 'Edit',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 32,
-                        ),
+  void _confirmDeleteJob(int jobId, String jobTitle) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title:
+            const Text('Delete Job', style: TextStyle(fontFamily: 'Poppins')),
+        content: Text(
+          'Are you sure you want to delete "$jobTitle"?',
+          style: const TextStyle(fontFamily: 'Poppins'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child:
+                const Text('Cancel', style: TextStyle(fontFamily: 'Poppins')),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await admin.deleteJob(jobId);
+                fetchJobs();
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        "Error deleting job: $e",
+                        style: const TextStyle(fontFamily: 'Poppins'),
                       ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.delete,
-                          color: Colors.redAccent,
-                          size: 20,
-                        ),
-                        onPressed: () async {
-                          try {
-                            await admin.deleteJob(jobId);
-                            fetchJobs();
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    "Error deleting job: $e",
-                                    style: const TextStyle(
-                                      fontFamily: 'Poppins',
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }
-                          }
-                        },
-                        tooltip: 'Delete',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(
-                          minWidth: 32,
-                          minHeight: 32,
-                        ),
-                      ),
-                      if (widget.onJobSelected != null)
-                        IconButton(
-                          icon: const Icon(
-                            Icons.check_circle,
-                            color: Colors.green,
-                            size: 20,
-                          ),
-                          onPressed: () => widget.onJobSelected!(jobId),
-                          tooltip: 'Select Job',
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(
-                            minWidth: 32,
-                            minHeight: 32,
-                          ),
-                        ),
-                      Icon(
-                        isExpanded ? Icons.expand_less : Icons.expand_more,
-                        color: textColor,
-                        size: 22,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red, fontFamily: 'Poppins'),
             ),
           ),
-        ),
-        if (isExpanded)
-          _buildExpandedApplicantsSection(jobId, job, themeProvider),
-      ],
+        ],
+      ),
     );
   }
+
+  void _showBulkSyncDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => BulkSyncDialog(
+        jobs: jobs,
+      ),
+    ).then((result) {
+      if (result == true) {
+        fetchJobs(); // Refresh after bulk sync
+      }
+    });
+  }
+
+  // Unused legacy UI methods removed to resolve IDE warnings.
 
   Widget _buildExpandedApplicantsSection(
     int jobId,
@@ -393,7 +294,6 @@ class _JobManagementState extends State<JobManagement> {
         themeProvider.isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300;
 
     return Container(
-      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: themeProvider.isDarkMode
@@ -814,6 +714,82 @@ class _JobManagementState extends State<JobManagement> {
     }
   }
 
+  Future<void> _bulkApproveAllPending() async {
+    // Get all pending jobs from the current list
+    final pendingJobs =
+        jobs.where((job) => job['approval_status'] == 'pending').toList();
+
+    if (pendingJobs.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No pending jobs to approve'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Bulk Approve Jobs'),
+        content: Text('Approve all ${pendingJobs.length} pending jobs?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Approve All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Show progress indicator
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Approving ${pendingJobs.length} jobs...'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    // Approve each job
+    int successCount = 0;
+    int failCount = 0;
+
+    for (final job in pendingJobs) {
+      try {
+        await admin.approveJob(job['id']);
+        successCount++;
+      } catch (e) {
+        failCount++;
+      }
+    }
+
+    // Refresh jobs list
+    await fetchJobs();
+
+    // Show result
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Approved: $successCount, Failed: $failCount'),
+          backgroundColor: failCount == 0 ? Colors.green : Colors.orange,
+        ),
+      );
+    }
+  }
+
   Future<void> _declineJob(int jobId, String jobTitle) async {
     final TextEditingController reasonController = TextEditingController();
 
@@ -882,6 +858,7 @@ class _JobManagementState extends State<JobManagement> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final filteredJobs = _filteredJobs();
 
     return DefaultTextStyle(
       style: TextStyle(
@@ -1166,12 +1143,38 @@ class _JobManagementState extends State<JobManagement> {
                                 }
                               },
                             ),
+                            const Spacer(),
+                            // Bulk Approve All Button (for testing)
+                            ElevatedButton.icon(
+                              onPressed: _bulkApproveAllPending,
+                              icon: const Icon(Icons.check_circle, size: 18),
+                              label: const Text('Approve All Pending'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Bulk Sync Button
+                            ElevatedButton.icon(
+                              onPressed: _showBulkSyncDialog,
+                              icon: const Icon(Icons.cloud_sync, size: 18),
+                              label: const Text('Bulk Sync'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 16),
 
-                        // Table with expandable rows (scrolls with the whole screen)
-                        jobs.isEmpty
+                        // Table with DataTable (perfect alignment)
+                        filteredJobs.isEmpty
                             ? Padding(
                                 padding:
                                     const EdgeInsets.symmetric(vertical: 48),
@@ -1188,89 +1191,344 @@ class _JobManagementState extends State<JobManagement> {
                                   ),
                                 ),
                               )
-                            : _filteredJobs().isEmpty
-                                ? Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 48),
-                                    child: Center(
-                                      child: Text(
-                                        "No jobs match your search",
-                                        style: TextStyle(
-                                          fontFamily: 'Poppins',
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.grey.shade400
-                                              : Colors.black54,
-                                          fontSize: 16,
-                                        ),
+                            : Container(
+                                decoration: BoxDecoration(
+                                  color: (themeProvider.isDarkMode
+                                          ? const Color(0xFF14131E)
+                                          : Colors.white)
+                                      .withValues(alpha: 0.95),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade800
+                                        : Colors.grey.shade300,
+                                  ),
+                                ),
+                                child: Theme(
+                                  data: Theme.of(context).copyWith(
+                                    cardColor: Colors.transparent,
+                                    dividerColor: Colors.transparent,
+                                  ),
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: DataTable(
+                                      columnSpacing: 16,
+                                      horizontalMargin: 12,
+                                      headingRowColor: WidgetStateProperty
+                                          .resolveWith<Color?>(
+                                        (states) => themeProvider.isDarkMode
+                                            ? Colors.grey.shade900
+                                            : Colors.grey.shade200,
                                       ),
-                                    ),
-                                  )
-                                : Container(
-                                    decoration: BoxDecoration(
-                                      color: (themeProvider.isDarkMode
-                                              ? const Color(0xFF14131E)
-                                              : Colors.white)
-                                          .withValues(alpha: 0.95),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: themeProvider.isDarkMode
-                                            ? Colors.grey.shade800
-                                            : Colors.grey.shade300,
-                                      ),
-                                    ),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        // Table header
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 12, vertical: 12),
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.grey.shade900
-                                              : Colors.grey.shade200,
-                                          child: Row(
-                                            children: [
-                                              _tableHeaderCell('Title',
-                                                  flex: 3,
-                                                  themeProvider: themeProvider),
-                                              _tableHeaderCell('Category',
-                                                  flex: 1,
-                                                  themeProvider: themeProvider),
-                                              _tableHeaderCell('Applications',
-                                                  flex: 1,
-                                                  themeProvider: themeProvider),
-                                              _tableHeaderCell('Status',
-                                                  flex: 1,
-                                                  themeProvider: themeProvider),
-                                              _tableHeaderCell('Approval',
-                                                  flex: 1,
-                                                  themeProvider: themeProvider),
-                                              _tableHeaderCell('Created by',
-                                                  flex: 2,
-                                                  themeProvider: themeProvider),
-                                              SizedBox(
-                                                  width: 120,
-                                                  child: Text('Actions',
-                                                      style: TextStyle(
-                                                          fontFamily: 'Poppins',
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 14,
-                                                          color: themeProvider
-                                                                  .isDarkMode
-                                                              ? Colors.white
-                                                              : Colors
-                                                                  .black87))),
-                                            ],
-                                          ),
-                                        ),
-                                        // All job rows in column so whole screen scrolls together
-                                        ..._filteredJobs().map((job) =>
-                                            _buildExpandableJobRow(
-                                                job, themeProvider)),
+                                      dataRowColor: WidgetStateProperty
+                                          .resolveWith<Color?>(
+                                              (states) => Colors.transparent),
+                                      columns: [
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Title', themeProvider)),
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Category', themeProvider)),
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Applications', themeProvider)),
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Status', themeProvider)),
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Approval', themeProvider)),
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Created by', themeProvider)),
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Recruitee', themeProvider)),
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Actions', themeProvider)),
                                       ],
+                                      rows: filteredJobs.map((job) {
+                                        final jobId = job['id'] as int;
+                                        final isExpanded =
+                                            _expandedJobIds.contains(jobId);
+                                        final createdBy =
+                                            job['created_by_user'] != null
+                                                ? (job['created_by_user']
+                                                        ['name'] ??
+                                                    job['created_by_user']
+                                                        ['email'] ??
+                                                    'Unknown')
+                                                : '—';
+                                        final isActive =
+                                            job['is_active'] == true;
+                                        final textColor =
+                                            themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87;
+
+                                        return DataRow(
+                                          onSelectChanged: (_) =>
+                                              _toggleJobExpanded(jobId),
+                                          cells: [
+                                            DataCell(Text(job['title'] ?? '—',
+                                                style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 13,
+                                                    color: textColor))),
+                                            DataCell(Text(
+                                                job['category'] ?? '—',
+                                                style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 13,
+                                                    color: textColor))),
+                                            DataCell(Text(
+                                                '${job['application_count'] ?? 0}',
+                                                style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 13,
+                                                    color: textColor))),
+                                            DataCell(
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: isActive
+                                                      ? Colors.green.withValues(
+                                                          alpha: 0.2)
+                                                      : Colors.orange
+                                                          .withValues(
+                                                              alpha: 0.2),
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                ),
+                                                child: Text(
+                                                  isActive
+                                                      ? 'Active'
+                                                      : 'Inactive',
+                                                  style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 11,
+                                                    color: isActive
+                                                        ? Colors.green.shade700
+                                                        : Colors
+                                                            .orange.shade700,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            DataCell(_hmApprovalChip(job)),
+                                            DataCell(Text(createdBy,
+                                                style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 12,
+                                                    color: textColor))),
+                                            DataCell(SyncStatusBadge(job: job)),
+                                            DataCell(
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  if (job['approval_status'] ==
+                                                          'approved' &&
+                                                      job['sync_to_recruitee'] ==
+                                                          true)
+                                                    _SyncNowButton(
+                                                        job: job,
+                                                        onSyncComplete:
+                                                            fetchJobs,
+                                                        adminService: admin),
+                                                  if (job['recruitee_url'] !=
+                                                      null)
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                          Icons.open_in_new,
+                                                          color: Colors.green,
+                                                          size: 18),
+                                                      onPressed: () =>
+                                                          _launchUrl(job[
+                                                              'recruitee_url']),
+                                                      padding: EdgeInsets.zero,
+                                                      constraints:
+                                                          const BoxConstraints(
+                                                              minWidth: 28,
+                                                              minHeight: 28),
+                                                    ),
+                                                  PopupMenuButton<String>(
+                                                    icon: Icon(Icons.more_vert,
+                                                        size: 18,
+                                                        color: textColor),
+                                                    onSelected: (value) =>
+                                                        _handleMenuAction(
+                                                            value, job, jobId),
+                                                    padding: EdgeInsets.zero,
+                                                    constraints:
+                                                        const BoxConstraints(
+                                                            minWidth: 28,
+                                                            minHeight: 28),
+                                                    itemBuilder: (context) => [
+                                                      if (job['approval_status'] ==
+                                                          'pending')
+                                                        const PopupMenuItem(
+                                                          value: 'approve',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                  Icons
+                                                                      .check_circle,
+                                                                  color: Colors
+                                                                      .green,
+                                                                  size: 18),
+                                                              SizedBox(
+                                                                  width: 8),
+                                                              Text('Approve')
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      if (job['approval_status'] ==
+                                                          'pending')
+                                                        const PopupMenuItem(
+                                                          value: 'decline',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(Icons.cancel,
+                                                                  color: Colors
+                                                                      .orange,
+                                                                  size: 18),
+                                                              SizedBox(
+                                                                  width: 8),
+                                                              Text('Decline')
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      const PopupMenuItem(
+                                                        value: 'edit',
+                                                        child: Row(
+                                                          children: [
+                                                            Icon(Icons.edit,
+                                                                color: Colors
+                                                                    .blueAccent,
+                                                                size: 18),
+                                                            SizedBox(width: 8),
+                                                            Text('Edit')
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      const PopupMenuItem(
+                                                        value: 'delete',
+                                                        child: Row(
+                                                          children: [
+                                                            Icon(Icons.delete,
+                                                                color: Colors
+                                                                    .redAccent,
+                                                                size: 18),
+                                                            SizedBox(width: 8),
+                                                            Text('Delete')
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      if (widget
+                                                              .onJobSelected !=
+                                                          null)
+                                                        const PopupMenuItem(
+                                                          value: 'select',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                  Icons
+                                                                      .check_circle,
+                                                                  color: Colors
+                                                                      .green,
+                                                                  size: 18),
+                                                              SizedBox(
+                                                                  width: 8),
+                                                              Text('Select Job')
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      if (job['approval_status'] ==
+                                                          'approved')
+                                                        PopupMenuItem(
+                                                          value: 'toggle_sync',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                  job['sync_to_recruitee'] ==
+                                                                          true
+                                                                      ? Icons
+                                                                          .cloud_off
+                                                                      : Icons
+                                                                          .cloud,
+                                                                  color: Colors
+                                                                      .blue,
+                                                                  size: 18),
+                                                              const SizedBox(
+                                                                  width: 8),
+                                                              Text(job['sync_to_recruitee'] ==
+                                                                      true
+                                                                  ? 'Disable Sync'
+                                                                  : 'Enable Sync'),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      if (job['approval_status'] ==
+                                                          'approved')
+                                                        const PopupMenuItem(
+                                                          value: 'history',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                  Icons.history,
+                                                                  color: Colors
+                                                                      .grey,
+                                                                  size: 18),
+                                                              SizedBox(
+                                                                  width: 8),
+                                                              Text(
+                                                                  'Sync History')
+                                                            ],
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                  Icon(
+                                                      isExpanded
+                                                          ? Icons.expand_less
+                                                          : Icons.expand_more,
+                                                      color: textColor,
+                                                      size: 18),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      }).toList(),
                                     ),
                                   ),
+                                ),
+                              ),
+
+                        // Expanded details section (applicants) displayed below the table
+                        if (_expandedJobIds.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 16),
+                            child: Column(
+                              children: _expandedJobIds.map((jobId) {
+                                final job = jobs.firstWhere(
+                                    (j) => j['id'] == jobId,
+                                    orElse: () => {});
+                                if (job.isEmpty) return const SizedBox.shrink();
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: _buildExpandedApplicantsSection(
+                                      jobId, job, themeProvider),
+                                );
+                              }).toList(),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -1278,6 +1536,114 @@ class _JobManagementState extends State<JobManagement> {
         ),
       ),
     );
+  }
+
+  Widget _tableHeaderText(String label, ThemeProvider themeProvider) {
+    return Text(
+      label,
+      style: TextStyle(
+        fontFamily: 'Poppins',
+        fontWeight: FontWeight.bold,
+        fontSize: 14,
+        color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+      ),
+    );
+  }
+}
+
+// ---------------- Sync Now Button with Loading Indicator ----------------
+class _SyncNowButton extends StatefulWidget {
+  final Map<String, dynamic> job;
+  final VoidCallback? onSyncComplete;
+  final AdminService adminService;
+
+  const _SyncNowButton(
+      {required this.job, this.onSyncComplete, required this.adminService});
+
+  @override
+  State<_SyncNowButton> createState() => _SyncNowButtonState();
+}
+
+class _SyncNowButtonState extends State<_SyncNowButton> {
+  bool _isSyncing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: _isSyncing
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.cloud_upload, size: 18),
+      onPressed: _isSyncing ? null : _sync,
+      tooltip: 'Sync to Recruitee',
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(
+        minWidth: 28,
+        minHeight: 28,
+      ),
+    );
+  }
+
+  Future<void> _sync() async {
+    setState(() => _isSyncing = true);
+    try {
+      final result =
+          await widget.adminService.syncJobToRecruitee(widget.job['id']);
+
+      if (mounted) {
+        if (result['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✓ Synced successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          // Open Recruitee URL if available
+          if (result['recruitee_url'] != null) {
+            _launchUrl(result['recruitee_url']);
+          }
+        } else if (result['retry_scheduled'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠ Sync failed – retry scheduled'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✗ Error: ${result['error'] ?? 'Unknown error'}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+
+      widget.onSyncComplete?.call();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Network error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncing = false);
+      }
+    }
+  }
+
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 }
 
