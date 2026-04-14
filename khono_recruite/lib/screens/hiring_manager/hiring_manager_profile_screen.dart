@@ -16,6 +16,7 @@ import '../../utils/api_endpoints.dart';
 
 class HiringManagerProfileScreen extends StatefulWidget {
   final String token;
+
   /// When set (e.g. when embedded in dashboard), back button calls this instead of popping.
   final VoidCallback? onBack;
 
@@ -30,7 +31,8 @@ class HiringManagerProfileScreen extends StatefulWidget {
       _HiringManagerProfileScreenState();
 }
 
-class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen> {
+class _HiringManagerProfileScreenState
+    extends State<HiringManagerProfileScreen> {
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _surnameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -96,8 +98,8 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
         _phoneError = null;
       }
 
-      if (email.isNotEmpty && !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-          .hasMatch(email)) {
+      if (email.isNotEmpty &&
+          !RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
         _emailError = 'Please enter a valid email address';
         isValid = false;
       } else {
@@ -167,8 +169,14 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
 
       final profile = Map<String, dynamic>.from(user['profile'] ?? {});
       final email = (user['email'] ?? '').toString();
-      final firstName = (profile['first_name'] ?? profile['full_name']?.toString().split(' ').first ?? '').toString();
-      final lastName = (profile['last_name'] ?? profile['full_name']?.toString().split(' ').skip(1).join(' ') ?? '').toString();
+      final firstName = (profile['first_name'] ??
+              profile['full_name']?.toString().split(' ').first ??
+              '')
+          .toString();
+      final lastName = (profile['last_name'] ??
+              profile['full_name']?.toString().split(' ').skip(1).join(' ') ??
+              '')
+          .toString();
       final phone = (profile['phone'] ?? '').toString();
       final deptRaw = (profile['department'] ?? '').toString().trim();
       final desigRaw = (profile['designation'] ?? '').toString().trim();
@@ -254,7 +262,8 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
 
       if (response.statusCode != 200) {
         final body = json.decode(response.body);
-        final msg = body['error'] ?? body['message'] ?? 'Failed to save profile';
+        final msg =
+            body['error'] ?? body['message'] ?? 'Failed to save profile';
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(msg.toString())),
@@ -375,180 +384,181 @@ class _HiringManagerProfileScreenState extends State<HiringManagerProfileScreen>
         ),
         child: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.only(top: 16, left: 16, right: 16, bottom: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.black.withValues(alpha: 0.4)
-                            : Colors.black.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: const Color(0xFFC10D00).withValues(alpha: 0.3),
+            padding:
+                const EdgeInsets.only(top: 16, left: 16, right: 16, bottom: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.black.withValues(alpha: 0.4)
+                        : Colors.black.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFFC10D00).withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          GestureDetector(
+                            onTap: _pickProfileImage,
+                            child: CircleAvatar(
+                              radius: 40,
+                              backgroundColor: (_profileImage != null ||
+                                      (_profileImageUrl != null &&
+                                          _profileImageUrl!.isNotEmpty))
+                                  ? Colors.grey.shade700
+                                  : const Color(0xFFC10D00),
+                              backgroundImage: (_profileImage != null ||
+                                      (_profileImageUrl != null &&
+                                          _profileImageUrl!.isNotEmpty))
+                                  ? _getProfileImageProvider()
+                                  : null,
+                              child: (_profileImage == null &&
+                                      (_profileImageUrl == null ||
+                                          _profileImageUrl!.isEmpty))
+                                  ? const Icon(
+                                      Icons.person,
+                                      size: 44,
+                                      color: Colors.white,
+                                    )
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Tap to upload',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.8),
+                              fontSize: 12,
+                              fontFamily: 'Poppins',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Hiring Manager',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                            Text(
+                              _emailController.text.isEmpty
+                                  ? 'Loading...'
+                                  : _emailController.text,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 16,
+                                fontFamily: 'Poppins',
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      child: Row(
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.black.withValues(alpha: 0.4)
+                        : Colors.black.withValues(alpha: 0.3),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: const Color(0xFFC10D00).withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              GestureDetector(
-                                onTap: _pickProfileImage,
-                                child: CircleAvatar(
-                                  radius: 40,
-                                  backgroundColor: (_profileImage != null ||
-                                          (_profileImageUrl != null &&
-                                              _profileImageUrl!.isNotEmpty))
-                                      ? Colors.grey.shade700
-                                      : const Color(0xFFC10D00),
-                                  backgroundImage: (_profileImage != null ||
-                                          (_profileImageUrl != null &&
-                                              _profileImageUrl!.isNotEmpty))
-                                      ? _getProfileImageProvider()
-                                      : null,
-                                  child: (_profileImage == null &&
-                                          (_profileImageUrl == null ||
-                                              _profileImageUrl!.isEmpty))
-                                      ? const Icon(
-                                          Icons.person,
-                                          size: 44,
-                                          color: Colors.white,
-                                        )
-                                      : null,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildEditableField(
+                                    'First Name', _firstNameController),
+                                const SizedBox(height: 16),
+                                _buildEditableField(
+                                    'Surname', _surnameController),
+                                const SizedBox(height: 16),
+                                _buildEditableField(
+                                  'Email Address',
+                                  _emailController,
+                                  errorText: _emailError,
+                                  readOnly: true,
                                 ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Tap to upload',
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: 0.8),
-                                  fontSize: 12,
-                                  fontFamily: 'Poppins',
+                                const SizedBox(height: 16),
+                                _buildEditableField(
+                                  'Phone Number',
+                                  _phoneController,
+                                  errorText: _phoneError,
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
-                                  'Hiring Manager',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    fontFamily: 'Poppins',
-                                  ),
+                                _buildDropdownField(
+                                  'Department',
+                                  _selectedDepartment,
+                                  _departments,
+                                  (String? newValue) {
+                                    setState(
+                                        () => _selectedDepartment = newValue);
+                                    _scheduleAutoSave();
+                                  },
                                 ),
-                                Text(
-                                  _emailController.text.isEmpty
-                                      ? 'Loading...'
-                                      : _emailController.text,
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 16,
-                                    fontFamily: 'Poppins',
-                                  ),
+                                const SizedBox(height: 16),
+                                _buildDropdownField(
+                                  'Designation',
+                                  _selectedDesignation,
+                                  _designations,
+                                  (String? newValue) {
+                                    setState(
+                                        () => _selectedDesignation = newValue);
+                                    _scheduleAutoSave();
+                                  },
+                                ),
+                                const SizedBox(height: 16),
+                                _buildEditableField(
+                                    'Preferred Name', _preferredNameController),
+                                const SizedBox(height: 16),
+                                _buildEditableField(
+                                  'Manager',
+                                  _managerController,
+                                  readOnly: true,
                                 ),
                               ],
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: isDark
-                            ? Colors.black.withValues(alpha: 0.4)
-                            : Colors.black.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: const Color(0xFFC10D00).withValues(alpha: 0.3),
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _buildEditableField(
-                                        'First Name', _firstNameController),
-                                    const SizedBox(height: 16),
-                                    _buildEditableField(
-                                        'Surname', _surnameController),
-                                    const SizedBox(height: 16),
-                                    _buildEditableField(
-                                      'Email Address',
-                                      _emailController,
-                                      errorText: _emailError,
-                                      readOnly: true,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    _buildEditableField(
-                                      'Phone Number',
-                                      _phoneController,
-                                      errorText: _phoneError,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    _buildDropdownField(
-                                      'Department',
-                                      _selectedDepartment,
-                                      _departments,
-                                      (String? newValue) {
-                                        setState(() =>
-                                            _selectedDepartment = newValue);
-                                        _scheduleAutoSave();
-                                      },
-                                    ),
-                                    const SizedBox(height: 16),
-                                    _buildDropdownField(
-                                      'Designation',
-                                      _selectedDesignation,
-                                      _designations,
-                                      (String? newValue) {
-                                        setState(() =>
-                                            _selectedDesignation = newValue);
-                                        _scheduleAutoSave();
-                                      },
-                                    ),
-                                    const SizedBox(height: 16),
-                                    _buildEditableField(
-                                        'Preferred Name', _preferredNameController),
-                                    const SizedBox(height: 16),
-                                    _buildEditableField(
-                                      'Manager',
-                                      _managerController,
-                                      readOnly: true,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
+              ],
+            ),
           ),
         ),
       ),

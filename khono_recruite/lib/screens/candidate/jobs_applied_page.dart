@@ -76,7 +76,8 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
       return _DisplayStatus.inProgress;
     }
     final status = (app['status']?.toString() ?? '').toLowerCase();
-    final interviewStatus = (app['interview_status']?.toString() ?? '').toLowerCase();
+    final interviewStatus =
+        (app['interview_status']?.toString() ?? '').toLowerCase();
     if (status == 'disqualified') return _DisplayStatus.rejected;
     if (status.contains('offer')) return _DisplayStatus.offer;
     if (status == 'assessment_submitted' && interviewStatus == 'scheduled') {
@@ -89,7 +90,8 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
   bool _showInAppliedTab(_DisplayStatus display) =>
       display == _DisplayStatus.applied || display == _DisplayStatus.interview;
   bool _showInOffers(_DisplayStatus display) => display == _DisplayStatus.offer;
-  bool _showInRejected(_DisplayStatus display) => display == _DisplayStatus.rejected;
+  bool _showInRejected(_DisplayStatus display) =>
+      display == _DisplayStatus.rejected;
 
   List<Map<String, dynamic>> get _filteredApplications {
     if (applications.isEmpty) return [];
@@ -111,15 +113,12 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
     }
   }
 
-  int _countApplied() => applications
-      .where((a) => _showInAppliedTab(_toDisplayStatus(a)))
-      .length;
-  int _countOffers() => applications
-      .where((a) => _showInOffers(_toDisplayStatus(a)))
-      .length;
-  int _countRejected() => applications
-      .where((a) => _showInRejected(_toDisplayStatus(a)))
-      .length;
+  int _countApplied() =>
+      applications.where((a) => _showInAppliedTab(_toDisplayStatus(a))).length;
+  int _countOffers() =>
+      applications.where((a) => _showInOffers(_toDisplayStatus(a))).length;
+  int _countRejected() =>
+      applications.where((a) => _showInRejected(_toDisplayStatus(a))).length;
 
   Future<void> _fetchApplications() async {
     setState(() => loading = true);
@@ -202,7 +201,8 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
 
   String _dateApplied(Map<String, dynamic> app) {
     final created = app['created_at']?.toString();
-    if (created != null && created.length >= 10) return created.substring(0, 10);
+    if (created != null && created.length >= 10)
+      return created.substring(0, 10);
     final saved = app['saved_at']?.toString();
     if (saved != null && saved.length >= 10) return saved.substring(0, 10);
     return '—';
@@ -221,7 +221,8 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
   }
 
   /// Shows CV in-app via backend proxy (avoids 401 and opens inside the app).
-  Future<void> _previewCv(BuildContext context, Map<String, dynamic> app) async {
+  Future<void> _previewCv(
+      BuildContext context, Map<String, dynamic> app) async {
     if (!_cvUploaded(app)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -241,7 +242,8 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
       }
       return;
     }
-    final proxyUrl = '${ApiEndpoints.candidateBase}/applications/$applicationId/cv-preview?access_token=${Uri.encodeComponent(token)}';
+    final proxyUrl =
+        '${ApiEndpoints.candidateBase}/applications/$applicationId/cv-preview?access_token=${Uri.encodeComponent(token)}';
     if (!mounted) return;
     showDialog<void>(
       context: context,
@@ -297,7 +299,8 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                     ? widget.token
                     : (await AuthService.getAccessToken() ?? '');
                 if (!context.mounted) return;
-                context.go('/candidate-dashboard?token=${Uri.encodeComponent(token)}');
+                context.go(
+                    '/candidate-dashboard?token=${Uri.encodeComponent(token)}');
               }
             },
           ),
@@ -337,7 +340,8 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
           return Padding(
             padding: const EdgeInsets.only(right: 12),
             child: Material(
-              color: selected ? _accentRed : Colors.white.withValues(alpha: 0.08),
+              color:
+                  selected ? _accentRed : Colors.white.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
               child: InkWell(
                 onTap: () => setState(() {
@@ -346,7 +350,8 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                 }),
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
@@ -427,8 +432,9 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final tableWidth =
-            constraints.maxWidth.isFinite ? constraints.maxWidth - 24.0 : 1100.0;
+        final tableWidth = constraints.maxWidth.isFinite
+            ? constraints.maxWidth - 24.0
+            : 1100.0;
         final hasActionColumn = !_drawerVisible;
         final minRequiredWidth = hasActionColumn ? 920.0 : 760.0;
         final effectiveWidth =
@@ -437,12 +443,17 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
         final contentWidth = effectiveWidth - indexColWidth;
 
         // Enterprise-like proportional sizing so the table fills the full area.
-        final jobTitleWidth = hasActionColumn ? contentWidth * 0.28 : contentWidth * 0.34;
-        final companyWidth = hasActionColumn ? contentWidth * 0.22 : contentWidth * 0.26;
-        final dateWidth = hasActionColumn ? contentWidth * 0.17 : contentWidth * 0.20;
-        final statusWidth = hasActionColumn ? contentWidth * 0.18 : contentWidth * 0.20;
+        final jobTitleWidth =
+            hasActionColumn ? contentWidth * 0.28 : contentWidth * 0.34;
+        final companyWidth =
+            hasActionColumn ? contentWidth * 0.22 : contentWidth * 0.26;
+        final dateWidth =
+            hasActionColumn ? contentWidth * 0.17 : contentWidth * 0.20;
+        final statusWidth =
+            hasActionColumn ? contentWidth * 0.18 : contentWidth * 0.20;
         final actionWidth = hasActionColumn
-            ? contentWidth - (jobTitleWidth + companyWidth + dateWidth + statusWidth)
+            ? contentWidth -
+                (jobTitleWidth + companyWidth + dateWidth + statusWidth)
             : 0.0;
 
         return SingleChildScrollView(
@@ -469,122 +480,125 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                   child: SizedBox(
                     width: effectiveWidth,
                     child: DataTable(
-                  headingRowColor:
-                      WidgetStateProperty.all(Colors.white.withValues(alpha: 0.06)),
-                  headingTextStyle: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white70,
-                  ),
-                  dataRowColor: WidgetStateProperty.resolveWith((states) {
-                    return Colors.transparent;
-                  }),
-                  dataTextStyle: GoogleFonts.poppins(fontSize: 14, color: Colors.white),
-                  dataRowMinHeight: 44,
-                  dataRowMaxHeight: 50,
-                  border: TableBorder(
-                    horizontalInside: BorderSide(color: _borderLight, width: 1),
-                    verticalInside: BorderSide(color: _borderLight, width: 1),
-                  ),
-                  columnSpacing: 8,
-                  horizontalMargin: 8,
-                  columns: [
-                    DataColumn(
-                      columnWidth: const FixedColumnWidth(indexColWidth),
-                      label: const Text('#'),
-                    ),
-                    DataColumn(
-                      columnWidth: FixedColumnWidth(jobTitleWidth),
-                      label: const Text('Job Title'),
-                    ),
-                    DataColumn(
-                      columnWidth: FixedColumnWidth(companyWidth),
-                      label: const Text('Company'),
-                    ),
-                    DataColumn(
-                      columnWidth: FixedColumnWidth(dateWidth),
-                      label: const Text('Date Applied'),
-                    ),
-                    DataColumn(
-                      columnWidth: FixedColumnWidth(statusWidth),
-                      label: const Text('Application Status'),
-                    ),
-                    if (!_drawerVisible)
-                      DataColumn(
-                        columnWidth: FixedColumnWidth(actionWidth),
-                        label: const Text('Action'),
+                      headingRowColor: WidgetStateProperty.all(
+                          Colors.white.withValues(alpha: 0.06)),
+                      headingTextStyle: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white70,
                       ),
-                  ],
-                  rows: List.generate(visibleRows.length, (i) {
-                    final app = visibleRows[i];
-                    final displayStatus = _toDisplayStatus(app);
-                    final jobTitle = app['job_title']?.toString() ?? '—';
-                    final company = app['company']?.toString() ?? '—';
-                    final cells = [
-                      DataCell(
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text('${start + i + 1}'),
+                      dataRowColor: WidgetStateProperty.resolveWith((states) {
+                        return Colors.transparent;
+                      }),
+                      dataTextStyle: GoogleFonts.poppins(
+                          fontSize: 14, color: Colors.white),
+                      dataRowMinHeight: 44,
+                      dataRowMaxHeight: 50,
+                      border: TableBorder(
+                        horizontalInside:
+                            BorderSide(color: _borderLight, width: 1),
+                        verticalInside:
+                            BorderSide(color: _borderLight, width: 1),
+                      ),
+                      columnSpacing: 8,
+                      horizontalMargin: 8,
+                      columns: [
+                        DataColumn(
+                          columnWidth: const FixedColumnWidth(indexColWidth),
+                          label: const Text('#'),
                         ),
-                      ),
-                      DataCell(
-                        Tooltip(
-                          message: jobTitle,
-                          child: Text(
-                            jobTitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                        DataColumn(
+                          columnWidth: FixedColumnWidth(jobTitleWidth),
+                          label: const Text('Job Title'),
+                        ),
+                        DataColumn(
+                          columnWidth: FixedColumnWidth(companyWidth),
+                          label: const Text('Company'),
+                        ),
+                        DataColumn(
+                          columnWidth: FixedColumnWidth(dateWidth),
+                          label: const Text('Date Applied'),
+                        ),
+                        DataColumn(
+                          columnWidth: FixedColumnWidth(statusWidth),
+                          label: const Text('Application Status'),
+                        ),
+                        if (!_drawerVisible)
+                          DataColumn(
+                            columnWidth: FixedColumnWidth(actionWidth),
+                            label: const Text('Action'),
                           ),
-                        ),
-                      ),
-                      DataCell(
-                        Tooltip(
-                          message: company,
-                          child: Text(
-                            company,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                      ],
+                      rows: List.generate(visibleRows.length, (i) {
+                        final app = visibleRows[i];
+                        final displayStatus = _toDisplayStatus(app);
+                        final jobTitle = app['job_title']?.toString() ?? '—';
+                        final company = app['company']?.toString() ?? '—';
+                        final cells = [
+                          DataCell(
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text('${start + i + 1}'),
+                            ),
                           ),
-                        ),
-                      ),
-                      DataCell(Text(_dateApplied(app))),
-                      DataCell(
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: _buildStatusPill(displayStatus),
-                        ),
-                      ),
-                    ];
-                    if (!_drawerVisible) {
-                      cells.add(
-                        DataCell(
-                          Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton(
-                              onPressed: () => _openDrawer(app),
-                              style: TextButton.styleFrom(
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 6,
-                                ),
-                              ),
+                          DataCell(
+                            Tooltip(
+                              message: jobTitle,
                               child: Text(
-                                'View Application',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.white,
-                                ),
+                                jobTitle,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ),
-                        ),
-                      );
-                    }
-                    return DataRow(cells: cells);
-                  }),
+                          DataCell(
+                            Tooltip(
+                              message: company,
+                              child: Text(
+                                company,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                          DataCell(Text(_dateApplied(app))),
+                          DataCell(
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: _buildStatusPill(displayStatus),
+                            ),
+                          ),
+                        ];
+                        if (!_drawerVisible) {
+                          cells.add(
+                            DataCell(
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton(
+                                  onPressed: () => _openDrawer(app),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 6,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'View Application',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+                        return DataRow(cells: cells);
+                      }),
                     ),
                   ),
                 ),
@@ -618,10 +632,12 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
                           side: BorderSide(
-                            color: _currentPage > 0 ? Colors.white30 : Colors.white12,
+                            color: _currentPage > 0
+                                ? Colors.white30
+                                : Colors.white12,
                           ),
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 8),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -653,8 +669,8 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                                 ? Colors.white30
                                 : Colors.white12,
                           ),
-                          padding:
-                              const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 8),
                         ),
                       ),
                     ],
@@ -779,97 +795,104 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                             const SizedBox(height: 10),
                             _requirementRow('CV Upload', cvDone),
                             if (singleAction != null) ...[
-                            const SizedBox(height: 28),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  _closeDrawer();
-                                  if (singleAction == 'Continue Assessment') {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => AssessmentPage(
-                                          applicationId: app['application_id'] as int,
-                                          draftData: app['draft_data'] is Map
-                                              ? Map<String, dynamic>.from(app['draft_data'] as Map)
-                                              : null,
+                              const SizedBox(height: 28),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: () {
+                                    _closeDrawer();
+                                    if (singleAction == 'Continue Assessment') {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => AssessmentPage(
+                                            applicationId:
+                                                app['application_id'] as int,
+                                            draftData: app['draft_data'] is Map
+                                                ? Map<String, dynamic>.from(
+                                                    app['draft_data'] as Map)
+                                                : null,
+                                          ),
                                         ),
-                                      ),
-                                    ).then((_) => _fetchApplications());
-                                  } else {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => CVUploadScreen(
-                                          applicationId: app['application_id'] as int,
+                                      ).then((_) => _fetchApplications());
+                                    } else {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => CVUploadScreen(
+                                            applicationId:
+                                                app['application_id'] as int,
+                                          ),
                                         ),
-                                      ),
-                                    ).then((_) => _fetchApplications());
-                                  }
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: _accentRed,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 14),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                                      ).then((_) => _fetchApplications());
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: _accentRed,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
                                   ),
-                                ),
-                                child: Text(
-                                  singleAction,
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 15,
+                                  child: Text(
+                                    singleAction,
+                                    style: GoogleFonts.poppins(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 15,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
-                          if (_cvUploaded(app)) ...[
-                            const SizedBox(height: 24),
-                            _drawerSectionTitle('Documents'),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Icon(Icons.check_circle, size: 18, color: Colors.green.shade400),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    'CV uploaded',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 14,
-                                      color: Colors.white70,
+                            ],
+                            if (_cvUploaded(app)) ...[
+                              const SizedBox(height: 24),
+                              _drawerSectionTitle('Documents'),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Icon(Icons.check_circle,
+                                      size: 18, color: Colors.green.shade400),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'CV uploaded',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        color: Colors.white70,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                TextButton.icon(
-                                  onPressed: () => _previewCv(context, app),
-                                  icon: Icon(
-                                    Icons.visibility_outlined,
-                                    size: 18,
-                                    color: _actionBlue,
-                                  ),
-                                  label: Text(
-                                    'Preview',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
+                                  TextButton.icon(
+                                    onPressed: () => _previewCv(context, app),
+                                    icon: Icon(
+                                      Icons.visibility_outlined,
+                                      size: 18,
                                       color: _actionBlue,
                                     ),
+                                    label: Text(
+                                      'Preview',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: _actionBlue,
+                                      ),
+                                    ),
+                                    style: TextButton.styleFrom(
+                                      backgroundColor:
+                                          _actionBlue.withValues(alpha: 0.10),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize:
+                                          MaterialTapTargetSize.shrinkWrap,
+                                    ),
                                   ),
-                                  style: TextButton.styleFrom(
-                                    backgroundColor:
-                                        _actionBlue.withValues(alpha: 0.10),
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                    minimumSize: Size.zero,
-                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+                                ],
+                              ),
                             ],
+                          ],
                         ],
                       ),
                     ),
@@ -894,7 +917,8 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
     if (timeStr != null && timeStr.isNotEmpty) {
       try {
         final dt = DateTime.parse(timeStr);
-        dateLabel = '${dt.day}/${dt.month}/${dt.year} at ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+        dateLabel =
+            '${dt.day}/${dt.month}/${dt.year} at ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
       } catch (_) {
         dateLabel = timeStr;
       }
@@ -906,14 +930,16 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
         decoration: BoxDecoration(
           color: Colors.blue.shade900.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.blue.shade700.withValues(alpha: 0.5)),
+          border:
+              Border.all(color: Colors.blue.shade700.withValues(alpha: 0.5)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.event_available, size: 18, color: Colors.blue.shade300),
+                Icon(Icons.event_available,
+                    size: 18, color: Colors.blue.shade300),
                 const SizedBox(width: 8),
                 Text(
                   'Interview scheduled',
@@ -934,7 +960,8 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
               const SizedBox(height: 8),
               SelectableText(
                 meetingLink,
-                style: GoogleFonts.poppins(fontSize: 12, color: Colors.blue.shade300),
+                style: GoogleFonts.poppins(
+                    fontSize: 12, color: Colors.blue.shade300),
               ),
             ],
           ],
@@ -1024,8 +1051,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
           'This role had specific requirements that were not met on this occasion. '
           'We encourage you to apply for other positions that match your skills and experience.';
     } else {
-      message =
-          'This application was not successful on this occasion. '
+      message = 'This application was not successful on this occasion. '
           'We encourage you to apply for other roles that match your experience.';
     }
 
@@ -1093,6 +1119,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
     );
   }
 }
+
 /// Full-screen in-app CV preview using backend proxy (avoids Cloudinary 401).
 class _CvPreviewDialog extends StatefulWidget {
   final String url;
@@ -1115,8 +1142,7 @@ class _CvPreviewDialogState extends State<_CvPreviewDialog> {
   @override
   void initState() {
     super.initState();
-    _controller = WebViewController()
-      ..loadRequest(Uri.parse(widget.url));
+    _controller = WebViewController()..loadRequest(Uri.parse(widget.url));
     if (!kIsWeb) {
       _controller.setJavaScriptMode(JavaScriptMode.unrestricted);
       _controller.setNavigationDelegate(
@@ -1145,7 +1171,8 @@ class _CvPreviewDialogState extends State<_CvPreviewDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Row(
                   children: [
                     Expanded(
@@ -1160,7 +1187,8 @@ class _CvPreviewDialogState extends State<_CvPreviewDialog> {
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                      icon: const Icon(Icons.close,
+                          color: Colors.white, size: 28),
                       onPressed: widget.onClose,
                       tooltip: 'Close',
                     ),
@@ -1184,4 +1212,3 @@ class _CvPreviewDialogState extends State<_CvPreviewDialog> {
     );
   }
 }
-

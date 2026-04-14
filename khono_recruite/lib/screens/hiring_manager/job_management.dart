@@ -54,8 +54,16 @@ class _JobManagementState extends State<JobManagement> {
   final Map<int, List<dynamic>> _applicationsByJob = {};
   final Set<int> _loadingApplications = {};
   static const List<String> _categoryOptions = [
-    'Engineering', 'Marketing', 'Sales', 'HR', 'Finance',
-    'Operations', 'Customer Service', 'Product', 'Design', 'Data Science',
+    'Engineering',
+    'Marketing',
+    'Sales',
+    'HR',
+    'Finance',
+    'Operations',
+    'Customer Service',
+    'Product',
+    'Design',
+    'Data Science',
   ];
 
   @override
@@ -88,8 +96,8 @@ class _JobManagementState extends State<JobManagement> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text("Error fetching jobs: $e",
-              style: const TextStyle(fontFamily: 'Poppins'))));
+            content: Text("Error fetching jobs: $e",
+                style: const TextStyle(fontFamily: 'Poppins'))));
       }
       jobs = [];
     }
@@ -101,14 +109,18 @@ class _JobManagementState extends State<JobManagement> {
   List<Map<String, dynamic>> _filteredJobs() {
     final query = _searchController.text.trim().toLowerCase();
     if (query.isEmpty) return jobs;
-    final words = query.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    final words =
+        query.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
     if (words.isEmpty) return jobs;
     return jobs.where((job) {
       final title = (job['title'] ?? '').toString().toLowerCase();
       final category = (job['category'] ?? '').toString().toLowerCase();
       final description = (job['description'] ?? '').toString().toLowerCase();
       final createdBy = job['created_by_user'] != null
-          ? ((job['created_by_user']['name'] ?? job['created_by_user']['email'] ?? '') as String).toLowerCase()
+          ? ((job['created_by_user']['name'] ??
+                  job['created_by_user']['email'] ??
+                  '') as String)
+              .toLowerCase()
           : '';
       final searchable = '$title $category $description $createdBy';
       return words.every((word) => searchable.contains(word));
@@ -120,10 +132,11 @@ class _JobManagementState extends State<JobManagement> {
     setState(() => _loadingApplications.add(jobId));
     try {
       final list = await admin.getJobApplications(jobId, perPage: 100);
-      if (mounted) setState(() {
-        _applicationsByJob[jobId] = list;
-        _loadingApplications.remove(jobId);
-      });
+      if (mounted)
+        setState(() {
+          _applicationsByJob[jobId] = list;
+          _loadingApplications.remove(jobId);
+        });
     } catch (e) {
       if (mounted) setState(() => _loadingApplications.remove(jobId));
     }
@@ -140,42 +153,36 @@ class _JobManagementState extends State<JobManagement> {
     });
   }
 
-  Color _jmTextPrimary(ThemeProvider tp) =>
-      tp.isDarkMode ? _jmWhite : _jmInk;
+  Color _jmTextPrimary(ThemeProvider tp) => tp.isDarkMode ? _jmWhite : _jmInk;
 
-  Color _jmTextMuted(ThemeProvider tp) =>
-      tp.isDarkMode ? _jmSilver : _jmSteel;
+  Color _jmTextMuted(ThemeProvider tp) => tp.isDarkMode ? _jmSilver : _jmSteel;
 
   /// Card chrome: 60% opacity in dark and light so background shows through (per HM spec).
-  Color _jmCardSurface(ThemeProvider tp) =>
-      tp.isDarkMode
-          ? _jmCharcoal.withValues(alpha: 0.6)
-          : _jmCanvas.withValues(alpha: 0.6);
+  Color _jmCardSurface(ThemeProvider tp) => tp.isDarkMode
+      ? _jmCharcoal.withValues(alpha: 0.6)
+      : _jmCanvas.withValues(alpha: 0.6);
 
-  Color _jmOverviewStripBg(ThemeProvider tp) =>
-      tp.isDarkMode
-          ? _jmCharcoal.withValues(alpha: 0.6)
-          : const Color(0xFFECECEC).withValues(alpha: 0.6);
+  Color _jmOverviewStripBg(ThemeProvider tp) => tp.isDarkMode
+      ? _jmCharcoal.withValues(alpha: 0.6)
+      : const Color(0xFFECECEC).withValues(alpha: 0.6);
 
-  Color _jmHeaderDivider(ThemeProvider tp) =>
-      tp.isDarkMode ? Colors.white.withValues(alpha: 0.1) : Colors.grey.shade300;
+  Color _jmHeaderDivider(ThemeProvider tp) => tp.isDarkMode
+      ? Colors.white.withValues(alpha: 0.1)
+      : Colors.grey.shade300;
 
-  Color _jmTableHeaderBg(ThemeProvider tp) =>
-      tp.isDarkMode
-          ? _jmCharcoal.withValues(alpha: 0.6)
-          : _jmSilver.withValues(alpha: 0.6);
+  Color _jmTableHeaderBg(ThemeProvider tp) => tp.isDarkMode
+      ? _jmCharcoal.withValues(alpha: 0.6)
+      : _jmSilver.withValues(alpha: 0.6);
 
   /// Search pill & similar: 60% tint, distinct from card via border / hue.
-  Color _jmSearchPillFill(ThemeProvider tp) =>
-      tp.isDarkMode
-          ? _jmInk.withValues(alpha: 0.6)
-          : _jmWhite.withValues(alpha: 0.6);
+  Color _jmSearchPillFill(ThemeProvider tp) => tp.isDarkMode
+      ? _jmInk.withValues(alpha: 0.6)
+      : _jmWhite.withValues(alpha: 0.6);
 
   /// Nested list rows / metrics (still slightly lifted from 60% card).
-  Color _jmInnerSurface(ThemeProvider tp) =>
-      tp.isDarkMode
-          ? _jmWhite.withValues(alpha: 0.08)
-          : _jmCanvas.withValues(alpha: 0.6);
+  Color _jmInnerSurface(ThemeProvider tp) => tp.isDarkMode
+      ? _jmWhite.withValues(alpha: 0.08)
+      : _jmCanvas.withValues(alpha: 0.6);
 
   Widget _tableHeaderCell(String label,
       {required int flex, required ThemeProvider themeProvider}) {
@@ -196,7 +203,8 @@ class _JobManagementState extends State<JobManagement> {
     );
   }
 
-  Widget _buildExpandableJobRow(Map<String, dynamic> job, ThemeProvider themeProvider) {
+  Widget _buildExpandableJobRow(
+      Map<String, dynamic> job, ThemeProvider themeProvider) {
     final jobId = job['id'] as int;
     final isExpanded = _expandedJobIds.contains(jobId);
     final createdBy = job['created_by_user'] != null
@@ -393,9 +401,7 @@ class _JobManagementState extends State<JobManagement> {
                           ],
                           const SizedBox(width: 4),
                           Icon(
-                            isExpanded
-                                ? Icons.expand_less
-                                : Icons.expand_more,
+                            isExpanded ? Icons.expand_less : Icons.expand_more,
                             color: textColor,
                             size: 22,
                           ),
@@ -408,19 +414,20 @@ class _JobManagementState extends State<JobManagement> {
             ),
           ),
         ),
-        if (isExpanded) _buildExpandedApplicantsSection(jobId, job, themeProvider),
+        if (isExpanded)
+          _buildExpandedApplicantsSection(jobId, job, themeProvider),
       ],
     );
   }
 
-  Widget _buildExpandedApplicantsSection(int jobId, Map<String, dynamic> job, ThemeProvider themeProvider) {
+  Widget _buildExpandedApplicantsSection(
+      int jobId, Map<String, dynamic> job, ThemeProvider themeProvider) {
     final applications = _applicationsByJob[jobId];
     final loading = _loadingApplications.contains(jobId);
     final textColor = _jmTextMuted(themeProvider);
     final headingColor = _jmTextPrimary(themeProvider);
-    final borderColor = themeProvider.isDarkMode
-        ? _jmSteel.withValues(alpha: 0.4)
-        : _jmSilver;
+    final borderColor =
+        themeProvider.isDarkMode ? _jmSteel.withValues(alpha: 0.4) : _jmSilver;
 
     return Container(
       width: double.infinity,
@@ -466,59 +473,88 @@ class _JobManagementState extends State<JobManagement> {
               ),
             ),
           ],
-          if ((job['approval_status'] ?? '') == 'approved' && job['approved_at'] != null)
+          if ((job['approval_status'] ?? '') == 'approved' &&
+              job['approved_at'] != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Text(
                 'Approved on ${job['approved_at']}${job['approved_by_user'] != null ? ' by ${job['approved_by_user']['name'] ?? job['approved_by_user']['email'] ?? ''}' : ''}',
-                style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: textColor),
+                style: TextStyle(
+                    fontFamily: 'Poppins', fontSize: 12, color: textColor),
               ),
             ),
           // Metrics summary
           Row(
             children: [
-              _metricChip('Total applications', '${job['application_count'] ?? 0}', themeProvider),
+              _metricChip('Total applications',
+                  '${job['application_count'] ?? 0}', themeProvider),
               const SizedBox(width: 12),
-              _metricChip('Job status', (job['is_active'] == true ? 'Active' : 'Inactive'), themeProvider),
+              _metricChip(
+                  'Job status',
+                  (job['is_active'] == true ? 'Active' : 'Inactive'),
+                  themeProvider),
               const SizedBox(width: 12),
-              _metricChip('Approval', (job['approval_status'] ?? 'pending').toString(), themeProvider),
+              _metricChip(
+                  'Approval',
+                  (job['approval_status'] ?? 'pending').toString(),
+                  themeProvider),
             ],
           ),
           const SizedBox(height: 12),
-          Text('Applicants', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, fontSize: 12, color: textColor)),
+          Text('Applicants',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  color: textColor)),
           const SizedBox(height: 6),
           if (loading)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))),
+              child: Center(
+                  child: SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(strokeWidth: 2))),
             )
           else if (applications == null || applications.isEmpty)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text('No applicants yet.', style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: textColor)),
+              child: Text('No applicants yet.',
+                  style: TextStyle(
+                      fontFamily: 'Poppins', fontSize: 13, color: textColor)),
             )
           else
             ...applications.asMap().entries.map<Widget>((entry) {
               final index = entry.key;
-              final app = entry.value is Map ? entry.value as Map<String, dynamic> : <String, dynamic>{};
-              final cand = app['candidate'] is Map ? app['candidate'] as Map<String, dynamic> : null;
+              final app = entry.value is Map
+                  ? entry.value as Map<String, dynamic>
+                  : <String, dynamic>{};
+              final cand = app['candidate'] is Map
+                  ? app['candidate'] as Map<String, dynamic>
+                  : null;
               final name = cand?['full_name'] ?? 'Unknown';
               final email = cand?['email'] ?? '—';
               final status = app['status'] ?? '—';
               final cvScore = app['cv_score'];
               final overallScore = app['overall_score'];
               final recommendation = app['recommendation']?.toString().trim();
-              final num cvNum = cvScore is num ? cvScore : (double.tryParse(cvScore?.toString() ?? '') ?? 0);
-              final num overallNum = overallScore is num ? overallScore : (double.tryParse(overallScore?.toString() ?? '') ?? 0);
-              final String recLabel = recommendation == null || recommendation.isEmpty
-                  ? '—'
-                  : (recommendation.toLowerCase().contains('proceed')
-                      ? 'Proceed'
-                      : recommendation.toLowerCase().contains('reject')
-                          ? 'Reject'
-                          : recommendation.toLowerCase().contains('hold')
-                              ? 'Hold'
-                              : recommendation);
+              final num cvNum = cvScore is num
+                  ? cvScore
+                  : (double.tryParse(cvScore?.toString() ?? '') ?? 0);
+              final num overallNum = overallScore is num
+                  ? overallScore
+                  : (double.tryParse(overallScore?.toString() ?? '') ?? 0);
+              final String recLabel =
+                  recommendation == null || recommendation.isEmpty
+                      ? '—'
+                      : (recommendation.toLowerCase().contains('proceed')
+                          ? 'Proceed'
+                          : recommendation.toLowerCase().contains('reject')
+                              ? 'Reject'
+                              : recommendation.toLowerCase().contains('hold')
+                                  ? 'Hold'
+                                  : recommendation);
               final Color recColor = recLabel == 'Proceed'
                   ? _jmGreen
                   : recLabel == 'Reject'
@@ -529,26 +565,50 @@ class _JobManagementState extends State<JobManagement> {
               return Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (index > 0) Divider(height: 1, color: borderColor, indent: 0, endIndent: 0),
+                  if (index > 0)
+                    Divider(
+                        height: 1, color: borderColor, indent: 0, endIndent: 0),
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Row(
                       children: [
-                        Expanded(flex: 2, child: Text(name, style: TextStyle(fontFamily: 'Poppins', fontSize: 13, color: textColor), overflow: TextOverflow.ellipsis)),
+                        Expanded(
+                            flex: 2,
+                            child: Text(name,
+                                style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 13,
+                                    color: textColor),
+                                overflow: TextOverflow.ellipsis)),
                         Icon(Icons.person_outline, size: 16, color: textColor),
                         const SizedBox(width: 8),
-                        Expanded(flex: 2, child: Text(email, style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: textColor), overflow: TextOverflow.ellipsis)),
-                        _applicantScoreChip(themeProvider, 'CV', cvNum, textColor),
+                        Expanded(
+                            flex: 2,
+                            child: Text(email,
+                                style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 12,
+                                    color: textColor),
+                                overflow: TextOverflow.ellipsis)),
+                        _applicantScoreChip(
+                            themeProvider, 'CV', cvNum, textColor),
                         const SizedBox(width: 6),
-                        _applicantScoreChip(themeProvider, 'Overall', overallNum, textColor),
+                        _applicantScoreChip(
+                            themeProvider, 'Overall', overallNum, textColor),
                         const SizedBox(width: 6),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: recColor.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: Text(recLabel, style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600, color: recColor)),
+                          child: Text(recLabel,
+                              style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: recColor)),
                         ),
                         const SizedBox(width: 8),
                         Container(
@@ -678,7 +738,8 @@ class _JobManagementState extends State<JobManagement> {
     );
   }
 
-  Widget _applicantScoreChip(ThemeProvider themeProvider, String label, num value, Color textColor) {
+  Widget _applicantScoreChip(
+      ThemeProvider themeProvider, String label, num value, Color textColor) {
     final display = value > 0 ? value.toStringAsFixed(0) : '—';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -691,8 +752,17 @@ class _JobManagementState extends State<JobManagement> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('$label: ', style: TextStyle(fontFamily: 'Poppins', fontSize: 10, color: textColor.withValues(alpha: 0.8))),
-          Text(display, style: TextStyle(fontFamily: 'Poppins', fontSize: 10, fontWeight: FontWeight.w600, color: textColor)),
+          Text('$label: ',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 10,
+                  color: textColor.withValues(alpha: 0.8))),
+          Text(display,
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: textColor)),
         ],
       ),
     );
@@ -710,7 +780,9 @@ class _JobManagementState extends State<JobManagement> {
       await admin.resubmitJob(job['id'] as int);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Job resubmitted for approval'), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text('Job resubmitted for approval'),
+              backgroundColor: Colors.green),
         );
         fetchJobs();
       }
@@ -729,8 +801,8 @@ class _JobManagementState extends State<JobManagement> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Job approved',
-                style: TextStyle(fontFamily: 'Poppins')),
+            content:
+                Text('Job approved', style: TextStyle(fontFamily: 'Poppins')),
             backgroundColor: _jmGreen,
           ),
         );
@@ -834,8 +906,7 @@ class _JobManagementState extends State<JobManagement> {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final _displayName =
-        AuthService.getCachedDisplayName()?.trim() ?? '';
+    final _displayName = AuthService.getCachedDisplayName()?.trim() ?? '';
     final welcomeName =
         _displayName.isNotEmpty ? _displayName : 'Hiring Manager';
 
@@ -898,8 +969,7 @@ class _JobManagementState extends State<JobManagement> {
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (widget.onOpenTeamCollaboration !=
-                                    null)
+                                if (widget.onOpenTeamCollaboration != null)
                                   _jmHeaderCircleButton(
                                     assetPath: 'assets/images/message.png',
                                     onTap: widget.onOpenTeamCollaboration,
@@ -908,8 +978,7 @@ class _JobManagementState extends State<JobManagement> {
                                   if (widget.onOpenTeamCollaboration != null)
                                     const SizedBox(width: 4),
                                   _jmHeaderCircleButton(
-                                    assetPath:
-                                        'assets/images/blue_bell.png',
+                                    assetPath: 'assets/images/blue_bell.png',
                                     onTap: widget.onOpenNotifications,
                                   ),
                                 ],
@@ -938,8 +1007,8 @@ class _JobManagementState extends State<JobManagement> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Container(
-                                padding: const EdgeInsets.fromLTRB(
-                                    14, 14, 14, 12),
+                                padding:
+                                    const EdgeInsets.fromLTRB(14, 14, 14, 12),
                                 decoration: BoxDecoration(
                                   color: _jmOverviewStripBg(themeProvider),
                                   border: Border(
@@ -950,16 +1019,14 @@ class _JobManagementState extends State<JobManagement> {
                                   ),
                                 ),
                                 child: Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
                                     Image.asset(
                                       'assets/images/Task_Management_White_Badge_Red.png',
                                       width: 48,
                                       height: 48,
                                       fit: BoxFit.contain,
-                                      errorBuilder: (_, __, ___) =>
-                                          Container(
+                                      errorBuilder: (_, __, ___) => Container(
                                         width: 48,
                                         height: 48,
                                         decoration: const BoxDecoration(
@@ -982,8 +1049,8 @@ class _JobManagementState extends State<JobManagement> {
                                               fontFamily: 'Poppins',
                                               fontWeight: FontWeight.w700,
                                               fontSize: 15,
-                                              color: _jmTextPrimary(
-                                                  themeProvider),
+                                              color:
+                                                  _jmTextPrimary(themeProvider),
                                             ),
                                           ),
                                           const SizedBox(height: 4),
@@ -994,8 +1061,8 @@ class _JobManagementState extends State<JobManagement> {
                                             style: TextStyle(
                                               fontFamily: 'Poppins',
                                               fontSize: 11,
-                                              color: _jmTextMuted(
-                                                  themeProvider),
+                                              color:
+                                                  _jmTextMuted(themeProvider),
                                             ),
                                           ),
                                         ],
@@ -1021,11 +1088,10 @@ class _JobManagementState extends State<JobManagement> {
                                 ),
                               ),
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                    14, 16, 16, 16),
+                                padding:
+                                    const EdgeInsets.fromLTRB(14, 16, 16, 16),
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     LayoutBuilder(
                                       builder: (context, constraints) {
@@ -1042,35 +1108,31 @@ class _JobManagementState extends State<JobManagement> {
                                                   color: _jmSearchPillFill(
                                                       themeProvider),
                                                   borderRadius:
-                                                      BorderRadius.circular(
-                                                          28),
+                                                      BorderRadius.circular(28),
                                                   border: Border.all(
-                                                    color: themeProvider
-                                                            .isDarkMode
-                                                        ? Colors.white
-                                                            .withValues(
-                                                                alpha: 0.1)
-                                                        : _jmSilver,
+                                                    color:
+                                                        themeProvider.isDarkMode
+                                                            ? Colors.white
+                                                                .withValues(
+                                                                    alpha: 0.1)
+                                                            : _jmSilver,
                                                   ),
                                                 ),
                                                 child: Row(
                                                   crossAxisAlignment:
-                                                      CrossAxisAlignment
-                                                          .center,
+                                                      CrossAxisAlignment.center,
                                                   children: [
                                                     Padding(
-                                                      padding:
-                                                          const EdgeInsets
-                                                              .fromLTRB(
-                                                              8, 8, 4, 8),
+                                                      padding: const EdgeInsets
+                                                          .fromLTRB(8, 8, 4, 8),
                                                       child: Container(
                                                         width: 36,
                                                         height: 36,
                                                         decoration:
                                                             const BoxDecoration(
                                                           color: _jmRed,
-                                                          shape: BoxShape
-                                                              .circle,
+                                                          shape:
+                                                              BoxShape.circle,
                                                         ),
                                                         padding:
                                                             const EdgeInsets
@@ -1078,10 +1140,9 @@ class _JobManagementState extends State<JobManagement> {
                                                         child: Image.asset(
                                                           'assets/images/SearchRed.png',
                                                           fit: BoxFit.contain,
-                                                          errorBuilder: (_,
-                                                                  __,
-                                                                  ___) =>
-                                                              const Icon(
+                                                          errorBuilder:
+                                                              (_, __, ___) =>
+                                                                  const Icon(
                                                             Icons.search,
                                                             color: _jmWhite,
                                                             size: 20,
@@ -1094,8 +1155,7 @@ class _JobManagementState extends State<JobManagement> {
                                                         controller:
                                                             _searchController,
                                                         style: TextStyle(
-                                                          fontFamily:
-                                                              'Poppins',
+                                                          fontFamily: 'Poppins',
                                                           fontSize: 14,
                                                           color: _jmTextPrimary(
                                                               themeProvider),
@@ -1104,8 +1164,7 @@ class _JobManagementState extends State<JobManagement> {
                                                             InputDecoration(
                                                           hintText:
                                                               'Search by Title or Description…',
-                                                          hintStyle:
-                                                              TextStyle(
+                                                          hintStyle: TextStyle(
                                                             fontFamily:
                                                                 'Poppins',
                                                             color: _jmTextMuted(
@@ -1115,8 +1174,7 @@ class _JobManagementState extends State<JobManagement> {
                                                           suffixIcon: hasText
                                                               ? IconButton(
                                                                   icon: Icon(
-                                                                    Icons
-                                                                        .clear,
+                                                                    Icons.clear,
                                                                     size: 20,
                                                                     color: _jmTextMuted(
                                                                         themeProvider),
@@ -1132,14 +1190,11 @@ class _JobManagementState extends State<JobManagement> {
                                                               : null,
                                                           filled: false,
                                                           border:
-                                                              InputBorder
-                                                                  .none,
+                                                              InputBorder.none,
                                                           focusedBorder:
-                                                              InputBorder
-                                                                  .none,
+                                                              InputBorder.none,
                                                           enabledBorder:
-                                                              InputBorder
-                                                                  .none,
+                                                              InputBorder.none,
                                                           contentPadding:
                                                               const EdgeInsets
                                                                   .symmetric(
@@ -1157,10 +1212,8 @@ class _JobManagementState extends State<JobManagement> {
 
                                               final categoryFilter =
                                                   PopupMenuButton<String?>(
-                                                offset:
-                                                    const Offset(0, 44),
-                                                color: themeProvider
-                                                        .isDarkMode
+                                                offset: const Offset(0, 44),
+                                                color: themeProvider.isDarkMode
                                                     ? _jmCharcoal.withValues(
                                                         alpha: 0.95)
                                                     : _jmWhite,
@@ -1171,8 +1224,7 @@ class _JobManagementState extends State<JobManagement> {
                                                   });
                                                 },
                                                 itemBuilder: (context) => [
-                                                  const PopupMenuItem<
-                                                      String?>(
+                                                  const PopupMenuItem<String?>(
                                                     value: null,
                                                     child: Text('All',
                                                         style: TextStyle(
@@ -1181,8 +1233,7 @@ class _JobManagementState extends State<JobManagement> {
                                                   ),
                                                   ..._categoryOptions.map(
                                                     (c) =>
-                                                        PopupMenuItem<
-                                                            String?>(
+                                                        PopupMenuItem<String?>(
                                                       value: c,
                                                       child: Text(c,
                                                           style: const TextStyle(
@@ -1205,19 +1256,16 @@ class _JobManagementState extends State<JobManagement> {
                                                         : _jmWhite.withValues(
                                                             alpha: 0.6),
                                                     borderRadius:
-                                                        BorderRadius
-                                                            .circular(24),
+                                                        BorderRadius.circular(
+                                                            24),
                                                     border: Border.all(
                                                       color: themeProvider
                                                               .isDarkMode
                                                           ? Colors.white
                                                               .withValues(
-                                                                  alpha:
-                                                                      0.1)
-                                                          : _jmSteel
-                                                              .withValues(
-                                                                  alpha:
-                                                                      0.5),
+                                                                  alpha: 0.1)
+                                                          : _jmSteel.withValues(
+                                                              alpha: 0.5),
                                                     ),
                                                   ),
                                                   child: Row(
@@ -1227,18 +1275,15 @@ class _JobManagementState extends State<JobManagement> {
                                                       Text(
                                                         'Category: ${_jmCategoryFilterLabel()}',
                                                         style: TextStyle(
-                                                          fontFamily:
-                                                              'Poppins',
+                                                          fontFamily: 'Poppins',
                                                           fontSize: 12,
                                                           fontWeight:
-                                                              FontWeight
-                                                                  .w600,
+                                                              FontWeight.w600,
                                                           color: _jmTextPrimary(
                                                               themeProvider),
                                                         ),
                                                       ),
-                                                      const SizedBox(
-                                                          width: 4),
+                                                      const SizedBox(width: 4),
                                                       Icon(
                                                         Icons.expand_more,
                                                         color: _jmTextPrimary(
@@ -1252,10 +1297,8 @@ class _JobManagementState extends State<JobManagement> {
 
                                               final statusFilter =
                                                   PopupMenuButton<String>(
-                                                offset:
-                                                    const Offset(0, 44),
-                                                color: themeProvider
-                                                        .isDarkMode
+                                                offset: const Offset(0, 44),
+                                                color: themeProvider.isDarkMode
                                                     ? _jmCharcoal.withValues(
                                                         alpha: 0.95)
                                                     : _jmWhite,
@@ -1313,8 +1356,8 @@ class _JobManagementState extends State<JobManagement> {
                                                                     alpha:
                                                                         0.6)),
                                                     borderRadius:
-                                                        BorderRadius
-                                                            .circular(24),
+                                                        BorderRadius.circular(
+                                                            24),
                                                     border: Border.all(
                                                       color: _statusFilter ==
                                                               'active'
@@ -1338,12 +1381,10 @@ class _JobManagementState extends State<JobManagement> {
                                                       Text(
                                                         'Status: ${_jmStatusFilterLabel()}',
                                                         style: TextStyle(
-                                                          fontFamily:
-                                                              'Poppins',
+                                                          fontFamily: 'Poppins',
                                                           fontSize: 12,
                                                           fontWeight:
-                                                              FontWeight
-                                                                  .w600,
+                                                              FontWeight.w600,
                                                           color: _statusFilter ==
                                                                   'active'
                                                               ? _jmWhite
@@ -1351,8 +1392,7 @@ class _JobManagementState extends State<JobManagement> {
                                                                   themeProvider),
                                                         ),
                                                       ),
-                                                      const SizedBox(
-                                                          width: 4),
+                                                      const SizedBox(width: 4),
                                                       Icon(
                                                         Icons.expand_more,
                                                         color: _statusFilter ==
@@ -1369,11 +1409,9 @@ class _JobManagementState extends State<JobManagement> {
 
                                               return Row(
                                                 crossAxisAlignment:
-                                                    CrossAxisAlignment
-                                                        .center,
+                                                    CrossAxisAlignment.center,
                                                 children: [
-                                                  Expanded(
-                                                      child: searchPill),
+                                                  Expanded(child: searchPill),
                                                   const SizedBox(width: 12),
                                                   categoryFilter,
                                                   const SizedBox(width: 10),
@@ -1388,13 +1426,11 @@ class _JobManagementState extends State<JobManagement> {
                                     const SizedBox(height: 18),
                                     jobs.isEmpty
                                         ? Padding(
-                                            padding: const EdgeInsets
-                                                .symmetric(vertical: 32),
+                                            padding: const EdgeInsets.symmetric(
+                                                vertical: 32),
                                             child: Center(
                                               child: Text(
-                                                loading
-                                                    ? ''
-                                                    : 'No jobs found',
+                                                loading ? '' : 'No jobs found',
                                                 style: TextStyle(
                                                   fontFamily: 'Poppins',
                                                   fontSize: 15,
@@ -1407,8 +1443,7 @@ class _JobManagementState extends State<JobManagement> {
                                         : _filteredJobs().isEmpty
                                             ? Padding(
                                                 padding:
-                                                    const EdgeInsets
-                                                        .symmetric(
+                                                    const EdgeInsets.symmetric(
                                                         vertical: 32),
                                                 child: Center(
                                                   child: Text(
@@ -1424,24 +1459,20 @@ class _JobManagementState extends State<JobManagement> {
                                               )
                                             : ClipRRect(
                                                 borderRadius:
-                                                    BorderRadius.circular(
-                                                        12),
+                                                    BorderRadius.circular(12),
                                                 child: Column(
                                                   mainAxisSize:
                                                       MainAxisSize.min,
                                                   children: [
                                                     Container(
-                                                      width:
-                                                          double.infinity,
-                                                      padding:
-                                                          const EdgeInsets
-                                                              .symmetric(
+                                                      width: double.infinity,
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
                                                         horizontal: 14,
                                                         vertical: 12,
                                                       ),
-                                                      color:
-                                                          _jmTableHeaderBg(
-                                                              themeProvider),
+                                                      color: _jmTableHeaderBg(
+                                                          themeProvider),
                                                       child: Row(
                                                         children: [
                                                           _tableHeaderCell(
@@ -1477,9 +1508,8 @@ class _JobManagementState extends State<JobManagement> {
                                                           SizedBox(
                                                             width: 268,
                                                             child: Align(
-                                                              alignment:
-                                                                  Alignment
-                                                                      .centerLeft,
+                                                              alignment: Alignment
+                                                                  .centerLeft,
                                                               child: Text(
                                                                 'Actions',
                                                                 style:
@@ -1489,8 +1519,7 @@ class _JobManagementState extends State<JobManagement> {
                                                                   fontWeight:
                                                                       FontWeight
                                                                           .bold,
-                                                                  fontSize:
-                                                                      12,
+                                                                  fontSize: 12,
                                                                   color: _jmTextPrimary(
                                                                       themeProvider),
                                                                 ),
@@ -1585,7 +1614,8 @@ class _JobFormDialogState extends State<JobFormDialog>
   List<Map<String, dynamic>> _minYearsPerSkillList = [];
   // Must-have certifications
   List<String> _requiredCertifications = [];
-  final TextEditingController _certificationController = TextEditingController();
+  final TextEditingController _certificationController =
+      TextEditingController();
 
   // Category options for dropdown
   static const List<String> categoryOptions = [
@@ -1638,14 +1668,24 @@ class _JobFormDialogState extends State<JobFormDialog>
     minExpController.text = (widget.job?['min_experience'] ?? 0).toString();
     final startFrom = widget.job?['start_date_from']?.toString();
     final startTo = widget.job?['start_date_to']?.toString();
-    if (startFrom != null && startFrom.isNotEmpty) _startDateFrom = DateTime.tryParse(startFrom.substring(0, startFrom.length >= 10 ? 10 : startFrom.length));
-    if (startTo != null && startTo.isNotEmpty) _startDateTo = DateTime.tryParse(startTo.substring(0, startTo.length >= 10 ? 10 : startTo.length));
+    if (startFrom != null && startFrom.isNotEmpty)
+      _startDateFrom = DateTime.tryParse(startFrom.substring(
+          0, startFrom.length >= 10 ? 10 : startFrom.length));
+    if (startTo != null && startTo.isNotEmpty)
+      _startDateTo = DateTime.tryParse(
+          startTo.substring(0, startTo.length >= 10 ? 10 : startTo.length));
     final minYearsRaw = widget.job?['min_years_per_skill'];
     if (minYearsRaw is Map) {
-      _minYearsPerSkillList = minYearsRaw.entries.map((e) => {"skill": e.key.toString(), "years": (e.value is num) ? (e.value as num).toDouble() : 0.0}).toList();
+      _minYearsPerSkillList = minYearsRaw.entries
+          .map((e) => {
+                "skill": e.key.toString(),
+                "years": (e.value is num) ? (e.value as num).toDouble() : 0.0
+              })
+          .toList();
     }
     final certsRaw = widget.job?['required_certifications'];
-    if (certsRaw is List) _requiredCertifications = certsRaw.map((e) => e.toString()).toList();
+    if (certsRaw is List)
+      _requiredCertifications = certsRaw.map((e) => e.toString()).toList();
     jobSummary = widget.job?['job_summary'] ?? '';
     companyDetails = widget.job?['company_details'] ?? '';
     companyDetailsController.text = companyDetails;
@@ -2048,7 +2088,8 @@ class _JobFormDialogState extends State<JobFormDialog>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please fix the errors in the form (e.g. Job Title, Description).'),
+            content: Text(
+                'Please fix the errors in the form (e.g. Job Title, Description).'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -2087,7 +2128,8 @@ class _JobFormDialogState extends State<JobFormDialog>
         .toList();
 
     final normalizedQuestions = _normalizeQuestions(questions);
-    final totalWeight = (weightings["cv"] ?? 0) + (weightings["assessment"] ?? 0);
+    final totalWeight =
+        (weightings["cv"] ?? 0) + (weightings["assessment"] ?? 0);
     if (totalWeight != 100) {
       setState(() => weightingsError =
           "Weightings must total 100% (current: $totalWeight%)");
@@ -2134,10 +2176,16 @@ class _JobFormDialogState extends State<JobFormDialog>
       'vacancy': 1,
       if (applicationDeadlineController.text.trim().isNotEmpty)
         'application_deadline': applicationDeadlineController.text.trim(),
-      if (_startDateFrom != null) 'start_date_from': _startDateFrom!.toIso8601String().substring(0, 10),
-      if (_startDateTo != null) 'start_date_to': _startDateTo!.toIso8601String().substring(0, 10),
-      'min_years_per_skill': Map.fromEntries(_minYearsPerSkillList.where((e) => (e['skill']?.toString() ?? '').trim().isNotEmpty).map((e) => MapEntry(e['skill']!.toString().trim(), (e['years'] is num) ? (e['years'] as num).toDouble() : 0.0))),
-      'required_certifications': _requiredCertifications.where((s) => s.trim().isNotEmpty).toList(),
+      if (_startDateFrom != null)
+        'start_date_from': _startDateFrom!.toIso8601String().substring(0, 10),
+      if (_startDateTo != null)
+        'start_date_to': _startDateTo!.toIso8601String().substring(0, 10),
+      'min_years_per_skill': Map.fromEntries(_minYearsPerSkillList
+          .where((e) => (e['skill']?.toString() ?? '').trim().isNotEmpty)
+          .map((e) => MapEntry(e['skill']!.toString().trim(),
+              (e['years'] is num) ? (e['years'] as num).toDouble() : 0.0))),
+      'required_certifications':
+          _requiredCertifications.where((s) => s.trim().isNotEmpty).toList(),
       if (_useTestPack && _testPackId != null) 'test_pack_id': _testPackId,
       'assessment_pack': _useTestPack && _testPackId != null
           ? {'questions': []}
@@ -2172,8 +2220,16 @@ class _JobFormDialogState extends State<JobFormDialog>
   Widget _hmJobFormApprovalBanner(Map<String, dynamic> job) {
     final status = (job['approval_status'] ?? 'pending').toString();
     final reason = (job['rejection_reason'] ?? '').toString();
-    Color color = status == 'approved' ? Colors.green : status == 'rejected' ? Colors.red : Colors.orange;
-    String label = status == 'approved' ? 'Approved' : status == 'rejected' ? 'Rejected' : 'Pending approval';
+    Color color = status == 'approved'
+        ? Colors.green
+        : status == 'rejected'
+            ? Colors.red
+            : Colors.orange;
+    String label = status == 'approved'
+        ? 'Approved'
+        : status == 'rejected'
+            ? 'Rejected'
+            : 'Pending approval';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -2183,10 +2239,27 @@ class _JobFormDialogState extends State<JobFormDialog>
       ),
       child: Row(
         children: [
-          Text('Approval: ', style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, color: color)),
-          Text(label, style: TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600, color: color)),
+          Text('Approval: ',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                  color: color)),
+          Text(label,
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                  color: color)),
           if (status == 'rejected' && reason.isNotEmpty)
-            Expanded(child: Padding(padding: const EdgeInsets.only(left: 8), child: Text('Reason: $reason', style: TextStyle(fontFamily: 'Poppins', fontSize: 12, color: Colors.red.shade800), maxLines: 2, overflow: TextOverflow.ellipsis))),
+            Expanded(
+                child: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Text('Reason: $reason',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            color: Colors.red.shade800),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis))),
         ],
       ),
     );
@@ -2214,961 +2287,629 @@ class _JobFormDialogState extends State<JobFormDialog>
             children: [
               TabBar(
                 controller: _tabController,
-              tabs: const [
-                Tab(text: "Job Details"),
-                Tab(text: "Assessment"),
-              ],
-              labelColor: Colors.redAccent,
-              unselectedLabelColor: themeProvider.isDarkMode
-                  ? Colors.grey.shade400
-                  : Colors.black54,
-              indicatorColor: Colors.redAccent,
-              indicatorWeight: 3,
-            ),
+                tabs: const [
+                  Tab(text: "Job Details"),
+                  Tab(text: "Assessment"),
+                ],
+                labelColor: Colors.redAccent,
+                unselectedLabelColor: themeProvider.isDarkMode
+                    ? Colors.grey.shade400
+                    : Colors.black54,
+                indicatorColor: Colors.redAccent,
+                indicatorWeight: 3,
+              ),
 
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  // Job Details Tab
-                  Container(
-                    color: (themeProvider.isDarkMode
-                            ? const Color(0xFF1A1A2E)
-                            : Colors.white)
-                        .withValues(alpha: 0.95),
-                    child: SingleChildScrollView(
-                      child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (widget.job != null && (widget.job!['approval_status'] ?? '').toString().isNotEmpty) ...[
-                              _hmJobFormApprovalBanner(widget.job!),
-                              const SizedBox(height: 16),
-                            ] else if (widget.job == null) ...[
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.blue),
-                                ),
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.info_outline, color: Colors.blue, size: 20),
-                                    SizedBox(width: 8),
-                                    Expanded(child: Text('This job will be submitted for approval after creation.', style: TextStyle(fontSize: 13, color: Colors.blue))),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                            ],
-                            Row(
-                              children: [
-                                Icon(Icons.work,
-                                    color: Colors.redAccent, size: 24),
-                                const SizedBox(width: 12),
-                                Text(
-                                  "Basic Job Information",
-                                  style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: CustomTextField(
-                                    label: "Job Title",
-                                    initialValue: title,
-                                    hintText: "Enter job title",
-                                    onChanged: (v) => title = v,
-                                    validator: (v) => v == null || v.isEmpty
-                                        ? "Enter job title"
-                                        : null,
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    // Job Details Tab
+                    Container(
+                      color: (themeProvider.isDarkMode
+                              ? const Color(0xFF1A1A2E)
+                              : Colors.white)
+                          .withValues(alpha: 0.95),
+                      child: SingleChildScrollView(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (widget.job != null &&
+                                  (widget.job!['approval_status'] ?? '')
+                                      .toString()
+                                      .isNotEmpty) ...[
+                                _hmJobFormApprovalBanner(widget.job!),
+                                const SizedBox(height: 16),
+                              ] else if (widget.job == null) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.blue),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.info_outline,
+                                          color: Colors.blue, size: 20),
+                                      SizedBox(width: 8),
+                                      Expanded(
+                                          child: Text(
+                                              'This job will be submitted for approval after creation.',
+                                              style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.blue))),
+                                    ],
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                IconButton.filled(
-                                  onPressed: _generatingJobDetails
-                                      ? null
-                                      : _generateJobDetailsWithAI,
-                                  icon: _generatingJobDetails
-                                      ? SizedBox(
-                                          width: 20,
-                                          height: 20,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.redAccent,
-                                          ),
-                                        )
-                                      : const Icon(Icons.auto_awesome),
-                                  tooltip:
-                                      _generatingJobDetails
-                                          ? "Generating…"
-                                          : "Generate job details from title (AI)",
-                                ),
+                                const SizedBox(height: 16),
                               ],
-                            ),
-                            const SizedBox(height: 20),
-                            Card(
-                              elevation: 4,
-                              shadowColor: Colors.black26,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              color: (themeProvider.isDarkMode
-                                      ? const Color(0xFF1A1A2E)
-                                      : Colors.white)
-                                  .withValues(alpha: 0.95),
-                              child: Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(Icons.assignment,
-                                            color: Colors.orangeAccent,
-                                            size: 24),
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          "Job Requirements",
-                                          style: TextStyle(
-                                            fontFamily: 'Poppins',
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.white
-                                                : Colors.black87,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 20),
-                                    CustomTextField(
-                                      label: "Responsibilities",
-                                      controller: responsibilitiesController,
-                                      hintText:
-                                          "Bullet points of key responsibilities",
-                                      maxLines: 4,
-                                      expands: false,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    CustomTextField(
-                                      label: "Qualifications",
-                                      controller: qualificationsController,
-                                      hintText:
-                                          "Bullet points of required qualifications",
-                                      maxLines: 4,
-                                      expands: false,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    CustomTextField(
-                                      label: "Required Skills",
-                                      controller: skillsController,
-                                      hintText:
-                                          "Bullet points of essential skills",
-                                      maxLines: 3,
-                                      expands: false,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    CustomTextField(
-                                      label: "Minimum Experience (years)",
-                                      controller: minExpController,
-                                      inputType: TextInputType.number,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text("Preferred start window", style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w600, color: themeProvider.isDarkMode ? Colors.white : Colors.black87)),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: OutlinedButton.icon(
-                                            icon: const Icon(Icons.calendar_today, size: 18),
-                                            label: Text(_startDateFrom == null ? "From" : "${_startDateFrom!.year}-${_startDateFrom!.month.toString().padLeft(2, '0')}-${_startDateFrom!.day.toString().padLeft(2, '0')}", style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)),
-                                            onPressed: () async {
-                                              final d = await showDatePicker(context: context, initialDate: _startDateFrom ?? DateTime.now(), firstDate: DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365 * 2)));
-                                              if (d != null && mounted) setState(() => _startDateFrom = d);
-                                            },
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: OutlinedButton.icon(
-                                            icon: const Icon(Icons.calendar_today, size: 18),
-                                            label: Text(_startDateTo == null ? "To" : "${_startDateTo!.year}-${_startDateTo!.month.toString().padLeft(2, '0')}-${_startDateTo!.day.toString().padLeft(2, '0')}", style: const TextStyle(fontFamily: 'Poppins', fontSize: 12)),
-                                            onPressed: () async {
-                                              final d = await showDatePicker(context: context, initialDate: _startDateTo ?? _startDateFrom ?? DateTime.now(), firstDate: _startDateFrom ?? DateTime.now(), lastDate: DateTime.now().add(const Duration(days: 365 * 2)));
-                                              if (d != null && mounted) setState(() => _startDateTo = d);
-                                            },
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text("Minimum years per skill", style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w600, color: themeProvider.isDarkMode ? Colors.white : Colors.black87)),
-                                        TextButton.icon(
-                                          icon: const Icon(Icons.add, size: 18),
-                                          label: const Text("Add", style: TextStyle(fontSize: 12)),
-                                          onPressed: () => setState(() => _minYearsPerSkillList.add({"skill": "", "years": 0.0})),
-                                        ),
-                                      ],
-                                    ),
-                                    if (_minYearsPerSkillList.isNotEmpty) ...[
-                                      ..._minYearsPerSkillList.asMap().entries.map((entry) {
-                                        final i = entry.key;
-                                        final row = entry.value;
-                                        return Padding(
-                                          padding: const EdgeInsets.only(bottom: 8),
-                                          child: Row(
-                                            children: [
-                                              Expanded(
-                                                flex: 2,
-                                                child: TextFormField(
-                                                  initialValue: row['skill']?.toString(),
-                                                  decoration: const InputDecoration(hintText: "Skill", isDense: true),
-                                                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
-                                                  onChanged: (v) => setState(() => _minYearsPerSkillList[i]['skill'] = v),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              SizedBox(
-                                                width: 70,
-                                                child: TextFormField(
-                                                  initialValue: row['years']?.toString(),
-                                                  keyboardType: TextInputType.number,
-                                                  decoration: const InputDecoration(hintText: "Years", isDense: true),
-                                                  style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
-                                                  onChanged: (v) => setState(() => _minYearsPerSkillList[i]['years'] = double.tryParse(v) ?? 0),
-                                                ),
-                                              ),
-                                              IconButton(
-                                                icon: const Icon(Icons.remove_circle_outline, size: 22),
-                                                onPressed: () => setState(() => _minYearsPerSkillList.removeAt(i)),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      }),
-                                      const SizedBox(height: 8),
-                                    ],
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text("Must-have certifications", style: TextStyle(fontFamily: 'Poppins', fontSize: 14, fontWeight: FontWeight.w600, color: themeProvider.isDarkMode ? Colors.white : Colors.black87)),
-                                        TextButton.icon(
-                                          icon: const Icon(Icons.add, size: 18),
-                                          label: const Text("Add", style: TextStyle(fontSize: 12)),
-                                          onPressed: () {
-                                            final c = _certificationController.text.trim();
-                                            if (c.isNotEmpty) {
-                                              setState(() {
-                                                _requiredCertifications.add(c);
-                                                _certificationController.clear();
-                                              });
-                                            }
-                                          },
-                                        ),
-                                      ],
-                                    ),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: TextFormField(
-                                            controller: _certificationController,
-                                            decoration: const InputDecoration(hintText: "e.g. AWS Certified, PMP", isDense: true),
-                                            style: const TextStyle(fontFamily: 'Poppins', fontSize: 13),
-                                            onFieldSubmitted: (v) {
-                                              if (v.trim().isNotEmpty) setState(() { _requiredCertifications.add(v.trim()); _certificationController.clear(); });
-                                            },
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        ElevatedButton(child: const Text("Add"), onPressed: () {
-                                          final c = _certificationController.text.trim();
-                                          if (c.isNotEmpty) setState(() { _requiredCertifications.add(c); _certificationController.clear(); });
-                                        }),
-                                      ],
-                                    ),
-                                    if (_requiredCertifications.isNotEmpty) ...[
-                                      const SizedBox(height: 8),
-                                      Wrap(
-                                        spacing: 6,
-                                        runSpacing: 6,
-                                        children: _requiredCertifications.map((c) => Chip(
-                                          label: Text(c, style: const TextStyle(fontSize: 12)),
-                                          deleteIcon: const Icon(Icons.close, size: 18),
-                                          onDeleted: () => setState(() => _requiredCertifications.remove(c)),
-                                        )).toList(),
-                                      ),
-                                    ],
-                                    const SizedBox(height: 16),
-                                    CustomTextField(
-                                      label:
-                                          "Application deadline (YYYY-MM-DD)",
-                                      controller: applicationDeadlineController,
-                                      hintText: "e.g. 2025-12-31",
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-
-                            // Company Information Section
-                            Card(
-                              elevation: 4,
-                              shadowColor: Colors.black26,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              color: (themeProvider.isDarkMode
-                                      ? const Color(0xFF1A1A2E)
-                                      : Colors.white)
-                                  .withValues(alpha: 0.95),
-                              child: Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(Icons.business,
-                                            color: Colors.greenAccent,
-                                            size: 24),
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          "Company Information",
-                                          style: TextStyle(
-                                            fontFamily: 'Poppins',
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.white
-                                                : Colors.black87,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 20),
-                                    CustomTextField(
-                                      label: "Description",
-                                      controller: descriptionController,
-                                      hintText: "Enter job description",
-                                      maxLines: 5,
-                                      expands: false,
-                                      onChanged: (v) => description = v,
-                                      validator: (v) => v == null || v.isEmpty
-                                          ? "Enter description"
-                                          : null,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    CustomTextField(
-                                      label: "Company Details",
-                                      controller: companyDetailsController,
-                                      hintText: "About the company",
-                                      maxLines: 4,
-                                      expands: false,
-                                      onChanged: (v) => companyDetails = v,
-                                    ),
-                                    const SizedBox(height: 20),
-                                    DropdownButtonFormField<String>(
-                                      value: category.isEmpty ? null : category,
-                                      decoration: const InputDecoration(
-                                        labelText: "Category",
-                                      ),
-                                      items: categoryOptions
-                                          .map((cat) => DropdownMenuItem(
-                                                value: cat,
-                                                child: Text(cat),
-                                              ))
-                                          .toList(),
-                                      onChanged: (value) => setState(
-                                          () => category = value ?? ''),
-                                    ),
-                                    const SizedBox(height: 24),
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        "Salary",
-                                        style: TextStyle(
-                                          fontFamily: 'Poppins',
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: CustomTextField(
-                                            label: "Salary Min",
-                                            controller: salaryMinController,
-                                            inputType: TextInputType.number,
-                                            hintText: "e.g. 30000",
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child: CustomTextField(
-                                            label: "Salary Max",
-                                            controller: salaryMaxController,
-                                            inputType: TextInputType.number,
-                                            hintText: "e.g. 45000",
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: CustomTextField(
-                                            label: "Currency",
-                                            initialValue: salaryCurrency,
-                                            hintText: "ZAR, USD, EUR",
-                                            onChanged: (v) {
-                                              setState(() {
-                                                salaryCurrency =
-                                                    v.isEmpty ? "ZAR" : v;
-                                              });
-                                            },
-                                          ),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Expanded(
-                                          child:
-                                              DropdownButtonFormField<String>(
-                                            value: salaryPeriod,
-                                            decoration: InputDecoration(
-                                              labelText: "Period",
-                                              border: OutlineInputBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                              ),
-                                            ),
-                                            items: const [
-                                              DropdownMenuItem(
-                                                value: "monthly",
-                                                child: Text("Per month", style: const TextStyle(fontFamily: 'Poppins')),
-                                              ),
-                                              DropdownMenuItem(
-                                                value: "yearly",
-                                                child: Text("Per year", style: const TextStyle(fontFamily: 'Poppins')),
-                                              ),
-                                            ],
-                                            onChanged: (value) {
-                                              if (value != null) {
-                                                setState(
-                                                    () => salaryPeriod = value);
-                                              }
-                                            },
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-
-                            // Assessment Configuration Section
-                            Card(
-                              elevation: 4,
-                              shadowColor: Colors.black26,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              color: (themeProvider.isDarkMode
-                                      ? const Color(0xFF1A1A2E)
-                                      : Colors.white)
-                                  .withValues(alpha: 0.95),
-                              child: Padding(
-                                padding: const EdgeInsets.all(20),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(Icons.assessment,
-                                            color: Colors.blueAccent, size: 24),
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          "Assessment Configuration",
-                                          style: TextStyle(
-                                            fontFamily: 'Poppins',
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.white
-                                                : Colors.black87,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 20),
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        "Evaluation weightings (must total 100%)",
-                                        style: TextStyle(
-                                          fontFamily: 'Poppins',
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    WeightingConfigurationWidget(
-                                      weightings: weightings,
-                                      errorText: weightingsError,
-                                      onChanged: (updated) {
-                                        setState(() {
-                                          weightings = updated;
-                                          final total = updated.values
-                                              .fold<int>(0, (a, b) => a + b);
-                                          weightingsError = total == 100
-                                              ? null
-                                              : "Weightings must total 100%";
-                                        });
-                                      },
-                                    ),
-                                    const SizedBox(height: 20),
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        "Knockout rules",
-                                        style: TextStyle(
-                                          fontFamily: 'Poppins',
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w600,
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    KnockoutRulesBuilder(
-                                      rules: knockoutRules,
-                                      onChanged: (updated) {
-                                        setState(() => knockoutRules = updated);
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Use a test pack or create custom questions
-                        Text(
-                          "Assessment",
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: themeProvider.isDarkMode
-                                ? Colors.grey.shade300
-                                : Colors.black87,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Radio<bool>(
-                              value: true,
-                              groupValue: _useTestPack,
-                              onChanged: (v) =>
-                                  setState(() => _useTestPack = true),
-                              activeColor: Colors.redAccent,
-                            ),
-                            Text("Use a test pack", style: const TextStyle(fontFamily: 'Poppins')),
-                            const SizedBox(width: 24),
-                            Radio<bool>(
-                              value: false,
-                              groupValue: _useTestPack,
-                              onChanged: (v) => setState(() {
-                                _useTestPack = false;
-                                _testPackId = null;
-                              }),
-                              activeColor: Colors.redAccent,
-                            ),
-                            Text("Create custom questions", style: const TextStyle(fontFamily: 'Poppins')),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        if (_useTestPack) ...[
-                          if (_loadingTestPacks)
-                            const Padding(
-                              padding: EdgeInsets.all(16),
-                              child: Center(
-                                  child: CircularProgressIndicator(
-                                      color: Colors.redAccent)),
-                            )
-                          else
-                            DropdownButtonFormField<int?>(
-                              value: _testPackId,
-                              decoration: InputDecoration(
-                                labelText: "Select test pack",
-                                border: const OutlineInputBorder(),
-                                labelStyle: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: themeProvider.isDarkMode
-                                      ? Colors.grey.shade400
-                                      : Colors.black87,
-                                ),
-                              ),
-                              dropdownColor: themeProvider.isDarkMode
-                                  ? const Color(0xFF14131E)
-                                  : Colors.white,
-                              items: [
-                                DropdownMenuItem<int?>(
-                                  value: null,
-                                  child: Text("None", style: const TextStyle(fontFamily: 'Poppins')),
-                                ),
-                                ..._testPacks.map(
-                                  (p) => DropdownMenuItem<int?>(
-                                    value: p.id,
-                                    child: Text(
-                                      "${p.name} (${p.category}) – ${p.questionCount} questions",
-                                      style: TextStyle(
+                              Row(
+                                children: [
+                                  Icon(Icons.work,
+                                      color: Colors.redAccent, size: 24),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    "Basic Job Information",
+                                    style: TextStyle(
                                         fontFamily: 'Poppins',
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
                                         color: themeProvider.isDarkMode
                                             ? Colors.white
-                                            : Colors.black87,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                              onChanged: (v) {
-                                setState(() {
-                                  _testPackId = v;
-                                  _cherryPickSelected = [];
-                                  if (v != null) {
-                                    for (final p in _testPacks) {
-                                      if (p.id == v) {
-                                        _cherryPickSelected = List.filled(
-                                            p.questions.length, true);
-                                        break;
-                                      }
-                                    }
-                                  }
-                                });
-                              },
-                            ),
-                          const SizedBox(height: 16),
-                          if (_testPackId != null) ...[
-                            _buildCherryPickSection(themeProvider),
-                          ],
-                          if (_testPackId != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                "Questions will be taken from the selected pack when candidates apply.",
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 12,
-                                  color: themeProvider.isDarkMode
-                                      ? Colors.grey.shade400
-                                      : Colors.black54,
-                                ),
-                              ),
-                            ),
-                        ],
-                        if (!_useTestPack) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                "Assessment Questions",
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: themeProvider.isDarkMode
-                                      ? Colors.white
-                                      : Colors.black87,
-                                ),
-                              ),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      color:
-                                          Colors.green.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.green),
-                                    ),
-                                    child: IconButton(
-                                      icon: const Icon(Icons.psychology,
-                                          color: Colors.green),
-                                      onPressed: _showAIQuestionDialog,
-                                      tooltip: "Generate AI Questions",
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.blue.withValues(alpha: 0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Colors.blue),
-                                    ),
-                                    child: IconButton(
-                                      icon: const Icon(Icons.save_alt,
-                                          color: Colors.blue),
-                                      onPressed: _saveAsTestPack,
-                                      tooltip: "Save as Test Pack",
-                                    ),
+                                            : Colors.black87),
                                   ),
                                 ],
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-                        Expanded(
-                          child: ListView.builder(
-                            itemCount: questions.length,
-                            itemBuilder: (_, index) {
-                              final q = questions[index];
-                              return Card(
+                              const SizedBox(height: 20),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: CustomTextField(
+                                      label: "Job Title",
+                                      initialValue: title,
+                                      hintText: "Enter job title",
+                                      onChanged: (v) => title = v,
+                                      validator: (v) => v == null || v.isEmpty
+                                          ? "Enter job title"
+                                          : null,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton.filled(
+                                    onPressed: _generatingJobDetails
+                                        ? null
+                                        : _generateJobDetailsWithAI,
+                                    icon: _generatingJobDetails
+                                        ? SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.redAccent,
+                                            ),
+                                          )
+                                        : const Icon(Icons.auto_awesome),
+                                    tooltip: _generatingJobDetails
+                                        ? "Generating…"
+                                        : "Generate job details from title (AI)",
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              Card(
+                                elevation: 4,
+                                shadowColor: Colors.black26,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
                                 color: (themeProvider.isDarkMode
-                                        ? const Color(0xFF14131E)
+                                        ? const Color(0xFF1A1A2E)
                                         : Colors.white)
-                                    .withValues(alpha: 0.9),
-                                margin: const EdgeInsets.symmetric(vertical: 8),
+                                    .withValues(alpha: 0.95),
                                 child: Padding(
-                                  padding: const EdgeInsets.all(16),
+                                  padding: const EdgeInsets.all(20),
                                   child: Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
-                                      // Question Header
                                       Row(
                                         children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: Colors.blue
-                                                  .withValues(alpha: 0.1),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              border: Border.all(
-                                                  color: Colors.blue
-                                                      .withValues(alpha: 0.3)),
-                                            ),
-                                            child: Text(
-                                              "Question ${index + 1}",
-                                              style: TextStyle(
-                                                fontFamily: 'Poppins',
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.blue,
-                                              ),
-                                            ),
-                                          ),
-                                          const Spacer(),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: Colors.orange
-                                                  .withValues(alpha: 0.1),
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                              border: Border.all(
-                                                  color: Colors.orange
-                                                      .withValues(alpha: 0.3)),
-                                            ),
-                                            child: Text(
-                                              "Weight: ${q["weight"] ?? 1}",
-                                              style: TextStyle(
-                                                fontFamily: 'Poppins',
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.orange,
-                                              ),
+                                          Icon(Icons.assignment,
+                                              color: Colors.orangeAccent,
+                                              size: 24),
+                                          const SizedBox(width: 12),
+                                          Text(
+                                            "Job Requirements",
+                                            style: TextStyle(
+                                              fontFamily: 'Poppins',
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black87,
                                             ),
                                           ),
                                         ],
                                       ),
-                                      const SizedBox(height: 12),
-
-                                      // Question Field
+                                      const SizedBox(height: 20),
                                       CustomTextField(
-                                        label: "Question",
-                                        initialValue: q["question"],
-                                        hintText: "Enter your question here",
+                                        label: "Responsibilities",
+                                        controller: responsibilitiesController,
+                                        hintText:
+                                            "Bullet points of key responsibilities",
+                                        maxLines: 4,
+                                        expands: false,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      CustomTextField(
+                                        label: "Qualifications",
+                                        controller: qualificationsController,
+                                        hintText:
+                                            "Bullet points of required qualifications",
+                                        maxLines: 4,
+                                        expands: false,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      CustomTextField(
+                                        label: "Required Skills",
+                                        controller: skillsController,
+                                        hintText:
+                                            "Bullet points of essential skills",
                                         maxLines: 3,
                                         expands: false,
-                                        onChanged: (v) => q["question"] = v,
                                       ),
                                       const SizedBox(height: 16),
+                                      CustomTextField(
+                                        label: "Minimum Experience (years)",
+                                        controller: minExpController,
+                                        inputType: TextInputType.number,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text("Preferred start window",
+                                          style: TextStyle(
+                                              fontFamily: 'Poppins',
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black87)),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: OutlinedButton.icon(
+                                              icon: const Icon(
+                                                  Icons.calendar_today,
+                                                  size: 18),
+                                              label: Text(
+                                                  _startDateFrom == null
+                                                      ? "From"
+                                                      : "${_startDateFrom!.year}-${_startDateFrom!.month.toString().padLeft(2, '0')}-${_startDateFrom!.day.toString().padLeft(2, '0')}",
+                                                  style: const TextStyle(
+                                                      fontFamily: 'Poppins',
+                                                      fontSize: 12)),
+                                              onPressed: () async {
+                                                final d = await showDatePicker(
+                                                    context: context,
+                                                    initialDate:
+                                                        _startDateFrom ??
+                                                            DateTime.now(),
+                                                    firstDate: DateTime.now(),
+                                                    lastDate: DateTime.now()
+                                                        .add(const Duration(
+                                                            days: 365 * 2)));
+                                                if (d != null && mounted)
+                                                  setState(
+                                                      () => _startDateFrom = d);
+                                              },
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: OutlinedButton.icon(
+                                              icon: const Icon(
+                                                  Icons.calendar_today,
+                                                  size: 18),
+                                              label: Text(
+                                                  _startDateTo == null
+                                                      ? "To"
+                                                      : "${_startDateTo!.year}-${_startDateTo!.month.toString().padLeft(2, '0')}-${_startDateTo!.day.toString().padLeft(2, '0')}",
+                                                  style: const TextStyle(
+                                                      fontFamily: 'Poppins',
+                                                      fontSize: 12)),
+                                              onPressed: () async {
+                                                final d = await showDatePicker(
+                                                    context: context,
+                                                    initialDate: _startDateTo ??
+                                                        _startDateFrom ??
+                                                        DateTime.now(),
+                                                    firstDate: _startDateFrom ??
+                                                        DateTime.now(),
+                                                    lastDate: DateTime.now()
+                                                        .add(const Duration(
+                                                            days: 365 * 2)));
+                                                if (d != null && mounted)
+                                                  setState(
+                                                      () => _startDateTo = d);
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text("Minimum years per skill",
+                                              style: TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                  color:
+                                                      themeProvider.isDarkMode
+                                                          ? Colors.white
+                                                          : Colors.black87)),
+                                          TextButton.icon(
+                                            icon:
+                                                const Icon(Icons.add, size: 18),
+                                            label: const Text("Add",
+                                                style: TextStyle(fontSize: 12)),
+                                            onPressed: () => setState(() =>
+                                                _minYearsPerSkillList.add({
+                                                  "skill": "",
+                                                  "years": 0.0
+                                                })),
+                                          ),
+                                        ],
+                                      ),
+                                      if (_minYearsPerSkillList.isNotEmpty) ...[
+                                        ..._minYearsPerSkillList
+                                            .asMap()
+                                            .entries
+                                            .map((entry) {
+                                          final i = entry.key;
+                                          final row = entry.value;
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                                bottom: 8),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: TextFormField(
+                                                    initialValue: row['skill']
+                                                        ?.toString(),
+                                                    decoration:
+                                                        const InputDecoration(
+                                                            hintText: "Skill",
+                                                            isDense: true),
+                                                    style: const TextStyle(
+                                                        fontFamily: 'Poppins',
+                                                        fontSize: 13),
+                                                    onChanged: (v) => setState(
+                                                        () =>
+                                                            _minYearsPerSkillList[
+                                                                    i]
+                                                                ['skill'] = v),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                SizedBox(
+                                                  width: 70,
+                                                  child: TextFormField(
+                                                    initialValue: row['years']
+                                                        ?.toString(),
+                                                    keyboardType:
+                                                        TextInputType.number,
+                                                    decoration:
+                                                        const InputDecoration(
+                                                            hintText: "Years",
+                                                            isDense: true),
+                                                    style: const TextStyle(
+                                                        fontFamily: 'Poppins',
+                                                        fontSize: 13),
+                                                    onChanged: (v) => setState(
+                                                        () =>
+                                                            _minYearsPerSkillList[
+                                                                        i]
+                                                                    ['years'] =
+                                                                double.tryParse(
+                                                                        v) ??
+                                                                    0),
+                                                  ),
+                                                ),
+                                                IconButton(
+                                                  icon: const Icon(
+                                                      Icons
+                                                          .remove_circle_outline,
+                                                      size: 22),
+                                                  onPressed: () => setState(
+                                                      () =>
+                                                          _minYearsPerSkillList
+                                                              .removeAt(i)),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }),
+                                        const SizedBox(height: 8),
+                                      ],
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text("Must-have certifications",
+                                              style: TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                  color:
+                                                      themeProvider.isDarkMode
+                                                          ? Colors.white
+                                                          : Colors.black87)),
+                                          TextButton.icon(
+                                            icon:
+                                                const Icon(Icons.add, size: 18),
+                                            label: const Text("Add",
+                                                style: TextStyle(fontSize: 12)),
+                                            onPressed: () {
+                                              final c = _certificationController
+                                                  .text
+                                                  .trim();
+                                              if (c.isNotEmpty) {
+                                                setState(() {
+                                                  _requiredCertifications
+                                                      .add(c);
+                                                  _certificationController
+                                                      .clear();
+                                                });
+                                              }
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: TextFormField(
+                                              controller:
+                                                  _certificationController,
+                                              decoration: const InputDecoration(
+                                                  hintText:
+                                                      "e.g. AWS Certified, PMP",
+                                                  isDense: true),
+                                              style: const TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 13),
+                                              onFieldSubmitted: (v) {
+                                                if (v.trim().isNotEmpty)
+                                                  setState(() {
+                                                    _requiredCertifications
+                                                        .add(v.trim());
+                                                    _certificationController
+                                                        .clear();
+                                                  });
+                                              },
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          ElevatedButton(
+                                              child: const Text("Add"),
+                                              onPressed: () {
+                                                final c =
+                                                    _certificationController
+                                                        .text
+                                                        .trim();
+                                                if (c.isNotEmpty)
+                                                  setState(() {
+                                                    _requiredCertifications
+                                                        .add(c);
+                                                    _certificationController
+                                                        .clear();
+                                                  });
+                                              }),
+                                        ],
+                                      ),
+                                      if (_requiredCertifications
+                                          .isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 6,
+                                          runSpacing: 6,
+                                          children: _requiredCertifications
+                                              .map((c) => Chip(
+                                                    label: Text(c,
+                                                        style: const TextStyle(
+                                                            fontSize: 12)),
+                                                    deleteIcon: const Icon(
+                                                        Icons.close,
+                                                        size: 18),
+                                                    onDeleted: () => setState(() =>
+                                                        _requiredCertifications
+                                                            .remove(c)),
+                                                  ))
+                                              .toList(),
+                                        ),
+                                      ],
+                                      const SizedBox(height: 16),
+                                      CustomTextField(
+                                        label:
+                                            "Application deadline (YYYY-MM-DD)",
+                                        controller:
+                                            applicationDeadlineController,
+                                        hintText: "e.g. 2025-12-31",
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
 
-                                      // Options Section
-                                      Text(
-                                        "Answer Options",
-                                        style: TextStyle(
-                                          fontFamily: 'Poppins',
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
+                              // Company Information Section
+                              Card(
+                                elevation: 4,
+                                shadowColor: Colors.black26,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                color: (themeProvider.isDarkMode
+                                        ? const Color(0xFF1A1A2E)
+                                        : Colors.white)
+                                    .withValues(alpha: 0.95),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(Icons.business,
+                                              color: Colors.greenAccent,
+                                              size: 24),
+                                          const SizedBox(width: 12),
+                                          Text(
+                                            "Company Information",
+                                            style: TextStyle(
+                                              fontFamily: 'Poppins',
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 20),
+                                      CustomTextField(
+                                        label: "Description",
+                                        controller: descriptionController,
+                                        hintText: "Enter job description",
+                                        maxLines: 5,
+                                        expands: false,
+                                        onChanged: (v) => description = v,
+                                        validator: (v) => v == null || v.isEmpty
+                                            ? "Enter description"
+                                            : null,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      CustomTextField(
+                                        label: "Company Details",
+                                        controller: companyDetailsController,
+                                        hintText: "About the company",
+                                        maxLines: 4,
+                                        expands: false,
+                                        onChanged: (v) => companyDetails = v,
+                                      ),
+                                      const SizedBox(height: 20),
+                                      DropdownButtonFormField<String>(
+                                        value:
+                                            category.isEmpty ? null : category,
+                                        decoration: const InputDecoration(
+                                          labelText: "Category",
+                                        ),
+                                        items: categoryOptions
+                                            .map((cat) => DropdownMenuItem(
+                                                  value: cat,
+                                                  child: Text(cat),
+                                                ))
+                                            .toList(),
+                                        onChanged: (value) => setState(
+                                            () => category = value ?? ''),
+                                      ),
+                                      const SizedBox(height: 24),
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          "Salary",
+                                          style: TextStyle(
+                                            fontFamily: 'Poppins',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
                                         ),
                                       ),
-                                      const SizedBox(height: 8),
-                                      ...List.generate(4, (i) {
-                                        return Padding(
-                                          padding:
-                                              const EdgeInsets.only(bottom: 12),
-                                          child: Row(
-                                            children: [
-                                              // Option Indicator
-                                              Container(
-                                                width: 32,
-                                                height: 32,
-                                                decoration: BoxDecoration(
-                                                  color: q["answer"] == i
-                                                      ? Colors.green.withValues(
-                                                          alpha: 0.2)
-                                                      : Colors.grey.withValues(
-                                                          alpha: 0.1),
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                  border: Border.all(
-                                                    color: q["answer"] == i
-                                                        ? Colors.green
-                                                        : Colors.grey
-                                                            .withValues(
-                                                                alpha: 0.3),
-                                                    width: q["answer"] == i
-                                                        ? 2
-                                                        : 1,
-                                                  ),
-                                                ),
-                                                child: Center(
-                                                  child: Text(
-                                                    String.fromCharCode(
-                                                        65 + i), // A, B, C, D
-                                                    style: TextStyle(
-                                                      fontFamily: 'Poppins',
-                                                      fontSize: 14,
-                                                      fontWeight:
-                                                          FontWeight.w600,
-                                                      color: q["answer"] == i
-                                                          ? Colors.green
-                                                          : Colors
-                                                              .grey.shade600,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 12),
-
-                                              // Option Field
-                                              Expanded(
-                                                child: CustomTextField(
-                                                  label:
-                                                      "Option ${String.fromCharCode(65 + i)}",
-                                                  initialValue: q["options"][i],
-                                                  hintText:
-                                                      "Enter option ${String.fromCharCode(65 + i)}",
-                                                  maxLines: 2,
-                                                  expands: false,
-                                                  onChanged: (v) =>
-                                                      q["options"][i] = v,
-                                                ),
-                                              ),
-
-                                              // Correct Answer Indicator
-                                              IconButton(
-                                                onPressed: () => setState(
-                                                    () => q["answer"] = i),
-                                                icon: Icon(
-                                                  q["answer"] == i
-                                                      ? Icons.check_circle
-                                                      : Icons
-                                                          .radio_button_unchecked,
-                                                  color: q["answer"] == i
-                                                      ? Colors.green
-                                                      : Colors.grey.shade400,
-                                                ),
-                                                tooltip:
-                                                    "Mark as correct answer",
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                      }),
-
-                                      const SizedBox(height: 16),
-
-                                      // Weight Field
+                                      const SizedBox(height: 12),
                                       Row(
                                         children: [
                                           Expanded(
                                             child: CustomTextField(
-                                              label: "Question Weight",
-                                              initialValue:
-                                                  q["weight"].toString(),
-                                              hintText: "Enter weight (1-10)",
+                                              label: "Salary Min",
+                                              controller: salaryMinController,
                                               inputType: TextInputType.number,
-                                              onChanged: (v) => q["weight"] =
-                                                  double.tryParse(v) ?? 1,
+                                              hintText: "e.g. 30000",
                                             ),
                                           ),
-                                          const SizedBox(width: 16),
-                                          Container(
-                                            decoration: BoxDecoration(
-                                              color: Colors.red
-                                                  .withValues(alpha: 0.1),
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              border: Border.all(
-                                                  color: Colors.red
-                                                      .withValues(alpha: 0.3)),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: CustomTextField(
+                                              label: "Salary Max",
+                                              controller: salaryMaxController,
+                                              inputType: TextInputType.number,
+                                              hintText: "e.g. 45000",
                                             ),
-                                            child: IconButton(
-                                              icon: const Icon(Icons.delete,
-                                                  color: Colors.red),
-                                              onPressed: () {
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: CustomTextField(
+                                              label: "Currency",
+                                              initialValue: salaryCurrency,
+                                              hintText: "ZAR, USD, EUR",
+                                              onChanged: (v) {
                                                 setState(() {
-                                                  questions.removeAt(index);
+                                                  salaryCurrency =
+                                                      v.isEmpty ? "ZAR" : v;
                                                 });
                                               },
-                                              tooltip: "Delete Question",
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child:
+                                                DropdownButtonFormField<String>(
+                                              value: salaryPeriod,
+                                              decoration: InputDecoration(
+                                                labelText: "Period",
+                                                border: OutlineInputBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                              ),
+                                              items: const [
+                                                DropdownMenuItem(
+                                                  value: "monthly",
+                                                  child: Text("Per month",
+                                                      style: const TextStyle(
+                                                          fontFamily:
+                                                              'Poppins')),
+                                                ),
+                                                DropdownMenuItem(
+                                                  value: "yearly",
+                                                  child: Text("Per year",
+                                                      style: const TextStyle(
+                                                          fontFamily:
+                                                              'Poppins')),
+                                                ),
+                                              ],
+                                              onChanged: (value) {
+                                                if (value != null) {
+                                                  setState(() =>
+                                                      salaryPeriod = value);
+                                                }
+                                              },
                                             ),
                                           ),
                                         ],
@@ -3176,46 +2917,559 @@ class _JobFormDialogState extends State<JobFormDialog>
                                     ],
                                   ),
                                 ),
-                              );
-                            },
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Assessment Configuration Section
+                              Card(
+                                elevation: 4,
+                                shadowColor: Colors.black26,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                color: (themeProvider.isDarkMode
+                                        ? const Color(0xFF1A1A2E)
+                                        : Colors.white)
+                                    .withValues(alpha: 0.95),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(Icons.assessment,
+                                              color: Colors.blueAccent,
+                                              size: 24),
+                                          const SizedBox(width: 12),
+                                          Text(
+                                            "Assessment Configuration",
+                                            style: TextStyle(
+                                              fontFamily: 'Poppins',
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 20),
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          "Evaluation weightings (must total 100%)",
+                                          style: TextStyle(
+                                            fontFamily: 'Poppins',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      WeightingConfigurationWidget(
+                                        weightings: weightings,
+                                        errorText: weightingsError,
+                                        onChanged: (updated) {
+                                          setState(() {
+                                            weightings = updated;
+                                            final total = updated.values
+                                                .fold<int>(0, (a, b) => a + b);
+                                            weightingsError = total == 100
+                                                ? null
+                                                : "Weightings must total 100%";
+                                          });
+                                        },
+                                      ),
+                                      const SizedBox(height: 20),
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          "Knockout rules",
+                                          style: TextStyle(
+                                            fontFamily: 'Poppins',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      KnockoutRulesBuilder(
+                                        rules: knockoutRules,
+                                        onChanged: (updated) {
+                                          setState(
+                                              () => knockoutRules = updated);
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        if (!_useTestPack) ...[
-                          const SizedBox(height: 12),
-                          CustomButton(
-                              text: "Add Question", onPressed: addQuestion),
-                        ],
-                      ],
-                    ),
-                  ),
-                ],
-              ), // End of TabBarView
-            ),
-
-            Container(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      "Cancel",
-                      style: TextStyle(
-                        fontFamily: 'Poppins',
-                        color: themeProvider.isDarkMode
-                            ? Colors.grey.shade400
-                            : Colors.black87,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  CustomButton(text: "Save Job", onPressed: saveJob),
-                ],
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Use a test pack or create custom questions
+                          Text(
+                            "Assessment",
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.grey.shade300
+                                  : Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Radio<bool>(
+                                value: true,
+                                groupValue: _useTestPack,
+                                onChanged: (v) =>
+                                    setState(() => _useTestPack = true),
+                                activeColor: Colors.redAccent,
+                              ),
+                              Text("Use a test pack",
+                                  style:
+                                      const TextStyle(fontFamily: 'Poppins')),
+                              const SizedBox(width: 24),
+                              Radio<bool>(
+                                value: false,
+                                groupValue: _useTestPack,
+                                onChanged: (v) => setState(() {
+                                  _useTestPack = false;
+                                  _testPackId = null;
+                                }),
+                                activeColor: Colors.redAccent,
+                              ),
+                              Text("Create custom questions",
+                                  style:
+                                      const TextStyle(fontFamily: 'Poppins')),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          if (_useTestPack) ...[
+                            if (_loadingTestPacks)
+                              const Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Center(
+                                    child: CircularProgressIndicator(
+                                        color: Colors.redAccent)),
+                              )
+                            else
+                              DropdownButtonFormField<int?>(
+                                value: _testPackId,
+                                decoration: InputDecoration(
+                                  labelText: "Select test pack",
+                                  border: const OutlineInputBorder(),
+                                  labelStyle: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade400
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                dropdownColor: themeProvider.isDarkMode
+                                    ? const Color(0xFF14131E)
+                                    : Colors.white,
+                                items: [
+                                  DropdownMenuItem<int?>(
+                                    value: null,
+                                    child: Text("None",
+                                        style: const TextStyle(
+                                            fontFamily: 'Poppins')),
+                                  ),
+                                  ..._testPacks.map(
+                                    (p) => DropdownMenuItem<int?>(
+                                      value: p.id,
+                                      child: Text(
+                                        "${p.name} (${p.category}) – ${p.questionCount} questions",
+                                        style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.white
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                onChanged: (v) {
+                                  setState(() {
+                                    _testPackId = v;
+                                    _cherryPickSelected = [];
+                                    if (v != null) {
+                                      for (final p in _testPacks) {
+                                        if (p.id == v) {
+                                          _cherryPickSelected = List.filled(
+                                              p.questions.length, true);
+                                          break;
+                                        }
+                                      }
+                                    }
+                                  });
+                                },
+                              ),
+                            const SizedBox(height: 16),
+                            if (_testPackId != null) ...[
+                              _buildCherryPickSection(themeProvider),
+                            ],
+                            if (_testPackId != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  "Questions will be taken from the selected pack when candidates apply.",
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 12,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade400
+                                        : Colors.black54,
+                                  ),
+                                ),
+                              ),
+                          ],
+                          if (!_useTestPack) ...[
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  "Assessment Questions",
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color:
+                                            Colors.green.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.green),
+                                      ),
+                                      child: IconButton(
+                                        icon: const Icon(Icons.psychology,
+                                            color: Colors.green),
+                                        onPressed: _showAIQuestionDialog,
+                                        tooltip: "Generate AI Questions",
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color:
+                                            Colors.blue.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.blue),
+                                      ),
+                                      child: IconButton(
+                                        icon: const Icon(Icons.save_alt,
+                                            color: Colors.blue),
+                                        onPressed: _saveAsTestPack,
+                                        tooltip: "Save as Test Pack",
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: questions.length,
+                              itemBuilder: (_, index) {
+                                final q = questions[index];
+                                return Card(
+                                  color: (themeProvider.isDarkMode
+                                          ? const Color(0xFF14131E)
+                                          : Colors.white)
+                                      .withValues(alpha: 0.9),
+                                  margin:
+                                      const EdgeInsets.symmetric(vertical: 8),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // Question Header
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue
+                                                    .withValues(alpha: 0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                    color: Colors.blue
+                                                        .withValues(
+                                                            alpha: 0.3)),
+                                              ),
+                                              child: Text(
+                                                "Question ${index + 1}",
+                                                style: TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.blue,
+                                                ),
+                                              ),
+                                            ),
+                                            const Spacer(),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.orange
+                                                    .withValues(alpha: 0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                    color: Colors.orange
+                                                        .withValues(
+                                                            alpha: 0.3)),
+                                              ),
+                                              child: Text(
+                                                "Weight: ${q["weight"] ?? 1}",
+                                                style: TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.orange,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+
+                                        // Question Field
+                                        CustomTextField(
+                                          label: "Question",
+                                          initialValue: q["question"],
+                                          hintText: "Enter your question here",
+                                          maxLines: 3,
+                                          expands: false,
+                                          onChanged: (v) => q["question"] = v,
+                                        ),
+                                        const SizedBox(height: 16),
+
+                                        // Options Section
+                                        Text(
+                                          "Answer Options",
+                                          style: TextStyle(
+                                            fontFamily: 'Poppins',
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        ...List.generate(4, (i) {
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                                bottom: 12),
+                                            child: Row(
+                                              children: [
+                                                // Option Indicator
+                                                Container(
+                                                  width: 32,
+                                                  height: 32,
+                                                  decoration: BoxDecoration(
+                                                    color: q["answer"] == i
+                                                        ? Colors.green
+                                                            .withValues(
+                                                                alpha: 0.2)
+                                                        : Colors.grey
+                                                            .withValues(
+                                                                alpha: 0.1),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
+                                                    border: Border.all(
+                                                      color: q["answer"] == i
+                                                          ? Colors.green
+                                                          : Colors.grey
+                                                              .withValues(
+                                                                  alpha: 0.3),
+                                                      width: q["answer"] == i
+                                                          ? 2
+                                                          : 1,
+                                                    ),
+                                                  ),
+                                                  child: Center(
+                                                    child: Text(
+                                                      String.fromCharCode(
+                                                          65 + i), // A, B, C, D
+                                                      style: TextStyle(
+                                                        fontFamily: 'Poppins',
+                                                        fontSize: 14,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: q["answer"] == i
+                                                            ? Colors.green
+                                                            : Colors
+                                                                .grey.shade600,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+
+                                                // Option Field
+                                                Expanded(
+                                                  child: CustomTextField(
+                                                    label:
+                                                        "Option ${String.fromCharCode(65 + i)}",
+                                                    initialValue: q["options"]
+                                                        [i],
+                                                    hintText:
+                                                        "Enter option ${String.fromCharCode(65 + i)}",
+                                                    maxLines: 2,
+                                                    expands: false,
+                                                    onChanged: (v) =>
+                                                        q["options"][i] = v,
+                                                  ),
+                                                ),
+
+                                                // Correct Answer Indicator
+                                                IconButton(
+                                                  onPressed: () => setState(
+                                                      () => q["answer"] = i),
+                                                  icon: Icon(
+                                                    q["answer"] == i
+                                                        ? Icons.check_circle
+                                                        : Icons
+                                                            .radio_button_unchecked,
+                                                    color: q["answer"] == i
+                                                        ? Colors.green
+                                                        : Colors.grey.shade400,
+                                                  ),
+                                                  tooltip:
+                                                      "Mark as correct answer",
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }),
+
+                                        const SizedBox(height: 16),
+
+                                        // Weight Field
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: CustomTextField(
+                                                label: "Question Weight",
+                                                initialValue:
+                                                    q["weight"].toString(),
+                                                hintText: "Enter weight (1-10)",
+                                                inputType: TextInputType.number,
+                                                onChanged: (v) => q["weight"] =
+                                                    double.tryParse(v) ?? 1,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 16),
+                                            Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.red
+                                                    .withValues(alpha: 0.1),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                border: Border.all(
+                                                    color: Colors.red
+                                                        .withValues(
+                                                            alpha: 0.3)),
+                                              ),
+                                              child: IconButton(
+                                                icon: const Icon(Icons.delete,
+                                                    color: Colors.red),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    questions.removeAt(index);
+                                                  });
+                                                },
+                                                tooltip: "Delete Question",
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          if (!_useTestPack) ...[
+                            const SizedBox(height: 12),
+                            CustomButton(
+                                text: "Add Question", onPressed: addQuestion),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ), // End of TabBarView
               ),
-            ), // Closing Container
-          ], // Closing Column children
-        ),
+
+              Container(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        "Cancel",
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: themeProvider.isDarkMode
+                              ? Colors.grey.shade400
+                              : Colors.black87,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    CustomButton(text: "Save Job", onPressed: saveJob),
+                  ],
+                ),
+              ), // Closing Container
+            ], // Closing Column children
+          ),
         ), // Form
       ),
     );
@@ -3392,7 +3646,8 @@ class _AIQuestionDialogState extends State<AIQuestionDialog> {
                   items: difficultyLevels.map((level) {
                     return DropdownMenuItem(
                       value: level,
-                      child: Text(level, style: const TextStyle(fontFamily: 'Poppins')),
+                      child: Text(level,
+                          style: const TextStyle(fontFamily: 'Poppins')),
                     );
                   }).toList(),
                   onChanged: (value) {
@@ -3428,7 +3683,8 @@ class _AIQuestionDialogState extends State<AIQuestionDialog> {
                   items: questionCounts.map((count) {
                     return DropdownMenuItem(
                       value: count,
-                      child: Text("$count questions", style: const TextStyle(fontFamily: 'Poppins')),
+                      child: Text("$count questions",
+                          style: const TextStyle(fontFamily: 'Poppins')),
                     );
                   }).toList(),
                   onChanged: (value) {
@@ -3480,10 +3736,13 @@ class _AIQuestionDialogState extends State<AIQuestionDialog> {
                                     ),
                                   ),
                                   const SizedBox(width: 8),
-                                  Text("Generating...", style: const TextStyle(fontFamily: 'Poppins')),
+                                  Text("Generating...",
+                                      style: const TextStyle(
+                                          fontFamily: 'Poppins')),
                                 ],
                               )
-                            : Text("Generate Questions", style: const TextStyle(fontFamily: 'Poppins')),
+                            : Text("Generate Questions",
+                                style: const TextStyle(fontFamily: 'Poppins')),
                       ),
                     ),
                   ],

@@ -135,6 +135,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   // Candidate-related variables
   bool loadingCandidates = true;
   int candidatePage = 1;
+
   /// Larger page so Candidate Overview can list everyone returned for the HM scope.
   int candidatePerPage = 200;
   List<Map<String, dynamic>> candidates = [];
@@ -1413,8 +1414,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               currentScreen = "candidates";
             });
           },
-          onOpenTeamCollaboration: () => setState(
-              () => currentScreen = 'team_collaboration'),
+          onOpenTeamCollaboration: () =>
+              setState(() => currentScreen = 'team_collaboration'),
           onOpenNotifications: () => setState(() {
             currentScreen = 'notifications';
             unreadNotificationCount = 0;
@@ -1600,8 +1601,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     message: 'Team collaboration',
                     child: _hmDashboardHeaderIconButton(
                       assetPath: 'assets/images/message.png',
-                      onTap: () => setState(
-                          () => currentScreen = 'team_collaboration'),
+                      onTap: () =>
+                          setState(() => currentScreen = 'team_collaboration'),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1756,15 +1757,12 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       String? subtitle,
       String? titleLeadingAsset,
       Color? titleColor}) {
-    final cardColor = isDark
-        ? _darkWidgetSurface()
-        : _paletteCanvas.withValues(alpha: 0.95);
-    final headerStripColor = isDark
-        ? _darkWidgetSurface()
-        : const Color(0xFFECECEC);
-    final headerBorderColor = isDark
-        ? Colors.white.withValues(alpha: 0.1)
-        : Colors.grey.shade300;
+    final cardColor =
+        isDark ? _darkWidgetSurface() : _paletteCanvas.withValues(alpha: 0.95);
+    final headerStripColor =
+        isDark ? _darkWidgetSurface() : const Color(0xFFECECEC);
+    final headerBorderColor =
+        isDark ? Colors.white.withValues(alpha: 0.1) : Colors.grey.shade300;
     final useRichHeader = titleLeadingAsset != null;
 
     return Container(
@@ -1889,8 +1887,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         children: candidatesData.isEmpty
             ? [
                 Text('No candidate data available',
-                    style: TextStyle(
-                        color: isDark ? _pureWhite : _pureBlack)),
+                    style: TextStyle(color: isDark ? _pureWhite : _pureBlack)),
               ]
             : candidatesData.map((c) {
                 final name = _candidateDisplayName(c);
@@ -1927,8 +1924,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                     fontSize: 10,
-                                    color:
-                                        isDark ? _pureWhite : _pureBlack)),
+                                    color: isDark ? _pureWhite : _pureBlack)),
                           ],
                         ),
                       ),
@@ -2253,8 +2249,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     return _buildDashboardCard(
       'Candidate Pipeline',
       isDark,
-      subtitle:
-          'Headcount at each hiring stage from applied through hired.',
+      subtitle: 'Headcount at each hiring stage from applied through hired.',
       titleLeadingAsset:
           'assets/images/Process_Flows_Automation_White_Badge_Red.png',
       child: SizedBox(
@@ -2312,8 +2307,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     return _buildDashboardCard(
       'Time-to-Fill Trend',
       isDark,
-      subtitle:
-          'Typical days to fill roles over the last several months.',
+      subtitle: 'Typical days to fill roles over the last several months.',
       titleLeadingAsset:
           'assets/images/Time_Allocation_Approval_White_Badge_Red.png',
       child: SizedBox(
@@ -2330,8 +2324,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     return _buildDashboardCard(
       'Diversity Metrics',
       isDark,
-      subtitle:
-          'Share of candidates by gender and ethnicity for reporting.',
+      subtitle: 'Share of candidates by gender and ethnicity for reporting.',
       titleLeadingAsset: 'assets/images/Sprints.png',
       child: Row(
         children: [
@@ -2372,7 +2365,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 iconPath,
                 height: 12,
                 width: 12,
-                errorBuilder: (_, __, ___) => const SizedBox(width: 12, height: 12),
+                errorBuilder: (_, __, ___) =>
+                    const SizedBox(width: 12, height: 12),
               ),
             ],
           ],
@@ -2422,10 +2416,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     return _buildDashboardCard(
       'Source Performance',
       isDark,
-      subtitle:
-          'Which sourcing channels are driving the most applications.',
-      titleLeadingAsset:
-          'assets/images/Goal_Target_White_Badge_Red.png',
+      subtitle: 'Which sourcing channels are driving the most applications.',
+      titleLeadingAsset: 'assets/images/Goal_Target_White_Badge_Red.png',
       child: SizedBox(
         height: 150,
         child: Row(
@@ -2473,8 +2465,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     return _buildDashboardCard(
       'Team Collaboration',
       isDark,
-      subtitle:
-          'Quick team notes; use the bell to jump to full notifications.',
+      subtitle: 'Quick team notes; use the bell to jump to full notifications.',
       titleLeadingAsset:
           'assets/images/Networking_Collaboration_White_Badge__Red.png',
       trailing: InkWell(
@@ -2536,8 +2527,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     color: _palettePrimary,
                     borderRadius: BorderRadius.circular(2),
                   ),
-                  child: const Icon(Icons.check,
-                      size: 10, color: _paletteWhite),
+                  child:
+                      const Icon(Icons.check, size: 10, color: _paletteWhite),
                 ),
                 const SizedBox(width: 6),
                 Expanded(
@@ -2546,8 +2537,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 9,
-                        color: isDark ? _pureWhite : _pureBlack),
+                        fontSize: 9, color: isDark ? _pureWhite : _pureBlack),
                   ),
                 ),
               ],
@@ -2568,8 +2558,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     return _buildDashboardCard(
       'Recent Activities',
       isDark,
-      subtitle:
-          'Latest hiring and account actions logged for your workspace.',
+      subtitle: 'Latest hiring and account actions logged for your workspace.',
       titleLeadingAsset: 'assets/images/bell_red.png',
       child: Column(
         children: list.map((a) {
@@ -2584,8 +2573,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     color: _palettePrimary,
                     borderRadius: BorderRadius.circular(2),
                   ),
-                  child: const Icon(Icons.check,
-                      size: 10, color: _paletteWhite),
+                  child:
+                      const Icon(Icons.check, size: 10, color: _paletteWhite),
                 ),
                 const SizedBox(width: 6),
                 Expanded(
@@ -2594,8 +2583,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 9,
-                        color: isDark ? _pureWhite : _pureBlack),
+                        fontSize: 9, color: isDark ? _pureWhite : _pureBlack),
                   ),
                 ),
               ],
@@ -2693,8 +2681,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   fontWeight: FontWeight.w700,
                   color: isDark ? _pureWhite : _palettePrimary,
                 ),
-                dataSource:
-                    _DashboardCalendarDataSource(_calendarAppointments),
+                dataSource: _DashboardCalendarDataSource(_calendarAppointments),
                 onViewChanged: (ViewChangedDetails details) {
                   final visibleDates = details.visibleDates;
                   if (visibleDates.isNotEmpty &&
@@ -2726,9 +2713,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   showAgenda: false,
                   monthCellStyle: MonthCellStyle(
                     backgroundColor: isDark ? Colors.transparent : null,
-                    todayBackgroundColor: isDark
-                        ? _palettePrimary.withValues(alpha: 0.22)
-                        : null,
+                    todayBackgroundColor:
+                        isDark ? _palettePrimary.withValues(alpha: 0.22) : null,
                     leadingDatesBackgroundColor:
                         isDark ? Colors.transparent : null,
                     trailingDatesBackgroundColor:

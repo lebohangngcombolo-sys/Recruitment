@@ -19,7 +19,6 @@ import '../../services/unified_api_service.dart';
 import 'assessments_results_screen.dart';
 import '../../screens/candidate/user_profile_page.dart';
 import '../../services/auth_service.dart';
-import '../../utils/app_config.dart';
 
 class CandidateDashboard extends StatefulWidget {
   final String token;
@@ -47,11 +46,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   final Color primaryColor = Color(0xFF991A1A);
   final Color strokeColor = Color(0xFFC10D00);
   final Color fillColor = Color(0xFFf2f2f2).withValues(alpha: 0.2);
-  final String apiBase = "${AppConfig.apiBase}/api/candidate";
+  final String apiBase = "http://127.0.0.1:5000/api/candidate";
   final GlobalKey _jobsSectionKey = GlobalKey();
   final ScrollController _mainScrollController = ScrollController();
+
   /// Sidebar width; keep in sync with `_buildSideMenu`.
   static const double _sideMenuWidth = 210;
+
   /// Theme + chatbot: same hit target; theme uses [_cornerActionGlyph] inside the circle.
   static const double _cornerActionSize = 44;
   static const double _cornerActionGlyph = 26;
@@ -155,9 +156,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       final data = response['data'] is Map ? response['data'] as Map : null;
       final candidateProfile = response['candidate_profile'] ??
           (data is Map ? data['candidate_profile'] : null);
-      final user = response['user'] ??
-          (data is Map ? data['user'] : null) ??
-          response;
+      final user =
+          response['user'] ?? (data is Map ? data['user'] : null) ?? response;
       final profile = user['profile'] is Map ? user['profile'] as Map : null;
 
       String? displayName;
@@ -936,24 +936,19 @@ class _CandidateDashboardState extends State<CandidateDashboard>
 
   static const Color _figmaLightText = Color(0xFF090812);
 
-  Color _cdOnSurface(bool dark) =>
-      dark ? Colors.white : _figmaLightText;
-  Color _cdOnSurfaceMuted(bool dark) => dark
-      ? Colors.white70
-      : _figmaLightText.withValues(alpha: 0.76);
+  Color _cdOnSurface(bool dark) => dark ? Colors.white : _figmaLightText;
+  Color _cdOnSurfaceMuted(bool dark) =>
+      dark ? Colors.white70 : _figmaLightText.withValues(alpha: 0.76);
   Color _cdPanelBg(bool dark) => dark
       ? Colors.white.withValues(alpha: 0.14)
       : Colors.white.withValues(alpha: 0.72);
-  Color _cdPanelBorder(bool dark) => dark
-      ? Colors.white10
-      : Colors.black.withValues(alpha: 0.1);
-  Color _cdHairline(bool dark) =>
-      dark ? Colors.white24 : Colors.black26;
+  Color _cdPanelBorder(bool dark) =>
+      dark ? Colors.white10 : Colors.black.withValues(alpha: 0.1);
+  Color _cdHairline(bool dark) => dark ? Colors.white24 : Colors.black26;
   Color _cdSidebarFill(bool dark) =>
       dark ? const Color(0xFF2A2A2A) : const Color(0xFFE6E6E8);
-  Color _cdSidebarEdge(bool dark) => dark
-      ? Colors.white12
-      : Colors.black.withValues(alpha: 0.08);
+  Color _cdSidebarEdge(bool dark) =>
+      dark ? Colors.white12 : Colors.black.withValues(alpha: 0.08);
   Color _cdIconHalo(bool dark) => dark
       ? Colors.white.withValues(alpha: 0.14)
       : Colors.black.withValues(alpha: 0.08);
@@ -1417,7 +1412,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => ProfilePage(token: widget.token)),
+                MaterialPageRoute(
+                    builder: (_) => ProfilePage(token: widget.token)),
               );
             },
           ),
@@ -1918,7 +1914,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               onTap: () {
                 final initialApplications = _allApplications
                     .where((app) {
-                      final status = app['status']?.toString().toLowerCase().trim();
+                      final status =
+                          app['status']?.toString().toLowerCase().trim();
                       if (status == null || status.isEmpty) return false;
                       return status == 'applied' ||
                           status == 'assessment_submitted' ||
@@ -2194,7 +2191,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 CircleAvatar(
                   radius: 15,
                   backgroundColor: Colors.white,
-                  child: _buildCircleAssetIcon('assets/icons/Notifications.png'),
+                  child:
+                      _buildCircleAssetIcon('assets/icons/Notifications.png'),
                 ),
                 SizedBox(width: 8),
                 Text(
@@ -2245,7 +2243,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                           text: TextSpan(
                             children: [
                               TextSpan(
-                                text: (item['job_title'] ?? item['job']?['title'] ?? 'Job')
+                                text: (item['job_title'] ??
+                                        item['job']?['title'] ??
+                                        'Job')
                                     .toString(),
                                 style: GoogleFonts.poppins(
                                   fontSize: 12,
@@ -2267,7 +2267,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       ),
                       Expanded(
                         child: Center(
-                          child: _buildStepDots(currentStep: step, isDark: isDark),
+                          child:
+                              _buildStepDots(currentStep: step, isDark: isDark),
                         ),
                       ),
                       _buildStatusChip(status.$1, status.$2),
@@ -2310,7 +2311,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 CircleAvatar(
                   radius: 19,
                   backgroundColor: Colors.white,
-                  child: _buildCircleAssetIcon('assets/icons/RecommendedJobs.png'),
+                  child:
+                      _buildCircleAssetIcon('assets/icons/RecommendedJobs.png'),
                 ),
                 SizedBox(width: 12),
                 Expanded(
@@ -2340,7 +2342,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 CircleAvatar(
                   radius: 15,
                   backgroundColor: Colors.white,
-                  child: _buildCircleAssetIcon('assets/icons/Notifications.png'),
+                  child:
+                      _buildCircleAssetIcon('assets/icons/Notifications.png'),
                 ),
                 SizedBox(width: 8),
                 Text(
@@ -2382,7 +2385,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                         text: TextSpan(
                           children: [
                             TextSpan(
-                              text: (job['title'] ?? 'Job Name / Title').toString(),
+                              text: (job['title'] ?? 'Job Name / Title')
+                                  .toString(),
                               style: GoogleFonts.poppins(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
@@ -2390,7 +2394,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                               ),
                             ),
                             TextSpan(
-                              text: ' - Full Time - Introductory Job Description & Requirement Detail for further insight prior to viewing more.',
+                              text:
+                                  ' - Full Time - Introductory Job Description & Requirement Detail for further insight prior to viewing more.',
                               style: GoogleFonts.poppins(
                                 fontSize: 11,
                                 color: _cdOnSurfaceMuted(isDark),
@@ -2934,7 +2939,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                                       child: Text(
                                         _unreadNotificationCount() > 99
                                             ? '99+'
-                                            : _unreadNotificationCount().toString(),
+                                            : _unreadNotificationCount()
+                                                .toString(),
                                         style: GoogleFonts.poppins(
                                           color: Colors.white,
                                           fontSize: 10,
@@ -2981,7 +2987,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                                 decoration: BoxDecoration(
                                   color: _cdPanelBg(isDark),
                                   borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(color: _cdHairline(isDark)),
+                                  border:
+                                      Border.all(color: _cdHairline(isDark)),
                                 ),
                                 child: Text(
                                   'Ver 2026.03.AI_STT',
@@ -2995,7 +3002,6 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                             ),
                           ),
                         ),
-
                       ],
                     ),
                   ),
