@@ -581,6 +581,34 @@ class _LoginScreenState extends State<LoginScreen>
                                     ),
                                   ],
                                 ),
+                                const SizedBox(height: 12),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      "Don't have an account? ",
+                                      style: GoogleFonts.poppins(
+                                        color: isDark
+                                            ? Colors.white70
+                                            : const Color(0xFF5C5C5C),
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                    GestureDetector(
+                                      onTap: loading
+                                          ? null
+                                          : () => context.push('/register'),
+                                      child: Text(
+                                        'Register',
+                                        style: GoogleFonts.poppins(
+                                          color: const Color(0xFFC10D00),
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ],
                             ),
                           ),

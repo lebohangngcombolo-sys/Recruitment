@@ -62,6 +62,17 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.redAccent,
+        onPressed: themeProvider.toggleTheme,
+        tooltip: themeProvider.isDarkMode
+            ? 'Switch to light mode'
+            : 'Switch to dark mode',
+        child: Icon(
+          themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+          color: Colors.white,
+        ),
+      ),
       body: Stack(
         children: [
           Container(
@@ -197,27 +208,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                                       fontFamily: 'Poppins',
                                     ),
                                   ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        // Theme Toggle
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.1)
-                                : Colors.black.withValues(alpha: 0.06),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: IconButton(
-                            icon: Icon(
-                              themeProvider.isDarkMode
-                                  ? Icons.light_mode
-                                  : Icons.dark_mode,
-                              color: onBg,
-                              size: 20,
-                            ),
-                            onPressed: () => themeProvider.toggleTheme(),
                           ),
                         ),
                         const SizedBox(height: 16),
