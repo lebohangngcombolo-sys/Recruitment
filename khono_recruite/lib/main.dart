@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 
 // Import screens
@@ -8,11 +7,16 @@ import 'screens/landing_page/splash_landing_page.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/auth/forgot_password_screen.dart';
+import 'screens/auth/verification_screen.dart';
+import 'screens/enrollment/enrollment_screen.dart';
 import 'screens/candidate/candidate_dashboard.dart';
 import 'screens/candidate/saved_application_screen.dart';
+import 'screens/candidate/jobs_applied_page.dart';
 import 'screens/candidate/assessment_page.dart';
 import 'screens/candidate/assessments_results_screen.dart';
 import 'screens/candidate/user_profile_page.dart';
+import 'screens/candidate/my_interviews_page.dart';
+import 'screens/candidate/saved_jobs_screen.dart';
 import 'screens/admin/admin_dashboard.dart';
 import 'screens/hr/hr_dashboard.dart';
 import 'screens/hiring_manager/hiring_manager_dashboard.dart';
@@ -21,223 +25,268 @@ import 'screens/candidate/redirect_to_assessment_page.dart';
 
 // Import services
 import 'services/auth_service.dart';
-import 'services/cache_service.dart';
 import 'providers/theme_provider.dart';
+
+String _dashboardRouteForRole(String? role) {
+  switch (role) {
+    case 'admin':
+      return '/admin-dashboard';
+    case 'hr':
+      return '/hr-dashboard';
+    case 'hiring_manager':
+      return '/hiring-manager-dashboard';
+    case 'candidate':
+      return '/candidate-dashboard';
+    default:
+      return '/login';
+  }
+}
+
+/// Single instance so changing theme does not recreate the router or drop navigation.
+GoRouter _createAppRouter(
+    {required String? initialToken, required String? initialRole}) {
+  return GoRouter(
+    initialLocation: initialToken != null && initialToken.trim().isNotEmpty
+        ? _dashboardRouteForRole(initialRole)
+        : '/',
+    redirect: (context, state) {
+      final token = initialToken;
+      final rawPath = state.uri.path;
+      final path = rawPath.isEmpty ? '/' : rawPath;
+      final tokenFromQuery = state.uri.queryParameters['token'];
+
+      final isAuthed = (token != null && token.trim().isNotEmpty) ||
+          (tokenFromQuery != null && tokenFromQuery.trim().isNotEmpty);
+
+      if (!isAuthed) {
+        final allowedUnauth = path == '/' ||
+            path.startsWith('/login') ||
+            path.startsWith('/register') ||
+            path.startsWith('/forgot-password') ||
+            path.startsWith('/oauth-callback') ||
+            path.startsWith('/verify-email');
+        if (!allowedUnauth) {
+          return '/';
+        }
+      }
+      return null;
+    },
+    routes: [
+      // Splash (root): first screen before auth; same URL as "Home" from login/register.
+      GoRoute(
+        path: '/',
+        redirect: (context, state) {
+          final t = initialToken;
+          if (t != null && t.trim().isNotEmpty) {
+            return _dashboardRouteForRole(initialRole);
+          }
+          return null;
+        },
+        builder: (context, state) => const SplashLandingPage(),
+      ),
+      // Legacy / direct link compatibility
+      GoRoute(
+        path: '/landing',
+        redirect: (context, state) => '/',
+      ),
+      // Authentication routes
+      GoRoute(
+        path: '/login',
+        builder: (context, state) => LoginScreen(),
+      ),
+      GoRoute(
+        path: '/register',
+        builder: (context, state) => RegisterScreen(),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (context, state) => ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/oauth-callback',
+        builder: (context, state) => OAuthCallbackPage(
+          accessToken: state.uri.queryParameters['access_token'],
+          refreshToken: state.uri.queryParameters['refresh_token'],
+          role: state.uri.queryParameters['role'],
+          dashboard: state.uri.queryParameters['dashboard'],
+        ),
+      ),
+      GoRoute(
+        path: '/verify-email',
+        builder: (context, state) {
+          final email = state.uri.queryParameters['email'] ?? '';
+          final code = state.uri.queryParameters['code'];
+          return VerificationScreen(
+            email: email,
+            initialCode: code,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/enrollment',
+        builder: (context, state) => EnrollmentScreen(
+          token: state.uri.queryParameters['token'] ?? '',
+        ),
+      ),
+
+      // Candidate routes
+      GoRoute(
+        path: '/candidate-dashboard',
+        builder: (context, state) => CandidateDashboard(
+          token: state.uri.queryParameters['token'] ?? '',
+        ),
+      ),
+      GoRoute(
+        path: '/saved-applications',
+        builder: (context, state) => SavedApplicationsScreen(
+          token: state.uri.queryParameters['token'] ?? '',
+        ),
+      ),
+      GoRoute(
+        path: '/jobs-applied',
+        builder: (context, state) {
+          final extra = state.extra;
+          final initial = extra is List
+              ? extra
+                  .whereType<Map>()
+                  .map((e) => Map<String, dynamic>.from(e))
+                  .toList()
+              : null;
+          return JobsAppliedPage(
+            token: state.uri.queryParameters['token'] ?? '',
+            initialApplications: initial,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/assessment',
+        builder: (context, state) => AssessmentPage(
+          applicationId:
+              int.tryParse(state.uri.queryParameters['applicationId'] ?? '0') ??
+                  0,
+          draftData: state.extra as Map<String, dynamic>?,
+        ),
+      ),
+      GoRoute(
+        path: '/assessment-results',
+        builder: (context, state) => AssessmentResultsPage(
+          token: state.uri.queryParameters['token'] ?? '',
+        ),
+      ),
+      GoRoute(
+        path: '/my-interviews',
+        builder: (context, state) => MyInterviewsPage(
+          token: state.uri.queryParameters['token'] ?? '',
+        ),
+      ),
+      GoRoute(
+        path: '/saved-jobs',
+        builder: (context, state) => SavedJobsScreen(
+          token: state.uri.queryParameters['token'] ?? '',
+        ),
+      ),
+      GoRoute(
+        path: '/profile',
+        builder: (context, state) => ProfilePage(
+          token: state.uri.queryParameters['token'] ?? '',
+        ),
+      ),
+      GoRoute(
+        path: '/job-details',
+        builder: (context, state) {
+          final job = state.extra as Map<String, dynamic>?;
+          return JobDetailsPage(
+            job: job ?? {},
+          );
+        },
+      ),
+      GoRoute(
+        path: '/redirect-to-assessment',
+        builder: (context, state) => RedirectToAssessmentPage(
+          applicationId:
+              int.tryParse(state.uri.queryParameters['applicationId'] ?? '0') ??
+                  0,
+          jobTitle: state.uri.queryParameters['jobTitle'],
+        ),
+      ),
+
+      // Admin routes
+      GoRoute(
+        path: '/admin-dashboard',
+        builder: (context, state) => AdminDashboard(
+          token: state.uri.queryParameters['token'] ?? '',
+        ),
+      ),
+
+      // HR routes
+      GoRoute(
+        path: '/hr-dashboard',
+        builder: (context, state) => HRDashboard(
+          token: state.uri.queryParameters['token'] ?? '',
+        ),
+      ),
+
+      // Hiring Manager routes
+      GoRoute(
+        path: '/hiring-manager-dashboard',
+        builder: (context, state) => HMMainDashboard(
+          token: state.uri.queryParameters['token'] ?? '',
+        ),
+      ),
+    ],
+    errorBuilder: (context, state) => Scaffold(
+      body: Center(
+        child: Text('Page not found'),
+      ),
+    ),
+  );
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize SharedPreferences
-  await SharedPreferences.getInstance();
-
-  // Initialize CacheService for offline support
-  await CacheService().initialize();
-
-  // Check for existing authentication
   final token = await AuthService.getAccessToken();
   final role = await AuthService.getRole();
+  final initialThemeDark = await ThemeProvider.loadSavedIsDark();
+  final router = _createAppRouter(initialToken: token, initialRole: role);
 
   runApp(MyApp(
     initialToken: token,
     initialRole: role,
+    initialThemeDark: initialThemeDark,
+    routerConfig: router,
   ));
 }
 
 class MyApp extends StatelessWidget {
   final String? initialToken;
   final String? initialRole;
-  late final GoRouter _router;
+  final bool initialThemeDark;
+  final GoRouter routerConfig;
 
-  MyApp({
+  const MyApp({
     super.key,
     this.initialToken,
     this.initialRole,
-  }) {
-    _router = GoRouter(
-      initialLocation: initialToken != null && initialToken!.trim().isNotEmpty
-          ? _getInitialRoute(initialRole)
-          : '/',
-      redirect: (context, state) async {
-        // Fetch current auth state dynamically (not from initialToken)
-        final currentToken = await AuthService.getAccessToken();
-        final rawPath = state.uri.path;
-        final path = rawPath.isEmpty ? '/' : rawPath;
-        final tokenFromQuery = state.uri.queryParameters['token'];
-
-        final isAuthed =
-            (currentToken != null && currentToken.trim().isNotEmpty) ||
-                (tokenFromQuery != null && tokenFromQuery.trim().isNotEmpty);
-
-        if (!isAuthed) {
-          final allowedUnauth = path == '/' ||
-              path.startsWith('/login') ||
-              path.startsWith('/register') ||
-              path.startsWith('/forgot-password') ||
-              path.startsWith('/oauth-callback');
-          if (!allowedUnauth) {
-            return '/';
-          }
-        }
-        return null;
-      },
-      routes: [
-        // Splash (root): first screen before auth; same URL as "Home" from login/register.
-        GoRoute(
-          path: '/',
-          redirect: (context, state) async {
-            // Fetch current auth state dynamically
-            final currentToken = await AuthService.getAccessToken();
-            final currentRole = await AuthService.getRole();
-            if (currentToken != null && currentToken.trim().isNotEmpty) {
-              return _getInitialRoute(currentRole);
-            }
-            return null;
-          },
-          builder: (context, state) => const SplashLandingPage(),
-        ),
-        // Legacy / direct link compatibility
-        GoRoute(
-          path: '/landing',
-          redirect: (context, state) => '/',
-        ),
-        // Authentication routes
-        GoRoute(
-          path: '/login',
-          builder: (context, state) => LoginScreen(),
-        ),
-        GoRoute(
-          path: '/register',
-          builder: (context, state) => RegisterScreen(),
-        ),
-        GoRoute(
-          path: '/forgot-password',
-          builder: (context, state) => ForgotPasswordScreen(),
-        ),
-        GoRoute(
-          path: '/oauth-callback',
-          builder: (context, state) => OAuthCallbackPage(
-            accessToken: state.uri.queryParameters['access_token'],
-            refreshToken: state.uri.queryParameters['refresh_token'],
-            role: state.uri.queryParameters['role'],
-            dashboard: state.uri.queryParameters['dashboard'],
-          ),
-        ),
-
-        // Candidate routes
-        GoRoute(
-          path: '/candidate-dashboard',
-          builder: (context, state) => CandidateDashboard(
-            token: state.uri.queryParameters['token'] ?? '',
-          ),
-        ),
-        GoRoute(
-          path: '/saved-applications',
-          builder: (context, state) => SavedApplicationsScreen(
-            token: state.uri.queryParameters['token'] ?? '',
-          ),
-        ),
-        GoRoute(
-          path: '/assessment',
-          builder: (context, state) => AssessmentPage(
-            applicationId: int.tryParse(
-                    state.uri.queryParameters['applicationId'] ?? '0') ??
-                0,
-            draftData: state.extra as Map<String, dynamic>?,
-          ),
-        ),
-        GoRoute(
-          path: '/assessment-results',
-          builder: (context, state) => AssessmentResultsPage(
-            token: state.uri.queryParameters['token'] ?? '',
-          ),
-        ),
-        GoRoute(
-          path: '/profile',
-          builder: (context, state) => ProfilePage(
-            token: state.uri.queryParameters['token'] ?? '',
-          ),
-        ),
-        GoRoute(
-          path: '/job-details',
-          builder: (context, state) {
-            final job = state.extra as Map<String, dynamic>?;
-            return JobDetailsPage(
-              job: job ?? {},
-            );
-          },
-        ),
-        GoRoute(
-          path: '/redirect-to-assessment',
-          builder: (context, state) => RedirectToAssessmentPage(
-            applicationId: int.tryParse(
-                    state.uri.queryParameters['applicationId'] ?? '0') ??
-                0,
-            jobTitle: state.uri.queryParameters['jobTitle'],
-          ),
-        ),
-
-        // Admin routes
-        GoRoute(
-          path: '/admin-dashboard',
-          builder: (context, state) => AdminDashboard(
-            token: state.uri.queryParameters['token'] ?? '',
-          ),
-        ),
-
-        // HR routes
-        GoRoute(
-          path: '/hr-dashboard',
-          builder: (context, state) => HRDashboard(
-            token: state.uri.queryParameters['token'] ?? '',
-          ),
-        ),
-
-        // Hiring Manager routes
-        GoRoute(
-          path: '/hiring-manager-dashboard',
-          builder: (context, state) => HMMainDashboard(
-            token: state.uri.queryParameters['token'] ?? '',
-          ),
-        ),
-      ],
-      errorBuilder: (context, state) => Scaffold(
-        body: Center(
-          child: Text('Page not found'),
-        ),
-      ),
-    );
-  }
+    required this.initialThemeDark,
+    required this.routerConfig,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
+      create: (_) => ThemeProvider(initialIsDark: initialThemeDark),
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
           return MaterialApp.router(
             title: 'Khono Recruitment',
             debugShowCheckedModeBanner: false,
             theme: themeProvider.themeData,
-            routerConfig: _router,
+            routerConfig: routerConfig,
           );
         },
       ),
     );
-  }
-
-  String _getInitialRoute(String? role) {
-    switch (role) {
-      case 'admin':
-        return '/admin-dashboard';
-      case 'hr':
-        return '/hr-dashboard';
-      case 'hiring_manager':
-        return '/hiring-manager-dashboard';
-      case 'candidate':
-        return '/candidate-dashboard';
-      default:
-        return '/login';
-    }
   }
 }
 

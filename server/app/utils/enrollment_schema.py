@@ -18,6 +18,13 @@ class EnrollmentSchema(Schema):
     cover_letter = fields.String(required=False)
     profile_picture = fields.String(required=False)
 
+    # 🆕 Autofill columns (for easier data access)
+    education_level = fields.String(required=False)
+    university = fields.String(required=False)
+    graduation_year = fields.String(required=False)
+    previous_companies = fields.String(required=False)
+    experience_summary = fields.String(required=False)
+
     # JSON structured fields
     education = fields.List(fields.Dict(), required=False)
     skills = fields.List(fields.Raw(), required=False)

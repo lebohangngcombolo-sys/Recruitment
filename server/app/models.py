@@ -399,6 +399,14 @@ class Candidate(db.Model):
     cover_letter = db.Column(db.Text)
     profile_picture = db.Column(db.String(1024), nullable=True)
 
+    # 🆕 Individual columns for autofill (complementing JSON arrays)
+    education_level = db.Column(db.String(100), nullable=True)  # Maps from education[].degree
+    education_field = db.Column(db.String(150), nullable=True)  # Maps from education[].field
+    university = db.Column(db.String(150), nullable=True)  # Maps from education[].institution
+    graduation_year = db.Column(db.String(4), nullable=True)  # Maps from education[].graduation_year
+    previous_companies = db.Column(db.Text, nullable=True)  # Comma-separated from work_experience[].company
+    experience_summary = db.Column(db.Text, nullable=True)  # Aggregated from work_experience[].description
+
     # Structured sections
     education = db.Column(MutableList.as_mutable(JSON), default=list)
     skills = db.Column(MutableList.as_mutable(JSON), default=list)
@@ -454,6 +462,13 @@ class Candidate(db.Model):
             "portfolio": self.portfolio,
             "cover_letter": self.cover_letter,
             "profile_picture": self.profile_picture,
+            # 🆕 Autofill columns (for easier frontend access)
+            "education_level": self.education_level,
+            "education_field": self.education_field,
+            "university": self.university,
+            "graduation_year": self.graduation_year,
+            "previous_companies": self.previous_companies,
+            "experience_summary": self.experience_summary,
             "education": self.education,
             "skills": self.skills,
             "work_experience": self.work_experience,

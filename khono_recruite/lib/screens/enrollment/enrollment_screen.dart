@@ -35,6 +35,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
   // Step 3 inline editing (no edit buttons/modals).
   bool _editingFullNameInline = false;
   bool _editingWorkExperienceInline = false;
+  bool _editingPhoneInline = false;
   final FocusNode _fullNameInlineFocusNode = FocusNode();
 
   // --- 3-step onboarding flow ---
@@ -1249,8 +1250,106 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                                           : '—',
                                   null,
                                 ),
-                                _buildReviewRow(
-                                    'Phone', phoneController.text, null),
+                                // Phone with inline editing
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Phone',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            _editingPhoneInline
+                                                ? TextField(
+                                                    controller: phoneController,
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 14,
+                                                      color: Colors.white70,
+                                                    ),
+                                                    decoration: InputDecoration(
+                                                      isDense: true,
+                                                      contentPadding:
+                                                          const EdgeInsets
+                                                              .symmetric(
+                                                              vertical: 4),
+                                                      border:
+                                                          UnderlineInputBorder(
+                                                        borderSide: BorderSide(
+                                                            color:
+                                                                _kKhonologyRed),
+                                                      ),
+                                                      enabledBorder:
+                                                          UnderlineInputBorder(
+                                                        borderSide: BorderSide(
+                                                            color:
+                                                                Colors.white38),
+                                                      ),
+                                                      focusedBorder:
+                                                          UnderlineInputBorder(
+                                                        borderSide: BorderSide(
+                                                            color:
+                                                                _kKhonologyRed),
+                                                      ),
+                                                    ),
+                                                    onSubmitted: (_) {
+                                                      setState(() =>
+                                                          _editingPhoneInline =
+                                                              false);
+                                                    },
+                                                  )
+                                                : InkWell(
+                                                    onTap: () {
+                                                      setState(() =>
+                                                          _editingPhoneInline =
+                                                              true);
+                                                    },
+                                                    child: Text(
+                                                      phoneController.text
+                                                              .trim()
+                                                              .isEmpty
+                                                          ? '—'
+                                                          : phoneController.text
+                                                              .trim(),
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        fontSize: 14,
+                                                        color: Colors.white70,
+                                                        height: 1.3,
+                                                      ),
+                                                    ),
+                                                  ),
+                                          ],
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () {
+                                          setState(() => _editingPhoneInline =
+                                              !_editingPhoneInline);
+                                        },
+                                        child: Text(
+                                          _editingPhoneInline ? 'Done' : 'Edit',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: _kKhonologyRed,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -1261,9 +1360,24 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                             completed: skillsOk,
                             onEdit: null,
                             expandBody: false,
-                            child: skillsOk
-                                ? _buildSkillsReviewContent()
-                                : Padding(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Editable skills field when expanded
+                                if (!(_reviewSectionCollapsed['skills'] ??
+                                    false))
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: _buildTextField(
+                                      skillsController,
+                                      'Skills (comma-separated)',
+                                      required: true,
+                                    ),
+                                  )
+                                else if (skillsOk)
+                                  _buildSkillsReviewContent()
+                                else
+                                  Padding(
                                     padding: const EdgeInsets.only(bottom: 8),
                                     child: Text(
                                       'No skills listed',
@@ -1273,6 +1387,8 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                                       ),
                                     ),
                                   ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -1288,8 +1404,42 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                             completed: educationOk,
                             onEdit: null,
                             expandBody: false,
-                            child: educationOk
-                                ? Column(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Show editable form fields when expanded
+                                if (!(_reviewSectionCollapsed['education'] ??
+                                    false)) ...[
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: _buildDropdown(
+                                          educationController,
+                                          'Education Level',
+                                          _educationLevels,
+                                          required: true,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: _buildDropdown(
+                                          universityController,
+                                          'University/College',
+                                          _universities,
+                                          required: true,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  _buildTextField(
+                                    graduationYearController,
+                                    'Graduation Year',
+                                    keyboardType: TextInputType.number,
+                                    required: true,
+                                  ),
+                                ] else if (educationOk)
+                                  Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     mainAxisSize: MainAxisSize.min,
@@ -1311,7 +1461,8 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                                         ),
                                     ],
                                   )
-                                : Padding(
+                                else
+                                  Padding(
                                     padding: const EdgeInsets.only(bottom: 8),
                                     child: Text(
                                       'No education details found',
@@ -1321,6 +1472,8 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                                       ),
                                     ),
                                   ),
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 16),
                           _buildCollapsibleReviewSection(
@@ -2116,28 +2269,28 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-                fontFamily: 'Poppins',
-              ),
+        Text.rich(
+          TextSpan(
+            text: label,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+              fontFamily: 'Poppins',
             ),
-            if (required)
-              Text(
-                ' *',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: customRed,
-                  fontFamily: 'Poppins',
+            children: [
+              if (required)
+                TextSpan(
+                  text: ' *',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: customRed,
+                    fontFamily: 'Poppins',
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 4),
         Container(
@@ -2206,28 +2359,28 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-                fontFamily: 'Poppins',
-              ),
+        Text.rich(
+          TextSpan(
+            text: label,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+              fontFamily: 'Poppins',
             ),
-            if (required)
-              Text(
-                ' *',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: customRed,
-                  fontFamily: 'Poppins',
+            children: [
+              if (required)
+                TextSpan(
+                  text: ' *',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: customRed,
+                    fontFamily: 'Poppins',
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 4),
         Container(
@@ -2247,6 +2400,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             ],
           ),
           child: DropdownButtonFormField<String>(
+            isExpanded: true,
             value: value,
             dropdownColor: Colors.grey[900],
             style: const TextStyle(
@@ -2284,6 +2438,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                 value: value,
                 child: Text(
                   value,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -2309,28 +2464,28 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text(
-              "Date of Birth",
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-                fontFamily: 'Poppins',
-              ),
+        Text.rich(
+          TextSpan(
+            text: "Date of Birth",
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+              fontFamily: 'Poppins',
             ),
-            if (required)
-              Text(
-                ' *',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: customRed,
-                  fontFamily: 'Poppins',
+            children: [
+              if (required)
+                TextSpan(
+                  text: ' *',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: customRed,
+                    fontFamily: 'Poppins',
+                  ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 4),
         GestureDetector(
@@ -2469,6 +2624,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             ],
           ),
           child: DropdownButtonFormField<String>(
+            isExpanded: true,
             initialValue: selectedGender,
             onChanged: (String? newValue) {
               setState(() {
@@ -2522,6 +2678,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Text(
                     value,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,

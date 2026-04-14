@@ -14,6 +14,9 @@ CANDIDATE_SIMPLE_FIELDS = {
     "full_name", "phone", "address", "dob", "gender", "bio", "title",
     "location", "nationality", "id_number", "linkedin", "github", "portfolio",
     "cover_letter", "cv_url", "cv_text",
+    # 🆕 Autofill columns for easier data access
+    "education_level", "education_field", "university", "graduation_year",
+    "previous_companies", "experience_summary",
 }
 
 # Candidate model JSON/list fields
@@ -122,6 +125,58 @@ def map_extraction_to_candidate(
         out["title"] = (flat["position"] if isinstance(flat["position"], str) else str(flat["position"])).strip()[:100]
     elif flat.get("title"):
         out["title"] = (flat["title"] if isinstance(flat["title"], str) else str(flat["title"])).strip()[:100]
+
+    # 🆕 Extract education fields for individual columns (from first education entry)
+    education_list = flat.get("education") if isinstance(flat.get("education"), list) else []
+    if education_list:
+        first_edu = education_list[0]
+        if isinstance(first_edu, dict):
+            # Map degree -> education_level
+            degree = first_edu.get("degree") or first_edu.get("level") or ""
+            if degree:
+                out["education_level"] = str(degree).strip()[:100]
+            # Map field -> education_field
+            field = first_edu.get("field") or first_edu.get("specialization") or ""
+            if field:
+                out["education_field"] = str(field).strip()[:150]
+            # Map institution -> university
+            institution = first_edu.get("institution") or first_edu.get("university") or first_edu.get("school") or ""
+            if institution:
+                out["university"] = str(institution).strip()[:150]
+            # Map graduation_year (from year or end_date)
+            year = first_edu.get("graduation_year") or first_edu.get("year") or ""
+            if not year:
+                end_date = first_edu.get("end_date") or ""
+                if end_date and len(str(end_date)) >= 4:
+                    # Extract year from date string (e.g., "2020" from "2020-06" or "June 2020")
+                    import re
+                    year_match = re.search(r"\b(19|20)\d{2}\b", str(end_date))
+                    if year_match:
+                        year = year_match.group(0)
+            if year:
+                out["graduation_year"] = str(year).strip()[:4]
+
+    # 🆕 Extract experience fields for individual columns
+    work_exp_list = work_experience_structured if work_experience_structured else flat.get("work_experience", [])
+    if work_exp_list and isinstance(work_exp_list, list):
+        # Extract companies (deduplicated, comma-separated)
+        companies = []
+        descriptions = []
+        for exp in work_exp_list:
+            if isinstance(exp, dict):
+                company = exp.get("company") or exp.get("employer") or ""
+                if company and company not in companies:
+                    companies.append(company)
+                desc = exp.get("description") or exp.get("responsibilities") or ""
+                if desc:
+                    descriptions.append(str(desc))
+        if companies:
+            out["previous_companies"] = ", ".join(companies)[:500]
+        if descriptions:
+            out["experience_summary"] = "\n\n".join(descriptions)[:5000]
+    elif flat.get("previous_companies"):
+        # Fallback to flat previous_companies if available
+        out["previous_companies"] = str(flat["previous_companies"]).strip()[:500]
 
     # List fields (ensure list type)
     for key in ("education", "skills", "certifications", "languages"):

@@ -42,6 +42,12 @@ class EnrollmentService:
         "profile_picture",
         "cv_url",
         "cv_text",
+        # 🆕 Autofill columns for easier data access and validation
+        "education_level",
+        "university",
+        "graduation_year",
+        "previous_companies",
+        "experience_summary",
     }
 
     JSON_FIELDS = {
@@ -249,27 +255,76 @@ class EnrollmentService:
 
         # 1. Prefer autofill_data (pre-normalized)
         autofill = cv_analysis_data.get("autofill_data") or {}
-        structured_data = cv_analysis_data.get("structured_data", {}) or {}
-        match_analysis = cv_analysis_data.get("match_analysis", {}) or {}
+        structured_data = cv_analysis_data.get("structured_data") or {}
+        match_analysis = cv_analysis_data.get("match_analysis") or {}
+        cv_text = cv_analysis_data.get("cv_text") or cv_analysis_data.get("raw_text") or cv_analysis_data.get("raw_payload", {}).get("cv_text") or ""
+        autofill = cv_analysis_data.get("autofill_data") or {}
+
+        # 🛡️ FATAL FALLBACK: If HF didn't provide autofill natively (e.g. Space not updated), generate it dynamically!
+        if not autofill and cv_text:
+            try:
+                from app.services.autofill_mapper import AutofillMapper
+                # Ensure cv_text is formatted correctly for mapper
+                if "raw_text" not in cv_analysis_data:
+                    cv_analysis_data["raw_text"] = cv_text
+                mapper = AutofillMapper()
+                autofill_resp = mapper.map_to_autofill(cv_analysis_data)
+                
+                def serialize_model(m):
+                    if hasattr(m, 'model_dump'): return m.model_dump()
+                    if hasattr(m, '__dict__'): return m.__dict__
+                    return dict(m)
+                    
+                autofill = {
+                    "personal": serialize_model(autofill_resp.personal) if autofill_resp.personal else {},
+                    "experience": [serialize_model(e) for e in autofill_resp.experience] if autofill_resp.experience else [],
+                    "education": [serialize_model(e) for e in autofill_resp.education] if autofill_resp.education else [],
+                    "skills": autofill_resp.skills or [],
+                    "certifications": autofill_resp.certifications or [],
+                    "languages": autofill_resp.languages or []
+                }
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"EnrollmentService dynamically generating autofill failed: {e}")
 
         mapped_fields = {}
 
-        # Helper to get field with fallback
+        # Helper to get field with fallback - scrubs "None" strings
         def get_field(path, default=""):
             parts = path.split('.')
             val = autofill
             for part in parts:
                 if isinstance(val, dict):
                     val = val.get(part)
+                elif isinstance(val, list) and isinstance(part, int):
+                    val = val[part] if part < len(val) else None
                 else:
                     val = None
                     break
-            return val or default
+            # Scrub "None" strings and empty values
+            if val is None or val == "None" or val == "null" or str(val).strip() in ["", "None", "null"]:
+                return default
+            return val
 
         # Personal Details
         mapped_fields["full_name"] = get_field("personal.full_name") or \
                                      structured_data.get("personal_details", {}).get("full_name") or \
                                      structured_data.get("personal_info", {}).get("name") or ""
+        
+        # Fallback: Extract name from raw CV text using regex if still empty
+        if not mapped_fields["full_name"] and cv_text:
+            import re
+            # Look for name patterns in first 20 lines
+            lines = cv_text.split('\n')[:20]
+            for line in lines:
+                line = line.strip()
+                # Pattern: 2-3 capitalized words (exclude common non-name words)
+                if re.match(r"^[A-Z][a-z]+\s+[A-Z][a-z]+(\s+[A-Z][a-z]+)?$", line):
+                    # Exclude common headers
+                    exclude = ['CURRICULUM VITAE', 'RESUME', 'PROFILE', 'CONTACT', 'EDUCATION', 'EXPERIENCE', 'SKILLS']
+                    if line.upper() not in exclude and not any(e in line.upper() for e in exclude):
+                        mapped_fields["full_name"] = line
+                        break
         
         mapped_fields["phone"] = get_field("personal.phone") or \
                                  structured_data.get("personal_details", {}).get("phone") or ""
@@ -305,15 +360,28 @@ class EnrollmentService:
             transformed_education = []
             for edu in education_data:
                 if isinstance(edu, dict):
-                    transformed_education.append({
-                        "level": edu.get("degree") or edu.get("level") or "",
-                        "institution": edu.get("university") or edu.get("institution") or edu.get("school") or "",
-                        "graduation_year": edu.get("year") or edu.get("graduation_year") or ""
-                    })
+                    # Scrub "None" strings
+                    def scrub_edu(val):
+                        if val is None or val == "None" or str(val).strip() in ["", "None", "null"]:
+                            return ""
+                        return str(val).strip()
+                    
+                    degree = scrub_edu(edu.get("degree") or edu.get("level"))
+                    institution = scrub_edu(edu.get("university") or edu.get("institution") or edu.get("school"))
+                    year = scrub_edu(edu.get("year") or edu.get("graduation_year"))
+                    
+                    # Only add if at least one field has content
+                    if degree or institution or year:
+                        transformed_education.append({
+                            "level": degree,
+                            "institution": institution,
+                            "graduation_year": year
+                        })
             mapped_fields["education"] = transformed_education
             
             if transformed_education:
                 latest = transformed_education[0]
+                mapped_fields["education_level"] = latest.get("level") or ""
                 mapped_fields["university"] = latest.get("institution") or ""
                 mapped_fields["graduation_year"] = latest.get("graduation_year") or ""
         elif isinstance(education_data, str):
@@ -326,28 +394,79 @@ class EnrollmentService:
             transformed_experience = []
             for exp in experience_data:
                 if isinstance(exp, dict):
-                    transformed_experience.append({
-                        "position": exp.get("title") or exp.get("position") or "",
-                        "company": exp.get("company") or "",
-                        "description": exp.get("description") or "",
-                        "period": exp.get("period") or f"{exp.get('start_date', '')} - {exp.get('end_date', 'Present')}"
-                    })
+                    # Data scrubber: convert "None" strings to empty
+                    def scrub_exp(val):
+                        if val is None or val == "None" or str(val).strip() in ["", "None", "null"]:
+                            return ""
+                        return str(val).strip()
+                    
+                    # Extract and scrub all fields
+                    pos = scrub_exp(exp.get("title") or exp.get("position"))
+                    com = scrub_exp(exp.get("company"))
+                    desc = scrub_exp(exp.get("description"))
+                    
+                    # Build period string
+                    start_date = scrub_exp(exp.get("start_date"))
+                    end_date = scrub_exp(exp.get("end_date")) or "Present"
+                    period = exp.get("period") or ""
+                    if not period and (start_date or end_date):
+                        period = f"{start_date} - {end_date}".strip(" -")
+                    period = scrub_exp(period)
+                    
+                    # Only add if there's real content (not just "None" strings)
+                    if pos or com or desc:
+                        transformed_experience.append({
+                            "position": pos,
+                            "company": com,
+                            "description": desc,
+                            "period": period
+                        })
             mapped_fields["work_experience"] = transformed_experience
             
             companies = [e.get("company") for e in transformed_experience if e.get("company")]
             positions = [e.get("position") for e in transformed_experience if e.get("position")]
-            descriptions = [e.get("description") for e in transformed_experience if e.get("description")]
             if companies:
                 mapped_fields["previous_companies"] = ", ".join(dict.fromkeys(companies))
             if positions:
                 mapped_fields["position"] = positions[0]
-            if descriptions:
-                mapped_fields["experience"] = "\n\n".join(descriptions)
-        elif isinstance(experience_data, str):
-            mapped_fields["work_experience"] = [{"description": experience_data}]
-            mapped_fields["experience"] = experience_data
+            
+            if transformed_experience:
+                exp_strings = []
+                for e in transformed_experience:
+                    # Data scrubber: convert "None" strings to empty
+                    def scrub(val):
+                        if val is None or val == "None" or str(val).strip() in ["", "None", "null"]:
+                            return ""
+                        return str(val).strip()
+                    
+                    pos = scrub(e.get('position'))
+                    com = scrub(e.get('company'))
+                    
+                    # Build display string: "Position at Company" or just "Position" or "Company"
+                    if pos and com:
+                        pos_com = f"{pos} at {com}"
+                    elif pos:
+                        pos_com = pos
+                    elif com:
+                        pos_com = com
+                    else:
+                        pos_com = ""
+                    
+                    period_str = scrub(e.get('period'))
+                    desc_str = scrub(e.get('description'))
+                    
+                    # Only include non-empty parts
+                    parts = [p for p in [pos_com, period_str, desc_str] if p]
+                    if parts:  # Only add entry if there's actual content
+                        exp_strings.append("\n".join(parts))
+                
+                mapped_fields["experience_summary"] = "\n\n".join(exp_strings) if exp_strings else ""
 
-        # Skills & dedupe
+        # ------------------------------------
+        # Enrollment state
+        # ------------------------------------
+        if not user.enrollment_completed:
+            user.enrollment_completed = True
         extracted_skills = autofill.get("skills") or structured_data.get("skills", [])
         matched_skills = (match_analysis.get("matched_skills") if isinstance(match_analysis.get("matched_skills"), list) else [])
         merged_skills = EnrollmentService._dedupe_skills(extracted_skills, matched_skills)

@@ -8,8 +8,9 @@ import 'dart:ui';
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 
-// Import your existing services
+import '../../providers/theme_provider.dart';
 import 'job_details_page.dart';
 import 'assessment_page.dart';
 import 'redirect_to_assessment_page.dart';
@@ -17,7 +18,6 @@ import '../../services/candidate_service.dart';
 import '../../services/unified_api_service.dart';
 import 'assessments_results_screen.dart';
 import '../../screens/candidate/user_profile_page.dart';
-import 'saved_application_screen.dart';
 import '../../services/auth_service.dart';
 import '../../utils/app_config.dart';
 
@@ -49,6 +49,14 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   final Color fillColor = Color(0xFFf2f2f2).withValues(alpha: 0.2);
   final String apiBase = "${AppConfig.apiBase}/api/candidate";
   final GlobalKey _jobsSectionKey = GlobalKey();
+  final ScrollController _mainScrollController = ScrollController();
+  /// Sidebar width; keep in sync with `_buildSideMenu`.
+  static const double _sideMenuWidth = 210;
+  /// Theme + chatbot: same hit target; theme uses [_cornerActionGlyph] inside the circle.
+  static const double _cornerActionSize = 44;
+  static const double _cornerActionGlyph = 26;
+  static const double _cornerActionGap = 10;
+  String _activeSidebarItem = 'dashboard';
 
   List<Map<String, dynamic>> notifications = [];
   Timer? _notificationTimer;
@@ -72,6 +80,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     }
     // Use cached name so greeting shows correct name from first paint (set by login/MFA before navigate)
     _userName = AuthService.getCachedDisplayName();
+    _loadStoredUserNameIfNeeded();
     _loadPersistedNameIfNeeded();
     // Don't restore from cache on init — show Continue section only after API returns, so no stale "Not started" cards appear
     _fetchDashboardCounts();
@@ -88,6 +97,26 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     final persisted = await AuthService.getPersistedDisplayName();
     if (persisted != null && persisted.isNotEmpty && mounted) {
       _safeSetState(() => _userName = persisted);
+    }
+  }
+
+  Future<void> _loadStoredUserNameIfNeeded() async {
+    if (_userName != null && _userName!.isNotEmpty) return;
+    final user = await AuthService.getUserInfo();
+    if (user == null) return;
+
+    final fullName = user['full_name']?.toString().trim();
+    final first = user['first_name']?.toString().trim() ?? '';
+    final last = user['last_name']?.toString().trim() ?? '';
+    final combined = '$first $last'.trim();
+    final resolved = (fullName != null && fullName.isNotEmpty)
+        ? fullName
+        : (combined.isNotEmpty ? combined : null);
+
+    if (resolved != null && mounted) {
+      AuthService.setCachedDisplayName(resolved);
+      await AuthService.persistDisplayName(resolved);
+      _safeSetState(() => _userName = resolved);
     }
   }
 
@@ -123,11 +152,19 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         return;
       }
       // Use the name they used when they registered (candidate_profile or user profile only, not email)
-      final candidateProfile = response['candidate_profile'];
-      final user = response['user'] ?? response;
+      final data = response['data'] is Map ? response['data'] as Map : null;
+      final candidateProfile = response['candidate_profile'] ??
+          (data is Map ? data['candidate_profile'] : null);
+      final user = response['user'] ??
+          (data is Map ? data['user'] : null) ??
+          response;
       final profile = user['profile'] is Map ? user['profile'] as Map : null;
 
       String? displayName;
+      final rootFullName = user['full_name']?.toString().trim();
+      if (rootFullName != null && rootFullName.isNotEmpty) {
+        displayName = rootFullName;
+      }
       if (candidateProfile != null &&
           candidateProfile['full_name']?.toString().trim().isNotEmpty == true) {
         displayName = candidateProfile['full_name'].toString().trim();
@@ -144,7 +181,17 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         final combined = '$first $last'.trim();
         if (combined.isNotEmpty) displayName = combined;
       }
+      if ((displayName == null || displayName.isEmpty)) {
+        final first = user['first_name']?.toString() ?? '';
+        final last = user['last_name']?.toString() ?? '';
+        final combined = '$first $last'.trim();
+        if (combined.isNotEmpty) displayName = combined;
+      }
 
+      if (displayName != null && displayName.isNotEmpty) {
+        AuthService.setCachedDisplayName(displayName);
+        await AuthService.persistDisplayName(displayName);
+      }
       if (mounted)
         _safeSetState(
           () => _userName = (displayName != null && displayName.isNotEmpty)
@@ -407,6 +454,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _notificationTimer?.cancel();
+    _mainScrollController.dispose();
     super.dispose();
   }
 
@@ -880,6 +928,42 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     }
   }
 
+  String get _greetingName {
+    final name = _userName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    return 'Name Surname';
+  }
+
+  static const Color _figmaLightText = Color(0xFF090812);
+
+  Color _cdOnSurface(bool dark) =>
+      dark ? Colors.white : _figmaLightText;
+  Color _cdOnSurfaceMuted(bool dark) => dark
+      ? Colors.white70
+      : _figmaLightText.withValues(alpha: 0.76);
+  Color _cdPanelBg(bool dark) => dark
+      ? Colors.white.withValues(alpha: 0.14)
+      : Colors.white.withValues(alpha: 0.72);
+  Color _cdPanelBorder(bool dark) => dark
+      ? Colors.white10
+      : Colors.black.withValues(alpha: 0.1);
+  Color _cdHairline(bool dark) =>
+      dark ? Colors.white24 : Colors.black26;
+  Color _cdSidebarFill(bool dark) =>
+      dark ? const Color(0xFF2A2A2A) : const Color(0xFFE6E6E8);
+  Color _cdSidebarEdge(bool dark) => dark
+      ? Colors.white12
+      : Colors.black.withValues(alpha: 0.08);
+  Color _cdIconHalo(bool dark) => dark
+      ? Colors.white.withValues(alpha: 0.14)
+      : Colors.black.withValues(alpha: 0.08);
+  Color _cdSideItemLabel(bool dark, bool isActive) {
+    if (isActive) return Colors.white;
+    return dark
+        ? Colors.white.withValues(alpha: 0.85)
+        : _figmaLightText.withValues(alpha: 0.9);
+  }
+
   // ignore: unused_element
   ImageProvider _getProfileImageProvider() {
     // Use the same default profile icon on all platforms (assets/icons/profile.png).
@@ -1105,6 +1189,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   /// Primary nav link with optional tap and subtle active state (dashboard theme).
+  // ignore: unused_element
   Widget _buildNavLink(
     String label, {
     bool isActive = false,
@@ -1127,15 +1212,234 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     );
   }
 
-  void _scrollToJobsSection() {
-    final ctx = _jobsSectionKey.currentContext;
-    if (ctx != null) {
-      Scrollable.ensureVisible(
-        ctx,
-        duration: Duration(milliseconds: 400),
-        alignment: 0.1,
-      );
-    }
+  Widget _buildSideMenuItem({
+    required String label,
+    required String iconAsset,
+    required bool isActive,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Container(
+        width: double.infinity,
+        margin: EdgeInsets.only(bottom: 6),
+        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFFC10D00) : Colors.transparent,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: _cdIconHalo(isDark),
+                shape: BoxShape.circle,
+              ),
+              child: _buildCircleAssetIcon(iconAsset, fallbackSize: 13),
+            ),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.poppins(
+                  color: _cdSideItemLabel(isDark, isActive),
+                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBottomMenuItem({
+    required String label,
+    required String iconAsset,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+        child: Row(
+          children: [
+            Container(
+              width: 26,
+              height: 26,
+              decoration: BoxDecoration(
+                color: _cdIconHalo(isDark),
+                shape: BoxShape.circle,
+              ),
+              child: _buildCircleAssetIcon(iconAsset, fallbackSize: 13),
+            ),
+            SizedBox(width: 8),
+            Text(
+              label,
+              style: GoogleFonts.poppins(
+                color: _cdOnSurface(isDark),
+                fontSize: 12.5,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSideMenuHeader({required bool isDark}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Center(
+          child: Image.asset(
+            'assets/icons/khono.png',
+            height: 34.97,
+            fit: BoxFit.contain,
+          ),
+        ),
+        SizedBox(height: 8),
+        SizedBox(
+          width: 192.14,
+          child: Column(
+            children: [
+              Text(
+                'Welcome to',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  color: _cdOnSurfaceMuted(isDark),
+                  fontSize: 8.5,
+                  fontWeight: FontWeight.w500,
+                  height: 1.0,
+                ),
+              ),
+              const SizedBox(height: 2),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  'Automated Recruitment Workflow',
+                  maxLines: 1,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.poppins(
+                    color: _cdOnSurface(isDark),
+                    fontSize: 11.2,
+                    fontWeight: FontWeight.w600,
+                    height: 1.0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        SizedBox(height: 8),
+        SizedBox(
+          width: 192.14,
+          child: Container(height: 1, color: _cdHairline(isDark)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSideMenu({required bool isDark}) {
+    return Container(
+      width: _sideMenuWidth,
+      margin: EdgeInsets.zero,
+      padding: EdgeInsets.fromLTRB(10, 14, 10, 8),
+      decoration: BoxDecoration(
+        color: _cdSidebarFill(isDark),
+        border: Border(right: BorderSide(color: _cdSidebarEdge(isDark))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildSideMenuHeader(isDark: isDark),
+          SizedBox(height: 10),
+          _buildSideMenuItem(
+            label: 'Dashboard',
+            iconAsset: 'assets/icons/Dashboard2.png',
+            isActive: _activeSidebarItem == 'dashboard',
+            isDark: isDark,
+            onTap: _scrollToDashboardTop,
+          ),
+          _buildSideMenuItem(
+            label: 'Applications',
+            iconAsset: 'assets/icons/Applications_blue.png',
+            isActive: _activeSidebarItem == 'applications',
+            isDark: isDark,
+            onTap: () {
+              _safeSetState(() => _activeSidebarItem = 'applications');
+              final initialApplications = _allApplications
+                  .where((app) {
+                    final status =
+                        app['status']?.toString().toLowerCase().trim();
+                    if (status == null || status.isEmpty) return false;
+                    return status == 'applied' ||
+                        status == 'assessment_submitted' ||
+                        status == 'disqualified' ||
+                        status.contains('offer');
+                  })
+                  .map((e) => Map<String, dynamic>.from(e))
+                  .toList();
+              context.push(
+                '/jobs-applied?token=${Uri.encodeComponent(widget.token)}',
+                extra: initialApplications,
+              );
+            },
+          ),
+          _buildSideMenuItem(
+            label: 'Assessments',
+            iconAsset: 'assets/icons/Assessments.png',
+            isActive: _activeSidebarItem == 'assessments',
+            isDark: isDark,
+            onTap: () {
+              _safeSetState(() => _activeSidebarItem = 'assessments');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AssessmentResultsPage(token: widget.token),
+                ),
+              );
+            },
+          ),
+          Spacer(),
+          _buildBottomMenuItem(
+            label: 'Account Profile',
+            iconAsset: 'assets/icons/Profile2.png',
+            isDark: isDark,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => ProfilePage(token: widget.token)),
+              );
+            },
+          ),
+          _buildBottomMenuItem(
+            label: 'Logout',
+            iconAsset: 'assets/icons/Logout.png',
+            isDark: isDark,
+            onTap: () => _showLogoutConfirmation(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _scrollToDashboardTop() {
+    _safeSetState(() => _activeSidebarItem = 'dashboard');
+    if (!_mainScrollController.hasClients) return;
+    _mainScrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   // ignore: unused_element
@@ -1414,6 +1718,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   int _getFilteredJobsTotalCount(int typeIndex) =>
       _getFilteredJobs(typeIndex).length;
 
+  // ignore: unused_element
   Widget _buildJobList(int typeIndex) {
     final jobs = _getFilteredJobs(typeIndex);
     if (_loadingJobs) {
@@ -1599,57 +1904,32 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     );
   }
 
-  Widget _buildOpportunitiesHeader() {
-    final incompleteCount = _getDeduplicatedContinueItems().length;
+  Widget _buildOpportunitiesCards({required bool isDark}) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(height: 20),
-          Text(
-            'Welcome back, ${_userName ?? 'Candidate'}!',
-            style: GoogleFonts.poppins(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            incompleteCount > 0
-                ? 'You have $incompleteCount application${incompleteCount == 1 ? '' : 's'} in progress.'
-                : (_applicationsCount != null && _applicationsCount! > 0)
-                    ? 'You have $_applicationsCount submitted application${_applicationsCount == 1 ? '' : 's'}.'
-                    : 'Explore your opportunities and applications today',
-            style: GoogleFonts.poppins(fontSize: 16, color: Colors.white70),
-          ),
-          SizedBox(height: 24),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOpportunitiesCards() {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 32),
+      padding: EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         children: [
           Expanded(
             child: _buildOpportunityCard(
-              title: 'My applications',
+              isDark: isDark,
+              title: 'Applications',
               count: _applicationsCount != null ? '$_applicationsCount' : '—',
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFF991A1A).withValues(alpha: 0.8),
-                  Color(0xFFC10D00).withValues(alpha: 0.6),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              iconAsset: 'assets/icons/Applications.png',
               onTap: () {
+                final initialApplications = _allApplications
+                    .where((app) {
+                      final status = app['status']?.toString().toLowerCase().trim();
+                      if (status == null || status.isEmpty) return false;
+                      return status == 'applied' ||
+                          status == 'assessment_submitted' ||
+                          status == 'disqualified' ||
+                          status.contains('offer');
+                    })
+                    .map((e) => Map<String, dynamic>.from(e))
+                    .toList();
                 context.push(
                   '/jobs-applied?token=${Uri.encodeComponent(widget.token)}',
+                  extra: initialApplications,
                 );
               },
             ),
@@ -1657,16 +1937,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           SizedBox(width: 16),
           Expanded(
             child: _buildOpportunityCard(
+              isDark: isDark,
               title: 'Interviews Scheduled',
               count: '$_interviewsScheduledCount',
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFF2A5298).withValues(alpha: 0.8),
-                  Color(0xFF1E3C72).withValues(alpha: 0.6),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              iconAsset: 'assets/icons/InterviewsScheduled.png',
               onTap: () {
                 context.push(
                   '/my-interviews?token=${Uri.encodeComponent(widget.token)}',
@@ -1677,23 +1951,13 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           SizedBox(width: 16),
           Expanded(
             child: _buildOpportunityCard(
+              isDark: isDark,
               title: 'Saved Jobs',
               count: _savedCount != null ? '$_savedCount' : '—',
-              gradient: LinearGradient(
-                colors: [
-                  Color(0xFF11998e).withValues(alpha: 0.8),
-                  Color(0xFF38ef7d).withValues(alpha: 0.6),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+              iconAsset: 'assets/icons/SavedJobs.png',
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        SavedApplicationsScreen(token: widget.token),
-                  ),
+                context.push(
+                  '/saved-jobs?token=${Uri.encodeComponent(widget.token)}',
                 );
               },
             ),
@@ -1878,69 +2142,406 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return items;
   }
 
-  Widget _buildContinueYourApplicationSection() {
+  Widget _buildContinueYourApplicationSection({required bool isDark}) {
     final items = _getDeduplicatedContinueItems();
-    // Section always visible; when no items yet show brief loading or empty state (no spinner)
-    if (items.isEmpty) {
-      return Padding(
-        padding: EdgeInsets.symmetric(horizontal: 32, vertical: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Continue Your Application',
-              style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            SizedBox(height: 12),
-            Text(
-              _dashboardCountsLoaded
-                  ? 'No applications in progress. Browse jobs below.'
-                  : 'Loading your applications...',
-              style: GoogleFonts.poppins(fontSize: 14, color: Colors.white70),
-            ),
-            SizedBox(height: 16),
-          ],
-        ),
-      );
-    }
-
+    final visible = items.take(2).toList();
+    final continueCount = visible.length;
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 32, vertical: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Continue Your Application',
-            style: GoogleFonts.poppins(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+      child: Container(
+        padding: EdgeInsets.fromLTRB(14, 14, 14, 12),
+        decoration: BoxDecoration(
+          color: _cdPanelBg(isDark),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _cdPanelBorder(isDark)),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 19,
+                  backgroundColor: Colors.white,
+                  child: _buildCircleAssetIcon(
+                    'assets/icons/ContinueApplication.png',
+                  ),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Continue Application',
+                        style: GoogleFonts.poppins(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: _cdOnSurface(isDark),
+                          height: 1.0,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Additional description can be included if required.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10.5,
+                          color: _cdOnSurfaceMuted(isDark),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                CircleAvatar(
+                  radius: 15,
+                  backgroundColor: Colors.white,
+                  child: _buildCircleAssetIcon('assets/icons/Notifications.png'),
+                ),
+                SizedBox(width: 8),
+                Text(
+                  '$continueCount',
+                  style: GoogleFonts.poppins(
+                    color: _cdOnSurface(isDark),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
             ),
-          ),
-          SizedBox(height: 16),
-          SizedBox(
-            height: 228,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: EdgeInsets.only(right: 32),
-              itemCount: items.length,
-              separatorBuilder: (_, __) => SizedBox(width: 16),
-              itemBuilder: (context, index) {
-                return SizedBox(
-                  width: 380,
-                  child: _buildIncompleteApplicationCard(
-                    items[index],
-                    compact: true,
+            SizedBox(height: 10),
+            Container(height: 1, color: _cdHairline(isDark)),
+            SizedBox(height: 8),
+            if (visible.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _dashboardCountsLoaded
+                        ? 'No applications in progress.'
+                        : 'Loading your applications...',
+                    style: GoogleFonts.poppins(
+                      color: _cdOnSurfaceMuted(isDark),
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ),
+            ...visible.map(
+              (item) {
+                final status = _continueStatusForItem(item);
+                final step = _stepFromItem(item);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 11,
+                        height: 11,
+                        color: _cdOnSurfaceMuted(isDark),
+                      ),
+                      SizedBox(width: 10),
+                      SizedBox(
+                        width: 300,
+                        child: RichText(
+                          text: TextSpan(
+                            children: [
+                              TextSpan(
+                                text: (item['job_title'] ?? item['job']?['title'] ?? 'Job')
+                                    .toString(),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: _cdOnSurface(isDark),
+                                ),
+                              ),
+                              TextSpan(
+                                text: ' - Full Time',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  color: _cdOnSurfaceMuted(isDark),
+                                ),
+                              ),
+                            ],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Expanded(
+                        child: Center(
+                          child: _buildStepDots(currentStep: step, isDark: isDark),
+                        ),
+                      ),
+                      _buildStatusChip(status.$1, status.$2),
+                      SizedBox(width: 8),
+                      _buildMiniViewButton(),
+                    ],
                   ),
                 );
               },
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecommendedJobsSection({required bool isDark}) {
+    final jobs = _getFilteredJobs(_currentTab).take(6).toList();
+    final jobsCount = jobs.length;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        24,
+        0,
+        // Keep row actions clear of the bottom-right FAB stack (same width as one control).
+        24 + _cornerActionSize + 20,
+        0,
+      ),
+      child: Container(
+        key: _jobsSectionKey,
+        padding: EdgeInsets.fromLTRB(14, 14, 14, 12),
+        decoration: BoxDecoration(
+          color: _cdPanelBg(isDark),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _cdPanelBorder(isDark)),
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 19,
+                  backgroundColor: Colors.white,
+                  child: _buildCircleAssetIcon('assets/icons/RecommendedJobs.png'),
+                ),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Recommended Jobs',
+                        style: GoogleFonts.poppins(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          color: _cdOnSurface(isDark),
+                          height: 1.0,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Additional description can be included if required.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10.5,
+                          color: _cdOnSurfaceMuted(isDark),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                CircleAvatar(
+                  radius: 15,
+                  backgroundColor: Colors.white,
+                  child: _buildCircleAssetIcon('assets/icons/Notifications.png'),
+                ),
+                SizedBox(width: 8),
+                Text(
+                  '$jobsCount',
+                  style: GoogleFonts.poppins(
+                    color: _cdOnSurface(isDark),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: 10),
+            Container(height: 1, color: _cdHairline(isDark)),
+            SizedBox(height: 8),
+            if (jobs.isEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'No jobs found.',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: _cdOnSurfaceMuted(isDark),
+                  ),
+                ),
+              ),
+            ...jobs.map(
+              (job) => Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 11,
+                      height: 11,
+                      color: _cdOnSurfaceMuted(isDark),
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: (job['title'] ?? 'Job Name / Title').toString(),
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: _cdOnSurface(isDark),
+                              ),
+                            ),
+                            TextSpan(
+                              text: ' - Full Time - Introductory Job Description & Requirement Detail for further insight prior to viewing more.',
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                color: _cdOnSurfaceMuted(isDark),
+                              ),
+                            ),
+                          ],
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    SizedBox(width: 10),
+                    _buildMiniViewButton(),
+                    SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () => _handleApplyNow(job),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: strokeColor,
+                        foregroundColor: Colors.white,
+                        minimumSize: Size(82, 28),
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: Text(
+                        'APPLY NOW',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCircleAssetIcon(
+    String assetPath, {
+    double scale = 1.35,
+    double fallbackSize = 14,
+    Color fallbackColor = Colors.white,
+  }) {
+    return ClipOval(
+      child: Transform.scale(
+        // Crop transparent icon margins so the glyph fills the circle.
+        scale: scale,
+        child: Image.asset(
+          assetPath,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          height: double.infinity,
+          errorBuilder: (_, __, ___) => Icon(
+            Icons.image_outlined,
+            size: fallbackSize,
+            color: fallbackColor,
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  (String, Color) _continueStatusForItem(Map<String, dynamic> item) {
+    final type = item['type']?.toString().toLowerCase();
+    if (type == 'pending') {
+      return ('Pending Response', const Color(0xFFE2A321));
+    }
+    final status = item['status']?.toString().toLowerCase() ?? '';
+    if (status.contains('interview') || status.contains('shortlist')) {
+      return ('Interview Scheduled', const Color(0xFF3A89D6));
+    }
+    final progress = _stepFromItem(item);
+    if (progress >= 4) {
+      return ('Interview Scheduled', const Color(0xFF3A89D6));
+    }
+    return ('Pending Response', const Color(0xFFE2A321));
+  }
+
+  int _stepFromItem(Map<String, dynamic> item) {
+    final type = item['type']?.toString().toLowerCase();
+    if (type == 'pending') return 1;
+    final draftData = item['draft_data'] is Map
+        ? Map<String, dynamic>.from(item['draft_data'] as Map)
+        : null;
+    final lastSaved = item['last_saved_screen']?.toString();
+    final percent = _progressPercent(draftData, lastSaved);
+    final step = (percent / 20).ceil().clamp(1, 5);
+    return step;
+  }
+
+  Widget _buildStepDots({required int currentStep, required bool isDark}) {
+    return Row(
+      children: List.generate(5, (i) {
+        final active = (i + 1) <= currentStep;
+        return Padding(
+          padding: EdgeInsets.only(right: i == 4 ? 0 : 6),
+          child: CircleAvatar(
+            radius: 12,
+            backgroundColor: active
+                ? strokeColor
+                : (isDark ? Colors.white : Colors.grey.shade300),
+            child: Text(
+              '${i + 1}',
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: active ? Colors.white : Colors.black87,
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildStatusChip(String text, Color color) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.poppins(
+          color: Colors.white,
+          fontSize: 9.5,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMiniViewButton() {
+    return ElevatedButton(
+      onPressed: () {},
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF727576),
+        foregroundColor: Colors.white,
+        minimumSize: Size(50, 24),
+        padding: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      child: Text(
+        'VIEW',
+        style: GoogleFonts.poppins(fontSize: 9.5, fontWeight: FontWeight.w600),
       ),
     );
   }
@@ -1963,32 +2564,25 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return 25;
   }
 
+  // ignore: unused_element
   Widget _buildIncompleteApplicationCard(
     Map<String, dynamic> item, {
     bool compact = false,
   }) {
     final type = item['type'] as String?;
     String title;
-    String? company;
-    String? location;
     String statusLine;
     int progressPercent;
-    bool showProgressBar;
     VoidCallback? onContinue;
 
     if (type == 'pending') {
       final job = item['job'] as Map<String, dynamic>? ?? {};
       title = job['title']?.toString() ?? 'Job';
-      company = job['company']?.toString().trim();
-      location = job['location']?.toString().trim();
       statusLine = 'Not started';
-      progressPercent = 0;
-      showProgressBar = false;
+      progressPercent = 8;
       onContinue = _continueWithApplication;
     } else {
       title = item['job_title']?.toString() ?? 'Application';
-      company = item['company']?.toString().trim();
-      location = item['location']?.toString().trim();
       final savedAt = item['saved_at']?.toString();
       final draftData = item['draft_data'] is Map
           ? Map<String, dynamic>.from(item['draft_data'] as Map)
@@ -1996,11 +2590,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       final lastSaved = item['last_saved_screen']?.toString();
       progressPercent = _progressPercent(draftData, lastSaved);
       if (progressPercent == 0) progressPercent = 25;
-      showProgressBar = true;
       final timeAgo =
           savedAt != null && savedAt.isNotEmpty ? _timeAgo(savedAt) : null;
       if (timeAgo != null && timeAgo.isNotEmpty) {
-        statusLine = '$progressPercent% complete - last updated $timeAgo';
+        statusLine = 'In progress';
       } else {
         statusLine = 'In progress';
       }
@@ -2032,11 +2625,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       padding: compact ? EdgeInsets.zero : EdgeInsets.only(bottom: 16),
       child: Container(
         height: compact ? double.infinity : null,
-        padding: EdgeInsets.all(compact ? 14 : 20),
+        padding: EdgeInsets.all(compact ? 18 : 20),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white24, width: 1),
+          color: const Color(0xFF1F2126).withValues(alpha: 0.84),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white24, width: 0.8),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.2),
@@ -2047,89 +2640,48 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: compact ? MainAxisSize.max : MainAxisSize.min,
+          mainAxisSize: MainAxisSize.max,
           children: [
             Text(
               title,
               style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
                 color: Colors.white,
+                height: 1.0,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            if (company != null && company.isNotEmpty) ...[
-              SizedBox(height: 4),
-              Text(
-                company,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: Colors.white70,
-                  fontWeight: FontWeight.w500,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            SizedBox(height: 18),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: progressPercent / 100,
+                minHeight: 6,
+                backgroundColor: Colors.white24,
+                valueColor: AlwaysStoppedAnimation<Color>(strokeColor),
               ),
-            ],
-            if (location != null && location.isNotEmpty) ...[
-              SizedBox(height: 6),
-              Row(
-                children: [
-                  Icon(
-                    Icons.location_on_outlined,
-                    size: 14,
-                    color: Colors.white54,
-                  ),
-                  SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      location,
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        color: Colors.white54,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ] else if (compact) ...[
-              // Reserve space when no location so progress bar and status align with other cards
-              SizedBox(height: 6),
-              SizedBox(height: 20),
-            ],
-            SizedBox(height: 10),
-            if (showProgressBar) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progressPercent / 100,
-                  minHeight: 6,
-                  backgroundColor: Colors.white24,
-                  valueColor: AlwaysStoppedAnimation<Color>(strokeColor),
-                ),
-              ),
-              SizedBox(height: 6),
-            ],
+            ),
+            SizedBox(height: 14),
             Row(
               children: [
-                if (showProgressBar && progressPercent >= 25)
-                  Padding(
-                    padding: EdgeInsets.only(right: 6),
-                    child: Icon(
-                      Icons.check_circle,
-                      size: 14,
-                      color: Colors.green.shade400,
-                    ),
+                Padding(
+                  padding: EdgeInsets.only(right: 8),
+                  child: Icon(
+                    Icons.check_circle,
+                    size: 16,
+                    color: Colors.green.shade400,
                   ),
+                ),
                 Expanded(
                   child: Text(
                     statusLine,
                     style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.white54,
+                      fontSize: 16,
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w500,
+                      height: 1.0,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -2137,8 +2689,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 ),
               ],
             ),
-            if (compact) Spacer(),
-            SizedBox(height: compact ? 0 : 12),
+            Spacer(),
             Align(
               alignment: Alignment.centerRight,
               child: ElevatedButton(
@@ -2146,7 +2697,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 style: ElevatedButton.styleFrom(
                   backgroundColor: strokeColor,
                   foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  padding: EdgeInsets.symmetric(horizontal: 26, vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
@@ -2180,21 +2731,23 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   Widget _buildOpportunityCard({
+    required bool isDark,
     required String title,
     required String count,
-    required Gradient gradient,
+    required String iconAsset,
     required VoidCallback onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 120,
+        height: 126,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
-          gradient: gradient,
+          borderRadius: BorderRadius.circular(8),
+          color: _cdPanelBg(isDark),
+          border: Border.all(color: _cdPanelBorder(isDark)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
+              color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.08),
               blurRadius: 10,
               offset: Offset(0, 4),
             ),
@@ -2202,53 +2755,54 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         ),
         child: Stack(
           children: [
-            // Background pattern or icon
-            Positioned(
-              right: 16,
-              top: 16,
-              child: Icon(
-                Icons.work_outline,
-                color: Colors.white.withValues(alpha: 0.3),
-                size: 40,
-              ),
-            ),
-
             // Content
             Padding(
-              padding: EdgeInsets.all(20),
+              padding: EdgeInsets.fromLTRB(12, 10, 12, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.start,
                 children: [
-                  Text(
-                    count,
-                    style: GoogleFonts.poppins(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  SizedBox(height: 8),
                   Text(
                     title,
                     style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
+                      fontSize: 17,
+                      color: _cdOnSurface(isDark),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Additional description information can be included.',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: _cdOnSurfaceMuted(isDark),
+                      height: 1.0,
+                    ),
+                  ),
+                  Spacer(),
+                  Text(
+                    count,
+                    style: GoogleFonts.poppins(
+                      fontSize: 34,
+                      fontWeight: FontWeight.bold,
+                      color: _cdOnSurface(isDark),
                     ),
                   ),
                 ],
               ),
             ),
 
-            // Arrow indicator
             Positioned(
-              bottom: 16,
-              right: 16,
-              child: Icon(
-                Icons.arrow_forward,
-                color: Colors.white.withValues(alpha: 0.7),
-                size: 20,
+              bottom: 10,
+              right: 10,
+              child: CircleAvatar(
+                radius: 18,
+                backgroundColor: Colors.white,
+                child: _buildCircleAssetIcon(
+                  iconAsset,
+                  fallbackColor: const Color(0xFFC10D00),
+                  fallbackSize: 16,
+                ),
               ),
             ),
           ],
@@ -2260,6 +2814,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final themeProvider = context.watch<ThemeProvider>();
+    final isDark = themeProvider.isDarkMode;
 
     return Theme(
       data: Theme.of(context).copyWith(
@@ -2292,297 +2848,222 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                   ),
                 ),
               ),
-            // Fixed background that fills the entire screen
+            // Theme-aware background (same asset pipeline as hiring manager)
             Positioned.fill(
-              child: Image.asset('assets/images/dark.png', fit: BoxFit.cover),
+              child: Container(
+                decoration: BoxDecoration(
+                  image: DecorationImage(
+                    image: AssetImage(themeProvider.backgroundImage),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
             ),
 
-            // Main content with transparent background
             Positioned.fill(
-              child: CustomScrollView(
-                slivers: [
-                  // App Bar - logo (title), nav tabs + utility (actions)
-                  SliverAppBar(
-                    backgroundColor: Colors.transparent,
-                    elevation: 0,
-                    title: Image.asset(
-                      'assets/icons/khono.png',
-                      height: 40,
-                      fit: BoxFit.contain,
-                    ),
-                    titleSpacing: 24,
-                    actions: [
-                      _buildNavLink('Dashboard', isActive: true),
-                      SizedBox(width: 28),
-                      _buildNavLink('Browse Jobs', onTap: _scrollToJobsSection),
-                      SizedBox(width: 28),
-                      _buildNavLink(
-                        'Applications',
-                        onTap: () {
-                          context.push(
-                            '/jobs-applied?token=${Uri.encodeComponent(widget.token)}',
-                          );
-                        },
-                      ),
-                      SizedBox(width: 28),
-                      _buildNavLink(
-                        'Assessments',
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  AssessmentResultsPage(token: widget.token),
-                            ),
-                          );
-                        },
-                      ),
-                      SizedBox(width: 40),
-                      Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          IconButton(
-                            icon: Icon(
-                              Icons.notifications_outlined,
-                              color: Colors.white,
-                              size: 24,
-                            ),
-                            onPressed: () => _showNotificationsDialog(),
-                          ),
-                          if (_unreadNotificationCount() > 0)
-                            Positioned(
-                              right: 6,
-                              top: 6,
-                              child: Container(
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 5,
-                                  vertical: 2,
+              child: Row(
+                children: [
+                  _buildSideMenu(isDark: isDark),
+                  Expanded(
+                    child: CustomScrollView(
+                      controller: _mainScrollController,
+                      slivers: [
+                        SliverAppBar(
+                          backgroundColor: Colors.transparent,
+                          elevation: 0,
+                          automaticallyImplyLeading: false,
+                          titleSpacing: 18,
+                          title: Row(
+                            children: [
+                              Text(
+                                'Candidate Dashboard',
+                                style: GoogleFonts.poppins(
+                                  color: _cdOnSurface(isDark),
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                  height: 1.0,
                                 ),
-                                decoration: BoxDecoration(
-                                  color: strokeColor,
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
+                              ),
+                              SizedBox(width: 18),
+                              Expanded(
                                 child: Text(
-                                  _unreadNotificationCount() > 99
-                                      ? '99+'
-                                      : _unreadNotificationCount().toString(),
+                                  'Hello, $_greetingName',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: GoogleFonts.poppins(
-                                    color: Colors.white,
-                                    fontSize: 10,
+                                    color: _cdOnSurface(isDark),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    height: 1.0,
                                   ),
                                 ),
                               ),
-                            ),
-                        ],
-                      ),
-                      SizedBox(width: 8),
-                      PopupMenuButton<String>(
-                        offset: Offset(0, 48),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        color: Color(0xFF2C2C2C),
-                        onSelected: (value) {
-                          if (value == 'profile') {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    ProfilePage(token: widget.token),
-                              ),
-                            );
-                          } else if (value == 'logout') {
-                            _showLogoutConfirmation(context);
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          PopupMenuItem(
-                            value: 'profile',
-                            child: Row(
+                            ],
+                          ),
+                          actions: [
+                            Stack(
+                              clipBehavior: Clip.none,
                               children: [
-                                Icon(
-                                  Icons.person_outline,
-                                  color: Colors.white70,
-                                  size: 20,
-                                ),
-                                SizedBox(width: 12),
-                                Text(
-                                  'My Profile',
-                                  style: GoogleFonts.poppins(
-                                    color: Colors.white,
+                                InkWell(
+                                  borderRadius: BorderRadius.circular(24),
+                                  onTap: () => _showNotificationsDialog(),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(6),
+                                    child: CircleAvatar(
+                                      radius: 16,
+                                      backgroundColor: Colors.white,
+                                      child: _buildCircleAssetIcon(
+                                        'assets/icons/Notifications.png',
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                          PopupMenuDivider(color: Colors.white24),
-                          PopupMenuItem(
-                            value: 'logout',
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.logout,
-                                  color: Colors.white70,
-                                  size: 20,
-                                ),
-                                SizedBox(width: 12),
-                                Text(
-                                  'Log Out',
-                                  style: GoogleFonts.poppins(
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          child: CircleAvatar(
-                            radius: 18,
-                            backgroundColor: primaryColor,
-                            child: Icon(
-                              Icons.person,
-                              color: Colors.white,
-                              size: 22,
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(width: 24),
-                    ],
-                  ),
-
-                  // Opportunities Section
-                  SliverToBoxAdapter(child: _buildOpportunitiesHeader()),
-                  SliverToBoxAdapter(child: _buildOpportunitiesCards()),
-
-                  // Continue Your Application section (always visible immediately after login)
-                  SliverToBoxAdapter(
-                    child: _buildContinueYourApplicationSection(),
-                  ),
-
-                  // Jobs Section (scroll target for "Browse Jobs")
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Column(
-                        key: _jobsSectionKey,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Recommended Jobs',
-                            style: GoogleFonts.poppins(
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          SizedBox(height: 24),
-                          DefaultTabController(
-                            length: _jobTypes.length,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                TabBar(
-                                  isScrollable: true,
-                                  tabAlignment: TabAlignment.start,
-                                  labelStyle: GoogleFonts.poppins(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 15,
-                                  ),
-                                  unselectedLabelStyle: GoogleFonts.poppins(
-                                    color: Colors.white70,
-                                    fontSize: 15,
-                                  ),
-                                  labelColor: Colors.white,
-                                  unselectedLabelColor: Colors.white70,
-                                  indicatorColor: primaryColor,
-                                  indicatorWeight: 3,
-                                  onTap: (index) => _safeSetState(() {
-                                    _currentTab = index;
-                                    _jobListCurrentPage = 0;
-                                  }),
-                                  tabs: _jobTypes
-                                      .map(
-                                        (type) => Tab(
-                                          child: Text(
-                                            type,
-                                            style: GoogleFonts.poppins(
-                                              color: Colors.white,
-                                            ),
-                                          ),
+                                if (_unreadNotificationCount() > 0)
+                                  Positioned(
+                                    right: 2,
+                                    top: 6,
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 5,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: strokeColor,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        _unreadNotificationCount() > 99
+                                            ? '99+'
+                                            : _unreadNotificationCount().toString(),
+                                        style: GoogleFonts.poppins(
+                                          color: Colors.white,
+                                          fontSize: 10,
                                         ),
-                                      )
-                                      .toList(),
-                                ),
-                                Container(
-                                  height: 1,
-                                  margin: EdgeInsets.only(top: 0),
-                                  color: Colors.white24,
-                                ),
-                                SizedBox(height: 24),
-                                SizedBox(
-                                  height: 860,
-                                  child: TabBarView(
-                                    children: _jobTypes
-                                        .asMap()
-                                        .entries
-                                        .map((e) => _buildJobList(e.key))
-                                        .toList(),
+                                      ),
+                                    ),
                                   ),
-                                ),
                               ],
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // Footer - KEPT AS IS
-                  SliverToBoxAdapter(
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 60,
-                          vertical: 40,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            SizedBox(),
-                            const SizedBox(height: 20),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Image.asset(
-                                  'assets/images/logo3.png',
-                                  width: 220,
-                                  height: 120,
-                                  fit: BoxFit.contain,
-                                ),
-                                const SizedBox(width: 20),
-                                Text(
-                                  "┬⌐ 2025 Khonology. All rights reserved.",
-                                  style: GoogleFonts.poppins(
-                                    color: Colors.white54,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
+                            SizedBox(width: 24),
                           ],
                         ),
-                      ),
+
+                        SliverToBoxAdapter(child: SizedBox(height: 6)),
+                        SliverToBoxAdapter(
+                          child: _buildOpportunitiesCards(isDark: isDark),
+                        ),
+
+                        // Continue Your Application section (always visible immediately after login)
+                        SliverToBoxAdapter(
+                          child: _buildContinueYourApplicationSection(
+                            isDark: isDark,
+                          ),
+                        ),
+
+                        // Recommended jobs in single rectangle layout
+                        SliverToBoxAdapter(
+                          child: _buildRecommendedJobsSection(isDark: isDark),
+                        ),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                              left: 24,
+                              top: 8,
+                              bottom: 14,
+                            ),
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: _cdPanelBg(isDark),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: _cdHairline(isDark)),
+                                ),
+                                child: Text(
+                                  'Ver 2026.03.AI_STT',
+                                  style: GoogleFonts.poppins(
+                                    color: _cdOnSurfaceMuted(isDark),
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                      ],
                     ),
                   ),
                 ],
+              ),
+            ),
+            Positioned(
+              right: 12,
+              bottom: 0,
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Tooltip(
+                        message: 'Chat assistant',
+                        child: Material(
+                          color: Colors.transparent,
+                          elevation: 0,
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: () {},
+                            splashColor: Colors.white24,
+                            child: SizedBox(
+                              width: _cornerActionSize,
+                              height: _cornerActionSize,
+                              child: Image.asset(
+                                'assets/icons/chatbot.png',
+                                width: _cornerActionSize,
+                                height: _cornerActionSize,
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: _cornerActionGap),
+                      Tooltip(
+                        message: themeProvider.isDarkMode
+                            ? 'Switch to light mode'
+                            : 'Switch to dark mode',
+                        child: Material(
+                          color: Colors.redAccent,
+                          elevation: 2,
+                          shape: const CircleBorder(),
+                          clipBehavior: Clip.antiAlias,
+                          child: InkWell(
+                            customBorder: const CircleBorder(),
+                            onTap: themeProvider.toggleTheme,
+                            child: SizedBox(
+                              width: _cornerActionSize,
+                              height: _cornerActionSize,
+                              child: Icon(
+                                themeProvider.isDarkMode
+                                    ? Icons.light_mode
+                                    : Icons.dark_mode,
+                                color: Colors.white,
+                                size: _cornerActionGlyph,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],

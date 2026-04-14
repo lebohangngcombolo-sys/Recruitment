@@ -58,6 +58,40 @@ class DataMerger:
         # NEW: Canonical schema uses 'structured_data' directly
         structured = external_result.get('structured_data', {})
         
+        # 🔥 FAIL-SAFE: If the remote HF space didn't return cleaned autofill_data, calculate it locally
+        autofill = external_result.get('autofill_data')
+        if not autofill:
+            try:
+                from app.services.autofill_mapper import AutofillMapper
+                mapper = AutofillMapper()
+                # Ensure we have raw text for fallbacks
+                if 'raw_text' not in external_result:
+                     external_result['raw_text'] = external_result.get('cv_text') or external_result.get('text')
+                
+                # Map to autofill format locally using our improved services
+                local_autofill = mapper.map_to_autofill(external_result)
+                
+                # Convert Pydantic-like object to dict for consistency with rest of logic
+                import json
+                from dataclasses import asdict
+                try:
+                    # Try asdict first if it's a dataclass
+                    autofill = asdict(local_autofill)
+                except:
+                    # Fallback to manual dict if it's a simple object
+                    autofill = {
+                        "personal": {k: getattr(local_autofill.personal, k) for k in ['full_name', 'email', 'phone', 'address', 'linkedin', 'github', 'portfolio', 'gender', 'dob'] if hasattr(local_autofill.personal, k)},
+                        "experience": [{"title": e.title, "company": e.company, "period": e.period, "description": e.description} for e in local_autofill.experience],
+                        "education": [{"degree": e.degree, "institution": e.university, "field": e.field, "year": e.year} for e in local_autofill.education],
+                        "skills": local_autofill.skills,
+                        "certifications": local_autofill.certifications,
+                        "languages": local_autofill.languages
+                    }
+                logger.info("✅ Calculated autofill_data locally using local services")
+            except Exception as e:
+                logger.warning(f"⚠️ Could not calculate local autofill_data: {e}")
+                autofill = {}
+        
         # LEGACY: Old service used 'match_analysis.evidence'
         match_analysis = external_result.get('match_analysis', {})
         evidence = match_analysis.get('evidence', {})
@@ -91,16 +125,29 @@ class DataMerger:
             return existing_list
 
         # --- Personal Details ---
-        personal = structured.get('personal_details', {})
+        # 🔥 CRITICAL: Prioritize cleaned personal data from autofill_data
+        autofill_personal = autofill.get('personal', {})
+        personal = autofill_personal or structured.get('personal_details', {})
+        
         if personal:
             if personal.get('full_name') and not candidate.full_name:
                 candidate.full_name = personal['full_name']
             if personal.get('phone') and not candidate.phone:
                 candidate.phone = personal['phone']
+            if personal.get('email') and not candidate.email:
+                candidate.email = personal['email']
+            if personal.get('address') and not candidate.address:
+                candidate.address = personal['address']
             if personal.get('linkedin') and not candidate.linkedin:
                 candidate.linkedin = personal['linkedin']
+            if personal.get('github') and not candidate.github:
+                candidate.github = personal['github']
             if personal.get('portfolio') and not candidate.portfolio:
                 candidate.portfolio = personal['portfolio']
+            if personal.get('gender') and not candidate.gender:
+                candidate.gender = personal['gender']
+            if personal.get('dob') and not candidate.dob:
+                candidate.dob = personal['dob']
         
         # --- Skills ---
         external_skills = structured.get('skills') or evidence.get('skills', [])
@@ -115,22 +162,34 @@ class DataMerger:
                 candidate.skills = _merge_unique_list(existing, new_skills)
         
         # --- Education ---
-        external_education = structured.get('education') or evidence.get('education', [])
+        # 🔥 CRITICAL FIX: Use carefully cleaned autofill_data if available
+        autofill = external_result.get('autofill_data', {})
+        external_education = autofill.get('education') or structured.get('education') or evidence.get('education', [])
+        
         if external_education:
             existing = candidate.education if isinstance(candidate.education, list) else []
             new_items = []
             for edu in _as_list(external_education):
                 if isinstance(edu, dict):
-                    if float(edu.get('confidence', 1.0) or 1.0) < 0.9:
+                    # Lower confidence threshold if it comes from our trusted autofill_data
+                    is_from_autofill = 'autofill_data' in external_result and edu in _as_list(autofill.get('education'))
+                    conf_threshold = 0.5 if is_from_autofill else 0.9
+                    
+                    if float(edu.get('confidence', 1.0) or 1.0) < conf_threshold:
                         continue
+                        
                     degree = (edu.get('degree') or '').strip()
-                    institution = (edu.get('institution') or '').strip()
+                    institution = (edu.get('institution') or edu.get('university') or '').strip()
+                    field = (edu.get('field') or '').strip()
+                    
                     if degree or institution:
                         new_items.append({
                             "degree": degree or None, 
                             "institution": institution or None,
+                            "field": field or None,
                             "start_date": edu.get('start_date'),
-                            "end_date": edu.get('end_date')
+                            "end_date": edu.get('end_date'),
+                            "year": edu.get('year')
                         })
                 else:
                     s = str(edu).strip()
@@ -148,23 +207,32 @@ class DataMerger:
                 )
         
         # --- Experience ---
-        external_experience = structured.get('work_experience') or evidence.get('experience', [])
+        # 🔥 CRITICAL FIX: Use carefully cleaned autofill_data if available
+        autofill = external_result.get('autofill_data', {})
+        external_experience = autofill.get('experience') or structured.get('work_experience') or evidence.get('experience', [])
+        
         if external_experience:
             existing = candidate.work_experience if isinstance(candidate.work_experience, list) else []
             new_items = []
             for exp in _as_list(external_experience):
                 if isinstance(exp, dict):
-                    if float(exp.get('confidence', 1.0) or 1.0) <= 0.8:
+                    # Lower confidence threshold if it comes from our trusted autofill_data
+                    is_from_autofill = 'autofill_data' in external_result and exp in _as_list(autofill.get('experience'))
+                    conf_threshold = 0.5 if is_from_autofill else 0.8
+                    
+                    if float(exp.get('confidence', 1.0) or 1.0) < conf_threshold:
                         continue
+                        
                     position = (exp.get('position') or exp.get('title') or '').strip()
                     company = (exp.get('company') or '').strip()
                     if position or company:
                         new_items.append({
                             "title": position or None, 
                             "company": company or None,
-                            "start_date": exp.get('start_date'),
+                            "start_date": exp.get('start_date') or exp.get('period'),
                             "end_date": exp.get('end_date'),
-                            "description": exp.get('description')
+                            "description": exp.get('description'),
+                            "location": exp.get('location')
                         })
                 else:
                     s = str(exp).strip()

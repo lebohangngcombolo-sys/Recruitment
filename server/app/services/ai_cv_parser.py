@@ -84,10 +84,42 @@ class AIParser:
         Basic regex-based extraction to ensure minimal auto-fill.
         """
         try:
-            matcher = CVPatternMatcher()
-            extracted = matcher.extract_all(cv_text)
-        except Exception:
-            extracted = {}
+            from app.services.autofill_mapper import AutofillMapper
+            mapper = AutofillMapper()
+            autofill_response = mapper.map_to_autofill({"raw_text": cv_text})
+            
+            def serialize_model(m):
+                if hasattr(m, 'model_dump'): return m.model_dump()
+                if hasattr(m, '__dict__'): return m.__dict__
+                return dict(m)
+
+            edu_list = [serialize_model(e) for e in autofill_response.education] if autofill_response.education else []
+            
+            extracted = {
+                "full_name": autofill_response.personal.full_name or "",
+                "email": autofill_response.personal.email or "",
+                "phone": autofill_response.personal.phone or "",
+                "address": autofill_response.personal.address or "",
+                "dob": str(autofill_response.personal.dob) if autofill_response.personal.dob else "",
+                "linkedin": autofill_response.personal.linkedin or "",
+                "github": autofill_response.personal.github or "",
+                "portfolio": autofill_response.personal.portfolio or "",
+                "gender": autofill_response.personal.gender or "",
+                "education": edu_list,
+                "skills": autofill_response.skills or [],
+                "certifications": autofill_response.certifications or [],
+                "languages": autofill_response.languages or [],
+                "position": (autofill_response.experience[0].title if autofill_response.experience and getattr(autofill_response.experience[0], 'title', None) else ""),
+                "experience": ("\n\n".join([f"{getattr(e, 'title', '')} at {getattr(e, 'company', '')}\n{getattr(e, 'period', '')}\n{getattr(e, 'description', '')}" for e in autofill_response.experience]) if autofill_response.experience else ""),
+                "previous_companies": [getattr(e, 'company', '') for e in autofill_response.experience if getattr(e, 'company', None)] if autofill_response.experience else [],
+            }
+        except Exception as e:
+            logger.warning(f"AutofillMapper fallback failed: {e}. Using CVPatternMatcher.")
+            try:
+                matcher = CVPatternMatcher()
+                extracted = matcher.extract_all(cv_text)
+            except Exception:
+                extracted = {}
 
         # Maintain backward-compatible keys
         extracted.setdefault("dob", "")

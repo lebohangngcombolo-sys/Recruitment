@@ -55,19 +55,28 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
+    final themeProvider = context.watch<ThemeProvider>();
+    final isDark = themeProvider.isDarkMode;
+    final onBg = isDark ? Colors.white : const Color(0xFF1A1A1A);
+    final onBgMuted = isDark ? Colors.white70 : const Color(0xFF424242);
     final size = MediaQuery.of(context).size;
 
     return Scaffold(
       body: Stack(
         children: [
-          // ---------- Background Image ----------
           Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               image: DecorationImage(
-                image: AssetImage("assets/images/dark.png"),
+                image: AssetImage(themeProvider.backgroundImage),
                 fit: BoxFit.cover,
               ),
+            ),
+          ),
+          Positioned.fill(
+            child: Container(
+              color: isDark
+                  ? Colors.black.withOpacity(0.28)
+                  : Colors.black.withOpacity(0.06),
             ),
           ),
 
@@ -78,8 +87,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.arrow_back,
-                        color: Colors.white, size: 28),
+                    icon: Icon(Icons.arrow_back, color: onBg, size: 28),
                     onPressed: () => Navigator.pop(context),
                   ),
                   const SizedBox(width: 12),
@@ -109,10 +117,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const SizedBox(height: 16),
-                        const Icon(
+                        Icon(
                           Icons.lock_reset,
                           size: 40,
-                          color: Colors.white,
+                          color: onBg,
                         ),
                         const SizedBox(height: 16),
                         Text(
@@ -120,14 +128,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                            color: onBg,
                             fontFamily: 'Poppins',
-                            shadows: [
-                              Shadow(
-                                  color: Colors.black26,
-                                  blurRadius: 4,
-                                  offset: Offset(2, 2))
-                            ],
+                            shadows: isDark
+                                ? [
+                                    const Shadow(
+                                      color: Colors.black26,
+                                      blurRadius: 4,
+                                      offset: Offset(2, 2))
+                                  ]
+                                : null,
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -135,7 +145,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           "Enter your email to receive reset instructions",
                           style: TextStyle(
                             fontSize: 16,
-                            color: Colors.white70,
+                            color: onBgMuted,
                             fontFamily: 'Poppins',
                           ),
                           textAlign: TextAlign.center,
@@ -148,7 +158,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                           backgroundColor: Colors.white,
                           textColor: Colors.black,
                           borderColor: Colors.grey.shade300,
-                          labelColor: Colors.white,
+                          labelColor: onBg,
                           borderRadius: 15,
                           borderWidth: 1,
                           focusedBorderWidth: 1.5,
@@ -194,7 +204,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : Colors.black.withValues(alpha: 0.06),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: IconButton(
@@ -202,7 +214,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                               themeProvider.isDarkMode
                                   ? Icons.light_mode
                                   : Icons.dark_mode,
-                              color: Colors.white,
+                              color: onBg,
                               size: 20,
                             ),
                             onPressed: () => themeProvider.toggleTheme(),
@@ -220,9 +232,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           if (loading)
             Container(
               color: Colors.black.withValues(alpha: 0.5),
-              child: const Center(
+              child: Center(
                 child: CircularProgressIndicator(
-                  color: Colors.white,
+                  color: isDark ? Colors.white : const Color(0xFFC10D00),
                   strokeWidth: 3,
                 ),
               ),

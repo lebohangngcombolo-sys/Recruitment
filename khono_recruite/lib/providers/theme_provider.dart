@@ -2,36 +2,62 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../constants/brand_tokens.dart';
 
+/// Persistent app brightness (survives logout; auth clears other prefs only).
+const String kThemeModePrefKey = 'khono_theme_mode';
+const String kLegacyIsDarkPrefKey = 'isDarkMode';
+
 class ThemeProvider extends ChangeNotifier {
-  bool _isDarkMode = false;
+  bool _isDarkMode;
   bool get isDarkMode => _isDarkMode;
 
-  ThemeProvider() {
-    _loadTheme(); // Load saved preference when the provider initializes
+  /// [initialIsDark] should match disk (set from [loadSavedIsDark] in [main]).
+  ThemeProvider({required bool initialIsDark}) : _isDarkMode = initialIsDark {
+    _reconcileWithDisk();
+  }
+
+  /// Read saved theme before [runApp] so the first frame matches preference.
+  static Future<bool> loadSavedIsDark() async {
+    final prefs = await SharedPreferences.getInstance();
+    return _readIsDarkFromPrefs(prefs);
+  }
+
+  static bool _readIsDarkFromPrefs(SharedPreferences prefs) {
+    final mode = prefs.getString(kThemeModePrefKey)?.toLowerCase().trim();
+    if (mode == 'dark') return true;
+    if (mode == 'light') return false;
+    return prefs.getBool(kLegacyIsDarkPrefKey) ?? false;
+  }
+
+  Future<void> _writeTheme(bool dark) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(kThemeModePrefKey, dark ? 'dark' : 'light');
+    await prefs.setBool(kLegacyIsDarkPrefKey, dark);
+  }
+
+  /// Migration: copy legacy bool → string key; keep both keys aligned.
+  Future<void> _reconcileWithDisk() async {
+    final prefs = await SharedPreferences.getInstance();
+    final disk = _readIsDarkFromPrefs(prefs);
+    if (disk != _isDarkMode) {
+      _isDarkMode = disk;
+      notifyListeners();
+    }
+    await _writeTheme(_isDarkMode);
   }
 
   /// Toggle between light and dark mode
   void toggleTheme() async {
     _isDarkMode = !_isDarkMode;
-    notifyListeners(); // Notify UI immediately for animation
-
-    // Save preference
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isDarkMode', _isDarkMode);
-  }
-
-  /// Load saved theme from storage
-  Future<void> _loadTheme() async {
-    final prefs = await SharedPreferences.getInstance();
-    _isDarkMode = prefs.getBool('isDarkMode') ?? false;
     notifyListeners();
+    await _writeTheme(_isDarkMode);
   }
 
   ThemeData get themeData => _isDarkMode ? darkTheme : lightTheme;
 
   /// 🌆 Dynamic background image based on theme
-  String get backgroundImage =>
-      _isDarkMode ? 'assets/images/dark.png' : 'assets/images/light_mode_bg.png';
+  String get backgroundImage => _isDarkMode
+      ? 'assets/images/dark.png'
+      : 'assets/icons/niice_wrld_white_bg.png';
 
   // Consistent text colors across the app
   Color get headerTextColor => _isDarkMode ? Colors.white : Colors.black87;

@@ -19,7 +19,7 @@ void main() {
       adminProvider = AdminStateProvider();
       jobProvider = JobStateProvider();
       interviewProvider = InterviewStateProvider();
-      themeProvider = ThemeProvider();
+      themeProvider = ThemeProvider(initialIsDark: false);
     });
 
     group('State Provider Initialization', () {
