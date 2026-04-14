@@ -13,7 +13,7 @@ sys.path.insert(0, '.')
 from app import create_app
 from app.extensions import db
 from app.models import User
-from werkzeug.security import generate_password_hash
+import bcrypt
 
 app = create_app()
 
@@ -85,7 +85,7 @@ with app.app_context():
             # Create new persona
             new_user = User(
                 email=persona['email'],
-                password=generate_password_hash(persona['password']),
+                password=bcrypt.hashpw(persona['password'].encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
                 role=persona['role'],
                 is_verified=True,
                 profile={
