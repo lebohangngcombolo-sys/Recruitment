@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 import '../../services/admin_service.dart';
@@ -26,6 +27,46 @@ import '../../utils/app_config.dart';
 import '../../services/notification_service.dart';
 // ignore: unused_import - json.decode used in fetchAudits, fetchPipelineActivity, fetchChartData
 import 'dart:convert';
+
+/// Normalizes shorthand paths (`images/…`, `icons/…`) to full pubspec keys.
+String _hmNormalizeAssetPath(String path) {
+  final p = path.trim();
+  if (p.startsWith('assets/')) return p;
+  if (p.startsWith('images/')) return 'assets/$p';
+  if (p.startsWith('icons/')) return 'assets/$p';
+  return p;
+}
+
+/// On Flutter web, [Image.asset] sometimes requests `assets/assets/…` and returns 404.
+/// We load via [Image.network] using the **host root**, not [Uri.base.path] (e.g. `/login`),
+/// otherwise the server returns HTML (`<!DOCTYPE…`) and decoding fails with [ImageCodecException].
+Widget _hmDashboardAssetImage(
+  String assetPath, {
+  double? width,
+  double? height,
+  BoxFit fit = BoxFit.contain,
+  ImageErrorWidgetBuilder? errorBuilder,
+}) {
+  final path = _hmNormalizeAssetPath(assetPath);
+  if (kIsWeb) {
+    final noLeading = path.startsWith('/') ? path.substring(1) : path;
+    final url = '${Uri.base.origin}/$noLeading';
+    return Image.network(
+      url,
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: errorBuilder,
+    );
+  }
+  return Image.asset(
+    path,
+    width: width,
+    height: height,
+    fit: fit,
+    errorBuilder: errorBuilder,
+  );
+}
 
 class _DashboardCalendarDataSource extends CalendarDataSource {
   _DashboardCalendarDataSource(List<Appointment> source) {
@@ -64,6 +105,14 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     _paletteYellow,
     _paletteGreen,
   ];
+
+  /// Dark mode: #3D3F40 ([_paletteCharcoal]) at 60% so the background image shows through.
+  static Color _darkWidgetSurface() => _paletteCharcoal.withValues(alpha: 0.6);
+
+  /// Dashboard body copy: pure white in dark mode, pure black in light mode.
+  static const Color _pureWhite = Color(0xFFFFFFFF);
+  static const Color _pureBlack = Color(0xFF000000);
+
   String currentScreen = "dashboard";
   bool loadingStats = true;
 
@@ -86,7 +135,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   // Candidate-related variables
   bool loadingCandidates = true;
   int candidatePage = 1;
-  int candidatePerPage = 20;
+  /// Larger page so Candidate Overview can list everyone returned for the HM scope.
+  int candidatePerPage = 200;
   List<Map<String, dynamic>> candidates = [];
   String? candidateSearchQuery;
   String? candidateStatusFilter;
@@ -865,11 +915,15 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     height: double.infinity,
                     decoration: BoxDecoration(
                       color: themeProvider.isDarkMode
-                          ? const Color(0xFF1F2840)
-                          : const Color(0xFFFFFFFF),
+                          ? _paletteCharcoal
+                          : Colors.white,
                       border: Border(
-                        right:
-                            BorderSide(color: Colors.grey.shade200, width: 1),
+                        right: BorderSide(
+                          color: themeProvider.isDarkMode
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.grey.shade200,
+                          width: 1,
+                        ),
                       ),
                       boxShadow: [
                         BoxShadow(
@@ -894,13 +948,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                   child: Align(
                                     alignment: Alignment.centerLeft,
                                     child: sidebarCollapsed
-                                        ? Image.asset(
-                                            'assets/images/icon.png',
+                                        ? _hmDashboardAssetImage(
+                                            'images/icon.png',
                                             height: 40,
                                             fit: BoxFit.contain,
                                           )
-                                        : Image.asset(
-                                            'assets/images/logo2.png',
+                                        : _hmDashboardAssetImage(
+                                            'images/logo2.png',
                                             height: 40,
                                             fit: BoxFit.contain,
                                           ),
@@ -914,7 +968,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                         ? Icons.arrow_forward_ios
                                         : Icons.arrow_back_ios,
                                     size: 16,
-                                    color: Colors.grey.shade600,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade400
+                                        : Colors.black,
                                   ),
                                   onPressed: toggleSidebar,
                                 ),
@@ -927,7 +983,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                             padding: EdgeInsets.zero,
                             children: [
                               _sidebarEntry(
-                                  'assets/images/Home_Remote_Work_Red_Badge_White.png',
+                                  'images/Home_Remote_Work_Red_Badge_White.png',
                                   'Home',
                                   'dashboard'),
                               _sidebarEntry(
@@ -942,20 +998,20 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                   'Interviews',
                                   'interviews'),
                               _sidebarEntry(
-                                  'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
+                                  'images/Goal_Target_White_Badge_Red_Badge_White.png',
                                   'CV Reviews',
                                   'cv_reviews'),
-                              _sidebarEntry('assets/icons/data-analytics.png',
+                              _sidebarEntry('icons/data-analytics.png',
                                   'Analytics', 'analytics'),
-                              _sidebarEntry('assets/icons/teamC.png',
+                              _sidebarEntry('images/Team.png',
                                   'Team Collaboration', 'team_collaboration'),
                               _sidebarEntryWithBadge(
-                                  'assets/images/Notification_Red_White.png',
+                                  'images/Notification_Red_White.png',
                                   'Notifications',
                                   'notifications',
                                   badgeCount: unreadNotificationCount),
                               _sidebarEntry(
-                                  'assets/images/innovation_brainstorm_red_badge_white.png',
+                                  'images/innovation_brainstorm_red_badge_white.png',
                                   'Settings',
                                   'settings'),
                             ],
@@ -975,11 +1031,16 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                       style: TextStyle(fontFamily: 'Poppins')),
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: themeProvider.isDarkMode
-                                        ? const Color(0xFF2D2D2D)
+                                        ? Colors.white.withValues(alpha: 0.12)
                                         : Colors.white,
-                                    foregroundColor: Colors.redAccent,
-                                    side:
-                                        BorderSide(color: Colors.grey.shade300),
+                                    foregroundColor: themeProvider.isDarkMode
+                                        ? Colors.redAccent
+                                        : Colors.black,
+                                    side: BorderSide(
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white.withValues(alpha: 0.2)
+                                          : Colors.grey.shade300,
+                                    ),
                                     minimumSize: const Size.fromHeight(40),
                                   ),
                                 )
@@ -987,8 +1048,12 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                 IconButton(
                                   onPressed: () =>
                                       _showLogoutConfirmation(context),
-                                  icon: const Icon(Icons.logout,
-                                      color: Colors.grey),
+                                  icon: Icon(
+                                    Icons.logout,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade400
+                                        : Colors.black,
+                                  ),
                                 ),
                             ],
                           ),
@@ -1055,17 +1120,21 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ? Colors.white
               : themeProvider.isDarkMode
                   ? Colors.grey.shade700
-                  : Colors.grey.shade600,
+                  : Colors.grey.shade200,
         ),
         child: Icon(
           icon,
           size: 20,
-          color: selected ? const Color(0xFFC10D00) : Colors.white,
+          color: selected
+              ? const Color(0xFFC10D00)
+              : themeProvider.isDarkMode
+                  ? Colors.white
+                  : Colors.black,
         ),
       );
     }
 
-    return Image.asset(
+    return _hmDashboardAssetImage(
       icon as String,
       width: 32,
       height: 32,
@@ -1082,7 +1151,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         ? const Color.fromRGBO(151, 18, 8, 1)
         : themeProvider.isDarkMode
             ? Colors.grey.shade400
-            : Colors.grey.shade800;
+            : Colors.black;
 
     return Column(
       children: [
@@ -1097,13 +1166,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   child: Row(
                     children: [
                       _buildSidebarIcon(
-                        'assets/images/candidates.png',
+                        'assets/images/HR_Team_Management_White_Badge_Red.png',
                         selected,
                         iconColor,
                         themeProvider,
                       ),
-                      const SizedBox(width: 12),
-                      if (!sidebarCollapsed)
+                      if (!sidebarCollapsed) ...[
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             'Candidates',
@@ -1113,13 +1182,14 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                   ? Colors.white
                                   : themeProvider.isDarkMode
                                       ? Colors.grey.shade400
-                                      : Colors.grey.shade800,
+                                      : Colors.black,
                               fontWeight: selected
                                   ? FontWeight.bold
                                   : FontWeight.normal,
                             ),
                           ),
                         ),
+                      ],
                     ],
                   ),
                 ),
@@ -1165,7 +1235,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         ? const Color.fromRGBO(151, 18, 8, 1)
         : themeProvider.isDarkMode
             ? Colors.grey.shade400
-            : Colors.grey.shade800;
+            : Colors.black;
 
     return InkWell(
       onTap: () {
@@ -1192,7 +1262,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                       ? const Color(0xFFC10D00)
                       : themeProvider.isDarkMode
                           ? Colors.grey.shade400
-                          : Colors.grey.shade800,
+                          : Colors.black,
                   fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),
@@ -1211,7 +1281,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         ? const Color.fromRGBO(151, 18, 8, 1)
         : themeProvider.isDarkMode
             ? Colors.grey.shade400
-            : Colors.grey.shade800;
+            : Colors.black;
     return InkWell(
       onTap: onTapOverride ?? () => setState(() => currentScreen = screenKey),
       child: Container(
@@ -1231,7 +1301,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                         ? Colors.white
                         : themeProvider.isDarkMode
                             ? Colors.grey.shade400
-                            : Colors.grey.shade800,
+                            : Colors.black,
                     fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
@@ -1250,7 +1320,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         ? const Color.fromRGBO(151, 18, 8, 1)
         : themeProvider.isDarkMode
             ? Colors.grey.shade400
-            : Colors.grey.shade800;
+            : Colors.black;
     return InkWell(
       onTap: onTapOverride ??
           () => setState(() {
@@ -1279,7 +1349,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                             ? Colors.white
                             : themeProvider.isDarkMode
                                 ? Colors.grey.shade400
-                                : Colors.grey.shade800,
+                                : Colors.black,
                         fontWeight:
                             selected ? FontWeight.bold : FontWeight.normal,
                       ),
@@ -1346,6 +1416,12 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               currentScreen = "candidates";
             });
           },
+          onOpenTeamCollaboration: () => setState(
+              () => currentScreen = 'team_collaboration'),
+          onOpenNotifications: () => setState(() {
+            currentScreen = 'notifications';
+            unreadNotificationCount = 0;
+          }),
         );
       case "candidates":
         return CandidateManagementScreen(jobId: selectedJobId ?? 0);
@@ -1383,6 +1459,38 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   // ---------------- Dashboard widgets ----------------
+
+  /// Header actions (message, notifications): no background pill — asset only, larger tap target.
+  Widget _hmDashboardHeaderIconButton({
+    required String assetPath,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Center(
+            child: _hmDashboardAssetImage(
+              assetPath,
+              width: 40,
+              height: 40,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => Icon(
+                Icons.image_not_supported_outlined,
+                size: 32,
+                color: _paletteSteel,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget dashboardOverview() {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDark = themeProvider.isDarkMode;
@@ -1396,54 +1504,48 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       {
         "title": "Total Jobs",
         "count": jobsCount,
-        "subtitle":
-            "additional job description information can be included if required.",
+        "subtitle": "Open requisitions currently managed by your team.",
         "color": _palettePrimary,
-        "icon": Icons.work_outline,
+        "icon": 'assets/images/Task_Management_White_Badge_Red.png',
       },
       {
         "title": "Candidates",
         "count": candidatesCount,
-        "subtitle":
-            "additional candidate information can be included if required.",
+        "subtitle": "Candidates active in your hiring pipeline.",
         "color": _palettePrimary,
-        "icon": Icons.groups_2_outlined,
+        "icon": 'assets/images/Search_Seek_White_Badge_Red.png',
       },
       {
         "title": "Interviews",
         "count": interviewsCount,
-        "subtitle":
-            "additional interview information can be included if required.",
+        "subtitle": "Scheduled and completed interviews this cycle.",
         "color": _palettePrimary,
-        "icon": Icons.record_voice_over_outlined,
+        "icon": 'images/Team.png',
       },
       {
         "title": "Applications",
         "count": cvReviewsCount,
-        "subtitle":
-            "additional application information can be included if required.",
+        "subtitle": "Applications received across your requisitions.",
         "color": _palettePrimary,
-        "icon": Icons.find_in_page_outlined,
+        "icon": 'images/Send_Paper_Plane_White_Badge_Red.png',
       },
       {
         "title": "Offers",
         "count": 0,
-        "subtitle":
-            "additional offer description information can be included if required.",
+        "subtitle": "Offers prepared or sent to shortlisted candidates.",
         "color": _palettePrimary,
-        "icon": Icons.send_outlined,
+        "icon": 'images/Project_Direction_Acceleration_Badge_Red.png',
       },
       {
         "title": "Assessments",
         "count": candidatesWithAssessments,
-        "subtitle":
-            "additional assessment information can be included if required.",
+        "subtitle": "Candidates with completed assessment submissions.",
         "color": _palettePrimary,
-        "icon": Icons.assignment_turned_in_outlined,
+        "icon": 'images/Document_Upload.png',
       },
     ];
 
-    final topCandidates = candidates.take(8).toList();
+    final overviewCandidates = List<Map<String, dynamic>>.from(candidates);
     final activities = pipelineActivity.take(6).toList();
     final sourceData = sourcePerformanceData.isNotEmpty
         ? sourcePerformanceData
@@ -1455,81 +1557,123 @@ class _HMMainDashboardState extends State<HMMainDashboard>
           ];
 
     return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Hiring Manager Dashboard',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: isDark ? _paletteWhite : _paletteInk,
-              ),
-            ),
-            Text(
-              'Hello, ${_effectiveWelcomeName(userName)}',
-              style: TextStyle(
-                fontFamily: 'Poppins',
-                fontSize: 11,
-                color: isDark ? _paletteSilver : _paletteCharcoal,
-              ),
-            ),
-            const SizedBox(height: 10),
-            _buildScreenshotKpiGrid(kpis, isDark),
-            const SizedBox(height: 10),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    children: [
-                      _buildCandidateOverviewCard(topCandidates, isDark),
-                      const SizedBox(height: 10),
-                      _buildCandidatePipelineCard(isDark),
-                      const SizedBox(height: 10),
-                      _buildDiversityMetricsCard(isDark),
-                      const SizedBox(height: 10),
-                      _buildTeamCollaborationCard(isDark),
-                      const SizedBox(height: 10),
-                      _buildRecentActivitiesCard(activities, isDark),
-                    ],
+      child: RefreshIndicator(
+        onRefresh: _refreshDashboardData,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Text(
+                          'Hiring Manager Dashboard',
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: isDark ? _pureWhite : _pureBlack,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Text(
+                            'Hello, ${_effectiveWelcomeName(userName)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isDark ? _pureWhite : _pureBlack,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    children: [
-                      _buildDemographicsInsightsCard(isDark),
-                      const SizedBox(height: 10),
-                      _buildTimeToFillCard(isDark),
-                      const SizedBox(height: 10),
-                      _buildSourcePerformanceCard(sourceData, isDark),
-                      const SizedBox(height: 10),
-                      _buildCalendarPanelCard(isDark),
-                    ],
+                  const SizedBox(width: 8),
+                  Tooltip(
+                    message: 'Team collaboration',
+                    child: _hmDashboardHeaderIconButton(
+                      assetPath: 'assets/images/message.png',
+                      onTap: () => setState(
+                          () => currentScreen = 'team_collaboration'),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                  const SizedBox(width: 8),
+                  Tooltip(
+                    message: 'Notifications',
+                    child: _hmDashboardHeaderIconButton(
+                      assetPath: 'assets/images/blue_bell.png',
+                      onTap: () => setState(() {
+                        currentScreen = 'notifications';
+                        unreadNotificationCount = 0;
+                      }),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _buildScreenshotKpiGrid(kpis, isDark),
+              const SizedBox(height: 10),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      children: [
+                        _buildCandidateOverviewCard(overviewCandidates, isDark),
+                        const SizedBox(height: 10),
+                        _buildCandidatePipelineCard(isDark),
+                        const SizedBox(height: 10),
+                        _buildDiversityMetricsCard(isDark),
+                        const SizedBox(height: 10),
+                        _buildTeamCollaborationCard(isDark),
+                        const SizedBox(height: 10),
+                        _buildRecentActivitiesCard(activities, isDark),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        _buildDemographicsInsightsCard(isDark),
+                        const SizedBox(height: 10),
+                        _buildTimeToFillCard(isDark),
+                        const SizedBox(height: 10),
+                        _buildSourcePerformanceCard(sourceData, isDark),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _buildCalendarPanelCard(isDark),
+            ],
+          ),
         ),
       ),
     );
   }
 
-
-  Widget _buildScreenshotKpiGrid(List<Map<String, dynamic>> items, bool isDark) {
+  Widget _buildScreenshotKpiGrid(
+      List<Map<String, dynamic>> items, bool isDark) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        childAspectRatio: 2.8,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
+        childAspectRatio: 3.25,
+        mainAxisSpacing: 6,
+        crossAxisSpacing: 6,
       ),
       itemCount: items.length,
       itemBuilder: (_, i) => _buildScreenshotKpiTile(items[i], isDark),
@@ -1538,11 +1682,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
   Widget _buildScreenshotKpiTile(Map<String, dynamic> item, bool isDark) {
     final Color accent = item['color'] as Color;
+    final isCandidatesWidget = item['title'] == "Candidates";
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: isDark
-            ? _paletteInk.withValues(alpha: 0.92)
+            ? _darkWidgetSurface()
             : _paletteCanvas.withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(10),
       ),
@@ -1557,32 +1703,50 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     style: TextStyle(
                         fontFamily: 'Poppins',
                         fontWeight: FontWeight.w700,
-                        fontSize: 11,
-                        color: isDark ? _paletteWhite : _paletteInk)),
+                        fontSize: 10,
+                        color: isDark ? _pureWhite : _pureBlack)),
                 Text(
                   item['subtitle'] as String,
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       fontFamily: 'Poppins',
-                      fontSize: 8,
-                      color: isDark ? _paletteSilver : _paletteSteel),
+                      fontSize: 7.5,
+                      color: isDark ? _pureWhite : _pureBlack),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text('${item['count']}',
                     style: TextStyle(
                         fontFamily: 'Poppins',
-                        fontSize: 22,
+                        fontSize: 17,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? _paletteWhite : _paletteInk)),
+                        color: isDark ? _pureWhite : _pureBlack)),
               ],
             ),
           ),
           Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
-            child: Icon(item['icon'] as IconData, color: _paletteWhite, size: 18),
+            width: 48,
+            height: 48,
+            child: isCandidatesWidget
+                ? _hmDashboardAssetImage(
+                    'assets/images/HR_Team_Management_White_Badge_Red.png',
+                    width: 48,
+                    height: 48,
+                  )
+                : (item['icon'] is IconData)
+                    ? Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                            color: accent, shape: BoxShape.circle),
+                        child: Icon(item['icon'] as IconData,
+                            color: _paletteWhite, size: 14),
+                      )
+                    : _hmDashboardAssetImage(
+                        item['icon'] as String,
+                        width: 48,
+                        height: 48,
+                      ),
           ),
         ],
       ),
@@ -1590,34 +1754,123 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   Widget _buildDashboardCard(String title, bool isDark,
-      {Widget? trailing, required Widget child}) {
+      {Widget? trailing,
+      required Widget child,
+      String? subtitle,
+      String? titleLeadingAsset,
+      Color? titleColor}) {
+    final cardColor = isDark
+        ? _darkWidgetSurface()
+        : _paletteCanvas.withValues(alpha: 0.95);
+    final headerStripColor = isDark
+        ? _darkWidgetSurface()
+        : const Color(0xFFECECEC);
+    final headerBorderColor = isDark
+        ? Colors.white.withValues(alpha: 0.1)
+        : Colors.grey.shade300;
+    final useRichHeader = titleLeadingAsset != null;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: isDark
-            ? _paletteInk.withValues(alpha: 0.92)
-            : _paletteCanvas.withValues(alpha: 0.95),
+        color: cardColor,
         borderRadius: BorderRadius.circular(10),
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(title,
-                    style: TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                        color: isDark ? _paletteWhite : _paletteInk)),
+          if (useRichHeader) ...[
+            Container(
+              decoration: BoxDecoration(
+                color: headerStripColor,
+                border: Border(
+                  bottom: BorderSide(color: headerBorderColor, width: 1),
+                ),
               ),
-              if (trailing != null) trailing,
-            ],
-          ),
-          const SizedBox(height: 8),
-          child,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  _hmDashboardAssetImage(
+                    titleLeadingAsset,
+                    width: 56,
+                    height: 56,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Icon(
+                      Icons.search,
+                      color: _palettePrimary,
+                      size: 40,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          title,
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: titleColor ??
+                                (isDark ? _pureWhite : _pureBlack),
+                          ),
+                        ),
+                        if (subtitle != null && subtitle.isNotEmpty) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontWeight: FontWeight.w400,
+                              fontSize: 11,
+                              height: 1.2,
+                              color: isDark ? _pureWhite : _pureBlack,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (trailing != null) trailing,
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: child,
+            ),
+          ] else ...[
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(title,
+                            style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                                color: titleColor ??
+                                    (isDark ? _pureWhite : _pureBlack))),
+                      ),
+                      if (trailing != null) trailing,
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  child,
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1628,6 +1881,9 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     return _buildDashboardCard(
       'Candidate Overview',
       isDark,
+      subtitle:
+          'Recent candidates in your pipeline with shortcuts to list and stages.',
+      titleLeadingAsset: 'assets/images/SearchRed.png',
       trailing: TextButton(
         onPressed: () => setState(() => currentScreen = "candidates"),
         child: const Text('VIEW', style: TextStyle(fontSize: 10)),
@@ -1636,26 +1892,33 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         children: candidatesData.isEmpty
             ? [
                 Text('No candidate data available',
-                    style:
-                        TextStyle(color: isDark ? _paletteSilver : _paletteSteel)),
+                    style: TextStyle(
+                        color: isDark ? _pureWhite : _pureBlack)),
               ]
             : candidatesData.map((c) {
-                final name = (c['full_name'] ?? c['name'] ?? 'Unnamed').toString();
-                final role =
-                    (c['requisition_title'] ?? c['job_title'] ?? 'N/A').toString();
+                final name = _candidateDisplayName(c);
                 return Container(
                   margin: const EdgeInsets.only(bottom: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                   decoration: BoxDecoration(
-                    color: isDark ? _paletteCharcoal : _paletteCanvas,
+                    color: isDark
+                        ? _paletteWhite.withValues(alpha: 0.08)
+                        : _paletteCanvas,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     children: [
-                      const CircleAvatar(
-                        radius: 10,
-                        backgroundColor: _palettePrimary,
-                        child: Icon(Icons.person, size: 12, color: _paletteWhite),
+                      _hmDashboardAssetImage(
+                        _candidateOverviewRowAvatar,
+                        width: 28,
+                        height: 28,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => Icon(
+                          Icons.person,
+                          size: 22,
+                          color: _palettePrimary,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -1667,18 +1930,14 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                     fontSize: 10,
-                                    color: isDark ? _paletteWhite : _paletteInk)),
-                            Text(role,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    fontSize: 8,
-                                    color: isDark ? _paletteSilver : _paletteSteel)),
+                                    color:
+                                        isDark ? _pureWhite : _pureBlack)),
                           ],
                         ),
                       ),
                       TextButton(
-                        onPressed: () => setState(() => currentScreen = "pipeline"),
+                        onPressed: () =>
+                            setState(() => currentScreen = "pipeline"),
                         child: const Text('VIA', style: TextStyle(fontSize: 9)),
                       ),
                     ],
@@ -1687,6 +1946,31 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               }).toList(),
       ),
     );
+  }
+
+  String _candidateDisplayName(Map<String, dynamic> candidateRow) {
+    final first = (candidateRow['first_name'] ?? '').toString().trim();
+    final last = (candidateRow['last_name'] ?? '').toString().trim();
+    final combined = '$first $last'.trim();
+    if (combined.isNotEmpty) return combined;
+
+    final profile = candidateRow['profile'];
+    if (profile is Map<String, dynamic>) {
+      final pFirst = (profile['first_name'] ?? '').toString().trim();
+      final pLast = (profile['last_name'] ?? '').toString().trim();
+      final pCombined = '$pFirst $pLast'.trim();
+      if (pCombined.isNotEmpty) return pCombined;
+      final pFull =
+          (profile['full_name'] ?? profile['name'] ?? '').toString().trim();
+      if (pFull.isNotEmpty) return pFull;
+    }
+
+    final full = (candidateRow['full_name'] ?? candidateRow['name'] ?? '')
+        .toString()
+        .trim();
+    if (full.isNotEmpty) return full;
+
+    return 'Unnamed Candidate';
   }
 
   Widget _buildDemographicsInsightsCard(bool isDark) {
@@ -1698,15 +1982,125 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     return _buildDashboardCard(
       'Candidate Demographics & Insights',
       isDark,
+      subtitle:
+          'Skills, gender, locations, and education for candidates in your pool.',
+      titleLeadingAsset:
+          'assets/images/Innovation_Brainstorm_White_Badge_Red.png',
       child: Column(
         children: [
-          _smallPairList('Gender Distribution:', gender, isDark),
+          Row(
+            children: [
+              _metricSectionTitle(
+                label: 'Gender Distribution:',
+                icon: 'assets/images/red_Management_Red_Badge_White.png',
+                isDark: isDark,
+              ),
+              const SizedBox(width: 12),
+              _metricSectionTitle(
+                label: 'Top Skills:',
+                icon: 'assets/images/bagde_red.png',
+                isDark: isDark,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _smallPairList('', gender, isDark)),
+              const SizedBox(width: 12),
+              Expanded(child: _smallChartDataList('', skills, isDark)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _metricSectionTitle(
+                label: 'Top Locations:',
+                icon: 'assets/images/Location_Pin_Point_Red_Badge_White.png',
+                isDark: isDark,
+              ),
+              const SizedBox(width: 12),
+              _metricSectionTitle(
+                label: 'Education Levels:',
+                icon: 'assets/images/bagde_red.png',
+                isDark: isDark,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _smallPairList('', locations, isDark)),
+              const SizedBox(width: 12),
+              Expanded(child: _smallPairList('', education, isDark)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metricSectionTitle({
+    required String label,
+    required dynamic icon, // Changed to dynamic
+    required bool isDark,
+  }) {
+    return Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (icon is IconData)
+                Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _palettePrimary.withValues(alpha: 0.95),
+                  ),
+                  child: Icon(icon, size: 14, color: _paletteWhite),
+                )
+              else
+                _hmDashboardAssetImage(
+                  icon as String,
+                  width: 28,
+                  height: 28,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => Container(
+                    width: 28,
+                    height: 28,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _palettePrimary.withValues(alpha: 0.95),
+                    ),
+                    child: const Icon(Icons.image_not_supported_outlined,
+                        size: 14, color: _paletteWhite),
+                  ),
+                ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? _pureWhite : _pureBlack,
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 6),
-          _smallChartDataList('Top Skills:', skills, isDark),
-          const SizedBox(height: 6),
-          _smallPairList('Top Locations:', locations, isDark),
-          const SizedBox(height: 6),
-          _smallPairList('Education Levels:', education, isDark),
+          Divider(
+            height: 1,
+            color: isDark
+                ? _paletteSilver.withValues(alpha: 0.25)
+                : _paletteSteel.withValues(alpha: 0.35),
+          ),
         ],
       ),
     );
@@ -1719,32 +2113,64 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         .toList();
   }
 
-  Widget _smallPairList(String title, List<MapEntry<String, int>> data, bool isDark) {
-    final rows = data.isEmpty ? [const MapEntry('N/A', 0)] : data.take(3).toList();
+  Widget _smallPairList(
+      String title, List<MapEntry<String, int>> data, bool isDark) {
+    final rows =
+        data.isEmpty ? [const MapEntry('N/A', 0)] : data.take(3).toList();
+    final total = rows.fold<int>(0, (p, e) => p + e.value).clamp(1, 999999);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title,
-            style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: isDark ? _paletteWhite : _paletteInk)),
-        const SizedBox(height: 3),
+        if (title.isNotEmpty)
+          Text(title,
+              style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? _pureWhite : _pureBlack)),
+        if (title.isNotEmpty) const SizedBox(height: 3),
         ...rows.map((e) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 1),
+              padding: const EdgeInsets.symmetric(vertical: 3),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(e.key,
                         style: TextStyle(
                             fontSize: 9,
-                            color: isDark ? _paletteSilver : _paletteSteel)),
+                            color: isDark ? _pureWhite : _pureBlack)),
                   ),
-                  Text('${e.value}',
-                      style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? _paletteWhite : _paletteInk)),
+                  Container(
+                    width: 24,
+                    height: 24,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: _paletteWhite,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text('${e.value}',
+                        style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: _paletteInk)),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    constraints: const BoxConstraints(minWidth: 36),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _paletteSteel.withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      '${((e.value / total) * 100).round()}%',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                        color: _paletteWhite,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             )),
@@ -1754,30 +2180,60 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
   Widget _smallChartDataList(String title, List<_ChartData> data, bool isDark) {
     final rows = data.isEmpty ? [_ChartData('N/A', 0)] : data;
+    final total = rows.fold<int>(0, (p, e) => p + e.value).clamp(1, 999999);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title,
-            style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: isDark ? _paletteWhite : _paletteInk)),
-        const SizedBox(height: 3),
+        if (title.isNotEmpty)
+          Text(title,
+              style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? _pureWhite : _pureBlack)),
+        if (title.isNotEmpty) const SizedBox(height: 3),
         ...rows.map((e) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 1),
+              padding: const EdgeInsets.symmetric(vertical: 3),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(e.label,
                         style: TextStyle(
                             fontSize: 9,
-                            color: isDark ? _paletteSilver : _paletteSteel)),
+                            color: isDark ? _pureWhite : _pureBlack)),
                   ),
-                  Text('${e.value}',
-                      style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? _paletteWhite : _paletteInk)),
+                  Container(
+                    width: 24,
+                    height: 24,
+                    alignment: Alignment.center,
+                    decoration: const BoxDecoration(
+                      color: _paletteWhite,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Text('${e.value}',
+                        style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: _paletteInk)),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    constraints: const BoxConstraints(minWidth: 36),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _paletteSteel.withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      '${((e.value / total) * 100).round()}%',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                        color: _paletteWhite,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             )),
@@ -1795,10 +2251,15 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             _ChartData('Hired', 0),
           ]
         : candidatePipelineData;
-    final maxVal = data.map((e) => e.value).fold<int>(1, (a, b) => a > b ? a : b);
+    final maxVal =
+        data.map((e) => e.value).fold<int>(1, (a, b) => a > b ? a : b);
     return _buildDashboardCard(
       'Candidate Pipeline',
       isDark,
+      subtitle:
+          'Headcount at each hiring stage from applied through hired.',
+      titleLeadingAsset:
+          'assets/images/Process_Flows_Automation_White_Badge_Red.png',
       child: SizedBox(
         height: 150,
         child: Row(
@@ -1814,7 +2275,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     Text('${e.value}',
                         style: TextStyle(
                             fontSize: 8,
-                            color: isDark ? _paletteSilver : _paletteSteel)),
+                            color: isDark ? _pureWhite : _pureBlack)),
                     const SizedBox(height: 3),
                     Container(
                         height: h,
@@ -1827,7 +2288,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             fontSize: 8,
-                            color: isDark ? _paletteSilver : _paletteSteel)),
+                            color: isDark ? _pureWhite : _pureBlack)),
                   ],
                 ),
               ),
@@ -1849,10 +2310,15 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             _ChartData('Mar 26', 23),
           ]
         : timeToFillData;
-    final maxVal = data.map((e) => e.value).fold<int>(1, (a, b) => a > b ? a : b);
+    final maxVal =
+        data.map((e) => e.value).fold<int>(1, (a, b) => a > b ? a : b);
     return _buildDashboardCard(
       'Time-to-Fill Trend',
       isDark,
+      subtitle:
+          'Typical days to fill roles over the last several months.',
+      titleLeadingAsset:
+          'assets/images/Time_Allocation_Approval_White_Badge_Red.png',
       child: SizedBox(
         height: 150,
         child: CustomPaint(
@@ -1867,27 +2333,53 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     return _buildDashboardCard(
       'Diversity Metrics',
       isDark,
+      subtitle:
+          'Share of candidates by gender and ethnicity for reporting.',
+      titleLeadingAsset: 'assets/images/Sprints.png',
       child: Row(
         children: [
-          Expanded(child: _simpleDonutLegend('Gender:', genderData, isDark)),
+          Expanded(
+              child: _simpleDonutLegend('Gender:', genderData, isDark,
+                  iconPath:
+                      'assets/images/red_Management_Red_Badge_White.png')),
           const SizedBox(width: 8),
-          Expanded(child: _simpleDonutLegend('Ethnicity:', ethnicityData, isDark)),
+          Expanded(
+              child: _simpleDonutLegend('Ethnicity:', ethnicityData, isDark)),
         ],
       ),
     );
   }
 
-  Widget _simpleDonutLegend(String title, List<_ChartData> data, bool isDark) {
-    final values = data.isEmpty ? [_ChartData('Unknown', 100)] : data.take(4).toList();
+  Widget _simpleDonutLegend(String title, List<_ChartData> data, bool isDark,
+      {String? iconPath}) {
+    final values =
+        data.isEmpty ? [_ChartData('Unknown', 100)] : data.take(4).toList();
     final total = values.fold<int>(0, (p, e) => p + e.value).clamp(1, 999999);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title,
-            style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: isDark ? _paletteWhite : _paletteInk)),
+        Row(
+          children: [
+            Flexible(
+              child: Text(title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? _pureWhite : _pureBlack)),
+            ),
+            if (iconPath != null) ...[
+              const SizedBox(width: 4),
+              _hmDashboardAssetImage(
+                iconPath,
+                height: 12,
+                width: 12,
+                errorBuilder: (_, __, ___) => const SizedBox(width: 12, height: 12),
+              ),
+            ],
+          ],
+        ),
         const SizedBox(height: 6),
         ...values.asMap().entries.map((entry) {
           final idx = entry.key;
@@ -1902,7 +2394,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   height: 8,
                   decoration: BoxDecoration(
                     color: _paletteAccents[idx % _paletteAccents.length]
-                        .withValues(alpha: (0.55 + (pct / 100)).clamp(0.55, 1.0)),
+                        .withValues(
+                            alpha: (0.55 + (pct / 100)).clamp(0.55, 1.0)),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -1911,13 +2404,13 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   child: Text(e.label,
                       style: TextStyle(
                           fontSize: 8,
-                          color: isDark ? _paletteSilver : _paletteSteel)),
+                          color: isDark ? _pureWhite : _pureBlack)),
                 ),
                 Text('$pct%',
                     style: TextStyle(
                         fontSize: 8,
                         fontWeight: FontWeight.w700,
-                        color: isDark ? _paletteWhite : _paletteInk)),
+                        color: isDark ? _pureWhite : _pureBlack)),
               ],
             ),
           );
@@ -1927,10 +2420,15 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   Widget _buildSourcePerformanceCard(List<_ChartData> data, bool isDark) {
-    final maxVal = data.map((e) => e.value).fold<int>(1, (a, b) => a > b ? a : b);
+    final maxVal =
+        data.map((e) => e.value).fold<int>(1, (a, b) => a > b ? a : b);
     return _buildDashboardCard(
       'Source Performance',
       isDark,
+      subtitle:
+          'Which sourcing channels are driving the most applications.',
+      titleLeadingAsset:
+          'assets/images/Goal_Target_White_Badge_Red.png',
       child: SizedBox(
         height: 150,
         child: Row(
@@ -1948,7 +2446,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     Text('${e.value}',
                         style: TextStyle(
                             fontSize: 8,
-                            color: isDark ? _paletteSilver : _paletteSteel)),
+                            color: isDark ? _pureWhite : _pureBlack)),
                     const SizedBox(height: 3),
                     Container(
                       height: h,
@@ -1963,7 +2461,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             fontSize: 8,
-                            color: isDark ? _paletteSilver : _paletteSteel)),
+                            color: isDark ? _pureWhite : _pureBlack)),
                   ],
                 ),
               ),
@@ -1978,14 +2476,55 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     return _buildDashboardCard(
       'Team Collaboration',
       isDark,
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.account_circle_outlined, size: 14),
-          const SizedBox(width: 4),
-          Text('${teamMessages.length}',
-              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
-        ],
+      subtitle:
+          'Quick team notes; use the bell to jump to full notifications.',
+      titleLeadingAsset:
+          'assets/images/Networking_Collaboration_White_Badge__Red.png',
+      trailing: InkWell(
+        onTap: () => setState(() {
+          currentScreen = 'notifications';
+          unreadNotificationCount = 0;
+        }),
+        borderRadius: BorderRadius.circular(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _paletteWhite,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(5),
+                child: Icon(
+                  Icons.notifications_outlined,
+                  size: 16,
+                  color: _paletteInk,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '$unreadNotificationCount',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? _pureWhite : _pureBlack,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
       child: Column(
         children: teamMessages.take(5).map((m) {
@@ -1993,7 +2532,16 @@ class _HMMainDashboardState extends State<HMMainDashboard>
             padding: const EdgeInsets.only(bottom: 5),
             child: Row(
               children: [
-                const Icon(Icons.flag, size: 10, color: _palettePrimary),
+                Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: _palettePrimary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  child: const Icon(Icons.check,
+                      size: 10, color: _paletteWhite),
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -2001,7 +2549,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 9, color: isDark ? _paletteSilver : _paletteSteel),
+                        fontSize: 9,
+                        color: isDark ? _pureWhite : _pureBlack),
                   ),
                 ),
               ],
@@ -2022,14 +2571,25 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     return _buildDashboardCard(
       'Recent Activities',
       isDark,
+      subtitle:
+          'Latest hiring and account actions logged for your workspace.',
+      titleLeadingAsset: 'assets/images/bell_red.png',
       child: Column(
         children: list.map((a) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 5),
             child: Row(
               children: [
-                const Icon(Icons.notifications_active,
-                    size: 10, color: _palettePrimary),
+                Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: _palettePrimary,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  child: const Icon(Icons.check,
+                      size: 10, color: _paletteWhite),
+                ),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
@@ -2037,7 +2597,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 9, color: isDark ? _paletteSilver : _paletteSteel),
+                        fontSize: 9,
+                        color: isDark ? _pureWhite : _pureBlack),
                   ),
                 ),
               ],
@@ -2048,189 +2609,176 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     );
   }
 
+  static const String _calendarHeaderIconAsset =
+      'assets/images/Date_Picker_White_Badge_Red.png';
+  static const String _candidateOverviewRowAvatar =
+      'assets/images/red_user_profile.png';
+
   Widget _buildCalendarPanelCard(bool isDark) {
     return _buildDashboardCard(
       'Calendar',
       isDark,
-      trailing: TextButton(
-        onPressed: () => setState(() => currentScreen = "meetings"),
-        child: const Text('VIEW', style: TextStyle(fontSize: 10)),
+      subtitle:
+          'Interviews and meetings by day—tap a date for details or long-press to add.',
+      titleLeadingAsset: _calendarHeaderIconAsset,
+      titleColor: isDark ? _pureWhite : _palettePrimary,
+      trailing: Tooltip(
+        message: 'View calendar analytics',
+        child: TextButton(
+          onPressed: () => _showCalendarAnalytics(),
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            foregroundColor: isDark ? _pureWhite : _palettePrimary,
+          ),
+          child: const Text(
+            'VIEW',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w700,
+              fontSize: 10,
+            ),
+          ),
+        ),
       ),
-      child: SizedBox(height: 380, child: modernCalendarCard()),
+      child: _hmEmbeddedMonthCalendar(),
     );
   }
 
-  Widget modernCalendarCard() {
+  /// Month grid only: no duplicate header, no Syncfusion title bar, no daily summary strip.
+  Widget _hmEmbeddedMonthCalendar() {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.isDarkMode;
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: (themeProvider.isDarkMode ? _paletteInk : _paletteCanvas)
-            .withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: _paletteCharcoal.withValues(alpha: 0.12),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-        gradient: themeProvider.isDarkMode
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  _paletteInk.withValues(alpha: 0.96),
-                  _paletteCharcoal.withValues(alpha: 0.94),
-                  _paletteSteel.withValues(alpha: 0.88),
-                ],
-              )
-            : LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  _paletteCanvas,
-                  _paletteWhite,
-                  _paletteCanvas.withValues(alpha: 0.98),
-                ],
-              ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _palettePrimary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.calendar_month, color: _paletteWhite, size: 22),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    "Calendar",
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                      color: _palettePrimary,
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                children: [
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: _palettePeriwinkle.withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: StreamBuilder(
-                      stream: Stream.periodic(const Duration(seconds: 1)),
-                      builder: (context, snapshot) {
-                        return Text(
-                          DateFormat('hh:mm a').format(DateTime.now()),
-                          style: const TextStyle(
-                            fontFamily: 'Poppins',
-                            fontWeight: FontWeight.w600,
-                            color: _palettePrimary,
-                            fontSize: 12,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.analytics_outlined, color: _palettePrimary),
-                    onPressed: () => _showCalendarAnalytics(),
-                    tooltip: "View calendar analytics",
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 400,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: _paletteWhite.withValues(alpha: 0.92),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: _paletteCharcoal.withValues(alpha: 0.08),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: _calendarLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : SfCalendar(
-                      view: CalendarView.month,
-                      dataSource:
-                          _DashboardCalendarDataSource(_calendarAppointments),
-                      onViewChanged: (ViewChangedDetails details) {
-                        final visibleDates = details.visibleDates;
-                        if (visibleDates.isNotEmpty &&
-                            (focusedDay.year != visibleDates.first.year ||
-                                focusedDay.month != visibleDates.first.month)) {
-                          setState(() {
-                            focusedDay = visibleDates.first;
-                          });
-                          _loadCalendarData();
-                        }
-                      },
-                      onTap: (CalendarTapDetails details) {
-                        if (details.targetElement ==
-                            CalendarElement.calendarCell) {
-                          _showDayEventsDialog(details.date!);
-                        }
-                      },
-                      onLongPress: (CalendarLongPressDetails details) {
-                        if (details.targetElement ==
-                            CalendarElement.calendarCell) {
-                          _showQuickEventCreationMenu(details.date!);
-                        }
-                      },
-                      monthViewSettings: MonthViewSettings(
-                        appointmentDisplayMode:
-                            MonthAppointmentDisplayMode.appointment,
-                        showAgenda: false,
-                        monthCellStyle: MonthCellStyle(
-                          textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 14,
-                            color: themeProvider.isDarkMode
-                                ? _paletteSilver
-                                : _paletteCharcoal,
-                          ),
-                        ),
-                      ),
-                      todayHighlightColor: _palettePrimary,
-                      selectionDecoration: BoxDecoration(
-                        color: _palettePeriwinkle.withValues(alpha: 0.25),
-                        border: Border.all(color: _palettePrimary, width: 2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
+    return SizedBox(
+      height: 400,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: isDark
+              ? _darkWidgetSurface()
+              : _paletteWhite.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: _paletteCharcoal.withValues(alpha: 0.08),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
-          ),
-          _buildDailyEventSummary(themeProvider),
-        ],
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: _calendarLoading
+            ? Center(
+                child: CircularProgressIndicator(
+                  color: isDark ? _palettePrimary : null,
+                ),
+              )
+            : SfCalendar(
+                view: CalendarView.month,
+                headerHeight: 0,
+                backgroundColor: isDark ? Colors.transparent : null,
+                cellBorderColor:
+                    isDark ? _paletteWhite.withValues(alpha: 0.12) : null,
+                viewHeaderStyle: ViewHeaderStyle(
+                  backgroundColor: isDark ? Colors.transparent : null,
+                  dayTextStyle: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? _pureWhite : _pureBlack,
+                  ),
+                ),
+                todayTextStyle: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? _pureWhite : _palettePrimary,
+                ),
+                dataSource:
+                    _DashboardCalendarDataSource(_calendarAppointments),
+                onViewChanged: (ViewChangedDetails details) {
+                  final visibleDates = details.visibleDates;
+                  if (visibleDates.isNotEmpty &&
+                      (focusedDay.year != visibleDates.first.year ||
+                          focusedDay.month != visibleDates.first.month)) {
+                    final nextFocusedDay = visibleDates.first;
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted) return;
+                      setState(() {
+                        focusedDay = nextFocusedDay;
+                      });
+                      _loadCalendarData();
+                    });
+                  }
+                },
+                onTap: (CalendarTapDetails details) {
+                  if (details.targetElement == CalendarElement.calendarCell) {
+                    _showDayEventsDialog(details.date!);
+                  }
+                },
+                onLongPress: (CalendarLongPressDetails details) {
+                  if (details.targetElement == CalendarElement.calendarCell) {
+                    _showQuickEventCreationMenu(details.date!);
+                  }
+                },
+                monthViewSettings: MonthViewSettings(
+                  appointmentDisplayMode:
+                      MonthAppointmentDisplayMode.appointment,
+                  showAgenda: false,
+                  monthCellStyle: MonthCellStyle(
+                    backgroundColor: isDark ? Colors.transparent : null,
+                    todayBackgroundColor: isDark
+                        ? _palettePrimary.withValues(alpha: 0.22)
+                        : null,
+                    leadingDatesBackgroundColor:
+                        isDark ? Colors.transparent : null,
+                    trailingDatesBackgroundColor:
+                        isDark ? Colors.transparent : null,
+                    textStyle: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      color: isDark ? _pureWhite : _pureBlack,
+                    ),
+                    leadingDatesTextStyle: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      color: isDark
+                          ? _pureWhite.withValues(alpha: 0.55)
+                          : _pureBlack.withValues(alpha: 0.45),
+                    ),
+                    trailingDatesTextStyle: TextStyle(
+                      fontFamily: 'Poppins',
+                      fontSize: 14,
+                      color: isDark
+                          ? _pureWhite.withValues(alpha: 0.55)
+                          : _pureBlack.withValues(alpha: 0.45),
+                    ),
+                  ),
+                ),
+                todayHighlightColor: _palettePrimary,
+                selectionDecoration: BoxDecoration(
+                  color: isDark
+                      ? _palettePrimary.withValues(alpha: 0.28)
+                      : _palettePeriwinkle.withValues(alpha: 0.25),
+                  border: Border.all(color: _palettePrimary, width: 2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
       ),
     );
+  }
+
+  Future<void> _refreshDashboardData() async {
+    await Future.wait([
+      fetchStats(),
+      fetchCandidates(refresh: true),
+      fetchChartData(),
+      fetchPipelineActivity(),
+      fetchDashboardNotifications(),
+      _loadCalendarData(),
+    ]);
   }
 
   // New method for showing day events in a dialog
@@ -2372,51 +2920,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     );
   }
 
-  // New method for daily event summary
-  Widget _buildDailyEventSummary(ThemeProvider themeProvider) {
-    final todayEvents = _calendarAppointments.where((appointment) {
-      final now = DateTime.now();
-      return appointment.startTime.year == now.year &&
-          appointment.startTime.month == now.month &&
-          appointment.startTime.day == now.day;
-    }).toList();
-
-    return ExpansionTile(
-      title: Text(
-        "Today's Events (${todayEvents.length})",
-        style:
-            const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
-      ),
-      children: todayEvents.isEmpty
-          ? [
-              const ListTile(
-                  title: Text("No events today",
-                      style: TextStyle(fontFamily: 'Poppins')))
-            ]
-          : todayEvents
-              .map((event) => ListTile(
-                    leading: Icon(
-                      event.color == Colors.deepOrange
-                          ? Icons.video_call
-                          : Icons.event,
-                      color: event.color,
-                    ),
-                    title: Text(event.subject,
-                        style: const TextStyle(fontFamily: 'Poppins')),
-                    subtitle: Text(
-                      DateFormat.jm().format(event.startTime),
-                      style:
-                          const TextStyle(fontFamily: 'Poppins', fontSize: 12),
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.more_vert),
-                      onPressed: () => _showEventActions(event),
-                    ),
-                  ))
-              .toList(),
-    );
-  }
-
   // New method for calendar analytics
   void _showCalendarAnalytics() {
     // Implement analytics dialog showing metrics
@@ -2440,11 +2943,6 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         );
       },
     );
-  }
-
-  // New method for event actions
-  void _showEventActions(Appointment event) {
-    // Implement quick actions menu
   }
 }
 
@@ -2477,7 +2975,7 @@ class _LineChartPainter extends CustomPainter {
       ..color = const Color(0xFFCF2030)
       ..style = PaintingStyle.fill;
     final gridPaint = Paint()
-      ..color = (isDark ? const Color(0xFFB0B6BB) : const Color(0xFF727576))
+      ..color = (isDark ? const Color(0xFFFFFFFF) : const Color(0xFF000000))
           .withValues(alpha: 0.35)
       ..strokeWidth = 1;
 
@@ -2488,8 +2986,10 @@ class _LineChartPainter extends CustomPainter {
 
     final path = Path();
     for (int i = 0; i < points.length; i++) {
-      final x = (points.length == 1) ? 0.0 : (i / (points.length - 1)) * size.width;
-      final y = size.height - ((points[i].value / maxValue) * (size.height - 8));
+      final x =
+          (points.length == 1) ? 0.0 : (i / (points.length - 1)) * size.width;
+      final y =
+          size.height - ((points[i].value / maxValue) * (size.height - 8));
       if (i == 0) {
         path.moveTo(x, y);
       } else {
