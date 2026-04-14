@@ -11,10 +11,12 @@ import 'dart:async';
 import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart'
     show File;
 import 'dart:typed_data';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Import your existing services
 import '../../services/candidate_service.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 import '../../utils/app_version.dart';
 
 /// New landing screen: hero, explore by category, job cards. Optional [token] for logged-in state.
@@ -34,6 +36,10 @@ class _LandingPageState extends State<LandingPage>
 
   int _currentTab = 0;
   int _selectedCategoryIndex = 0; // 0 = All, 1..8 = category tabs
+  
+  // Saved jobs functionality
+  List<Map<String, dynamic>> _savedJobs = [];
+  
   // Aligned with Khonology's typical vacancies (development, architecture, cloud, data/digital)
   static const List<String> _categoryNames = [
     'All',
@@ -94,7 +100,6 @@ class _LandingPageState extends State<LandingPage>
   Uint8List? _profileImageBytes;
   // ignore: unused_field - kept for profile picture when UI is reconnected
   String _profileImageUrl = "";
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
   @override
   void initState() {
@@ -102,6 +107,7 @@ class _LandingPageState extends State<LandingPage>
     _isDisposed = false;
     WidgetsBinding.instance.addObserver(this);
     _initializeData();
+    _loadSavedJobs(); // Load saved jobs
     if (_hasToken) fetchProfileImage();
   }
 
@@ -205,7 +211,7 @@ class _LandingPageState extends State<LandingPage>
     if (!_hasToken) return;
     try {
       final profileRes = await http.get(
-        Uri.parse("$apiBase/profile"),
+        Uri.parse("${ApiEndpoints.candidateBase}/profile"),
         headers: {
           'Authorization': 'Bearer ${_effectiveToken ?? ''}',
           'Content-Type': 'application/json',
@@ -231,7 +237,7 @@ class _LandingPageState extends State<LandingPage>
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse("$apiBase/upload_profile_picture"),
+        Uri.parse(ApiEndpoints.uploadAuthProfilePicture),
       );
 
       request.headers['Authorization'] = 'Bearer ${_effectiveToken ?? ''}';
@@ -276,8 +282,11 @@ class _LandingPageState extends State<LandingPage>
 
     _safeSetState(() => loadingJobs = true);
     try {
+      final role = await AuthService.getRole();
+      final isCandidate = role == 'candidate';
+
       final List<Map<String, dynamic>> jobs =
-          _hasToken && _effectiveToken != null
+          _hasToken && _effectiveToken != null && isCandidate
               ? await CandidateService.getAvailableJobs(_effectiveToken!)
               : await CandidateService.getPublicJobs();
       if (!mounted) return;
@@ -313,6 +322,12 @@ class _LandingPageState extends State<LandingPage>
   Future<void> fetchApplications() async {
     if (!mounted || !_hasToken) return;
 
+    final role = await AuthService.getRole();
+    if (role != 'candidate') {
+      _safeSetState(() => loadingApplications = false);
+      return;
+    }
+
     _safeSetState(() => loadingApplications = true);
     try {
       final data = await CandidateService.getApplications(_effectiveToken!);
@@ -339,6 +354,12 @@ class _LandingPageState extends State<LandingPage>
 
   Future<void> fetchNotifications() async {
     if (!mounted || !_hasToken) return;
+
+    final role = await AuthService.getRole();
+    if (role != 'candidate') {
+      _safeSetState(() => loadingNotifications = false);
+      return;
+    }
 
     _safeSetState(() => loadingNotifications = true);
     try {
@@ -525,7 +546,7 @@ class _LandingPageState extends State<LandingPage>
 
     try {
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/ai/chat"),
+        Uri.parse("${ApiEndpoints.aiBase}/chat"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer ${_effectiveToken ?? ''}",
@@ -576,7 +597,7 @@ class _LandingPageState extends State<LandingPage>
     _safeSetState(() => _isLoading = true);
     try {
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/ai/parse_cv"),
+        Uri.parse("${ApiEndpoints.aiBase}/parse_cv"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer ${_effectiveToken ?? ''}",
@@ -724,11 +745,17 @@ class _LandingPageState extends State<LandingPage>
                   children: [
                     IconButton(
                       icon: Icon(
-                        Icons.favorite_border,
-                        color: strokeColor,
+                        _isJobSaved(job) ? Icons.favorite : Icons.favorite_border,
+                        color: _isJobSaved(job) ? Colors.red : strokeColor,
                         size: 22,
                       ),
-                      onPressed: () => _saveJob(job),
+                      onPressed: () {
+                        if (_isJobSaved(job)) {
+                          _unsaveJob(job);
+                        } else {
+                          _saveJobToFavorites(job);
+                        }
+                      },
                     ),
                     SizedBox(width: 4),
                     ElevatedButton(
@@ -775,13 +802,121 @@ class _LandingPageState extends State<LandingPage>
     );
   }
 
-  void _saveJob(Map<String, dynamic> job) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Job saved to favorites', style: GoogleFonts.poppins()),
-        backgroundColor: primaryColor,
-      ),
-    );
+  // Saved jobs functionality
+  Future<void> _loadSavedJobs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedJobsJson = prefs.getString('saved_jobs');
+      if (savedJobsJson != null && savedJobsJson.isNotEmpty) {
+        final List<dynamic> savedList = jsonDecode(savedJobsJson);
+        final savedJobsList = savedList
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        if (mounted) {
+          setState(() {
+            _savedJobs = savedJobsList;
+          });
+        }
+      }
+    } catch (e) {
+      // Error handling, no state change needed
+    }
+  }
+
+  Future<void> _saveJobToFavorites(Map<String, dynamic> job) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jobId = job['id']?.toString();
+      if (jobId == null) return;
+
+      // Check if already saved
+      if (_isJobSaved(job)) return;
+
+      final newSavedJob = Map<String, dynamic>.from(job);
+      newSavedJob['saved_at'] = DateTime.now().toIso8601String();
+
+      final updatedSavedJobs = [..._savedJobs, newSavedJob];
+      await prefs.setString('saved_jobs', jsonEncode(updatedSavedJobs));
+
+      if (mounted) {
+        setState(() {
+          _savedJobs = updatedSavedJobs;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Job saved',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to save job',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _unsaveJob(Map<String, dynamic> job) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jobId = job['id']?.toString();
+      if (jobId == null) return;
+
+      final updatedSavedJobs = _savedJobs
+          .where((savedJob) => savedJob['id']?.toString() != jobId)
+          .toList();
+
+      await prefs.setString('saved_jobs', jsonEncode(updatedSavedJobs));
+
+      if (mounted) {
+        setState(() {
+          _savedJobs = updatedSavedJobs;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Job removed from saved',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.orange,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to remove saved job',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  bool _isJobSaved(Map<String, dynamic> job) {
+    final jobId = job['id']?.toString();
+    if (jobId == null) return false;
+    return _savedJobs.any((savedJob) => savedJob['id']?.toString() == jobId);
   }
 
   // Updated search functionality (kept for possible search UI)

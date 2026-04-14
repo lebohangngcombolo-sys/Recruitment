@@ -1,11 +1,15 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:vector_math/vector_math_64.dart' as vm;
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/auth_service.dart';
+import '../../services/app_state_manager.dart';
 import '../../utils/api_endpoints.dart';
 import '../../providers/theme_provider.dart';
+import '../../widgets/themed_surface_card.dart';
+import '../../widgets/state_widgets.dart';
 import 'candidate_detail_screen.dart';
 
 class CandidateListScreen extends StatefulWidget {
@@ -28,27 +32,68 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
     fetchCandidates();
   }
 
-  Future<void> fetchCandidates() async {
-    try {
-      final response = await AuthService.authorizedGet(
-        "${ApiEndpoints.adminBase}/candidates/all",
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+  Future<void> fetchCandidates({bool refresh = false}) async {
+    if (refresh) {
+      // Clear existing data for fresh load
+      if (mounted) {
         setState(() {
-          candidates = data['candidates'];
+          candidates.clear();
+          loading = true;
+        });
+      }
+      appStateManager.clearCache('candidates');
+    }
+
+    try {
+      // Use AppStateManager for cached fetching
+      final data = await appStateManager.fetchWithCache(
+        'candidates',
+        () async {
+          final response = await AuthService.authorizedGet(
+            "${ApiEndpoints.adminBase}/candidates/all",
+          );
+
+          if (response.statusCode != 200) {
+            throw Exception(
+                'Failed to load candidates: ${response.statusCode}');
+          }
+
+          final responseData = jsonDecode(response.body);
+          return responseData;
+        },
+        forceRefresh: refresh,
+      );
+
+      if (mounted) {
+        setState(() {
+          candidates = data['candidates'] ?? [];
           loading = false;
         });
-      } else {
-        setState(() => loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to load candidates')),
-        );
       }
     } catch (e) {
-      setState(() => loading = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        setState(() => loading = false);
+
+        // Show appropriate error message
+        String errorMessage = 'Error loading candidates';
+        if (e.toString().contains('Network')) {
+          errorMessage = 'Network error - please check your connection';
+        } else if (e.toString().contains('401') ||
+            e.toString().contains('token')) {
+          errorMessage = 'Session expired - please login again';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$errorMessage: $e'),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Retry',
+              onPressed: () => fetchCandidates(refresh: true),
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -78,548 +123,508 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
             backgroundColor: (themeProvider.isDarkMode
                     ? const Color(0xFF14131E)
                     : Colors.white)
-                .withValues(alpha: 0.9),
+                .withOpacity(0.95),
             elevation: 0,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () => fetchCandidates(refresh: true),
+                tooltip: 'Refresh candidates',
+              ),
+            ],
             foregroundColor:
                 themeProvider.isDarkMode ? Colors.white : Colors.black87,
             iconTheme: IconThemeData(
                 color:
                     themeProvider.isDarkMode ? Colors.white : Colors.black87),
           ),
-          body: loading
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const CircularProgressIndicator(
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.redAccent),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        "Loading Candidates...",
-                        style: GoogleFonts.inter(
-                          color: themeProvider.isDarkMode
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade600,
-                          fontSize: 16,
+          body: RefreshIndicator(
+            onRefresh: () => fetchCandidates(refresh: true),
+            child: loading
+                ? const ThemedLoadingState(
+                    message: "Loading Candidates...",
+                  )
+                : candidates.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.people_outline,
+                              size: 80,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.grey.shade600
+                                  : Colors.grey.shade300,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              "No Candidates Found",
+                              style: GoogleFonts.inter(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.grey.shade400
+                                    : Colors.grey.shade600,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              "Candidates will appear here once they register",
+                              style: GoogleFonts.inter(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.grey.shade500
+                                    : Colors.grey.shade500,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ],
-                  ),
-                )
-              : candidates.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      )
+                    : Column(
                         children: [
-                          Icon(
-                            Icons.people_outline,
-                            size: 80,
-                            color: themeProvider.isDarkMode
-                                ? Colors.grey.shade600
-                                : Colors.grey.shade300,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            "No Candidates Found",
-                            style: GoogleFonts.inter(
-                              color: themeProvider.isDarkMode
-                                  ? Colors.grey.shade400
-                                  : Colors.grey.shade600,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
+                          // Header with stats
+                          Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: ThemedStatCard(
+                              title: "Candidate Directory",
+                              value: "${candidates.length}",
+                              icon: Icons.people_alt,
+                              iconColor: Colors.redAccent,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            "Candidates will appear here once they register",
-                            style: GoogleFonts.inter(
-                              color: themeProvider.isDarkMode
-                                  ? Colors.grey.shade500
-                                  : Colors.grey.shade500,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : Column(
-                      children: [
-                        // Header with stats
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          margin: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: (themeProvider.isDarkMode
-                                    ? const Color(0xFF14131E)
-                                    : Colors.white)
-                                .withValues(alpha: 0.9),
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.05),
-                                blurRadius: 20,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color:
-                                      Colors.redAccent.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  Icons.people_alt,
-                                  color: Colors.redAccent,
-                                  size: 28,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    "Candidate Directory",
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w600,
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87,
-                                    ),
-                                  ),
-                                  Text(
-                                    "${candidates.length} candidates registered",
-                                    style: GoogleFonts.inter(
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.grey.shade400
-                                          : Colors.grey.shade600,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const Spacer(),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color:
-                                      Colors.redAccent.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  "Active",
-                                  style: GoogleFonts.inter(
-                                    color: Colors.redAccent,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Candidates Grid
-                        Expanded(
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              int cardsPerRow = 1;
-                              double width = constraints.maxWidth;
+                          // Candidates Grid
+                          Expanded(
+                            child: LayoutBuilder(
+                              builder: (context, constraints) {
+                                int cardsPerRow = 1;
+                                double width = constraints.maxWidth;
 
-                              if (width >= 1200) {
-                                cardsPerRow = 3;
-                              } else if (width >= 800) {
-                                cardsPerRow = 2;
-                              }
+                                if (width >= 1200) {
+                                  cardsPerRow = 3;
+                                } else if (width >= 800) {
+                                  cardsPerRow = 2;
+                                }
 
-                              double cardWidth =
-                                  (width - (20 * (cardsPerRow + 1))) /
-                                      cardsPerRow;
+                                double cardWidth =
+                                    (width - (20 * (cardsPerRow + 1))) /
+                                        cardsPerRow;
 
-                              return SingleChildScrollView(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 20),
-                                child: Wrap(
-                                  spacing: 20,
-                                  runSpacing: 20,
-                                  children:
-                                      candidates.asMap().entries.map((entry) {
-                                    int index = entry.key;
-                                    var c = entry.value;
+                                return SingleChildScrollView(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 20),
+                                  child: Wrap(
+                                    spacing: 20,
+                                    runSpacing: 20,
+                                    children:
+                                        candidates.asMap().entries.map((entry) {
+                                      int index = entry.key;
+                                      var c = entry.value;
 
-                                    bool isHovered = hoveredIndex == index;
+                                      bool isHovered = hoveredIndex == index;
 
-                                    return MouseRegion(
-                                      onEnter: (_) =>
-                                          setState(() => hoveredIndex = index),
-                                      onExit: (_) =>
-                                          setState(() => hoveredIndex = null),
-                                      child: AnimatedContainer(
-                                        duration:
-                                            const Duration(milliseconds: 200),
-                                        transform: isHovered
-                                            ? (Matrix4.identity()
-                                              ..translateByVector3(
-                                                  vm.Vector3(0, -8, 0)))
-                                            : Matrix4.identity(),
-                                        width: cardWidth,
-                                        decoration: BoxDecoration(
-                                          color: (themeProvider.isDarkMode
-                                                  ? const Color(0xFF14131E)
-                                                  : Colors.white)
-                                              .withValues(alpha: 0.9),
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: isHovered
-                                                  ? Colors.redAccent
-                                                      .withValues(alpha: 0.15)
-                                                  : Colors.black
-                                                      .withValues(alpha: 0.08),
-                                              blurRadius: isHovered ? 25 : 15,
-                                              offset: const Offset(0, 8),
-                                            ),
-                                          ],
-                                          border: Border.all(
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.grey.shade800
-                                                : Colors.grey
-                                                    .withValues(alpha: 0.1),
-                                          ),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            // Header with avatar
-                                            Container(
-                                              padding: const EdgeInsets.all(20),
-                                              decoration: BoxDecoration(
-                                                color: Colors.redAccent
-                                                    .withValues(alpha: 0.03),
-                                                borderRadius:
-                                                    const BorderRadius.only(
-                                                  topLeft: Radius.circular(20),
-                                                  topRight: Radius.circular(20),
-                                                ),
-                                              ),
-                                              child: Row(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  Stack(
-                                                    children: [
-                                                      Container(
-                                                        width: 60,
-                                                        height: 60,
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          color: Colors
-                                                              .redAccent
-                                                              .withValues(
-                                                                  alpha: 0.1),
-                                                          shape:
-                                                              BoxShape.circle,
-                                                          border: Border.all(
-                                                            color: Colors
-                                                                .redAccent
-                                                                .withValues(
-                                                                    alpha: 0.2),
-                                                            width: 2,
-                                                          ),
-                                                        ),
-                                                        child:
-                                                            c['profile_picture'] !=
-                                                                    null
-                                                                ? ClipOval(
-                                                                    child: Image
-                                                                        .network(
-                                                                      c['profile_picture'],
-                                                                      width: 60,
-                                                                      height:
-                                                                          60,
-                                                                      fit: BoxFit
-                                                                          .cover,
-                                                                    ),
-                                                                  )
-                                                                : Icon(
-                                                                    Icons
-                                                                        .person,
-                                                                    size: 30,
-                                                                    color: Colors
-                                                                        .redAccent
-                                                                        .withValues(
-                                                                            alpha:
-                                                                                0.6),
-                                                                  ),
-                                                      ),
-                                                      Positioned(
-                                                        bottom: 0,
-                                                        right: 0,
-                                                        child: Container(
-                                                          width: 16,
-                                                          height: 16,
-                                                          decoration:
-                                                              BoxDecoration(
-                                                            color: Colors.green,
-                                                            shape:
-                                                                BoxShape.circle,
-                                                            border: Border.all(
-                                                              color:
-                                                                  Colors.white,
-                                                              width: 2,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                  const SizedBox(width: 16),
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Text(
-                                                          c['full_name'] ??
-                                                              'Unknown Candidate',
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                            fontSize: 18,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            color: themeProvider
-                                                                    .isDarkMode
-                                                                ? Colors.white
-                                                                : Colors
-                                                                    .black87,
-                                                          ),
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
-                                                        ),
-                                                        const SizedBox(
-                                                            height: 4),
-                                                        Text(
-                                                          c['email'] ??
-                                                              'No email provided',
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                            color: themeProvider
-                                                                    .isDarkMode
-                                                                ? Colors.grey
-                                                                    .shade400
-                                                                : Colors.grey
-                                                                    .shade600,
-                                                            fontSize: 12,
-                                                          ),
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
-                                                        ),
-                                                      ],
+                                      return MouseRegion(
+                                        onEnter: kIsWeb
+                                            ? (_) => setState(
+                                                () => hoveredIndex = index)
+                                            : null,
+                                        onExit: kIsWeb
+                                            ? (_) => setState(
+                                                () => hoveredIndex = null)
+                                            : null,
+                                        child: AnimatedContainer(
+                                          duration:
+                                              const Duration(milliseconds: 200),
+                                          transform: isHovered
+                                              ? (Matrix4.identity()
+                                                ..translateByVector3(
+                                                    vm.Vector3(0, -8, 0)))
+                                              : Matrix4.identity(),
+                                          width: cardWidth,
+                                          child: ThemedSurfaceCard(
+                                            padding: EdgeInsets.zero,
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                // Header with avatar
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.all(20),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.redAccent
+                                                        .withValues(
+                                                            alpha: 0.03),
+                                                    borderRadius:
+                                                        const BorderRadius.only(
+                                                      topLeft:
+                                                          Radius.circular(20),
+                                                      topRight:
+                                                          Radius.circular(20),
                                                     ),
                                                   ),
-                                                ],
-                                              ),
-                                            ),
-                                            // Details section
-                                            Padding(
-                                              padding: const EdgeInsets.all(20),
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  _buildInfoRow(
-                                                    icon: Icons.phone,
-                                                    label: "Phone",
-                                                    value: c['phone'] ?? 'N/A',
-                                                    themeProvider:
-                                                        themeProvider,
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  _buildInfoRow(
-                                                    icon: Icons.location_on,
-                                                    label: "Location",
-                                                    value:
-                                                        c['location'] ?? 'N/A',
-                                                    themeProvider:
-                                                        themeProvider,
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  _buildInfoRow(
-                                                    icon: Icons.female,
-                                                    label: "Gender",
-                                                    value: c['gender'] ?? 'N/A',
-                                                    themeProvider:
-                                                        themeProvider,
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  _buildInfoRow(
-                                                    icon: Icons.badge,
-                                                    label: "ID Number",
-                                                    value:
-                                                        c['id_number'] ?? 'N/A',
-                                                    themeProvider:
-                                                        themeProvider,
-                                                  ),
-                                                  if (c['applications_summary'] != null && (c['applications_summary'] as List).isNotEmpty) ...[
-                                                    const SizedBox(height: 8),
-                                                    _buildInfoRow(
-                                                      icon: Icons.work,
-                                                      label: "Jobs applied",
-                                                      value: "${(c['applications_summary'] as List).length} job(s): ${(c['applications_summary'] as List).map((a) => a is Map ? (a['job_title'] ?? '') : '').where((s) => s.isNotEmpty).take(3).join(', ')}${(c['applications_summary'] as List).length > 3 ? '...' : ''}",
-                                                      themeProvider: themeProvider,
-                                                    ),
-                                                  ],
-                                                  const SizedBox(height: 16),
-                                                  // Action buttons
-                                                  Row(
+                                                  child: Row(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
                                                     children: [
-                                                      Expanded(
-                                                        child: Container(
-                                                          decoration:
-                                                              BoxDecoration(
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        12),
-                                                            boxShadow: [
-                                                              BoxShadow(
-                                                                color: Colors
-                                                                    .blue
-                                                                    .withValues(
-                                                                        alpha:
-                                                                            0.3),
-                                                                blurRadius: 8,
-                                                                offset:
-                                                                    const Offset(
-                                                                        0, 4),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                          child: ElevatedButton
-                                                              .icon(
-                                                            icon: const Icon(
-                                                                Icons
-                                                                    .visibility,
-                                                                size: 16),
-                                                            label: Text(
-                                                              "View Profile",
-                                                              style: GoogleFonts
-                                                                  .inter(
-                                                                fontSize: 12,
-                                                                fontWeight:
-                                                                    FontWeight
-                                                                        .w600,
-                                                              ),
-                                                            ),
-                                                            onPressed: () {
-                                                              final summary = c['applications_summary'] as List?;
-                                                              final firstAppId = summary != null && summary.isNotEmpty && summary.first is Map
-                                                                  ? (summary.first as Map)['application_id']
-                                                                  : null;
-                                                              if (firstAppId != null) {
-                                                                Navigator.of(context).push(
-                                                                  MaterialPageRoute(
-                                                                    builder: (_) => CandidateDetailScreen(
-                                                                      candidateId: c['id'] as int,
-                                                                      applicationId: firstAppId as int,
-                                                                    ),
-                                                                  ),
-                                                                );
-                                                              } else {
-                                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                                  const SnackBar(content: Text('No applications yet')),
-                                                                );
-                                                              }
-                                                            },
-                                                            style:
-                                                                ElevatedButton
-                                                                    .styleFrom(
-                                                              backgroundColor:
-                                                                  Colors.blue,
-                                                              foregroundColor:
-                                                                  Colors.white,
-                                                              padding:
-                                                                  const EdgeInsets
-                                                                      .symmetric(
-                                                                      vertical:
-                                                                          12),
-                                                              shape:
-                                                                  RoundedRectangleBorder(
-                                                                borderRadius:
-                                                                    BorderRadius
-                                                                        .circular(
-                                                                            12),
-                                                              ),
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 8),
-                                                      Container(
-                                                        decoration:
-                                                            BoxDecoration(
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(12),
-                                                          boxShadow: [
-                                                            BoxShadow(
+                                                      Stack(
+                                                        children: [
+                                                          Container(
+                                                            width: 60,
+                                                            height: 60,
+                                                            decoration:
+                                                                BoxDecoration(
                                                               color: Colors
                                                                   .redAccent
                                                                   .withValues(
                                                                       alpha:
-                                                                          0.3),
-                                                              blurRadius: 8,
-                                                              offset:
-                                                                  const Offset(
-                                                                      0, 4),
+                                                                          0.1),
+                                                              shape: BoxShape
+                                                                  .circle,
+                                                              border:
+                                                                  Border.all(
+                                                                color: Colors
+                                                                    .redAccent
+                                                                    .withValues(
+                                                                        alpha:
+                                                                            0.2),
+                                                                width: 2,
+                                                              ),
+                                                            ),
+                                                            child:
+                                                                c['profile_picture'] !=
+                                                                        null
+                                                                    ? ClipOval(
+                                                                        child: Image
+                                                                            .network(
+                                                                          c['profile_picture'],
+                                                                          width:
+                                                                              60,
+                                                                          height:
+                                                                              60,
+                                                                          fit: BoxFit
+                                                                              .cover,
+                                                                        ),
+                                                                      )
+                                                                    : Icon(
+                                                                        Icons
+                                                                            .person,
+                                                                        size:
+                                                                            30,
+                                                                        color: Colors
+                                                                            .redAccent
+                                                                            .withValues(alpha: 0.6),
+                                                                      ),
+                                                          ),
+                                                          Positioned(
+                                                            bottom: 0,
+                                                            right: 0,
+                                                            child: Container(
+                                                              width: 16,
+                                                              height: 16,
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                color: Colors
+                                                                    .green,
+                                                                shape: BoxShape
+                                                                    .circle,
+                                                                border:
+                                                                    Border.all(
+                                                                  color: Colors
+                                                                      .white,
+                                                                  width: 2,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      const SizedBox(width: 16),
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            Text(
+                                                              c['full_name'] ??
+                                                                  'Unknown Candidate',
+                                                              style: GoogleFonts
+                                                                  .inter(
+                                                                fontSize: 18,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                color: themeProvider
+                                                                        .isDarkMode
+                                                                    ? Colors
+                                                                        .white
+                                                                    : Colors
+                                                                        .black87,
+                                                              ),
+                                                              maxLines: 1,
+                                                              overflow:
+                                                                  TextOverflow
+                                                                      .ellipsis,
+                                                            ),
+                                                            const SizedBox(
+                                                                height: 4),
+                                                            Text(
+                                                              c['email'] ??
+                                                                  'No email provided',
+                                                              style: GoogleFonts
+                                                                  .inter(
+                                                                color: themeProvider.isDarkMode
+                                                                    ? Colors
+                                                                        .grey
+                                                                        .shade400
+                                                                    : Colors
+                                                                        .grey
+                                                                        .shade600,
+                                                                fontSize: 12,
+                                                              ),
+                                                              maxLines: 1,
+                                                              overflow:
+                                                                  TextOverflow
+                                                                      .ellipsis,
                                                             ),
                                                           ],
-                                                        ),
-                                                        child: IconButton(
-                                                          onPressed: () {},
-                                                          icon: const Icon(
-                                                              Icons.more_vert,
-                                                              color:
-                                                                  Colors.white),
-                                                          style: IconButton
-                                                              .styleFrom(
-                                                            backgroundColor:
-                                                                Colors
-                                                                    .redAccent,
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .all(12),
-                                                          ),
                                                         ),
                                                       ),
                                                     ],
                                                   ),
-                                                ],
-                                              ),
+                                                ),
+                                                // Details section
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.all(20),
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      _buildInfoRow(
+                                                        icon: Icons.phone,
+                                                        label: "Phone",
+                                                        value:
+                                                            c['phone'] ?? 'N/A',
+                                                        themeProvider:
+                                                            themeProvider,
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      _buildInfoRow(
+                                                        icon: Icons.location_on,
+                                                        label: "Location",
+                                                        value: c['location'] ??
+                                                            'N/A',
+                                                        themeProvider:
+                                                            themeProvider,
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      _buildInfoRow(
+                                                        icon: Icons.female,
+                                                        label: "Gender",
+                                                        value: c['gender'] ??
+                                                            'N/A',
+                                                        themeProvider:
+                                                            themeProvider,
+                                                      ),
+                                                      const SizedBox(height: 8),
+                                                      _buildInfoRow(
+                                                        icon: Icons.badge,
+                                                        label: "ID Number",
+                                                        value: c['id_number'] ??
+                                                            'N/A',
+                                                        themeProvider:
+                                                            themeProvider,
+                                                      ),
+                                                      if (c['applications_summary'] !=
+                                                              null &&
+                                                          (c['applications_summary']
+                                                                  as List)
+                                                              .isNotEmpty) ...[
+                                                        const SizedBox(
+                                                            height: 8),
+                                                        _buildInfoRow(
+                                                          icon: Icons.work,
+                                                          label: "Jobs applied",
+                                                          value:
+                                                              "${(c['applications_summary'] as List).length} job(s): ${(c['applications_summary'] as List).map((a) => a is Map ? (a['job_title'] ?? '') : '').where((s) => s.isNotEmpty).take(3).join(', ')}${(c['applications_summary'] as List).length > 3 ? '...' : ''}",
+                                                          themeProvider:
+                                                              themeProvider,
+                                                        ),
+                                                      ],
+                                                      const SizedBox(
+                                                          height: 16),
+                                                      // Action buttons
+                                                      Row(
+                                                        children: [
+                                                          Expanded(
+                                                            child: Container(
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                borderRadius:
+                                                                    BorderRadius
+                                                                        .circular(
+                                                                            12),
+                                                                boxShadow: [
+                                                                  BoxShadow(
+                                                                    color: Colors
+                                                                        .blue
+                                                                        .withValues(
+                                                                            alpha:
+                                                                                0.3),
+                                                                    blurRadius:
+                                                                        8,
+                                                                    offset:
+                                                                        const Offset(
+                                                                            0,
+                                                                            4),
+                                                                  ),
+                                                                ],
+                                                              ),
+                                                              child:
+                                                                  ElevatedButton
+                                                                      .icon(
+                                                                icon: const Icon(
+                                                                    Icons
+                                                                        .visibility,
+                                                                    size: 16),
+                                                                label: Text(
+                                                                  "View Profile",
+                                                                  style:
+                                                                      GoogleFonts
+                                                                          .inter(
+                                                                    fontSize:
+                                                                        12,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .w600,
+                                                                  ),
+                                                                ),
+                                                                onPressed: () {
+                                                                  final summary =
+                                                                      c['applications_summary']
+                                                                          as List?;
+                                                                  final firstAppId = summary !=
+                                                                              null &&
+                                                                          summary
+                                                                              .isNotEmpty &&
+                                                                          summary.first
+                                                                              is Map
+                                                                      ? (summary
+                                                                              .first
+                                                                          as Map)['application_id']
+                                                                      : null;
+                                                                  if (firstAppId !=
+                                                                      null) {
+                                                                    Navigator.of(
+                                                                            context)
+                                                                        .push(
+                                                                      MaterialPageRoute(
+                                                                        builder:
+                                                                            (_) =>
+                                                                                CandidateDetailScreen(
+                                                                          candidateId:
+                                                                              c['id'] as int,
+                                                                          applicationId:
+                                                                              firstAppId as int,
+                                                                        ),
+                                                                      ),
+                                                                    );
+                                                                  } else {
+                                                                    ScaffoldMessenger.of(
+                                                                            context)
+                                                                        .showSnackBar(
+                                                                      const SnackBar(
+                                                                          content:
+                                                                              Text('No applications yet')),
+                                                                    );
+                                                                  }
+                                                                },
+                                                                style: ElevatedButton
+                                                                    .styleFrom(
+                                                                  backgroundColor:
+                                                                      Colors
+                                                                          .blue,
+                                                                  foregroundColor:
+                                                                      Colors
+                                                                          .white,
+                                                                  padding: const EdgeInsets
+                                                                      .symmetric(
+                                                                      vertical:
+                                                                          12),
+                                                                  shape:
+                                                                      RoundedRectangleBorder(
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                            12),
+                                                                  ),
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          const SizedBox(
+                                                              width: 8),
+                                                          Container(
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          12),
+                                                              boxShadow: [
+                                                                BoxShadow(
+                                                                  color: Colors
+                                                                      .redAccent
+                                                                      .withValues(
+                                                                          alpha:
+                                                                              0.3),
+                                                                  blurRadius: 8,
+                                                                  offset:
+                                                                      const Offset(
+                                                                          0, 4),
+                                                                ),
+                                                              ],
+                                                            ),
+                                                            child: IconButton(
+                                                              onPressed: () {},
+                                                              icon: const Icon(
+                                                                  Icons
+                                                                      .more_vert,
+                                                                  color: Colors
+                                                                      .white),
+                                                              style: IconButton
+                                                                  .styleFrom(
+                                                                backgroundColor:
+                                                                    Colors
+                                                                        .redAccent,
+                                                                padding:
+                                                                    const EdgeInsets
+                                                                        .all(
+                                                                        12),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                          ],
+                                          ),
                                         ),
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                              );
-                            },
+                                      );
+                                    }).toList(),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+          ),
         ),
       ),
     );

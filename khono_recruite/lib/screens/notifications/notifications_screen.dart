@@ -11,10 +11,7 @@ import '../../providers/theme_provider.dart';
 /// (after marking it as read). Parent can use it to e.g. switch to interviews tab
 /// or navigate to the relevant screen. [notification] includes id, message, type, interview_id, etc.
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({
-    super.key,
-    this.onNotificationTap,
-  });
+  const NotificationsScreen({super.key, this.onNotificationTap});
 
   /// Called when user taps a notification (after marking as read). Pass the notification map.
   final void Function(Map<String, dynamic> notification)? onNotificationTap;
@@ -143,7 +140,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Color _accentColor(
-      Map<String, dynamic> notification, ThemeProvider themeProvider) {
+    Map<String, dynamic> notification,
+    ThemeProvider themeProvider,
+  ) {
     switch (_typeFor(notification)) {
       case 'new_application':
         return themeProvider.isDarkMode
@@ -306,8 +305,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Theme(
       data: baseTheme.copyWith(
         textTheme: GoogleFonts.poppinsTextTheme(baseTheme.textTheme),
-        primaryTextTheme:
-            GoogleFonts.poppinsTextTheme(baseTheme.primaryTextTheme),
+        primaryTextTheme: GoogleFonts.poppinsTextTheme(
+          baseTheme.primaryTextTheme,
+        ),
         chipTheme: baseTheme.chipTheme.copyWith(
           labelStyle: GoogleFonts.poppins(fontSize: 12),
           secondaryLabelStyle: GoogleFonts.poppins(
@@ -473,8 +473,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                               .map(
                                                 (filter) => ChoiceChip(
                                                   label: Text(
-                                                    _filterLabel(filter),
-                                                  ),
+                                                      _filterLabel(filter)),
                                                   selected:
                                                       _selectedFilter == filter,
                                                   onSelected: (_) {
@@ -528,16 +527,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 final isUnread = n['is_read'] != true;
                                 final createdAt = n['created_at'] != null
                                     ? DateTime.tryParse(
-                                        n['created_at'].toString(),
-                                      )
+                                        n['created_at'].toString())
                                     : null;
                                 final accent = _accentColor(n, themeProvider);
 
                                 return TweenAnimationBuilder<double>(
                                   tween: Tween(begin: 0, end: 1),
                                   duration: Duration(
-                                    milliseconds: 500 + (index * 100),
-                                  ),
+                                      milliseconds: 500 + (index * 100)),
                                   builder: (context, opacity, child) {
                                     return Opacity(
                                       opacity: opacity,
@@ -554,8 +551,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                       borderRadius: BorderRadius.circular(16),
                                       child: Container(
                                         margin: const EdgeInsets.symmetric(
-                                          vertical: 8,
-                                        ),
+                                            vertical: 8),
                                         padding: const EdgeInsets.all(16),
                                         decoration: BoxDecoration(
                                           color: (themeProvider.isDarkMode
@@ -648,11 +644,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                                             BoxDecoration(
                                                           color: accent
                                                               .withOpacity(
-                                                                  0.12),
+                                                            0.12,
+                                                          ),
                                                           borderRadius:
                                                               BorderRadius
                                                                   .circular(
-                                                                      999),
+                                                            999,
+                                                          ),
                                                         ),
                                                         child: Text(
                                                           _filterLabel(
@@ -724,8 +722,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                                         children: [
                                                           Text(
                                                             _formatCreatedAt(
-                                                              createdAt,
-                                                            ),
+                                                                createdAt),
                                                             style: GoogleFonts
                                                                 .poppins(
                                                               fontSize: 12,

@@ -45,11 +45,6 @@ class _ProfilePageState extends State<ProfilePage>
   final TextEditingController locationController = TextEditingController();
   final TextEditingController titleController = TextEditingController();
 
-  // Candidate fields
-  final TextEditingController degreeController = TextEditingController();
-  final TextEditingController institutionController = TextEditingController();
-  final TextEditingController graduationYearController =
-      TextEditingController();
   final TextEditingController skillsController = TextEditingController();
   final TextEditingController workExpController = TextEditingController();
   final TextEditingController jobTitleController = TextEditingController();
@@ -468,9 +463,6 @@ class _ProfilePageState extends State<ProfilePage>
         locationController.text = candidate['location'] ?? "";
         titleController.text = candidate['title'] ?? "";
 
-        degreeController.text = candidate['degree'] ?? "";
-        institutionController.text = candidate['institution'] ?? "";
-        graduationYearController.text = candidate['graduation_year'] ?? "";
         skillsController.text = (candidate['skills'] ?? []).join(", ");
         workExpController.text =
             (candidate['work_experience'] ?? []).join("\n");
@@ -559,35 +551,60 @@ class _ProfilePageState extends State<ProfilePage>
 
   Future<void> updateProfile() async {
     try {
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              SizedBox(width: 16),
+              Text("Updating profile..."),
+            ],
+          ),
+          duration: Duration(seconds: 10),
+        ),
+      );
+
       final payload = {
-        "full_name": fullNameController.text,
-        "phone": phoneController.text,
-        "gender": genderController.text,
-        "dob": dobController.text.isNotEmpty
-            ? DateFormat('yyyy-MM-dd')
-                .format(DateTime.parse(dobController.text))
-            : null,
-        "nationality": nationalityController.text,
-        "id_number": idNumberController.text,
-        "bio": bioController.text,
-        "location": locationController.text,
-        "title": titleController.text,
-        "degree": degreeController.text,
-        "institution": institutionController.text,
-        "graduation_year": graduationYearController.text,
-        "skills":
-            skillsController.text.split(",").map((e) => e.trim()).toList(),
-        "work_experience":
-            workExpController.text.split("\n").map((e) => e.trim()).toList(),
-        "job_title": jobTitleController.text,
-        "company": companyController.text,
-        "years_of_experience": yearsOfExpController.text,
-        "linkedin": linkedinController.text,
-        "github": githubController.text,
-        "portfolio": portfolioController.text,
-        "cv_text": cvTextController.text,
-        "cv_url": cvUrlController.text,
-        "user_profile": {"email": emailController.text},
+        "profile": {
+          "full_name": fullNameController.text.trim(),
+          "phone": phoneController.text.trim(),
+          "gender": genderController.text.trim(),
+          "dob": dobController.text.isNotEmpty
+              ? DateFormat('yyyy-MM-dd')
+                  .format(DateTime.parse(dobController.text))
+              : null,
+          "nationality": nationalityController.text.trim(),
+          "id_number": idNumberController.text.trim(),
+          "bio": bioController.text.trim(),
+          "location": locationController.text.trim(),
+          "title": titleController.text.trim(),
+          "skills": skillsController.text
+              .split(",")
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList(),
+          "work_experience": workExpController.text
+              .split("\n")
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList(),
+          "job_title": jobTitleController.text.trim(),
+          "company": companyController.text.trim(),
+          "years_of_experience": yearsOfExpController.text.trim(),
+          "linkedin": linkedinController.text.trim(),
+          "github": githubController.text.trim(),
+          "portfolio": portfolioController.text.trim(),
+          "cv_text": cvTextController.text.trim(),
+          "cv_url": cvUrlController.text.trim(),
+        }
       };
 
       final res = await http.put(
@@ -599,13 +616,56 @@ class _ProfilePageState extends State<ProfilePage>
         body: json.encode(payload),
       );
 
+      // Clear previous snackbar
+      ScaffoldMessenger.of(context).clearSnackBars();
+
       if (res.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Profile updated successfully")));
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 8),
+                Text("Profile updated successfully!"),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
         setState(() => showProfileSummary = true);
+        await fetchProfileAndSettings(); // Refresh data
+      } else {
+        final errorData = json.decode(res.body);
+        final errorMessage = errorData['message'] ?? 'Failed to update profile';
+        throw Exception(errorMessage);
       }
     } catch (e) {
       debugPrint("Error updating profile: $e");
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.white),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "Error updating profile: ${e.toString().replaceAll('Exception:', '')}",
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'Retry',
+            textColor: Colors.white,
+            onPressed: updateProfile,
+          ),
+        ),
+      );
     }
   }
 
@@ -1522,59 +1582,46 @@ class _ProfilePageState extends State<ProfilePage>
             headerColor: Colors.blue.withValues(alpha: 0.1),
           ),
 
-          // Education & Skills Card
+          // Skills Card
           _modernCard(
-            "Education & Skills",
+            "Skills",
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (degreeController.text.isNotEmpty)
-                  _infoRow("Degree", degreeController.text),
-                if (institutionController.text.isNotEmpty)
-                  _infoRow("Institution", institutionController.text),
-                if (graduationYearController.text.isNotEmpty)
-                  _infoRow("Graduation Year", graduationYearController.text),
                 if (skillsController.text.isNotEmpty) ...[
-                  const SizedBox(height: 12),
                   Text(
                     "Skills",
-                    style: GoogleFonts.inter(
+                    style: GoogleFonts.poppins(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: themeProvider.isDarkMode
                           ? Colors.white
-                          : Colors.grey.shade700,
+                          : Colors.black87,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: skillsController.text.split(',').map((skill) {
-                      final trimmedSkill = skill.trim();
-                      if (trimmedSkill.isEmpty) return const SizedBox.shrink();
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Text(
-                          trimmedSkill,
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            color: Colors.redAccent,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      );
-                    }).toList(),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: themeProvider.isDarkMode
+                          ? Colors.black.withValues(alpha: 0.3)
+                          : Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      skillsController.text,
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: themeProvider.isDarkMode
+                            ? Colors.white70
+                            : Colors.black87,
+                      ),
+                    ),
                   ),
                 ],
               ],
             ),
-            headerColor: Colors.green.withValues(alpha: 0.1),
           ),
 
           // Online Profiles Card
@@ -1900,21 +1947,13 @@ class _ProfilePageState extends State<ProfilePage>
           ),
 
           _modernCard(
-            "Education & Skills",
+            "Skills",
             Column(
               children: [
-                CustomTextField(label: "Degree", controller: degreeController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Institution", controller: institutionController),
-                const SizedBox(height: 12),
-                CustomTextField(
-                    label: "Graduation Year",
-                    controller: graduationYearController),
-                const SizedBox(height: 12),
                 CustomTextField(
                     label: "Skills (comma separated)",
-                    controller: skillsController),
+                    controller: skillsController,
+                    maxLines: 3),
               ],
             ),
           ),

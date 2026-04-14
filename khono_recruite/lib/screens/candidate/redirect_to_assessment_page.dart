@@ -204,11 +204,22 @@ class _RedirectToAssessmentPageState extends State<RedirectToAssessmentPage>
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
+        child: Stack(
+          children: [
+            Positioned(
+              top: 8,
+              right: 16,
+              child: Image.asset(
+                'assets/icons/khono.png',
+                height: 24,
+                fit: BoxFit.contain,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
               const SizedBox(height: 48),
               Image.asset(
                 'assets/images/logo3.png',
@@ -297,9 +308,12 @@ class _RedirectToAssessmentPageState extends State<RedirectToAssessmentPage>
                   ),
                 ),
               ),
-            ],
+                ],
+              ),
+            ),
+          ],
           ),
-        ),
+        
       ),
     );
   }

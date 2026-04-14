@@ -9,6 +9,7 @@ import '../../providers/theme_provider.dart';
 
 class VerificationScreen extends StatefulWidget {
   final String email;
+
   /// When registration returned the code (email failed to send), pre-fill the code field.
   final String? initialCode;
   const VerificationScreen({super.key, required this.email, this.initialCode});
@@ -164,8 +165,8 @@ class _VerificationScreenState extends State<VerificationScreen>
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
               child: MouseRegion(
-                onEnter: (_) => kIsWeb ? _animationController.forward() : null,
-                onExit: (_) => kIsWeb ? _animationController.reverse() : null,
+                onEnter: kIsWeb ? (_) => _animationController.forward() : null,
+                onExit: kIsWeb ? (_) => _animationController.reverse() : null,
                 child: ScaleTransition(
                   scale: _scaleAnimation,
                   child: Container(

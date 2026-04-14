@@ -20,6 +20,12 @@ def _database_uri():
     url = (url or "").strip()
     if not url:
         return 'postgresql://user:password@localhost:5432/recruitment_db'
+
+    # Render (and some guides) provide DATABASE_URL starting with `postgres://...`
+    # SQLAlchemy expects `postgresql://...`.
+    if url.startswith('postgres://'):
+        url = 'postgresql://' + url[len('postgres://'):]
+
     # Render and other cloud Postgres often require SSL for external connections
     if 'sslmode=' not in url and ('render.com' in url or 'localhost' not in url.split('@')[-1].split('/')[0]):
         separator = '?' if '?' not in url else '&'
@@ -34,15 +40,29 @@ class Config:
     # PostgreSQL (from .env DATABASE_URL; SSL enabled for remote e.g. Render)
     SQLALCHEMY_DATABASE_URI = _database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    # Resilient to Render free-tier (sleep/wake) and dropped connections
+    # Multiple database bindings for cross-database sync
+    SQLALCHEMY_BINDS = {
+        'main': _database_uri(),
+        'analyser': os.getenv('ANALYSER_DATABASE_URL', 'postgresql://recruiter:zhubXkTYjieGoYevXB7jtHj5EdhNYmV7@dpg-d6v72fchg0os73ddre00-a.oregon-postgres.render.com/analyser_w2n9?sslmode=require')
+    }
+    # Enhanced connection pooling for production scalability
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
-        "connect_args": {"connect_timeout": 30},
-        "pool_recycle": 300,
+        "pool_size": int(os.getenv('DB_POOL_SIZE', '10')),
+        "max_overflow": int(os.getenv('DB_MAX_OVERFLOW', '20')),
+        "pool_recycle": int(os.getenv('DB_POOL_RECYCLE', '300')),
+        "pool_timeout": int(os.getenv('DB_POOL_TIMEOUT', '30')),
+        "connect_args": {
+            "connect_timeout": int(os.getenv('DB_CONNECT_TIMEOUT', '30')),
+            "application_name": "khono_recruite_admin",
+        },
     }
     
     # MongoDB
     MONGO_URI = os.getenv('MONGO_URI', 'mongodb://localhost:27017/recruitment_cv')
+    
+    # CV Analyser Database (separate from main database)
+    ANALYSER_DATABASE_URL = os.getenv('ANALYSER_DATABASE_URL', 'postgresql://recruiter:zhubXkTYjieGoYevXB7jtHj5EdhNYmV7@dpg-d6v72fchg0os73ddre00-a.oregon-postgres.render.com/analyser_w2n9?sslmode=require')
     
     # Redis
     #REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
@@ -63,6 +83,7 @@ class Config:
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=_parse_positive(os.getenv('JWT_REFRESH_TOKEN_DAYS', '30'), 30))
     JWT_TOKEN_LOCATION = ["headers", "query_string"]  # Allow token in headers or query string
     JWT_QUERY_STRING_NAME = "access_token"            # Query param name
+    JWT_IGNORE_OPTIONS = True                         # Ignore OPTIONS requests for JWT check
     
     # Email (SMTP and/or SendGrid HTTP API; Render typically uses SENDGRID_API_KEY)
     MAIL_SERVER = os.getenv('MAIL_SERVER', 'smtp.gmail.com')
@@ -73,7 +94,16 @@ class Config:
     MAIL_DEFAULT_SENDER = os.getenv('MAIL_DEFAULT_SENDER')
     _mt = (os.getenv('MAIL_TIMEOUT') or '60').strip()
     MAIL_TIMEOUT = int(_mt) if _mt else 60
-    SENDGRID_API_KEY = (os.getenv('SENDGRID_API_KEY') or '').strip() or None
+    _sg = (os.getenv('SENDGRID_API_KEY') or '').strip() or None
+    if not _sg:
+        try:
+            if (MAIL_SERVER or '').strip().lower() == 'smtp.sendgrid.net' and (MAIL_USERNAME or '').strip().lower() == 'apikey':
+                candidate = (MAIL_PASSWORD or '').strip()
+                if candidate:
+                    _sg = candidate
+        except Exception:
+            _sg = None
+    SENDGRID_API_KEY = _sg
     SENDGRID_API_URL = (os.getenv('SENDGRID_API_URL') or 'https://api.sendgrid.com/v3/mail/send').strip()
     
     # OAuth Configuration
@@ -115,6 +145,23 @@ class Config:
     GOOGLE_CALENDAR_TOKEN_PATH = os.getenv('GOOGLE_CALENDAR_TOKEN_PATH', 'token.pickle')
     GOOGLE_CALENDAR_DEFAULT_DURATION = int(os.getenv('GOOGLE_CALENDAR_DEFAULT_DURATION', '60'))  # minutes
     GOOGLE_CALENDAR_TIMEZONE = os.getenv('GOOGLE_CALENDAR_TIMEZONE', 'UTC')
+
+    # FastAPI Analysis Service Configuration
+    ANALYSIS_SERVICE_URL = os.getenv('ANALYSIS_SERVICE_URL', 'http://localhost:8000')
+    ANALYSIS_SERVICE_API_KEY = os.getenv('ANALYSIS_SERVICE_API_KEY', '')
+
+    # Recruitee ATS Integration
+    RECRUITEE_ENABLED = os.getenv('RECRUITEE_ENABLED', 'false').lower() == 'true'
+    RECRUITEE_COMPANY_ID = os.getenv('RECRUITEE_COMPANY_ID', '')
+    RECRUITEE_API_TOKEN = os.getenv('RECRUITEE_API_TOKEN', '')
+    RECRUITEE_WEBHOOK_SECRET = os.getenv('RECRUITEE_WEBHOOK_SECRET', '')
+    RECRUITEE_BASE_URL = f"https://api.recruitee.com/c/{RECRUITEE_COMPANY_ID}" if RECRUITEE_COMPANY_ID else ""
+    
+    # App version info
+    APP_VERSION = os.getenv('APP_VERSION', '1.0.0')
+    
+    # Celery Eager Mode (for local runs without workers)
+    CELERY_TASK_ALWAYS_EAGER = os.getenv('CELERY_TASK_ALWAYS_EAGER', 'false').lower() == 'true'
 
     
 class DevelopmentConfig(Config):

@@ -12,9 +12,7 @@ import 'package:provider/provider.dart';
 import '../../widgets/custom_textfield.dart';
 import '../../services/auth_service.dart';
 import '../../providers/theme_provider.dart';
-
-// ------------------- API Base URL -------------------
-const String candidateBase = "http://127.0.0.1:5000/api/candidate";
+import '../../utils/api_endpoints.dart';
 
 class ProfilePage extends StatefulWidget {
   final String token;
@@ -61,8 +59,10 @@ class _ProfilePageState extends State<ProfilePage>
   final List<Map<String, TextEditingController>> _educationExtraRows = [];
 
   final TextEditingController skillsController = TextEditingController();
+
   /// Skills as a list for chip-based UI; reference-like items are separated into _referenceEntries.
   List<String> _skillList = [];
+
   /// Parsed reference lines (moved out of skills); shown under Work Experience.
   List<String> _referenceEntries = [];
   final TextEditingController _addSkillController = TextEditingController();
@@ -100,7 +100,6 @@ class _ProfilePageState extends State<ProfilePage>
   List<dynamic> documents = [];
   List<String> _certifications = [];
   List<String> _languages = [];
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
 
   // Add these helper methods in the _ProfilePageState class (around line 150, after the state variables):
 
@@ -139,7 +138,11 @@ class _ProfilePageState extends State<ProfilePage>
   void _addSkillFromInput() {
     final text = _addSkillController.text.trim();
     if (text.isEmpty) return;
-    final toAdd = text.split(',').map((e) => e.trim()).where((s) => s.isNotEmpty).toList();
+    final toAdd = text
+        .split(',')
+        .map((e) => e.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
     setState(() {
       for (final s in toAdd) {
         if (!_skillList.contains(s)) _skillList.add(s);
@@ -154,12 +157,16 @@ class _ProfilePageState extends State<ProfilePage>
     final t = s.trim();
     final lower = t.toLowerCase();
     // Email
-    if (t.contains('@') && (t.contains('.') || lower.contains('email'))) return true;
+    if (t.contains('@') && (t.contains('.') || lower.contains('email')))
+      return true;
     // Phone: with or without spaces e.g. +27 81 025 6782 or +27810256782
-    if (RegExp(r'\+[\d\s]{10,}').hasMatch(t) || RegExp(r'\d{10,}').hasMatch(t.replaceAll(' ', ''))) return true;
+    if (RegExp(r'\+[\d\s]{10,}').hasMatch(t) ||
+        RegExp(r'\d{10,}').hasMatch(t.replaceAll(' ', ''))) return true;
     if (RegExp(r'\+?\d{10,}').hasMatch(t)) return true;
     // Explicit reference/role keywords
-    if (lower.contains('reference') || lower.contains('facilitator') || lower.contains('senior coach')) return true;
+    if (lower.contains('reference') ||
+        lower.contains('facilitator') ||
+        lower.contains('senior coach')) return true;
     if (lower.contains('.co.za') || lower.contains('.com')) return true;
     // "Name - Organization" or "Name - Role" pattern (people's names with a dash)
     if (t.contains(' - ') && t.split(' - ').length >= 2) return true;
@@ -174,8 +181,10 @@ class _ProfilePageState extends State<ProfilePage>
     final t = s.trim();
     if (t.length > 50) return false;
     if (t.contains('@') || t.contains(' - ')) return false;
-    if (RegExp(r'\+[\d\s]+').hasMatch(t) || RegExp(r'\d{10,}').hasMatch(t.replaceAll(' ', ''))) return false;
-    if (t.toLowerCase().contains('reference') || t.toLowerCase().contains('.co.za')) return false;
+    if (RegExp(r'\+[\d\s]+').hasMatch(t) ||
+        RegExp(r'\d{10,}').hasMatch(t.replaceAll(' ', ''))) return false;
+    if (t.toLowerCase().contains('reference') ||
+        t.toLowerCase().contains('.co.za')) return false;
     return true;
   }
 
@@ -184,17 +193,50 @@ class _ProfilePageState extends State<ProfilePage>
     if (text.isEmpty) return false;
     final lower = text.trim().toLowerCase();
     const institutionKeywords = [
-      'academy', 'university', 'universities', 'college', 'school', 'institute', 'campus',
-      'polytechnic', 'varsity', 'faculty', 'department of ', 'high school', 'secondary school',
+      'academy',
+      'university',
+      'universities',
+      'college',
+      'school',
+      'institute',
+      'campus',
+      'polytechnic',
+      'varsity',
+      'faculty',
+      'department of ',
+      'high school',
+      'secondary school',
     ];
     return institutionKeywords.any((k) => lower.contains(k));
   }
 
   /// Programme/degree keywords so we can split "DYICT Academy Java" -> institution + "Java".
   static const _programmeKeywords = [
-    'java', 'matric', 'bsc', 'bsc.', 'ba', 'ba.', 'bcom', 'beng', 'btech', 'mbchb', 'llb',
-    'certificate', 'diploma', 'degree', 'aws', 'python', 'javascript', 'cloud practitioner',
-    'national diploma', 'higher certificate', 'nqf', 'honours', 'masters', 'phd', 'mba',
+    'java',
+    'matric',
+    'bsc',
+    'bsc.',
+    'ba',
+    'ba.',
+    'bcom',
+    'beng',
+    'btech',
+    'mbchb',
+    'llb',
+    'certificate',
+    'diploma',
+    'degree',
+    'aws',
+    'python',
+    'javascript',
+    'cloud practitioner',
+    'national diploma',
+    'higher certificate',
+    'nqf',
+    'honours',
+    'masters',
+    'phd',
+    'mba',
   ];
 
   /// If [text] contains both institution-like and programme-like parts, returns (institution, degree); otherwise (null, null).
@@ -343,29 +385,64 @@ class _ProfilePageState extends State<ProfilePage>
     List<Map<String, String>> into,
   ) {
     if (map is! Map) return;
-    String d = (map['level'] ?? map['degree'] ?? map['qualification'] ?? map['programme'] ?? flatDegree).toString().trim();
-    String i = (map['institution'] ?? map['school'] ?? map['school_name'] ?? flatInstitution).toString().trim();
-    String y = (map['graduation_year'] ?? map['year'] ?? map['completion_year'] ?? flatGraduationYear).toString().trim();
+    String d = (map['level'] ??
+            map['degree'] ??
+            map['qualification'] ??
+            map['programme'] ??
+            flatDegree)
+        .toString()
+        .trim();
+    String i = (map['institution'] ??
+            map['school'] ??
+            map['school_name'] ??
+            flatInstitution)
+        .toString()
+        .trim();
+    String y = (map['graduation_year'] ??
+            map['year'] ??
+            map['completion_year'] ??
+            flatGraduationYear)
+        .toString()
+        .trim();
     // Normalize literal \n so DB-stored "entry1\nentry2" is split
     d = d.replaceAll(r'\n', '\n').replaceAll('\\n', '\n');
     i = i.replaceAll(r'\n', '\n').replaceAll('\\n', '\n');
     // If degree or institution has newlines, treat each line as a separate qualification (e.g. AWS + Matric)
     if (d.contains('\n') || i.contains('\n')) {
-      final degreeLines = d.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-      final instLines = i.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-      final yearLines = y.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-      final maxLen = [degreeLines.length, instLines.length, yearLines.length].reduce((a, b) => a > b ? a : b);
+      final degreeLines = d
+          .split('\n')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      final instLines = i
+          .split('\n')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      final yearLines = y
+          .split('\n')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      final maxLen = [degreeLines.length, instLines.length, yearLines.length]
+          .reduce((a, b) => a > b ? a : b);
       if (maxLen == 0) return;
       for (int idx = 0; idx < maxLen; idx++) {
         String lineD = idx < degreeLines.length ? degreeLines[idx] : '';
         String lineI = idx < instLines.length ? instLines[idx] : '';
-        String lineY = idx < yearLines.length ? yearLines[idx] : (yearLines.isNotEmpty ? yearLines.last : y);
+        String lineY = idx < yearLines.length
+            ? yearLines[idx]
+            : (yearLines.isNotEmpty ? yearLines.last : y);
         if (lineD.isEmpty && lineI.isEmpty) continue;
         final parsed = _parseEducationString(lineD.isEmpty ? lineI : lineD);
         if (lineD.isEmpty) lineD = parsed['degree'] ?? lineI;
         if (lineI.isEmpty) lineI = parsed['institution'] ?? '';
         if (lineY.isEmpty) lineY = parsed['graduation_year'] ?? y;
-        final m = {'degree': lineD, 'institution': lineI, 'graduation_year': lineY};
+        final m = {
+          'degree': lineD,
+          'institution': lineI,
+          'graduation_year': lineY
+        };
         _correctInstitutionVsDegree(m);
         into.add(m);
       }
@@ -373,7 +450,8 @@ class _ProfilePageState extends State<ProfilePage>
     }
     // Single entry: when institution or year is missing but level/degree contains a year, parse to extract
     final yearInLevel = RegExp(r'(19|20)\d{2}').hasMatch(d);
-    if (d.isNotEmpty && (i.isEmpty || y.isEmpty || (yearInLevel && i.isEmpty))) {
+    if (d.isNotEmpty &&
+        (i.isEmpty || y.isEmpty || (yearInLevel && i.isEmpty))) {
       final parsed = _parseEducationString(d);
       if (i.isEmpty) i = parsed['institution'] ?? i;
       if (y.isEmpty) y = parsed['graduation_year'] ?? y;
@@ -891,7 +969,7 @@ class _ProfilePageState extends State<ProfilePage>
   Future<void> fetchProfileAndSettings() async {
     try {
       final profileRes = await http.get(
-        Uri.parse("$apiBase/profile"),
+        Uri.parse("${ApiEndpoints.candidateBase}/profile"),
         headers: {
           'Authorization': 'Bearer ${widget.token}',
           'Content-Type': 'application/json'
@@ -905,8 +983,9 @@ class _ProfilePageState extends State<ProfilePage>
 
         // --------- BASIC IDENTITY FIELDS (with robust fallbacks) ---------
         // Full name: prefer candidate full_name, then user profile / user fields, then email username.
-        final profileMap =
-            (user['profile'] is Map) ? user['profile'] as Map : <String, dynamic>{};
+        final profileMap = (user['profile'] is Map)
+            ? user['profile'] as Map
+            : <String, dynamic>{};
         String fullName = (candidate['full_name'] ?? '').toString().trim();
         if (fullName.isEmpty) {
           fullName = (profileMap['full_name'] ??
@@ -921,15 +1000,15 @@ class _ProfilePageState extends State<ProfilePage>
           final rawEmail =
               (profileMap['email'] ?? user['email'] ?? data['email'] ?? '')
                   .toString();
-          fullName = rawEmail.contains('@')
-              ? rawEmail.split('@').first
-              : rawEmail;
+          fullName =
+              rawEmail.contains('@') ? rawEmail.split('@').first : rawEmail;
         }
         fullNameController.text = fullName;
 
         // Email: prefer profile.email, then user.email, then data.email.
-        final email = (profileMap['email'] ?? user['email'] ?? data['email'] ?? '')
-            .toString();
+        final email =
+            (profileMap['email'] ?? user['email'] ?? data['email'] ?? '')
+                .toString();
         emailController.text = email;
 
         // Phone: prefer candidate.phone, then other common phone keys.
@@ -966,7 +1045,8 @@ class _ProfilePageState extends State<ProfilePage>
         idNumberController.text = candidate['id_number'] ?? "";
         bioController.text = candidate['bio'] ?? "";
         // Prefer address (from enrollment) then location
-        locationController.text = (candidate['address'] ?? candidate['location'] ?? "").toString();
+        locationController.text =
+            (candidate['address'] ?? candidate['location'] ?? "").toString();
 
         // Initialize education from enrollment format: education list [{level, institution, graduation_year}] or string with \n
         String degree = candidate['degree'] ?? "";
@@ -974,7 +1054,10 @@ class _ProfilePageState extends State<ProfilePage>
         String graduationYear = candidate['graduation_year'] ?? "";
         dynamic rawEducation = candidate['education'];
         // Some backends store education in profile
-        if ((rawEducation == null || (rawEducation is List && rawEducation.isEmpty) || (rawEducation is String && rawEducation.toString().trim().isEmpty)) &&
+        if ((rawEducation == null ||
+                (rawEducation is List && rawEducation.isEmpty) ||
+                (rawEducation is String &&
+                    rawEducation.toString().trim().isEmpty)) &&
             candidate['profile'] is Map) {
           final prof = candidate['profile'] as Map;
           rawEducation = rawEducation ?? prof['education'];
@@ -984,12 +1067,14 @@ class _ProfilePageState extends State<ProfilePage>
         if (rawEducation is List && rawEducation.isNotEmpty) {
           for (var e in rawEducation) {
             if (e is Map) {
-              _addEducationEntryFromMap(e, degree, institution, graduationYear, allEducationEntries);
+              _addEducationEntryFromMap(
+                  e, degree, institution, graduationYear, allEducationEntries);
             } else {
               final str = e is String ? e : e.toString();
               if (str.trim().isEmpty) continue;
               // Split by \n (and literal \n) so DB string "entry1\nentry2" yields multiple qualifications
-              allEducationEntries.addAll(_parseAllEducationFromStringMulti(str));
+              allEducationEntries
+                  .addAll(_parseAllEducationFromStringMulti(str));
               if (allEducationEntries.isEmpty) {
                 final parsed = _parseEducationString(str);
                 final m = <String, String>{
@@ -1016,7 +1101,9 @@ class _ProfilePageState extends State<ProfilePage>
             _correctInstitutionVsDegree(m);
             allEducationEntries.add(m);
           }
-        } else if (institution.isEmpty && graduationYear.isEmpty && degree.isNotEmpty) {
+        } else if (institution.isEmpty &&
+            graduationYear.isEmpty &&
+            degree.isNotEmpty) {
           allEducationEntries.addAll(_parseAllEducationFromStringMulti(degree));
           if (allEducationEntries.isEmpty) {
             final parsed = _parseEducationString(degree);
@@ -1031,7 +1118,9 @@ class _ProfilePageState extends State<ProfilePage>
         }
         // When list is empty but flat fields exist (e.g. from enrollment), use them as one entry so matric/degree autofill
         if (allEducationEntries.isEmpty &&
-            (degree.isNotEmpty || institution.isNotEmpty || graduationYear.isNotEmpty)) {
+            (degree.isNotEmpty ||
+                institution.isNotEmpty ||
+                graduationYear.isNotEmpty)) {
           final m = <String, String>{
             'degree': degree,
             'institution': institution,
@@ -1052,14 +1141,16 @@ class _ProfilePageState extends State<ProfilePage>
         if (allEducationEntries.isNotEmpty) {
           degree = allEducationEntries.first['degree'] ?? degree;
           institution = allEducationEntries.first['institution'] ?? institution;
-          graduationYear = allEducationEntries.first['graduation_year'] ?? graduationYear;
+          graduationYear =
+              allEducationEntries.first['graduation_year'] ?? graduationYear;
           degreeController.text = degree;
           institutionController.text = institution;
           graduationYearController.text = graduationYear;
           for (int i = 1; i < allEducationEntries.length; i++) {
             final e = allEducationEntries[i];
             _educationExtraRows.add({
-              'institution': TextEditingController(text: e['institution'] ?? ''),
+              'institution':
+                  TextEditingController(text: e['institution'] ?? ''),
               'degree': TextEditingController(text: e['degree'] ?? ''),
               'year': TextEditingController(text: e['graduation_year'] ?? ''),
             });
@@ -1072,12 +1163,17 @@ class _ProfilePageState extends State<ProfilePage>
         if (workExperience.isNotEmpty && workExperience is List) {
           for (var exp in workExperience) {
             if (exp is Map) {
-              final position = (exp['position'] ?? exp['title'] ?? '').toString().trim();
+              final position =
+                  (exp['position'] ?? exp['title'] ?? '').toString().trim();
               final company = (exp['company'] ?? '').toString().trim();
               final description = (exp['description'] ?? '').toString().trim();
-              final dateRange = (exp['dates'] ?? exp['period'] ?? exp['duration'] ?? '').toString().trim();
+              final dateRange =
+                  (exp['dates'] ?? exp['period'] ?? exp['duration'] ?? '')
+                      .toString()
+                      .trim();
               workBlocks.add([
-                if (company.isNotEmpty && dateRange.isNotEmpty) '$company $dateRange',
+                if (company.isNotEmpty && dateRange.isNotEmpty)
+                  '$company $dateRange',
                 if (position.isNotEmpty) position,
                 if (description.isNotEmpty) description,
               ].where((s) => s.isNotEmpty).join('\n'));
@@ -1091,7 +1187,8 @@ class _ProfilePageState extends State<ProfilePage>
         // if the backend has a saved value, show the first block; otherwise start empty.
         if (workBlocks.isNotEmpty) {
           workExpController.text = workBlocks.first;
-        } else if (workExperience is String && workExperience.toString().trim().isNotEmpty) {
+        } else if (workExperience is String &&
+            workExperience.toString().trim().isNotEmpty) {
           workExpController.text = workExperience.toString().trim();
         } else if (workExpController.text.trim().isEmpty) {
           workExpController.text = '';
@@ -1100,8 +1197,15 @@ class _ProfilePageState extends State<ProfilePage>
         // Parse skills: separate actual skills from reference-like text (show references under Work Experience)
         final rawSkills = candidate['skills'];
         final List<String> allTokens = rawSkills is List
-            ? (rawSkills.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList())
-            : (rawSkills?.toString() ?? '').split(RegExp(r',|\n')).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+            ? (rawSkills
+                .map((e) => e.toString().trim())
+                .where((s) => s.isNotEmpty)
+                .toList())
+            : (rawSkills?.toString() ?? '')
+                .split(RegExp(r',|\n'))
+                .map((s) => s.trim())
+                .where((s) => s.isNotEmpty)
+                .toList();
         final prof = candidate['profile'];
         final refList = prof is Map ? prof['references'] : null;
         _referenceEntries = refList is List
@@ -1124,7 +1228,8 @@ class _ProfilePageState extends State<ProfilePage>
         skillsController.text = _skillList.join(", ");
 
         // Structured work experience: only overwrite parsed values when backend actually has data.
-        final backendJobTitle = (candidate['job_title'] ?? "").toString().trim();
+        final backendJobTitle =
+            (candidate['job_title'] ?? "").toString().trim();
         if (backendJobTitle.isNotEmpty) {
           jobTitleController.text = backendJobTitle;
         }
@@ -1132,7 +1237,8 @@ class _ProfilePageState extends State<ProfilePage>
         if (backendCompany.isNotEmpty) {
           companyController.text = backendCompany;
         }
-        final backendYears = (candidate['years_of_experience'] ?? "").toString().trim();
+        final backendYears =
+            (candidate['years_of_experience'] ?? "").toString().trim();
         if (backendYears.isNotEmpty) {
           yearsOfExpController.text = backendYears;
         }
@@ -1150,7 +1256,7 @@ class _ProfilePageState extends State<ProfilePage>
       }
 
       final settingsRes = await http.get(
-        Uri.parse("$apiBase/settings"),
+        Uri.parse("${ApiEndpoints.candidateBase}/settings"),
         headers: {
           'Authorization': 'Bearer ${widget.token}',
           'Content-Type': 'application/json'
@@ -1186,7 +1292,7 @@ class _ProfilePageState extends State<ProfilePage>
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse("$apiBase/upload_profile_picture"),
+        Uri.parse("${ApiEndpoints.candidateBase}/upload_profile_picture"),
       );
       request.headers['Authorization'] = 'Bearer ${widget.token}';
       request.files.add(
@@ -1280,7 +1386,7 @@ class _ProfilePageState extends State<ProfilePage>
       };
 
       final res = await http.put(
-        Uri.parse("$apiBase/profile"),
+        Uri.parse("${ApiEndpoints.candidateBase}/profile"),
         headers: {
           'Authorization': 'Bearer ${widget.token}',
           'Content-Type': 'application/json'
@@ -1308,7 +1414,7 @@ class _ProfilePageState extends State<ProfilePage>
       };
 
       final res = await http.put(
-        Uri.parse("$apiBase/settings"),
+        Uri.parse("${ApiEndpoints.candidateBase}/settings"),
         headers: {
           'Authorization': 'Bearer ${widget.token}',
           'Content-Type': 'application/json'
@@ -1576,119 +1682,123 @@ class _ProfilePageState extends State<ProfilePage>
                                   Stack(
                                     children: [
                                       Container(
-                                width: 100,
-                                height: 100,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.3),
-                                    width: 2,
-                                  ),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(50),
-                                  child: Image(
-                                    image: _getProfileImageProvider(),
-                                    fit: BoxFit.cover,
-                                    errorBuilder:
-                                        (context, error, stackTrace) =>
-                                            Container(
-                                      color:
-                                          Colors.white.withValues(alpha: 0.1),
-                                      child: Icon(
-                                        Icons.person,
-                                        color:
-                                            Colors.white.withValues(alpha: 0.3),
-                                        size: 40,
+                                        width: 100,
+                                        height: 100,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: Colors.white
+                                                .withValues(alpha: 0.3),
+                                            width: 2,
+                                          ),
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(50),
+                                          child: Image(
+                                            image: _getProfileImageProvider(),
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (context, error, stackTrace) =>
+                                                    Container(
+                                              color: Colors.white
+                                                  .withValues(alpha: 0.1),
+                                              child: Icon(
+                                                Icons.person,
+                                                color: Colors.white
+                                                    .withValues(alpha: 0.3),
+                                                size: 40,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                bottom: 0,
-                                right: 0,
-                                child: GestureDetector(
-                                  onTap: _pickProfileImage,
-                                  child: Container(
-                                    width: 32,
-                                    height: 32,
-                                    decoration: BoxDecoration(
-                                      color: Colors.redAccent
-                                          .withValues(alpha: 0.8),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 2,
+                                      Positioned(
+                                        bottom: 0,
+                                        right: 0,
+                                        child: GestureDetector(
+                                          onTap: _pickProfileImage,
+                                          child: Container(
+                                            width: 32,
+                                            height: 32,
+                                            decoration: BoxDecoration(
+                                              color: Colors.redAccent
+                                                  .withValues(alpha: 0.8),
+                                              shape: BoxShape.circle,
+                                              border: Border.all(
+                                                color: Colors.white,
+                                                width: 2,
+                                              ),
+                                            ),
+                                            child: const Icon(
+                                              Icons.edit,
+                                              color: Colors.white,
+                                              size: 14,
+                                            ),
+                                          ),
+                                        ),
                                       ),
-                                    ),
-                                    child: const Icon(
-                                      Icons.edit,
-                                      color: Colors.white,
-                                      size: 14,
-                                    ),
+                                    ],
                                   ),
-                                ),
-                                ),
-                              ],
-                            ),
-                              const SizedBox(height: 16),
-                          Text(
-                            fullNameController.text.isNotEmpty
-                                ? fullNameController.text
-                                : "Your Name",
-                            style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            titleController.text.isNotEmpty
-                                ? titleController.text
-                                : "Your Title",
-                            style: GoogleFonts.inter(
-                              fontSize: 14,
-                              color: Colors.white70,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          if (_mfaEnabled) ...[
-                            const SizedBox(height: 12),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.verified,
-                                      color: Colors.greenAccent, size: 12),
-                                  const SizedBox(width: 6),
+                                  const SizedBox(height: 16),
                                   Text(
-                                    "2FA Enabled",
-                                    style: GoogleFonts.inter(
-                                      fontSize: 12,
-                                      color: Colors.greenAccent,
-                                      fontWeight: FontWeight.w500,
+                                    fullNameController.text.isNotEmpty
+                                        ? fullNameController.text
+                                        : "Your Name",
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
                                     ),
+                                    textAlign: TextAlign.center,
                                   ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    titleController.text.isNotEmpty
+                                        ? titleController.text
+                                        : "Your Title",
+                                    style: GoogleFonts.inter(
+                                      fontSize: 14,
+                                      color: Colors.white70,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  if (_mfaEnabled) ...[
+                                    const SizedBox(height: 12),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green
+                                            .withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.verified,
+                                              color: Colors.greenAccent,
+                                              size: 12),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            "2FA Enabled",
+                                            style: GoogleFonts.inter(
+                                              fontSize: 12,
+                                              color: Colors.greenAccent,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
-                          ],
-                          ],
                           ),
-                          ),
-                          ),
-                          ],
-                        ),
-                          const SizedBox(height: 40),
+                        ],
+                      ),
+                      const SizedBox(height: 40),
                       // Navigation buttons
                       _sidebarButton("Profile", Icons.person_outline_rounded),
                       _sidebarButton("Settings", Icons.settings_outlined),
@@ -2741,7 +2851,8 @@ class _ProfilePageState extends State<ProfilePage>
                           horizontal: 16,
                           vertical: 16,
                         ),
-                        prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
+                        prefixIcon:
+                            Icon(Icons.person_outline_rounded, size: 20),
                       ),
                     ),
                   ],
@@ -2834,7 +2945,8 @@ class _ProfilePageState extends State<ProfilePage>
                         options: nationalityOptions,
                         onChanged: (String? newValue) {
                           setState(() {
-                            _selectedNationality = newValue == '' ? null : newValue;
+                            _selectedNationality =
+                                newValue == '' ? null : newValue;
                             nationalityController.text =
                                 nationalityOptions.firstWhere(
                               (opt) => opt['value'] == newValue,
@@ -3015,12 +3127,14 @@ class _ProfilePageState extends State<ProfilePage>
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.redAccent,
                               side: const BorderSide(color: Colors.redAccent),
-                              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 24, horizontal: 20),
                             ),
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.add_circle_outline_rounded, size: 40, color: Colors.redAccent),
+                                Icon(Icons.add_circle_outline_rounded,
+                                    size: 40, color: Colors.redAccent),
                                 const SizedBox(height: 12),
                                 Text(
                                   "Add another",
@@ -3079,18 +3193,21 @@ class _ProfilePageState extends State<ProfilePage>
                           color: Colors.redAccent,
                         ),
                       ),
-                      deleteIcon: const Icon(Icons.close, size: 18, color: Colors.redAccent),
+                      deleteIcon: const Icon(Icons.close,
+                          size: 18, color: Colors.redAccent),
                       onDeleted: () {
                         setState(() {
                           _skillList.remove(skill);
                         });
                       },
                       backgroundColor: Colors.redAccent.withValues(alpha: 0.08),
-                      side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.4)),
+                      side: BorderSide(
+                          color: Colors.redAccent.withValues(alpha: 0.4)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 4, vertical: 0),
                     );
                   }).toList(),
                 ),
@@ -3102,7 +3219,8 @@ class _ProfilePageState extends State<ProfilePage>
                         controller: _addSkillController,
                         decoration: InputDecoration(
                           hintText: "Add a skill (press Enter or comma)",
-                          hintStyle: GoogleFonts.inter(color: Colors.grey.shade500, fontSize: 14),
+                          hintStyle: GoogleFonts.inter(
+                              color: Colors.grey.shade500, fontSize: 14),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
                             borderSide: BorderSide(color: Colors.grey.shade300),
@@ -3113,12 +3231,16 @@ class _ProfilePageState extends State<ProfilePage>
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Colors.redAccent, width: 1.5),
+                            borderSide: const BorderSide(
+                                color: Colors.redAccent, width: 1.5),
                           ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          prefixIcon: Icon(Icons.add_circle_outline, size: 20, color: Colors.grey.shade600),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 12),
+                          prefixIcon: Icon(Icons.add_circle_outline,
+                              size: 20, color: Colors.grey.shade600),
                         ),
-                        style: GoogleFonts.inter(fontSize: 14, color: Colors.black87),
+                        style: GoogleFonts.inter(
+                            fontSize: 14, color: Colors.black87),
                         onSubmitted: (value) {
                           _addSkillFromInput();
                         },
@@ -3133,7 +3255,8 @@ class _ProfilePageState extends State<ProfilePage>
                     IconButton.filled(
                       onPressed: _addSkillFromInput,
                       style: IconButton.styleFrom(
-                        backgroundColor: Colors.redAccent.withValues(alpha: 0.12),
+                        backgroundColor:
+                            Colors.redAccent.withValues(alpha: 0.12),
                         foregroundColor: Colors.redAccent,
                       ),
                       icon: const Icon(Icons.add_rounded, size: 24),
@@ -3205,7 +3328,8 @@ class _ProfilePageState extends State<ProfilePage>
                           horizontal: 16,
                           vertical: 12,
                         ),
-                        prefixIcon: const Icon(Icons.work_outline_rounded, size: 20),
+                        prefixIcon:
+                            const Icon(Icons.work_outline_rounded, size: 20),
                       ),
                     ),
                     const SizedBox(width: 16),
@@ -3226,7 +3350,8 @@ class _ProfilePageState extends State<ProfilePage>
                           horizontal: 16,
                           vertical: 12,
                         ),
-                        prefixIcon: const Icon(Icons.business_outlined, size: 20),
+                        prefixIcon:
+                            const Icon(Icons.business_outlined, size: 20),
                       ),
                     ),
                   ],
@@ -3258,17 +3383,20 @@ class _ProfilePageState extends State<ProfilePage>
                           vertical: 8,
                         ),
                         prefixIcon: IconButton(
-                          icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                          icon: const Icon(Icons.calendar_today_outlined,
+                              size: 18),
                           onPressed: () async {
                             final picked = await showDatePicker(
                               context: context,
                               initialDate: DateTime.now(),
                               firstDate: DateTime(1980),
-                              lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                              lastDate: DateTime.now()
+                                  .add(const Duration(days: 365 * 5)),
                             );
                             if (picked != null) {
                               setState(() {
-                                workFromController.text = DateFormat('dd MMM yyyy').format(picked);
+                                workFromController.text =
+                                    DateFormat('dd MMM yyyy').format(picked);
                               });
                             }
                           },
@@ -3296,7 +3424,8 @@ class _ProfilePageState extends State<ProfilePage>
                           vertical: 8,
                         ),
                         prefixIcon: IconButton(
-                          icon: const Icon(Icons.calendar_today_outlined, size: 18),
+                          icon: const Icon(Icons.calendar_today_outlined,
+                              size: 18),
                           onPressed: _currentlyWorkHere
                               ? null
                               : () async {
@@ -3304,11 +3433,14 @@ class _ProfilePageState extends State<ProfilePage>
                                     context: context,
                                     initialDate: DateTime.now(),
                                     firstDate: DateTime(1980),
-                                    lastDate: DateTime.now().add(const Duration(days: 365 * 5)),
+                                    lastDate: DateTime.now()
+                                        .add(const Duration(days: 365 * 5)),
                                   );
                                   if (picked != null) {
                                     setState(() {
-                                      workToController.text = DateFormat('dd MMM yyyy').format(picked);
+                                      workToController.text =
+                                          DateFormat('dd MMM yyyy')
+                                              .format(picked);
                                     });
                                   }
                                 },
@@ -3371,7 +3503,8 @@ class _ProfilePageState extends State<ProfilePage>
                       height: 1.5,
                     ),
                     decoration: InputDecoration(
-                      hintText: "Describe your day-to-day responsibilities and key achievements for this role.",
+                      hintText:
+                          "Describe your day-to-day responsibilities and key achievements for this role.",
                       hintStyle: GoogleFonts.inter(
                         fontSize: 14,
                         color: Colors.grey.shade500,
@@ -3382,7 +3515,8 @@ class _ProfilePageState extends State<ProfilePage>
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 16),
                       alignLabelWithHint: true,
                     ),
                   ),
@@ -3505,7 +3639,6 @@ class _ProfilePageState extends State<ProfilePage>
               ],
             ),
           ),
-
         ],
       ),
     );
@@ -3855,7 +3988,7 @@ class _ProfilePageState extends State<ProfilePage>
 
       try {
         final response = await http.post(
-          Uri.parse("$candidateBase/settings/change_password"),
+          Uri.parse("${ApiEndpoints.candidateBase}/settings/change_password"),
           headers: {
             "Authorization": "Bearer ${widget.token}",
             "Content-Type": "application/json",

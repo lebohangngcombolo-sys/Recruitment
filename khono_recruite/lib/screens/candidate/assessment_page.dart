@@ -5,7 +5,6 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../services/auth_service.dart';
 import '../../utils/api_endpoints.dart';
-import 'cv_upload_page.dart';
 import 'package:go_router/go_router.dart';
 
 class AssessmentPage extends StatefulWidget {
@@ -28,7 +27,6 @@ class _AssessmentPageState extends State<AssessmentPage>
   bool submitting = false;
   int _currentQuestionIndex = 0; // one question per screen, navigate with Prev/Next
   late AnimationController _redirectPulseController;
-  late Animation<double> _redirectPulseAnimation;
 
   // Countdown timer: duration from intro "About X minutes" (questions.length * 1.5).ceil()
   int _countdownRemainingSeconds = 0;
@@ -51,9 +49,6 @@ class _AssessmentPageState extends State<AssessmentPage>
       duration: const Duration(milliseconds: 1400),
       vsync: this,
     )..repeat(reverse: true);
-    _redirectPulseAnimation = Tween<double>(begin: 0.82, end: 1.08).animate(
-      CurvedAnimation(parent: _redirectPulseController, curve: Curves.easeInOut),
-    );
     loadTokenAndFetch();
 
     // Autofill from draft if available (backend may nest as assessment.assessment)
@@ -235,7 +230,7 @@ class _AssessmentPageState extends State<AssessmentPage>
                     ),
                   ),
                   child: Text(
-                    'Continue',
+                    'OK',
                     style: GoogleFonts.poppins(
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
@@ -247,15 +242,21 @@ class _AssessmentPageState extends State<AssessmentPage>
             );
           },
         );
-
         if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) =>
-                CVUploadScreen(applicationId: widget.applicationId),
-          ),
-        );
+        _countdownTimer?.cancel();
+        final safeToken = token ?? '';
+        final redirectNonce = DateTime.now().millisecondsSinceEpoch;
+        // IMPORTANT: Assessment is opened via Navigator.push on top of a GoRouter route.
+        // If underlying route is already /candidate-dashboard, a plain go('/candidate-dashboard')
+        // becomes a no-op. Add a nonce query to force router state change.
+        final target = safeToken.isNotEmpty
+            ? '/candidate-dashboard?token=${Uri.encodeComponent(safeToken)}&_rt=$redirectNonce'
+            : '/candidate-dashboard?_rt=$redirectNonce';
+
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        if (!mounted) return;
+        GoRouter.of(context).go(target);
+        return;
       } else {
         throw Exception("Failed to submit: ${res.body}");
       }
@@ -548,101 +549,87 @@ class _AssessmentPageState extends State<AssessmentPage>
   @override
   Widget build(BuildContext context) {
     if (loading) {
+      final jobText = _assessmentTitle.trim();
+      final redirectMessage = (jobText.isNotEmpty && jobText != 'Assessment')
+          ? 'You are now being redirected to your assessment for ${jobText.toLowerCase()}'
+          : 'You are now being redirected to your assessment';
       return Scaffold(
-        extendBodyBehindAppBar: true,
-        backgroundColor: _primaryDark,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          scrolledUnderElevation: 0,
-          iconTheme: IconThemeData(color: Colors.white, size: 28),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 26),
-            onPressed: () => Navigator.pop(context),
-            tooltip: 'Back',
-          ),
-          title: null,
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: Center(
-                child: Image.asset(
-                  'assets/icons/khono.png',
-                  height: 32,
-                  fit: BoxFit.contain,
-                ),
+        backgroundColor: Colors.white,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    'assets/images/logo3.png',
+                    height: 64,
+                    width: 64,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Icon(
+                      Icons.work_outline,
+                      size: 64,
+                      color: _accentRed,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Khonology',
+                    style: GoogleFonts.poppins(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: _accentRed,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Preparing your application',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 48),
+                  Text(
+                    redirectMessage,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      color: Colors.black87,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  AnimatedBuilder(
+                    animation: _redirectPulseController,
+                    builder: (context, _) {
+                      final t = _redirectPulseController.value;
+                      const segmentCount = 8;
+                      final filledSegments =
+                          (t * segmentCount).floor().clamp(0, segmentCount);
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(segmentCount, (i) {
+                          final filled = i < filledSegments;
+                          return Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 2),
+                            width: 28,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: filled
+                                  ? const Color(0xFF2E7D32)
+                                  : Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          );
+                        }),
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-        body: _buildBackground(
-          context,
-          Column(
-            children: [
-              const SizedBox(height: 16),
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ScaleTransition(
-                        scale: _redirectPulseAnimation,
-                        child: Container(
-                          width: 88,
-                          height: 88,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: _accentRed.withValues(alpha: 0.6),
-                              width: 4,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: _accentRed.withValues(alpha: 0.35),
-                                blurRadius: 24,
-                                spreadRadius: 2,
-                              ),
-                            ],
-                          ),
-                          child: Center(
-                            child: SizedBox(
-                              width: 56,
-                              height: 56,
-                              child: CircularProgressIndicator(
-                                color: _accentRed,
-                                strokeWidth: 3,
-                                strokeCap: StrokeCap.round,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 40),
-                      Text(
-                        'Loading your assessment',
-                        style: GoogleFonts.poppins(
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                          letterSpacing: -0.5,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        "Hang tight — we're setting everything up.",
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          color: Colors.white.withValues(alpha: 0.85),
-                          height: 1.4,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
           ),
         ),
       );

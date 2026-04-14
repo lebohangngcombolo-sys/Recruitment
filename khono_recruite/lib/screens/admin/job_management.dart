@@ -1,12 +1,20 @@
+// ignore_for_file: dead_code, deprecated_member_use
+
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter/material.dart' hide SearchBar, FilterChip; // hide both
+import 'package:url_launcher/url_launcher.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_textfield.dart';
-import '../../widgets/knockout_rules_builder.dart';
 import '../../widgets/weighting_configuration_widget.dart';
-import '../../widgets/search_bar.dart'; // your custom SearchBar
-import '../../widgets/filter_chip.dart'; // your custom FilterChip
+import '../../widgets/knockout_rules_builder.dart';
 import '../../services/admin_service.dart';
+import '../../services/ai_service.dart';
+import '../../services/test_pack_service.dart';
+import '../../models/test_pack.dart';
+import '../../widgets/save_test_pack_dialog.dart';
+import '../../widgets/sync_status_badge.dart';
+import '../../widgets/bulk_sync_dialog.dart';
+import '../../screens/admin/sync_history_screen.dart';
 import '../../providers/theme_provider.dart';
 
 class JobManagement extends StatefulWidget {
@@ -20,610 +28,529 @@ class JobManagement extends StatefulWidget {
 
 class _JobManagementState extends State<JobManagement> {
   final AdminService admin = AdminService();
+  final TextEditingController _searchController = TextEditingController();
   List<Map<String, dynamic>> jobs = [];
   bool loading = true;
-
-  // New state variables for enhanced features
-  String searchQuery = '';
-  String selectedCategory = 'all';
-  String selectedStatus = 'active';
-  String selectedApprovalStatus = 'all';
-  String sortBy = 'created_at';
-  String sortOrder = 'desc';
-  int currentPage = 1;
-  int totalPages = 1;
-  bool showInactiveJobs = false;
-
-  // Filter options
-  final List<String> statusFilters = ['active', 'inactive', 'all'];
-  final List<String> approvalFilters = ['all', 'pending', 'approved', 'rejected'];
-  final List<String> sortOptions = [
-    'created_at',
-    'updated_at',
-    'title',
-    'category',
-    'vacancy',
-    'min_experience'
-  ];
-
-  final List<String> categories = [
-    'all',
+  String _statusFilter = 'active'; // active, inactive, all
+  String? _categoryFilter; // null = all
+  final Set<int> _expandedJobIds = {};
+  final Map<int, List<dynamic>> _applicationsByJob = {};
+  final Set<int> _loadingApplications = {};
+  static const List<String> _categoryOptions = [
     'Engineering',
     'Marketing',
     'Sales',
     'HR',
     'Finance',
-    'Operations'
+    'Operations',
+    'Customer Service',
+    'Product',
+    'Design',
+    'Data Science',
   ];
 
   @override
   void initState() {
     super.initState();
     fetchJobs();
+    _searchController.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> fetchJobs() async {
     setState(() => loading = true);
     try {
-      // Try enhanced method with filters
-      Map<String, dynamic> response;
-      try {
-        response = await _fetchJobsEnhanced();
-      } catch (e) {
-        // Fallback to original method
-        final data = await admin.listJobs();
-        jobs = List<Map<String, dynamic>>.from(data);
-        return;
-      }
-
-      jobs = List<Map<String, dynamic>>.from(response['jobs'] ?? []);
-      totalPages = response['pagination']?['total_pages'] ?? 1;
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error fetching jobs: $e")),
+      final data = await admin.listJobsEnhanced(
+        page: 1,
+        perPage: 500,
+        search: null,
+        category: _categoryFilter,
+        status: _statusFilter,
+        sortBy: 'created_at',
+        sortOrder: 'desc',
       );
+      final list = data['jobs'];
+      jobs = list != null ? List<Map<String, dynamic>>.from(list) : [];
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              "Error fetching jobs: $e",
+              style: const TextStyle(fontFamily: 'Poppins'),
+            ),
+          ),
+        );
+      }
+      jobs = [];
     }
-    setState(() => loading = false);
+    if (mounted) setState(() => loading = false);
   }
 
-  Future<Map<String, dynamic>> _fetchJobsEnhanced() async {
-    try {
-      // Use the enhanced listJobs method which returns Map<String, dynamic>
-      final response = await admin.listJobsEnhanced(
-        page: currentPage,
-        category: selectedCategory == 'all' ? null : selectedCategory,
-        status: selectedStatus,
-        approvalStatus: selectedApprovalStatus == 'all' ? null : selectedApprovalStatus,
-        sortBy: sortBy,
-        sortOrder: sortOrder,
-        search: searchQuery.isNotEmpty ? searchQuery : null,
-      );
+  void _applySearch() => setState(() {});
 
-      return response;
+  List<Map<String, dynamic>> _filteredJobs() {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) return jobs;
+    final words =
+        query.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    if (words.isEmpty) return jobs;
+    return jobs.where((job) {
+      final title = (job['title'] ?? '').toString().toLowerCase();
+      final category = (job['category'] ?? '').toString().toLowerCase();
+      final description = (job['description'] ?? '').toString().toLowerCase();
+      final createdBy = job['created_by_user'] != null
+          ? ((job['created_by_user']['name'] ??
+                  job['created_by_user']['email'] ??
+                  '') as String)
+              .toLowerCase()
+          : '';
+      final searchable = '$title $category $description $createdBy';
+      return words.every((word) => searchable.contains(word));
+    }).toList();
+  }
+
+  Future<void> _fetchApplicationsForJob(int jobId) async {
+    if (_applicationsByJob.containsKey(jobId)) return;
+    setState(() => _loadingApplications.add(jobId));
+    try {
+      final list = await admin.getJobApplications(jobId, perPage: 100);
+      if (mounted)
+        setState(() {
+          _applicationsByJob[jobId] = list;
+          _loadingApplications.remove(jobId);
+        });
     } catch (e) {
-      // If enhanced method doesn't exist or fails, fallback to original
-      final data = await admin.listJobs();
-      return {
-        'jobs': data,
-        'pagination': {
-          'page': 1,
-          'per_page': 20,
-          'total': data.length,
-          'total_pages': 1,
-          'has_next': false,
-          'has_prev': false,
+      if (mounted) setState(() => _loadingApplications.remove(jobId));
+    }
+  }
+
+  void _toggleJobExpanded(int jobId) {
+    setState(() {
+      if (_expandedJobIds.contains(jobId)) {
+        _expandedJobIds.remove(jobId);
+      } else {
+        _expandedJobIds.add(jobId);
+        _fetchApplicationsForJob(jobId);
+      }
+    });
+  }
+
+  // ==================== RECRUITEE SYNC METHODS ====================
+
+  Future<void> _toggleJobSync(int jobId, bool enabled) async {
+    try {
+      await admin.toggleJobSync(jobId, enabled);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text(enabled ? 'Sync enabled for job' : 'Sync disabled for job'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      fetchJobs(); // Refresh to show updated state
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _launchUrl(String? url) async {
+    if (url == null || url.isEmpty) return;
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not launch URL: $url'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showSyncHistory(int jobId, String jobTitle) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SyncHistoryScreen(
+          jobId: jobId,
+          jobTitle: jobTitle,
+        ),
+      ),
+    );
+  }
+
+  void _handleMenuAction(String action, Map<String, dynamic> job, int jobId) {
+    switch (action) {
+      case 'approve':
+        _approveJob(jobId, job['title'] ?? 'Job');
+        break;
+      case 'decline':
+        _declineJob(jobId, job['title'] ?? 'Job');
+        break;
+      case 'edit':
+        openJobForm(job: job);
+        break;
+      case 'delete':
+        _confirmDeleteJob(jobId, job['title'] ?? 'Job');
+        break;
+      case 'select':
+        if (widget.onJobSelected != null) {
+          widget.onJobSelected!(jobId);
         }
-      };
+        break;
+      case 'toggle_sync':
+        _toggleJobSync(jobId, !(job['sync_to_recruitee'] ?? false));
+        break;
+      case 'history':
+        _showSyncHistory(jobId, job['title'] ?? 'Job');
+        break;
     }
   }
 
-  void openJobForm({Map<String, dynamic>? job}) {
+  void _confirmDeleteJob(int jobId, String jobTitle) {
     showDialog(
       context: context,
-      builder: (_) => JobFormDialog(job: job, onSaved: fetchJobs),
-    );
-  }
-
-  // Enhanced job operations
-  Future<void> toggleJobStatus(Map<String, dynamic> job) async {
-    try {
-      await admin.updateJobStatus(job['id'], !(job['is_active'] ?? true));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text((job['is_active'] ?? true)
-              ? "Job deactivated successfully"
-              : "Job activated successfully"),
-          backgroundColor: Colors.green,
-        ),
-      );
-      fetchJobs();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error updating job status: $e")),
-      );
-    }
-  }
-
-  Future<void> restoreJob(Map<String, dynamic> job) async {
-    try {
-      await admin.restoreJob(job['id']);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Job restored successfully"),
-          backgroundColor: Colors.green,
-        ),
-      );
-      fetchJobs();
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error restoring job: $e")),
-      );
-    }
-  }
-
-  Future<void> _approveJob(Map<String, dynamic> job) async {
-    try {
-      await admin.approveJob(job['id'] as int);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Job approved"), backgroundColor: Colors.green),
-        );
-        fetchJobs();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error approving job: $e")),
-        );
-      }
-    }
-  }
-
-  void _showRejectDialog(Map<String, dynamic> job) {
-    final reasonController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Reject Job"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Reject \"${job['title'] ?? 'Job'}\"? Provide a reason (optional):"),
-            const SizedBox(height: 12),
-            TextField(
-              controller: reasonController,
-              decoration: const InputDecoration(
-                hintText: "Reason for rejection",
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () async {
-              final reason = reasonController.text.trim();
-              Navigator.pop(ctx);
-              try {
-                await admin.rejectJob(job['id'] as int, reason);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Job rejected"), backgroundColor: Colors.orange),
-                  );
-                  fetchJobs();
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text("Error rejecting job: $e")),
-                  );
-                }
-              }
-            },
-            child: const Text("Reject"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void showJobDetails(Map<String, dynamic> job) async {
-    try {
-      final detailedJob = await admin.getJobDetailed(job['id']);
-      _showJobDetailsDialog(detailedJob);
-    } catch (e) {
-      // Fallback to basic details
-      _showBasicJobDetails(job);
-    }
-  }
-
-  void _showJobDetailsDialog(Map<String, dynamic> detailedJob) {
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        child: Container(
-          width: 600,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            color: Theme.of(context).cardColor,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      detailedJob['title'] ?? 'Job Details',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                // Job Information
-                _buildDetailSection("Description", detailedJob['description']),
-                if (detailedJob['job_summary'] != null &&
-                    detailedJob['job_summary'].isNotEmpty)
-                  _buildDetailSection("Summary", detailedJob['job_summary']),
-
-                // Requirements
-                if (detailedJob['required_skills'] != null &&
-                    detailedJob['required_skills'].isNotEmpty)
-                  _buildListSection(
-                      "Required Skills", detailedJob['required_skills']),
-
-                if (detailedJob['responsibilities'] != null &&
-                    detailedJob['responsibilities'].isNotEmpty)
-                  _buildListSection(
-                      "Responsibilities", detailedJob['responsibilities']),
-
-                if (detailedJob['qualifications'] != null &&
-                    detailedJob['qualifications'].isNotEmpty)
-                  _buildListSection(
-                      "Qualifications", detailedJob['qualifications']),
-
-                // Approval status
-                const SizedBox(height: 20),
-                const Text("Approval", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    _buildStatChip(
-                      "Approval",
-                      (detailedJob['approval_status'] ?? 'pending').toString(),
-                      color: detailedJob['approval_status'] == 'approved'
-                          ? Colors.green
-                          : detailedJob['approval_status'] == 'rejected'
-                              ? Colors.red
-                              : Colors.orange,
-                    ),
-                    if (detailedJob['approval_status'] == 'approved' && detailedJob['approved_at'] != null)
-                      _buildStatChip("Approved at", detailedJob['approved_at'].toString().split('.').first),
-                    if (detailedJob['approved_by_user'] != null)
-                      _buildStatChip("Approved by", detailedJob['approved_by_user']['name'] ?? detailedJob['approved_by_user']['email'] ?? '—'),
-                  ],
-                ),
-                if (detailedJob['approval_status'] == 'rejected' && (detailedJob['rejection_reason'] ?? '').toString().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      "Reason: ${detailedJob['rejection_reason']}",
-                      style: TextStyle(color: Colors.red.shade700, fontSize: 14),
-                    ),
-                  ),
-
-                // Job Stats
-                const SizedBox(height: 20),
-                const Text("Job Statistics",
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  children: [
-                    _buildStatChip(
-                        "Category", detailedJob['category'] ?? 'Not specified'),
-                    _buildStatChip("Experience",
-                        "${detailedJob['min_experience'] ?? 0} yrs"),
-                    _buildStatChip(
-                        "Vacancies", "${detailedJob['vacancy'] ?? 1}"),
-                    _buildStatChip(
-                        "Status",
-                        (detailedJob['is_active'] ?? true)
-                            ? 'Active'
-                            : 'Inactive',
-                        color: (detailedJob['is_active'] ?? true)
-                            ? Colors.green
-                            : Colors.red),
-                  ],
-                ),
-
-                // Advanced stats if available
-                if (detailedJob['statistics'] != null)
-                  _buildAdvancedStatistics(detailedJob['statistics']),
-
-                const SizedBox(height: 30),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text("Close"),
-                    ),
-                    const SizedBox(width: 12),
-                    CustomButton(
-                      text: "Edit Job",
-                      onPressed: () {
-                        Navigator.pop(context);
-                        openJobForm(job: detailedJob);
-                      },
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showJobApplicationsDialog(Map<String, dynamic> job, ThemeProvider themeProvider) async {
-    final jobId = job['id'] as int?;
-    if (jobId == null) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-    try {
-      final applications = await admin.getJobApplications(jobId);
-      if (!context.mounted) return;
-      Navigator.of(context).pop();
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(
-            'Applicants',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
-            ),
-          ),
-          content: SizedBox(
-            width: 500,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${job['title'] ?? 'Job'}${(job['company'] != null && (job['company'] as String).isNotEmpty) ? ' at ${job['company']}' : ''}',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                if (applications.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      'No applications yet',
-                      style: TextStyle(
-                        color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade600,
-                      ),
-                    ),
-                  )
-                else
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 400),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: applications.length,
-                      itemBuilder: (_, i) {
-                        final app = applications[i] is Map ? applications[i] as Map<String, dynamic> : <String, dynamic>{};
-                        final cand = app['candidate'] is Map ? app['candidate'] as Map<String, dynamic> : <String, dynamic>{};
-                        final name = cand['full_name'] ?? 'Unknown';
-                        final email = cand['email'] ?? '';
-                        final phone = cand['phone'] ?? '';
-                        final status = app['status'] ?? '';
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: themeProvider.isDarkMode
-                                  ? Colors.white.withValues(alpha: 0.05)
-                                  : Colors.grey.shade100,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  name,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                    color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
-                                  ),
-                                ),
-                                if (email.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      email,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
-                                      ),
-                                    ),
-                                  ),
-                                if (phone.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 2),
-                                    child: Text(
-                                      phone,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: themeProvider.isDarkMode ? Colors.grey.shade400 : Colors.grey.shade700,
-                                      ),
-                                    ),
-                                  ),
-                                if (status.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 6),
-                                    child: Chip(
-                                      label: Text(status, style: const TextStyle(fontSize: 11)),
-                                      backgroundColor: Colors.teal.withValues(alpha: 0.2),
-                                      side: BorderSide(color: Colors.teal, width: 0.5),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      if (context.mounted) Navigator.of(context).pop();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load applicants: $e')),
-      );
-    }
-  }
-
-  void _showBasicJobDetails(Map<String, dynamic> job) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(job['title'] ?? 'Job Details'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(job['description'] ?? 'No description'),
-              const SizedBox(height: 16),
-              if (job['required_skills'] != null)
-                Text("Skills: ${(job['required_skills'] as List).join(", ")}"),
-              if (job['min_experience'] != null)
-                Text("Experience: ${job['min_experience']} years"),
-              if (job['category'] != null) Text("Category: ${job['category']}"),
-              Text(
-                "Status: ${(job['is_active'] ?? true) ? 'Active' : 'Inactive'}",
-                style: TextStyle(
-                  color: (job['is_active'] ?? true) ? Colors.green : Colors.red,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                "Approval: ${(job['approval_status'] ?? 'pending').toString()}",
-                style: TextStyle(
-                  color: job['approval_status'] == 'approved'
-                      ? Colors.green
-                      : job['approval_status'] == 'rejected'
-                          ? Colors.red
-                          : Colors.orange,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (job['approval_status'] == 'rejected' && (job['rejection_reason'] ?? '').toString().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text("Reason: ${job['rejection_reason']}"),
-                ),
-            ],
-          ),
+      builder: (context) => AlertDialog(
+        title:
+            const Text('Delete Job', style: TextStyle(fontFamily: 'Poppins')),
+        content: Text(
+          'Are you sure you want to delete "$jobTitle"?',
+          style: const TextStyle(fontFamily: 'Poppins'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("Close"),
+            child:
+                const Text('Cancel', style: TextStyle(fontFamily: 'Poppins')),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await admin.deleteJob(jobId);
+                fetchJobs();
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        "Error deleting job: $e",
+                        style: const TextStyle(fontFamily: 'Poppins'),
+                      ),
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red, fontFamily: 'Poppins'),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDetailSection(String title, String? content) {
-    if (content == null || content.isEmpty) return const SizedBox();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(content),
-        ],
+  void _showBulkSyncDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => BulkSyncDialog(
+        jobs: jobs,
       ),
-    );
+    ).then((result) {
+      if (result == true) {
+        fetchJobs(); // Refresh after bulk sync
+      }
+    });
   }
 
-  Widget _buildListSection(String title, List<dynamic> items) {
-    if (items.isEmpty) return const SizedBox();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
+  // Unused legacy UI methods removed to resolve IDE warnings.
+
+  Widget _buildExpandedApplicantsSection(
+    int jobId,
+    Map<String, dynamic> job,
+    ThemeProvider themeProvider,
+  ) {
+    final applications = _applicationsByJob[jobId];
+    final loading = _loadingApplications.contains(jobId);
+    final textColor =
+        themeProvider.isDarkMode ? Colors.white70 : Colors.black54;
+    final borderColor =
+        themeProvider.isDarkMode ? Colors.grey.shade700 : Colors.grey.shade300;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: themeProvider.isDarkMode
+            ? Colors.grey.shade900.withValues(alpha: 0.6)
+            : Colors.grey.shade50,
+        border: Border(bottom: BorderSide(color: borderColor)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          ...items
-              .map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(left: 8, bottom: 2),
-                  child: Text("• $item"),
+          Text(
+            'Candidates & metrics',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+          if ((job['approval_status'] ?? '') == 'rejected') ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline,
+                      size: 18, color: Colors.red.shade700),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Rejection reason: ${job['rejection_reason'] ?? 'Not provided'}',
+                      style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 13,
+                          color: Colors.red.shade700),
+                    ),
+                  ),
+                  TextButton.icon(
+                    icon: const Icon(Icons.refresh, size: 18),
+                    label: const Text('Resubmit'),
+                    onPressed: () => _resubmitJob(job),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if ((job['approval_status'] ?? '') == 'approved' &&
+              job['approved_at'] != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Approved on ${job['approved_at']}${job['approved_by_user'] != null ? ' by ${job['approved_by_user']['name'] ?? job['approved_by_user']['email'] ?? ''}' : ''}',
+                style: TextStyle(
+                    fontFamily: 'Poppins', fontSize: 12, color: textColor),
+              ),
+            ),
+          // Metrics summary
+          Row(
+            children: [
+              _metricChip(
+                'Total applications',
+                '${job['application_count'] ?? 0}',
+                themeProvider,
+              ),
+              const SizedBox(width: 12),
+              _metricChip(
+                  'Job status',
+                  (job['is_active'] == true ? 'Active' : 'Inactive'),
+                  themeProvider),
+              const SizedBox(width: 12),
+              _metricChip(
+                  'Approval',
+                  (job['approval_status'] ?? 'pending').toString(),
+                  themeProvider),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Applicants',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              color: textColor,
+            ),
+          ),
+          const SizedBox(height: 6),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-              )
-              .toList(),
+              ),
+            )
+          else if (applications == null || applications.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'No applicants yet.',
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontSize: 13,
+                  color: textColor,
+                ),
+              ),
+            )
+          else
+            ...applications.asMap().entries.map<Widget>((entry) {
+              final index = entry.key;
+              final app = entry.value is Map
+                  ? entry.value as Map<String, dynamic>
+                  : <String, dynamic>{};
+              final cand = app['candidate'] is Map
+                  ? app['candidate'] as Map<String, dynamic>
+                  : null;
+              final name = cand?['full_name'] ?? 'Unknown';
+              final email = cand?['email'] ?? '—';
+              final status = app['status'] ?? '—';
+              final cvScore = app['cv_score'];
+              final overallScore = app['overall_score'];
+              final recommendation = app['recommendation']?.toString().trim();
+              final num cvNum = cvScore is num
+                  ? cvScore
+                  : (double.tryParse(cvScore?.toString() ?? '') ?? 0);
+              final num overallNum = overallScore is num
+                  ? overallScore
+                  : (double.tryParse(overallScore?.toString() ?? '') ?? 0);
+              final String recLabel =
+                  recommendation == null || recommendation.isEmpty
+                      ? '—'
+                      : (recommendation.toLowerCase().contains('proceed')
+                          ? 'Proceed'
+                          : recommendation.toLowerCase().contains('reject')
+                              ? 'Reject'
+                              : recommendation.toLowerCase().contains('hold')
+                                  ? 'Hold'
+                                  : recommendation);
+              final Color recColor = recLabel == 'Proceed'
+                  ? Colors.green
+                  : recLabel == 'Reject'
+                      ? Colors.red
+                      : recLabel == 'Hold'
+                          ? Colors.orange
+                          : (themeProvider.isDarkMode
+                              ? Colors.grey
+                              : Colors.black54);
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (index > 0)
+                    Divider(
+                      height: 1,
+                      color: borderColor,
+                      indent: 0,
+                      endIndent: 0,
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            name,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 13,
+                              color: textColor,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Icon(Icons.person_outline, size: 16, color: textColor),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            email,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 12,
+                              color: textColor,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        _applicantScoreChip(
+                          themeProvider,
+                          'CV',
+                          cvNum,
+                          textColor,
+                        ),
+                        const SizedBox(width: 6),
+                        _applicantScoreChip(
+                          themeProvider,
+                          'Overall',
+                          overallNum,
+                          textColor,
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: recColor.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            recLabel,
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: recColor,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '$status',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 11,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.blue.shade200
+                                  : Colors.blue.shade800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            }),
         ],
       ),
     );
   }
 
-  Widget _buildStatChip(String label, String value, {Color? color}) {
-    return Chip(
-      label: Text("$label: $value"),
-      backgroundColor: color?.withOpacity(0.1) ?? Colors.blue.withOpacity(0.1),
-      side: BorderSide(color: color ?? Colors.blue),
-    );
-  }
-
-  Widget _approvalStatusChip(Map<String, dynamic> job) {
+  Widget _hmApprovalChip(Map<String, dynamic> job) {
     final status = (job['approval_status'] ?? 'pending').toString();
     Color color;
     String label;
@@ -641,910 +568,1086 @@ class _JobManagementState extends State<JobManagement> {
         label = 'Pending';
     }
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color, width: 1),
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
         label,
-        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+        style: TextStyle(
+            fontFamily: 'Poppins',
+            fontWeight: FontWeight.w600,
+            fontSize: 11,
+            color: color),
       ),
     );
   }
 
-  Widget _buildAdvancedStatistics(Map<String, dynamic> stats) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 20),
-        const Text("Advanced Statistics",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 10),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 2.5,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: stats.keys.length,
-          itemBuilder: (context, index) {
-            final key = stats.keys.elementAt(index);
-            final value = stats[key];
-            return Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    key.toString().replaceAll('_', ' ').toUpperCase(),
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    value?.toString() ?? '0',
-                    style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  void showJobStatistics() async {
-    try {
-      final stats = await admin.getJobStatistics();
-      _showStatisticsDialog(stats);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error loading statistics: $e")),
-      );
-    }
-  }
-
-  void _showStatisticsDialog(Map<String, dynamic> stats) {
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        child: Container(
-          width: 500,
-          padding: const EdgeInsets.all(24),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  "Job Statistics",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 20),
-
-                // Overall Statistics
-                if (stats['overall'] != null)
-                  _buildStatisticsSection("Overall", stats['overall']),
-
-                // By Category
-                if (stats['by_category'] != null &&
-                    (stats['by_category'] as List).isNotEmpty)
-                  _buildCategorySection(stats['by_category']),
-
-                const SizedBox(height: 30),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: CustomButton(
-                    text: "Close",
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatisticsSection(String title, Map<String, dynamic> data) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 2.5,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: data.keys.length,
-          itemBuilder: (context, index) {
-            final key = data.keys.elementAt(index);
-            final value = data[key];
-            final colors = [
-              Colors.blue,
-              Colors.green,
-              Colors.orange,
-              Colors.purple,
-              Colors.red,
-              Colors.teal
-            ];
-            return Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: colors[index % colors.length].withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: colors[index % colors.length]),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    key.toString().replaceAll('_', ' ').toUpperCase(),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: colors[index % colors.length],
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    value?.toString() ?? '0',
-                    style: const TextStyle(
-                        fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 20),
-      ],
-    );
-  }
-
-  Widget _buildCategorySection(List<dynamic> categories) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text("By Category",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        ...categories.map((category) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(category['category'] ?? 'Unknown',
-                      style: const TextStyle(fontWeight: FontWeight.w500)),
-                ),
-                Text("${category['count'] ?? 0}",
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
-          );
-        }).toList(),
-      ],
-    );
-  }
-
-  Widget _buildJobCard(Map<String, dynamic> job, ThemeProvider themeProvider) {
-    final bool isActive = job['is_active'] ?? true;
-
-    return Card(
-      color: (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-          .withOpacity(0.9),
-      elevation: 3,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: themeProvider.isDarkMode ? Colors.grey.shade800 : Colors.grey,
-          width: 0.3,
-        ),
-      ),
-      child: InkWell(
-        onTap: () => showJobDetails(job),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          job['title'] ?? 'Untitled Job',
-                          style: TextStyle(
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 18,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (job['company'] != null && (job['company'] as String).isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              job['company'] as String,
-                              style: TextStyle(
-                                color: themeProvider.isDarkMode
-                                    ? Colors.grey.shade400
-                                    : Colors.black54,
-                                fontSize: 14,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isActive ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: isActive ? Colors.green : Colors.red, width: 1),
-                        ),
-                        child: Text(
-                          isActive ? 'Active' : 'Inactive',
-                          style: TextStyle(
-                            color: isActive ? Colors.green : Colors.red,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      _approvalStatusChip(job),
-                    ],
-                  ),
-                ],
-              ),
-              if ((job['approval_status'] ?? '') == 'rejected' && (job['rejection_reason'] ?? '').toString().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    'Rejection: ${job['rejection_reason']}',
-                    style: TextStyle(
-                      color: Colors.red.shade700,
-                      fontSize: 12,
-                      fontStyle: FontStyle.italic,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              if (job['created_by_user'] != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    "Created by: ${job['created_by_user']['name'] ?? job['created_by_user']['email'] ?? 'Unknown'}",
-                    style: TextStyle(
-                      color: themeProvider.isDarkMode
-                          ? Colors.grey.shade400
-                          : Colors.black54,
-                      fontSize: 12,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              const SizedBox(height: 8),
-
-              // Job info chips (company + employment type like candidate-facing listing)
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  if (job['employment_type'] != null && (job['employment_type'] as String).isNotEmpty)
-                    Chip(
-                      label: Text(
-                        (job['employment_type'] as String).replaceAll('_', ' '),
-                        style: const TextStyle(fontSize: 11),
-                      ),
-                      backgroundColor: Colors.redAccent.withOpacity(0.1),
-                      side: BorderSide(color: Colors.redAccent, width: 0.5),
-                    ),
-                  if (job['category'] != null && job['category'].isNotEmpty)
-                    Chip(
-                      label: Text(job['category']),
-                      backgroundColor: Colors.blue.withOpacity(0.1),
-                      side: BorderSide(color: Colors.blue, width: 0.5),
-                    ),
-                  if (job['min_experience'] != null)
-                    Chip(
-                      label: Text("${job['min_experience']} yrs exp"),
-                      backgroundColor: Colors.orange.withOpacity(0.1),
-                      side: BorderSide(color: Colors.orange, width: 0.5),
-                    ),
-                  if (job['vacancy'] != null && job['vacancy'] > 1)
-                    Chip(
-                      label: Text("${job['vacancy']} vacancies"),
-                      backgroundColor: Colors.purple.withOpacity(0.1),
-                      side: BorderSide(color: Colors.purple, width: 0.5),
-                    ),
-                  if (job['application_count'] != null &&
-                      job['application_count'] > 0)
-                    Chip(
-                      label: Text("${job['application_count']} applications"),
-                      backgroundColor: Colors.teal.withOpacity(0.1),
-                      side: BorderSide(color: Colors.teal, width: 0.5),
-                    ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // Description
-              Text(
-                job['description'] ?? 'No description',
-                style: TextStyle(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.black54,
-                  fontSize: 14,
-                ),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-
-              const SizedBox(height: 12),
-
-              // Skills preview
-              if (job['required_skills'] != null &&
-                  job['required_skills'].isNotEmpty)
-                Wrap(
-                  spacing: 4,
-                  runSpacing: 4,
-                  children: (job['required_skills'] as List)
-                      .take(3)
-                      .map((skill) => Chip(
-                            label: Text(skill.toString(),
-                                style: const TextStyle(fontSize: 11)),
-                            backgroundColor: themeProvider.isDarkMode
-                                ? Colors.grey.shade800
-                                : Colors.grey.shade200,
-                            side: BorderSide.none,
-                          ))
-                      .toList(),
-                ),
-
-              const SizedBox(height: 16),
-
-              // Footer with actions and date
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "Created: ${_formatDate(job['created_at'])}",
-                    style: TextStyle(
-                      color: themeProvider.isDarkMode
-                          ? Colors.grey.shade500
-                          : Colors.grey.shade600,
-                      fontSize: 12,
-                    ),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.people, size: 20),
-                        color: Colors.teal,
-                        tooltip: "View Applicants",
-                        onPressed: () => _showJobApplicationsDialog(job, themeProvider),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.visibility, size: 20),
-                        color: Colors.blue,
-                        tooltip: "View Details",
-                        onPressed: () => showJobDetails(job),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.edit, size: 20),
-                        color: Colors.blueAccent,
-                        tooltip: "Edit",
-                        onPressed: () => openJobForm(job: job),
-                      ),
-                      if (isActive)
-                        IconButton(
-                          icon: const Icon(Icons.delete, size: 20),
-                          color: Colors.redAccent,
-                          tooltip: "Deactivate",
-                          onPressed: () => toggleJobStatus(job),
-                        )
-                      else
-                        IconButton(
-                          icon: const Icon(Icons.restore, size: 20),
-                          color: Colors.orange,
-                          tooltip: "Restore",
-                          onPressed: () => restoreJob(job),
-                        ),
-                      if ((job['approval_status'] ?? '') == 'pending') ...[
-                        IconButton(
-                          icon: const Icon(Icons.check_circle_outline, size: 20),
-                          color: Colors.green,
-                          tooltip: "Approve",
-                          onPressed: () => _approveJob(job),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.cancel_outlined, size: 20),
-                          color: Colors.red,
-                          tooltip: "Reject",
-                          onPressed: () => _showRejectDialog(job),
-                        ),
-                      ],
-                      if (widget.onJobSelected != null)
-                        IconButton(
-                          icon: const Icon(Icons.check_circle, size: 20),
-                          color: Colors.green,
-                          tooltip: "Select Job",
-                          onPressed: () =>
-                              widget.onJobSelected!(job['id'] as int),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatDate(String? dateString) {
-    if (dateString == null) return 'Unknown';
-    try {
-      final date = DateTime.parse(dateString);
-      return '${date.day}/${date.month}/${date.year}';
-    } catch (e) {
-      return 'Invalid date';
-    }
-  }
-
-  Widget _buildPagination() {
-    if (totalPages <= 1) return const SizedBox();
-
+  Widget _metricChip(String label, String value, ThemeProvider themeProvider) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.black.withOpacity(0.05),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: themeProvider.isDarkMode ? Colors.grey.shade800 : Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: themeProvider.isDarkMode
+              ? Colors.grey.shade700
+              : Colors.grey.shade300,
+        ),
+      ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left),
-            onPressed: currentPage > 1
-                ? () {
-                    setState(() => currentPage--);
-                    fetchJobs();
-                  }
-                : null,
+          Text(
+            '$label: ',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 12,
+              color: themeProvider.isDarkMode
+                  ? Colors.grey.shade400
+                  : Colors.black54,
+            ),
           ),
-          ...List.generate(
-            totalPages.clamp(1, 5),
-            (index) {
-              final pageNumber = index + 1;
-              return TextButton(
-                onPressed: () {
-                  setState(() => currentPage = pageNumber);
-                  fetchJobs();
-                },
-                style: TextButton.styleFrom(
-                  foregroundColor: currentPage == pageNumber
-                      ? Colors.redAccent
-                      : Colors.grey,
-                ),
-                child: Text(pageNumber.toString()),
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right),
-            onPressed: currentPage < totalPages
-                ? () {
-                    setState(() => currentPage++);
-                    fetchJobs();
-                  }
-                : null,
+          Text(
+            value,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+              color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+            ),
           ),
         ],
       ),
     );
   }
 
+  Widget _applicantScoreChip(
+    ThemeProvider themeProvider,
+    String label,
+    num value,
+    Color textColor,
+  ) {
+    final display = value > 0 ? value.toStringAsFixed(0) : '—';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: themeProvider.isDarkMode
+            ? Colors.grey.shade800
+            : Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '$label: ',
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 10,
+              color: textColor.withValues(alpha: 0.8),
+            ),
+          ),
+          Text(
+            display,
+            style: TextStyle(
+              fontFamily: 'Poppins',
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: textColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void openJobForm({Map<String, dynamic>? job}) {
+    showDialog(
+      context: context,
+      builder: (_) => JobFormDialog(job: job, onSaved: fetchJobs),
+    );
+  }
+
+  Future<void> _resubmitJob(Map<String, dynamic> job) async {
+    try {
+      await admin.resubmitJob(job['id'] as int);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Job resubmitted for approval'),
+              backgroundColor: Colors.green),
+        );
+        fetchJobs();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error resubmitting: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _approveJob(int jobId, String jobTitle) async {
+    try {
+      await admin.approveJob(jobId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$jobTitle has been approved'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        fetchJobs();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error approving job: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _bulkApproveAllPending() async {
+    // Get all pending jobs from the current list
+    final pendingJobs =
+        jobs.where((job) => job['approval_status'] == 'pending').toList();
+
+    if (pendingJobs.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No pending jobs to approve'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Bulk Approve Jobs'),
+        content: Text('Approve all ${pendingJobs.length} pending jobs?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+            child: const Text('Approve All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Show progress indicator
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Approving ${pendingJobs.length} jobs...'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    // Approve each job
+    int successCount = 0;
+    int failCount = 0;
+
+    for (final job in pendingJobs) {
+      try {
+        await admin.approveJob(job['id']);
+        successCount++;
+      } catch (e) {
+        failCount++;
+      }
+    }
+
+    // Refresh jobs list
+    await fetchJobs();
+
+    // Show result
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Approved: $successCount, Failed: $failCount'),
+          backgroundColor: failCount == 0 ? Colors.green : Colors.orange,
+        ),
+      );
+    }
+  }
+
+  Future<void> _declineJob(int jobId, String jobTitle) async {
+    final TextEditingController reasonController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Decline Job: $jobTitle'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Please provide a reason for declining this job:'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: reasonController,
+                decoration: const InputDecoration(
+                  labelText: 'Reason for decline',
+                  border: OutlineInputBorder(),
+                  hintText: 'Enter reason...',
+                ),
+                maxLines: 3,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              child: const Text('Decline'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == true && reasonController.text.trim().isNotEmpty) {
+      try {
+        await admin.rejectJob(jobId, reasonController.text.trim());
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('$jobTitle has been declined'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          fetchJobs();
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error declining job: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+    reasonController.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final filteredJobs = _filteredJobs();
 
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage(themeProvider.backgroundImage),
-            fit: BoxFit.cover,
+    return DefaultTextStyle(
+      style: TextStyle(
+        fontFamily: 'Poppins',
+        color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+      ),
+      child: Scaffold(
+        // 🌆 Dynamic background implementation
+        body: Container(
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage(themeProvider.backgroundImage),
+              fit: BoxFit.cover,
+            ),
           ),
-        ),
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          body: loading
-              ? const Center(
-                  child: CircularProgressIndicator(color: Colors.redAccent))
-              : Column(
-                  children: [
-                    // Header
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                "Job Management",
-                                style: TextStyle(
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                  color: themeProvider.isDarkMode
-                                      ? Colors.white
-                                      : Colors.black87,
-                                ),
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            body: loading
+                ? const Center(
+                    child: CircularProgressIndicator(color: Colors.redAccent),
+                  )
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Header
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "Job Management",
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white
+                                    : Colors.black87,
                               ),
-                              Row(
-                                children: [
-                                  CustomButton(
-                                    text: "Statistics",
-                                    onPressed: showJobStatistics,
-                                    outlined: true,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  CustomButton(
-                                    text: "Add Job",
-                                    onPressed: () => openJobForm(),
-                                    icon: Icons.add,
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 20),
-
-                          // Search and Filters
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: themeProvider.isDarkMode
-                                  ? Colors.black.withOpacity(0.6)
-                                  : Colors.white.withOpacity(0.7),
-                              borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Column(
+                            CustomButton(
+                              text: "Add Job",
+                              onPressed: () => openJobForm(),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Divider(
+                          color: themeProvider.isDarkMode
+                              ? Colors.grey.shade800
+                              : Colors.grey,
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Search bar
+                        ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: _searchController,
+                          builder: (_, value, __) {
+                            final hasText = value.text.isNotEmpty;
+                            final borderColor = themeProvider.isDarkMode
+                                ? Colors.grey.shade700
+                                : Colors.grey.shade400;
+                            final inputBorder = OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: borderColor),
+                            );
+                            return Row(
                               children: [
-                                // Search Bar
-                                SearchBar(
-                                  hintText:
-                                      "Search jobs by title, description, or skills...",
-                                  onSearch: (query) {
-                                    setState(() {
-                                      searchQuery = query;
-                                      currentPage = 1;
-                                    });
-                                    fetchJobs();
-                                  },
-                                  onClear: () {
-                                    setState(() => searchQuery = '');
-                                    fetchJobs();
-                                  },
+                                Expanded(
+                                  child: TextField(
+                                    controller: _searchController,
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                      fontSize: 14,
+                                    ),
+                                    decoration: InputDecoration(
+                                      hintText:
+                                          'Search jobs by title, description...',
+                                      hintStyle: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        color: themeProvider.isDarkMode
+                                            ? Colors.grey.shade500
+                                            : Colors.grey.shade600,
+                                      ),
+                                      prefixIcon: const Icon(
+                                        Icons.search,
+                                        color: Colors.grey,
+                                      ),
+                                      suffixIcon: hasText
+                                          ? IconButton(
+                                              icon: const Icon(
+                                                Icons.clear,
+                                                size: 20,
+                                              ),
+                                              onPressed: () {
+                                                _searchController.clear();
+                                                setState(() {});
+                                              },
+                                            )
+                                          : null,
+                                      border: inputBorder,
+                                      enabledBorder: inputBorder,
+                                      focusedBorder: inputBorder,
+                                      filled: true,
+                                      fillColor: themeProvider.isDarkMode
+                                          ? Colors.grey.shade900.withValues(
+                                              alpha: 0.5,
+                                            )
+                                          : Colors.grey.shade50,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
+                                      ),
+                                    ),
+                                    onSubmitted: (_) => _applySearch(),
+                                  ),
                                 ),
-                                const SizedBox(height: 16),
-
-                                // Filter Row
-                                SingleChildScrollView(
-                                  scrollDirection: Axis.horizontal,
-                                  child: Row(
-                                    children: [
-                                      // Status Filter
-                                      ...statusFilters.map((status) {
-                                        return Padding(
-                                          padding:
-                                              const EdgeInsets.only(right: 8),
-                                          child: FilterChip(
-                                            label: status,
-                                            selected: selectedStatus == status,
-                                            onSelected: (selected) {
-                                              setState(() {
-                                                selectedStatus = status;
-                                                currentPage = 1;
-                                              });
-                                              fetchJobs();
-                                            },
-                                          ),
-                                        );
-                                      }).toList(),
-
-                                      const SizedBox(width: 16),
-
-                                      // Approval Status Filter
-                                      ...approvalFilters.map((approval) {
-                                        return Padding(
-                                          padding: const EdgeInsets.only(right: 8),
-                                          child: FilterChip(
-                                            label: approval == 'all' ? 'All' : approval[0].toUpperCase() + approval.substring(1),
-                                            selected: selectedApprovalStatus == approval,
-                                            onSelected: (_) {
-                                              setState(() {
-                                                selectedApprovalStatus = approval;
-                                                currentPage = 1;
-                                              });
-                                              fetchJobs();
-                                            },
-                                          ),
-                                        );
-                                      }).toList(),
-
-                                      const SizedBox(width: 16),
-
-                                      // Category Filter
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 12, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.grey.shade800
-                                              : Colors.grey.shade200,
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                        child: DropdownButtonHideUnderline(
-                                          child: DropdownButton<String>(
-                                            value: selectedCategory,
-                                            items: categories.map((category) {
-                                              return DropdownMenuItem(
-                                                value: category,
-                                                child: Text(category),
-                                              );
-                                            }).toList(),
-                                            onChanged: (value) {
-                                              if (value != null) {
-                                                setState(() {
-                                                  selectedCategory = value;
-                                                  currentPage = 1;
-                                                });
-                                                fetchJobs();
-                                              }
-                                            },
-                                            style: TextStyle(
-                                              color: themeProvider.isDarkMode
-                                                  ? Colors.white
-                                                  : Colors.black87,
-                                            ),
-                                            dropdownColor:
-                                                themeProvider.isDarkMode
-                                                    ? Colors.grey.shade900
-                                                    : Colors.white,
-                                          ),
-                                        ),
-                                      ),
-
-                                      const SizedBox(width: 16),
-
-                                      // Sort Options
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 12, vertical: 8),
-                                        decoration: BoxDecoration(
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.grey.shade800
-                                              : Colors.grey.shade200,
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                        child: DropdownButtonHideUnderline(
-                                          child: DropdownButton<String>(
-                                            value: sortBy,
-                                            items: sortOptions.map((option) {
-                                              return DropdownMenuItem(
-                                                value: option,
-                                                child: Text(option.replaceAll(
-                                                    '_', ' ')),
-                                              );
-                                            }).toList(),
-                                            onChanged: (value) {
-                                              if (value != null) {
-                                                setState(() {
-                                                  sortBy = value;
-                                                  currentPage = 1;
-                                                });
-                                                fetchJobs();
-                                              }
-                                            },
-                                            style: TextStyle(
-                                              color: themeProvider.isDarkMode
-                                                  ? Colors.white
-                                                  : Colors.black87,
-                                            ),
-                                            dropdownColor:
-                                                themeProvider.isDarkMode
-                                                    ? Colors.grey.shade900
-                                                    : Colors.white,
-                                          ),
-                                        ),
-                                      ),
-
-                                      const SizedBox(width: 8),
-
-                                      // Sort Order Toggle
-                                      IconButton(
-                                        icon: Icon(
-                                          sortOrder == 'desc'
-                                              ? Icons.arrow_downward
-                                              : Icons.arrow_upward,
-                                          size: 20,
-                                        ),
-                                        onPressed: () {
-                                          setState(() {
-                                            sortOrder = sortOrder == 'desc'
-                                                ? 'asc'
-                                                : 'desc';
-                                            currentPage = 1;
-                                          });
-                                          fetchJobs();
-                                        },
-                                        tooltip: 'Toggle sort order',
-                                      ),
-                                    ],
+                                const SizedBox(width: 12),
+                                IconButton.filled(
+                                  onPressed: _applySearch,
+                                  icon: const Icon(Icons.search),
+                                  tooltip: 'Search',
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.redAccent,
+                                    foregroundColor: Colors.white,
                                   ),
                                 ),
                               ],
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Filters
+                        Row(
+                          children: [
+                            Text(
+                              'Category:',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 14,
+                                color: themeProvider.isDarkMode
+                                    ? Colors.grey.shade400
+                                    : Colors.black54,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // Job Count
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Showing ${jobs.length} jobs",
-                            style: TextStyle(
-                              color: themeProvider.isDarkMode
-                                  ? Colors.grey.shade400
-                                  : Colors.grey.shade600,
-                            ),
-                          ),
-                          if (searchQuery.isNotEmpty ||
-                              selectedCategory != 'all' ||
-                              selectedStatus != 'active' ||
-                              selectedApprovalStatus != 'all')
-                            TextButton(
-                              onPressed: () {
-                                setState(() {
-                                  searchQuery = '';
-                                  selectedCategory = 'all';
-                                  selectedStatus = 'active';
-                                  selectedApprovalStatus = 'all';
-                                  sortBy = 'created_at';
-                                  sortOrder = 'desc';
-                                  currentPage = 1;
-                                });
-                                fetchJobs();
-                              },
-                              child: const Text("Clear Filters"),
-                            ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    // Jobs List
-                    Expanded(
-                      child: jobs.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.work_outline,
-                                    size: 64,
-                                    color: themeProvider.isDarkMode
-                                        ? Colors.grey.shade400
-                                        : Colors.grey,
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    "No jobs found",
+                            const SizedBox(width: 8),
+                            DropdownButton<String?>(
+                              value: _categoryFilter,
+                              hint: Text(
+                                'All',
+                                style: TextStyle(
+                                  fontFamily: 'Poppins',
+                                  color: themeProvider.isDarkMode
+                                      ? Colors.grey.shade400
+                                      : Colors.black54,
+                                ),
+                              ),
+                              underline: const SizedBox(),
+                              borderRadius: BorderRadius.circular(8),
+                              dropdownColor: themeProvider.isDarkMode
+                                  ? const Color(0xFF14131E)
+                                  : Colors.white,
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white
+                                    : Colors.black87,
+                                fontSize: 14,
+                              ),
+                              items: [
+                                DropdownMenuItem<String?>(
+                                  value: null,
+                                  child: Text(
+                                    'All',
                                     style: TextStyle(
-                                      fontSize: 18,
+                                      fontFamily: 'Poppins',
                                       color: themeProvider.isDarkMode
-                                          ? Colors.grey.shade400
-                                          : Colors.grey.shade600,
+                                          ? Colors.white
+                                          : Colors.black87,
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    searchQuery.isNotEmpty
-                                        ? "Try adjusting your search"
-                                        : "Create your first job posting",
-                                    style: TextStyle(
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.grey.shade500
-                                          : Colors.grey.shade500,
-                                    ),
-                                  ),
-                                  if (!searchQuery.isNotEmpty)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 16),
-                                      child: CustomButton(
-                                        text: "Add Job",
-                                        onPressed: () => openJobForm(),
-                                        small: true,
+                                ),
+                                ..._categoryOptions.map(
+                                  (c) => DropdownMenuItem<String?>(
+                                    value: c,
+                                    child: Text(
+                                      c,
+                                      style: TextStyle(
+                                        fontFamily: 'Poppins',
+                                        color: themeProvider.isDarkMode
+                                            ? Colors.white
+                                            : Colors.black87,
                                       ),
                                     ),
-                                ],
-                              ),
-                            )
-                          : ListView.builder(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 24),
-                              itemCount: jobs.length,
-                              itemBuilder: (_, index) {
-                                final job = jobs[index];
-                                return _buildJobCard(job, themeProvider);
+                                  ),
+                                ),
+                              ],
+                              onChanged: (v) {
+                                setState(() {
+                                  _categoryFilter = v;
+                                  fetchJobs();
+                                });
                               },
                             ),
-                    ),
+                            const SizedBox(width: 24),
+                            Text(
+                              'Status:',
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                fontSize: 14,
+                                color: themeProvider.isDarkMode
+                                    ? Colors.grey.shade400
+                                    : Colors.black54,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            DropdownButton<String>(
+                              value: _statusFilter,
+                              underline: const SizedBox(),
+                              borderRadius: BorderRadius.circular(8),
+                              dropdownColor: themeProvider.isDarkMode
+                                  ? const Color(0xFF14131E)
+                                  : Colors.white,
+                              style: TextStyle(
+                                fontFamily: 'Poppins',
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white
+                                    : Colors.black87,
+                                fontSize: 14,
+                              ),
+                              items: [
+                                DropdownMenuItem(
+                                  value: 'active',
+                                  child: Text(
+                                    'Active',
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'inactive',
+                                  child: Text(
+                                    'Inactive',
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                                DropdownMenuItem(
+                                  value: 'all',
+                                  child: Text(
+                                    'All',
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              onChanged: (v) {
+                                if (v != null) {
+                                  setState(() {
+                                    _statusFilter = v;
+                                    fetchJobs();
+                                  });
+                                }
+                              },
+                            ),
+                            const Spacer(),
+                            // Bulk Approve All Button (for testing)
+                            ElevatedButton.icon(
+                              onPressed: _bulkApproveAllPending,
+                              icon: const Icon(Icons.check_circle, size: 18),
+                              label: const Text('Approve All Pending'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            // Bulk Sync Button
+                            ElevatedButton.icon(
+                              onPressed: _showBulkSyncDialog,
+                              icon: const Icon(Icons.cloud_sync, size: 18),
+                              label: const Text('Bulk Sync'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
 
-                    // Pagination
-                    _buildPagination(),
-                  ],
-                ),
+                        // Table with DataTable (perfect alignment)
+                        filteredJobs.isEmpty
+                            ? Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 48),
+                                child: Center(
+                                  child: Text(
+                                    loading ? '' : "No jobs found",
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.grey.shade400
+                                          : Colors.black54,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Container(
+                                decoration: BoxDecoration(
+                                  color: (themeProvider.isDarkMode
+                                          ? const Color(0xFF14131E)
+                                          : Colors.white)
+                                      .withValues(alpha: 0.95),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade800
+                                        : Colors.grey.shade300,
+                                  ),
+                                ),
+                                child: Theme(
+                                  data: Theme.of(context).copyWith(
+                                    cardColor: Colors.transparent,
+                                    dividerColor: Colors.transparent,
+                                  ),
+                                  child: SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: DataTable(
+                                      columnSpacing: 16,
+                                      horizontalMargin: 12,
+                                      headingRowColor: WidgetStateProperty
+                                          .resolveWith<Color?>(
+                                        (states) => themeProvider.isDarkMode
+                                            ? Colors.grey.shade900
+                                            : Colors.grey.shade200,
+                                      ),
+                                      dataRowColor: WidgetStateProperty
+                                          .resolveWith<Color?>(
+                                              (states) => Colors.transparent),
+                                      columns: [
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Title', themeProvider)),
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Category', themeProvider)),
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Applications', themeProvider)),
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Status', themeProvider)),
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Approval', themeProvider)),
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Created by', themeProvider)),
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Recruitee', themeProvider)),
+                                        DataColumn(
+                                            label: _tableHeaderText(
+                                                'Actions', themeProvider)),
+                                      ],
+                                      rows: filteredJobs.map((job) {
+                                        final jobId = job['id'] as int;
+                                        final isExpanded =
+                                            _expandedJobIds.contains(jobId);
+                                        final createdBy =
+                                            job['created_by_user'] != null
+                                                ? (job['created_by_user']
+                                                        ['name'] ??
+                                                    job['created_by_user']
+                                                        ['email'] ??
+                                                    'Unknown')
+                                                : '—';
+                                        final isActive =
+                                            job['is_active'] == true;
+                                        final textColor =
+                                            themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87;
+
+                                        return DataRow(
+                                          onSelectChanged: (_) =>
+                                              _toggleJobExpanded(jobId),
+                                          cells: [
+                                            DataCell(Text(job['title'] ?? '—',
+                                                style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 13,
+                                                    color: textColor))),
+                                            DataCell(Text(
+                                                job['category'] ?? '—',
+                                                style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 13,
+                                                    color: textColor))),
+                                            DataCell(Text(
+                                                '${job['application_count'] ?? 0}',
+                                                style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 13,
+                                                    color: textColor))),
+                                            DataCell(
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: isActive
+                                                      ? Colors.green.withValues(
+                                                          alpha: 0.2)
+                                                      : Colors.orange
+                                                          .withValues(
+                                                              alpha: 0.2),
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
+                                                ),
+                                                child: Text(
+                                                  isActive
+                                                      ? 'Active'
+                                                      : 'Inactive',
+                                                  style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 11,
+                                                    color: isActive
+                                                        ? Colors.green.shade700
+                                                        : Colors
+                                                            .orange.shade700,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            DataCell(_hmApprovalChip(job)),
+                                            DataCell(Text(createdBy,
+                                                style: TextStyle(
+                                                    fontFamily: 'Poppins',
+                                                    fontSize: 12,
+                                                    color: textColor))),
+                                            DataCell(SyncStatusBadge(job: job)),
+                                            DataCell(
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  if (job['approval_status'] ==
+                                                          'approved' &&
+                                                      job['sync_to_recruitee'] ==
+                                                          true)
+                                                    _SyncNowButton(
+                                                        job: job,
+                                                        onSyncComplete:
+                                                            fetchJobs,
+                                                        adminService: admin),
+                                                  if (job['recruitee_url'] !=
+                                                      null)
+                                                    IconButton(
+                                                      icon: const Icon(
+                                                          Icons.open_in_new,
+                                                          color: Colors.green,
+                                                          size: 18),
+                                                      onPressed: () =>
+                                                          _launchUrl(job[
+                                                              'recruitee_url']),
+                                                      padding: EdgeInsets.zero,
+                                                      constraints:
+                                                          const BoxConstraints(
+                                                              minWidth: 28,
+                                                              minHeight: 28),
+                                                    ),
+                                                  PopupMenuButton<String>(
+                                                    icon: Icon(Icons.more_vert,
+                                                        size: 18,
+                                                        color: textColor),
+                                                    onSelected: (value) =>
+                                                        _handleMenuAction(
+                                                            value, job, jobId),
+                                                    padding: EdgeInsets.zero,
+                                                    constraints:
+                                                        const BoxConstraints(
+                                                            minWidth: 28,
+                                                            minHeight: 28),
+                                                    itemBuilder: (context) => [
+                                                      if (job['approval_status'] ==
+                                                          'pending')
+                                                        const PopupMenuItem(
+                                                          value: 'approve',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                  Icons
+                                                                      .check_circle,
+                                                                  color: Colors
+                                                                      .green,
+                                                                  size: 18),
+                                                              SizedBox(
+                                                                  width: 8),
+                                                              Text('Approve')
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      if (job['approval_status'] ==
+                                                          'pending')
+                                                        const PopupMenuItem(
+                                                          value: 'decline',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(Icons.cancel,
+                                                                  color: Colors
+                                                                      .orange,
+                                                                  size: 18),
+                                                              SizedBox(
+                                                                  width: 8),
+                                                              Text('Decline')
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      const PopupMenuItem(
+                                                        value: 'edit',
+                                                        child: Row(
+                                                          children: [
+                                                            Icon(Icons.edit,
+                                                                color: Colors
+                                                                    .blueAccent,
+                                                                size: 18),
+                                                            SizedBox(width: 8),
+                                                            Text('Edit')
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      const PopupMenuItem(
+                                                        value: 'delete',
+                                                        child: Row(
+                                                          children: [
+                                                            Icon(Icons.delete,
+                                                                color: Colors
+                                                                    .redAccent,
+                                                                size: 18),
+                                                            SizedBox(width: 8),
+                                                            Text('Delete')
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      if (widget
+                                                              .onJobSelected !=
+                                                          null)
+                                                        const PopupMenuItem(
+                                                          value: 'select',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                  Icons
+                                                                      .check_circle,
+                                                                  color: Colors
+                                                                      .green,
+                                                                  size: 18),
+                                                              SizedBox(
+                                                                  width: 8),
+                                                              Text('Select Job')
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      if (job['approval_status'] ==
+                                                          'approved')
+                                                        PopupMenuItem(
+                                                          value: 'toggle_sync',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                  job['sync_to_recruitee'] ==
+                                                                          true
+                                                                      ? Icons
+                                                                          .cloud_off
+                                                                      : Icons
+                                                                          .cloud,
+                                                                  color: Colors
+                                                                      .blue,
+                                                                  size: 18),
+                                                              const SizedBox(
+                                                                  width: 8),
+                                                              Text(job['sync_to_recruitee'] ==
+                                                                      true
+                                                                  ? 'Disable Sync'
+                                                                  : 'Enable Sync'),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      if (job['approval_status'] ==
+                                                          'approved')
+                                                        const PopupMenuItem(
+                                                          value: 'history',
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                  Icons.history,
+                                                                  color: Colors
+                                                                      .grey,
+                                                                  size: 18),
+                                                              SizedBox(
+                                                                  width: 8),
+                                                              Text(
+                                                                  'Sync History')
+                                                            ],
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                  Icon(
+                                                      isExpanded
+                                                          ? Icons.expand_less
+                                                          : Icons.expand_more,
+                                                      color: textColor,
+                                                      size: 18),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ),
+                              ),
+
+                        // Expanded details section (applicants) displayed below the table
+                        if (_expandedJobIds.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 16),
+                            child: Column(
+                              children: _expandedJobIds.map((jobId) {
+                                final job = jobs.firstWhere(
+                                    (j) => j['id'] == jobId,
+                                    orElse: () => {});
+                                if (job.isEmpty) return const SizedBox.shrink();
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: _buildExpandedApplicantsSection(
+                                      jobId, job, themeProvider),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _tableHeaderText(String label, ThemeProvider themeProvider) {
+    return Text(
+      label,
+      style: TextStyle(
+        fontFamily: 'Poppins',
+        fontWeight: FontWeight.bold,
+        fontSize: 14,
+        color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
       ),
     );
   }
 }
 
+// ---------------- Sync Now Button with Loading Indicator ----------------
+class _SyncNowButton extends StatefulWidget {
+  final Map<String, dynamic> job;
+  final VoidCallback? onSyncComplete;
+  final AdminService adminService;
+
+  const _SyncNowButton(
+      {required this.job, this.onSyncComplete, required this.adminService});
+
+  @override
+  State<_SyncNowButton> createState() => _SyncNowButtonState();
+}
+
+class _SyncNowButtonState extends State<_SyncNowButton> {
+  bool _isSyncing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: _isSyncing
+          ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.cloud_upload, size: 18),
+      onPressed: _isSyncing ? null : _sync,
+      tooltip: 'Sync to Recruitee',
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(
+        minWidth: 28,
+        minHeight: 28,
+      ),
+    );
+  }
+
+  Future<void> _sync() async {
+    setState(() => _isSyncing = true);
+    try {
+      final result =
+          await widget.adminService.syncJobToRecruitee(widget.job['id']);
+
+      if (mounted) {
+        if (result['success'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('✓ Synced successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          // Open Recruitee URL if available
+          if (result['recruitee_url'] != null) {
+            _launchUrl(result['recruitee_url']);
+          }
+        } else if (result['retry_scheduled'] == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠ Sync failed – retry scheduled'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('✗ Error: ${result['error'] ?? 'Unknown error'}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+
+      widget.onSyncComplete?.call();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Network error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncing = false);
+      }
+    }
+  }
+
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+}
+
 // ---------------- Job + Assessment Form Dialog ----------------
-// (Keep your existing JobFormDialog class exactly as it was)
 class JobFormDialog extends StatefulWidget {
   final Map<String, dynamic>? job;
   final VoidCallback onSaved;
@@ -1563,17 +1666,27 @@ class _JobFormDialogState extends State<JobFormDialog>
   String jobSummary = "";
   TextEditingController responsibilitiesController = TextEditingController();
   TextEditingController qualificationsController = TextEditingController();
+  TextEditingController companyDetailsController = TextEditingController();
+  TextEditingController descriptionController = TextEditingController();
   String companyName = "";
   String jobLocation = "";
   String companyDetails = "";
   String category = "";
   final skillsController = TextEditingController();
   final minExpController = TextEditingController();
-  final salaryMinController = TextEditingController();
-  final salaryMaxController = TextEditingController();
+  final categoryController = TextEditingController();
   String salaryCurrency = "ZAR";
   String salaryPeriod = "monthly";
+  final TextEditingController salaryMinController = TextEditingController();
+  final TextEditingController salaryMaxController = TextEditingController();
+  final TextEditingController applicationDeadlineController =
+      TextEditingController();
   List<Map<String, dynamic>> questions = [];
+  int? _testPackId;
+  List<TestPack> _testPacks = [];
+  bool _useTestPack = false;
+  bool _loadingTestPacks = false;
+  List<bool> _cherryPickSelected = [];
   Map<String, int> weightings = {
     "cv": 60,
     "assessment": 40,
@@ -1585,84 +1698,384 @@ class _JobFormDialogState extends State<JobFormDialog>
   String? weightingsError;
   late TabController _tabController;
   final AdminService admin = AdminService();
+  final TestPackService _testPackService = TestPackService();
+
+  // Preferred start window for the role
+  DateTime? _startDateFrom;
+  DateTime? _startDateTo;
+  // Minimum years per skill, e.g. [{"skill": "Python", "years": 3}, ...]
+  List<Map<String, dynamic>> _minYearsPerSkillList = [];
+  // Must-have certifications
+  List<String> _requiredCertifications = [];
+  final TextEditingController _certificationController =
+      TextEditingController();
+
+  // Category options for dropdown
+  static const List<String> categoryOptions = [
+    "Engineering",
+    "Marketing",
+    "Sales",
+    "HR",
+    "Finance",
+    "Operations",
+    "Customer Service",
+    "Product",
+    "Design",
+    "Data Science",
+  ];
 
   @override
   void initState() {
     super.initState();
     title = widget.job?['title'] ?? '';
     description = widget.job?['description'] ?? '';
-    skillsController.text = (widget.job?['required_skills'] ?? []).join(", ");
-    minExpController.text = (widget.job?['min_experience'] ?? 0).toString();
-    jobSummary = widget.job?['job_summary'] ?? '';
-    responsibilitiesController.text =
-        (widget.job?['responsibilities'] ?? []).join(", ");
-    qualificationsController.text =
-        (widget.job?['qualifications'] ?? []).join(", ");
-    companyName = widget.job?['company'] ?? '';
-    jobLocation = widget.job?['location'] ?? '';
-    companyDetails = widget.job?['company_details'] ?? '';
+    descriptionController.text = description;
+    companyDetailsController.text = widget.job?['company_details'] ?? '';
+    category = widget.job?['category'] ?? '';
+
     salaryCurrency = widget.job?['salary_currency'] ?? 'ZAR';
     salaryMinController.text = (widget.job?['salary_min'] ?? '').toString();
     salaryMaxController.text = (widget.job?['salary_max'] ?? '').toString();
     salaryPeriod = widget.job?['salary_period'] ?? 'monthly';
-    category = widget.job?['category'] ?? '';
-    employmentType = widget.job?['employment_type'] ?? 'full_time';
-
-    final jobWeightings = widget.job?['weightings'];
-    if (jobWeightings is Map) {
-      weightings = {
-        "cv": (jobWeightings["cv"] ?? 60).toInt(),
-        "assessment": (jobWeightings["assessment"] ?? 40).toInt(),
-        "interview": (jobWeightings["interview"] ?? 0).toInt(),
-        "references": (jobWeightings["references"] ?? 0).toInt(),
-      };
+    final rawDeadline = widget.job?['application_deadline'];
+    if (rawDeadline != null && rawDeadline.toString().trim().isNotEmpty) {
+      final s = rawDeadline.toString();
+      applicationDeadlineController.text =
+          s.length >= 10 ? s.substring(0, 10) : s;
     }
 
-    knockoutRules = _normalizeKnockoutRules(widget.job?['knockout_rules']);
+    // Format existing responsibilities as bullet points
+    final existingResponsibilities = widget.job?['responsibilities'] ?? [];
+    responsibilitiesController.text =
+        existingResponsibilities.map((r) => "• $r").join('\n');
+
+    // Format existing qualifications as bullet points
+    final existingQualifications = widget.job?['qualifications'] ?? [];
+    qualificationsController.text =
+        existingQualifications.map((q) => "• $q").join('\n');
+
+    // Format existing skills as bullet points
+    final existingSkills = widget.job?['required_skills'] ?? [];
+    skillsController.text = existingSkills.map((s) => "• $s").join('\n');
+
+    minExpController.text = (widget.job?['min_experience'] ?? 0).toString();
+    final startFrom = widget.job?['start_date_from']?.toString();
+    final startTo = widget.job?['start_date_to']?.toString();
+    if (startFrom != null && startFrom.isNotEmpty)
+      _startDateFrom = DateTime.tryParse(
+        startFrom.substring(0, startFrom.length >= 10 ? 10 : startFrom.length),
+      );
+    if (startTo != null && startTo.isNotEmpty)
+      _startDateTo = DateTime.tryParse(
+        startTo.substring(0, startTo.length >= 10 ? 10 : startTo.length),
+      );
+    final minYearsRaw = widget.job?['min_years_per_skill'];
+    if (minYearsRaw is Map) {
+      _minYearsPerSkillList = minYearsRaw.entries
+          .map(
+            (e) => {
+              "skill": e.key.toString(),
+              "years": (e.value is num) ? (e.value as num).toDouble() : 0.0,
+            },
+          )
+          .toList();
+    }
+    final certsRaw = widget.job?['required_certifications'];
+    if (certsRaw is List)
+      _requiredCertifications = certsRaw.map((e) => e.toString()).toList();
+    jobSummary = widget.job?['job_summary'] ?? '';
+    companyDetails = widget.job?['company_details'] ?? '';
+    companyDetailsController.text = companyDetails;
+    category = widget.job?['category'] ?? '';
+    categoryController.text = category;
 
     if (widget.job != null &&
         widget.job!['assessment_pack'] != null &&
         widget.job!['assessment_pack']['questions'] != null) {
-      questions =
-          _normalizeQuestions(widget.job!['assessment_pack']['questions']);
+      questions = _normalizeQuestions(
+        widget.job!['assessment_pack']['questions'],
+      );
+    }
+    final tpId = widget.job?['test_pack_id'];
+    if (tpId != null && tpId is int) {
+      _testPackId = tpId;
+      _useTestPack = true;
+    }
+
+    // Load weightings (CV %, Assessment %, etc.) and knockout rules when editing
+    final rawWeightings = widget.job?['weightings'];
+    if (rawWeightings is Map) {
+      weightings = {
+        "cv": (rawWeightings["cv"] is int)
+            ? rawWeightings["cv"] as int
+            : (rawWeightings["cv"] is num)
+                ? (rawWeightings["cv"] as num).toInt()
+                : 60,
+        "assessment": (rawWeightings["assessment"] is int)
+            ? rawWeightings["assessment"] as int
+            : (rawWeightings["assessment"] is num)
+                ? (rawWeightings["assessment"] as num).toInt()
+                : 40,
+        // This screen edits CV + Assessment only.
+        "interview": 0,
+        "references": 0,
+      };
+    }
+    final rawRules = widget.job?['knockout_rules'];
+    if (rawRules is List) {
+      knockoutRules =
+          rawRules.map((e) => Map<String, dynamic>.from(e as Map)).toList();
     }
 
     _tabController = TabController(length: 2, vsync: this);
+    _loadTestPacks();
   }
 
-  Widget _jobFormApprovalBanner(Map<String, dynamic> job, {bool isAdminDialog = false}) {
-    final status = (job['approval_status'] ?? 'pending').toString();
-    final reason = (job['rejection_reason'] ?? '').toString();
-    Color color = status == 'approved' ? Colors.green : status == 'rejected' ? Colors.red : Colors.orange;
-    String label = status == 'approved' ? 'Approved' : status == 'rejected' ? 'Rejected' : 'Pending approval';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color),
-      ),
-      child: Row(
-        children: [
-          Text('Approval: ', style: TextStyle(fontWeight: FontWeight.w600, color: color)),
-          Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: color)),
-          if (status == 'rejected' && reason.isNotEmpty)
-            Expanded(child: Padding(padding: const EdgeInsets.only(left: 8), child: Text('Reason: $reason', style: TextStyle(fontSize: 12, color: Colors.red.shade800), maxLines: 2, overflow: TextOverflow.ellipsis))),
-        ],
+  Future<void> _loadTestPacks() async {
+    setState(() => _loadingTestPacks = true);
+    try {
+      final packs = await _testPackService.getTestPacks();
+      if (mounted) setState(() => _testPacks = packs);
+    } catch (_) {}
+    if (mounted) setState(() => _loadingTestPacks = false);
+  }
+
+  Widget _buildCherryPickSection(dynamic themeProvider) {
+    TestPack? selectedPack;
+    for (final p in _testPacks) {
+      if (p.id == _testPackId) {
+        selectedPack = p;
+        break;
+      }
+    }
+    if (selectedPack == null || selectedPack.questions.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    if (_cherryPickSelected.length != selectedPack.questions.length) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(
+            () => _cherryPickSelected = List.filled(
+              selectedPack!.questions.length,
+              true,
+            ),
+          );
+        }
+      });
+      return const SizedBox.shrink();
+    }
+    final packQuestions = selectedPack.questions;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Customize questions',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: themeProvider.isDarkMode
+                ? Colors.grey.shade300
+                : Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Select which questions to use. "Use selected" copies them as custom questions.',
+          style: TextStyle(
+            fontFamily: 'Poppins',
+            fontSize: 12,
+            color: themeProvider.isDarkMode
+                ? Colors.grey.shade400
+                : Colors.black54,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          constraints: const BoxConstraints(maxHeight: 180),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: themeProvider.isDarkMode
+                  ? Colors.grey.shade700
+                  : Colors.grey.shade300,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: packQuestions.length,
+            itemBuilder: (_, i) {
+              final q = packQuestions[i];
+              final text =
+                  (q['question_text'] ?? q['question'] ?? '').toString();
+              final short =
+                  text.length > 60 ? '${text.substring(0, 60)}...' : text;
+              return CheckboxListTile(
+                value: _cherryPickSelected[i],
+                onChanged: (v) =>
+                    setState(() => _cherryPickSelected[i] = v ?? true),
+                title: Text(
+                  short,
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 13,
+                    color: themeProvider.isDarkMode
+                        ? Colors.white70
+                        : Colors.black87,
+                  ),
+                ),
+                controlAffinity: ListTileControlAffinity.leading,
+                dense: true,
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () => _applyCherryPickedQuestions(selectedPack!),
+          icon: const Icon(Icons.checklist, size: 18),
+          label: const Text('Use selected'),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  void _applyCherryPickedQuestions(TestPack pack) {
+    final selected = <Map<String, dynamic>>[];
+    for (var i = 0; i < pack.questions.length; i++) {
+      if (i < _cherryPickSelected.length && _cherryPickSelected[i]) {
+        final q = Map<String, dynamic>.from(pack.questions[i]);
+        selected.add({
+          'question': q['question_text'] ?? q['question'] ?? '',
+          'options': (q['options'] is List)
+              ? List<String>.from(
+                  (q['options'] as List).map((e) => e.toString()),
+                )
+              : ['', '', '', ''],
+          'answer': (q['correct_option'] ?? q['correct_answer'] ?? 0) is num
+              ? ((q['correct_option'] ?? q['correct_answer'] ?? 0) as num)
+                  .toInt()
+              : 0,
+          'weight':
+              (q['weight'] ?? 1) is num ? (q['weight'] as num).toInt() : 1,
+        });
+      }
+    }
+    if (selected.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select at least one question')),
+      );
+      return;
+    }
+    setState(() {
+      questions = selected;
+      _useTestPack = false;
+      _testPackId = null;
+      _cherryPickSelected = [];
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Using ${selected.length} question(s) as custom assessment',
+        ),
       ),
     );
   }
 
+  // Show AI Question Generation Dialog
+  Future<void> _showAIQuestionDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AIQuestionDialog(
+        jobTitle: title,
+        onQuestionsGenerated: (generatedQuestions) {
+          setState(() {
+            questions.addAll(generatedQuestions);
+          });
+        },
+      ),
+    );
+  }
+
+  Future<void> _saveAsTestPack() async {
+    if (questions.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Add at least one question first')),
+      );
+      return;
+    }
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) => SaveTestPackDialog(
+        initialQuestions: questions,
+        initialName: title.trim().isEmpty ? null : '$title Assessment Pack',
+      ),
+    );
+    if (result == null || !mounted) return;
+    try {
+      final pack = await _testPackService.createTestPack(result);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Test pack "${pack.name}" created')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
+  }
+
   @override
   void dispose() {
+    descriptionController.dispose();
+    companyDetailsController.dispose();
     responsibilitiesController.dispose();
     qualificationsController.dispose();
     skillsController.dispose();
     minExpController.dispose();
     salaryMinController.dispose();
     salaryMaxController.dispose();
+    _certificationController.dispose();
     _tabController.dispose();
     super.dispose();
+  }
+
+  List<Map<String, dynamic>> _normalizeQuestions(dynamic raw) {
+    if (raw == null) return [];
+
+    final List<dynamic> items;
+    if (raw is List) {
+      items = raw;
+    } else {
+      return [];
+    }
+
+    final normalized = <Map<String, dynamic>>[];
+    for (final item in items) {
+      if (item is! Map) continue;
+      final map = Map<String, dynamic>.from(item);
+
+      final optsRaw = map['options'];
+      final options = (optsRaw is List)
+          ? optsRaw.map((e) => e?.toString() ?? '').toList()
+          : <String>['', '', '', ''];
+      while (options.length < 4) {
+        options.add('');
+      }
+
+      normalized.add({
+        'question': (map['question'] ?? '').toString(),
+        'options': options.take(4).toList(),
+        'answer': (map['answer'] ?? map['correct_answer'] ?? 0) is num
+            ? ((map['answer'] ?? map['correct_answer'] ?? 0) as num).toInt()
+            : 0,
+        'weight':
+            (map['weight'] ?? 1) is num ? (map['weight'] as num).toInt() : 1,
+      });
+    }
+    return normalized;
   }
 
   void addQuestion() {
@@ -1676,154 +2089,279 @@ class _JobFormDialogState extends State<JobFormDialog>
     });
   }
 
-  List<Map<String, dynamic>> _normalizeKnockoutRules(dynamic raw) {
-    if (raw is! List) return [];
-    return raw.map<Map<String, dynamic>>((rule) {
-      if (rule is Map<String, dynamic>) {
-        return Map<String, dynamic>.from(rule);
-      }
-      return {
-        "type": "skills",
-        "field": "skills",
-        "operator": "==",
-        "value": rule.toString(),
-      };
-    }).toList();
-  }
+  bool _generatingJobDetails = false;
 
-  List<Map<String, dynamic>> _normalizeQuestions(dynamic raw) {
-    if (raw is! List) return [];
-    return raw.map<Map<String, dynamic>>((item) {
-      final Map<String, dynamic> question =
-          item is Map<String, dynamic> ? Map<String, dynamic>.from(item) : {};
-      final rawOptions = question["options"];
-      final List<dynamic> options =
-          rawOptions is List ? List.from(rawOptions) : [];
-      while (options.length < 4) {
-        options.add("");
-      }
-      final normalizedOptions = options.take(4).map((opt) {
-        return opt == null ? "" : opt.toString();
-      }).toList();
+  Future<void> _generateJobDetailsWithAI() async {
+    final jobTitle = title.trim();
+    if (jobTitle.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a job title first')),
+      );
+      return;
+    }
 
-      final rawAnswer = question["answer"] ?? question["correct_answer"];
-      int answer = 0;
-      if (rawAnswer is num) {
-        answer = rawAnswer.toInt();
-      } else if (rawAnswer is String) {
-        answer = int.tryParse(rawAnswer) ?? 0;
-      }
-      if (answer < 0 || answer > 3) answer = 0;
+    setState(() => _generatingJobDetails = true);
 
-      final rawWeight = question["weight"];
-      double weight = 1;
-      if (rawWeight is num) {
-        weight = rawWeight.toDouble();
-      } else if (rawWeight is String) {
-        weight = double.tryParse(rawWeight) ?? 1;
-      }
-      if (weight <= 0) weight = 1;
+    try {
+      final result = await AIService.generateJobDetails(jobTitle);
+      if (!mounted) return;
 
-      return {
-        "question": question["question"]?.toString() ?? "",
-        "options": normalizedOptions,
-        "answer": answer,
-        "weight": weight,
-      };
-    }).toList();
+      final details = result['job_details'] ?? result;
+      if (details is! Map<String, dynamic>) {
+        throw Exception("Invalid response format from AI service");
+      }
+
+      // Apply the generated details to form fields
+      setState(() {
+        descriptionController.text = details['description'] ?? '';
+        responsibilitiesController.text =
+            (details['responsibilities'] as List?)?.join('\n') ?? '';
+        qualificationsController.text =
+            (details['qualifications'] as List?)?.join('\n') ?? '';
+        categoryController.text = details['category'] ?? '';
+        minExpController.text = details['min_experience']?.toString() ?? '';
+        companyDetailsController.text = details['company_details'] ?? '';
+
+        // Apply skills
+        final skills = details['required_skills'] as List?;
+        if (skills != null && skills.isNotEmpty) {
+          skillsController.text = skills.join(', ');
+        }
+
+        // Apply salary if available
+        final smin = details['salary_min'];
+        if (smin != null) {
+          salaryMinController.text = smin.toString();
+        }
+        final smax = details['salary_max'];
+        if (smax != null) {
+          salaryMaxController.text = smax.toString();
+        }
+        final ew = details['evaluation_weightings'] ?? details['weightings'];
+        if (ew is Map) {
+          weightings = {
+            'cv': (ew['cv'] is num) ? (ew['cv'] as num).toInt() : 60,
+            'assessment': (ew['assessment'] is num)
+                ? (ew['assessment'] as num).toInt()
+                : 40,
+            'interview':
+                (ew['interview'] is num) ? (ew['interview'] as num).toInt() : 0,
+            'references': (ew['references'] is num)
+                ? (ew['references'] as num).toInt()
+                : 0,
+          };
+        }
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Job details filled from AI. Review and edit as needed.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Generate failed: $e')));
+    } finally {
+      if (mounted) setState(() => _generatingJobDetails = false);
+    }
   }
 
   Future<void> saveJob() async {
     final formState = _formKey.currentState;
-    if (formState == null || !formState.validate()) return;
-
-    final totalWeight = weightings.values.fold<int>(0, (sum, v) => sum + v);
-    if (totalWeight != 100) {
-      setState(() {
-        weightingsError = "Weightings must total 100%";
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Weightings must total 100%")),
-      );
+    if (formState == null || !formState.validate()) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Please fix the errors in the form (e.g. Job Title, Description).',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
       return;
-    } else {
-      setState(() {
-        weightingsError = null;
-      });
     }
 
-    final skills = skillsController.text
-        .split(",")
+    final responsibilities = responsibilitiesController.text
+        .split("\n")
         .map((e) => e.trim())
         .where((e) => e.isNotEmpty)
-        .toList();
-
-    final responsibilities = responsibilitiesController.text
-        .split(",")
-        .map((e) => e.trim())
+        .map(
+          (e) => e.startsWith('• ') ? e.substring(2) : e,
+        ) // Remove bullet point prefix
         .where((e) => e.isNotEmpty)
         .toList();
 
     final qualifications = qualificationsController.text
-        .split(",")
+        .split("\n")
         .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .map(
+          (e) => e.startsWith('• ') ? e.substring(2) : e,
+        ) // Remove bullet point prefix
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    final skills = skillsController.text
+        .split("\n")
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .map(
+          (e) => e.startsWith('• ') ? e.substring(2) : e,
+        ) // Remove bullet point prefix
         .where((e) => e.isNotEmpty)
         .toList();
 
     final normalizedQuestions = _normalizeQuestions(questions);
-    final jobData = {
-      'title': title,
-      'description': description,
-      'company': companyName,
-      'location': jobLocation,
-      'job_summary': jobSummary,
+    final totalWeight =
+        (weightings["cv"] ?? 0) + (weightings["assessment"] ?? 0);
+    if (totalWeight != 100) {
+      setState(
+        () => weightingsError =
+            "Weightings must total 100% (current: $totalWeight%)",
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Adjust CV and Assessment percentages so they total 100%.",
+          ),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    final Map<String, int> adjustedWeightings = {
+      "cv": weightings["cv"] ?? 0,
+      "assessment": weightings["assessment"] ?? 0,
+      "interview": 0,
+      "references": 0,
+    };
+
+    final jobData = <String, dynamic>{
+      'title': (title).trim().isEmpty ? 'Untitled Position' : title.trim(),
+      'description': () {
+        final fromController = descriptionController.text.trim();
+        final fromState = description.trim();
+        final value = fromController.isNotEmpty ? fromController : fromState;
+        return value.isEmpty ? 'No description provided' : value;
+      }(),
+      'company': companyName.trim(),
+      'location': jobLocation.trim(),
+      'job_summary': jobSummary.trim(),
       'employment_type': employmentType,
       'responsibilities': responsibilities,
       'qualifications': qualifications,
-      'company_details': companyDetails,
+      'company_details': companyDetails.trim(),
       'salary_min': double.tryParse(salaryMinController.text),
       'salary_max': double.tryParse(salaryMaxController.text),
       'salary_currency': salaryCurrency,
       'salary_period': salaryPeriod,
-      'category': category,
+      'category': category.trim().isEmpty ? 'General' : category.trim(),
       'required_skills': skills,
       'min_experience': double.tryParse(minExpController.text) ?? 0,
-      'weightings': weightings,
+      'weightings': adjustedWeightings,
       'knockout_rules': knockoutRules,
-      'assessment_pack': {
-        'questions': normalizedQuestions.map((q) {
-          return {
-            "question": q["question"],
-            "options": q["options"],
-            "correct_answer": q["answer"],
-            "weight": q["weight"] ?? 1
-          };
-        }).toList()
-      },
+      'vacancy': 1,
+      if (applicationDeadlineController.text.trim().isNotEmpty)
+        'application_deadline': applicationDeadlineController.text.trim(),
+      if (_startDateFrom != null)
+        'start_date_from': _startDateFrom!.toIso8601String().substring(0, 10),
+      if (_startDateTo != null)
+        'start_date_to': _startDateTo!.toIso8601String().substring(0, 10),
+      'min_years_per_skill': Map.fromEntries(
+        _minYearsPerSkillList
+            .where((e) => (e['skill']?.toString() ?? '').trim().isNotEmpty)
+            .map(
+              (e) => MapEntry(
+                e['skill']!.toString().trim(),
+                (e['years'] is num) ? (e['years'] as num).toDouble() : 0.0,
+              ),
+            ),
+      ),
+      'required_certifications':
+          _requiredCertifications.where((s) => s.trim().isNotEmpty).toList(),
+      if (_useTestPack && _testPackId != null) 'test_pack_id': _testPackId,
+      'assessment_pack': _useTestPack && _testPackId != null
+          ? {'questions': []}
+          : {
+              'questions': normalizedQuestions.map((q) {
+                return <String, dynamic>{
+                  "question": q["question"] as String? ?? "",
+                  "options": q["options"] as List<dynamic>? ?? [],
+                  "correct_answer": q["answer"],
+                  "weight": q["weight"] ?? 1,
+                };
+              }).toList(),
+            },
     };
 
     try {
-      // Try enhanced method first
-      try {
-        if (widget.job == null) {
-          await admin.createJobEnhanced(jobData);
-        } else {
-          await admin.updateJobEnhanced(widget.job!['id'] as int, jobData);
-        }
-      } catch (e) {
-        // Fallback to original methods
-        if (widget.job == null) {
-          await admin.createJob(jobData);
-        } else {
-          await admin.updateJob(widget.job!['id'] as int, jobData);
-        }
+      if (widget.job == null) {
+        await admin.createJob(jobData);
+      } else {
+        await admin.updateJob(widget.job!['id'] as int, jobData);
       }
+      if (!mounted) return;
       widget.onSaved();
       Navigator.pop(context);
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Error saving job: $e")));
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text("Error saving job: $e")));
     }
+  }
+
+  Widget _hmJobFormApprovalBanner(Map<String, dynamic> job) {
+    final status = (job['approval_status'] ?? 'pending').toString();
+    final reason = (job['rejection_reason'] ?? '').toString();
+    Color color = status == 'approved'
+        ? Colors.green
+        : status == 'rejected'
+            ? Colors.red
+            : Colors.orange;
+    String label = status == 'approved'
+        ? 'Approved'
+        : status == 'rejected'
+            ? 'Rejected'
+            : 'Pending approval';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color),
+      ),
+      child: Row(
+        children: [
+          Text('Approval: ',
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                  color: color)),
+          Text(label,
+              style: TextStyle(
+                  fontFamily: 'Poppins',
+                  fontWeight: FontWeight.w600,
+                  color: color)),
+          if (status == 'rejected' && reason.isNotEmpty)
+            Expanded(
+                child: Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Text('Reason: $reason',
+                        style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 12,
+                            color: Colors.red.shade800),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis))),
+        ],
+      ),
+    );
   }
 
   @override
@@ -1834,398 +2372,1692 @@ class _JobFormDialogState extends State<JobFormDialog>
       insetPadding: const EdgeInsets.all(20),
       child: Container(
         width: 650,
-        height: 720,
+        height: 800, // Increased height to accommodate expanded fields
         decoration: BoxDecoration(
           color: (themeProvider.isDarkMode
                   ? const Color(0xFF14131E)
                   : Colors.white)
-              .withOpacity(0.95),
+              .withValues(alpha: 0.95),
           borderRadius: BorderRadius.circular(24),
         ),
-        child: Column(
-          children: [
-            TabBar(
-              controller: _tabController,
-              tabs: const [
-                Tab(text: "Job Details"),
-                Tab(text: "Assessment"),
-              ],
-              labelColor: Colors.redAccent,
-              unselectedLabelColor: themeProvider.isDarkMode
-                  ? Colors.grey.shade400
-                  : Colors.black54,
-              indicatorColor: Colors.redAccent,
-              indicatorWeight: 3,
-            ),
-            Expanded(
-              child: TabBarView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              TabBar(
                 controller: _tabController,
-                children: [
-                  // Job Details Form
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Form(
-                      key: _formKey,
-                      child: SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (widget.job != null && (widget.job!['approval_status'] ?? '').toString().isNotEmpty) ...[
-                              _jobFormApprovalBanner(widget.job!, isAdminDialog: true),
-                              const SizedBox(height: 16),
-                            ] else if (widget.job == null) ...[
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: Colors.blue),
-                                ),
-                                child: const Row(
-                                  children: [
-                                    Icon(Icons.info_outline, color: Colors.blue, size: 20),
-                                    SizedBox(width: 8),
-                                    Expanded(child: Text('This job will be submitted for approval after creation.', style: TextStyle(fontSize: 13, color: Colors.blue))),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                            ],
-                            CustomTextField(
-                              label: "Title",
-                              initialValue: title,
-                              hintText: "Enter job title",
-                              onChanged: (v) => title = v,
-                              validator: (v) =>
-                                  v == null || v.isEmpty ? "Enter title" : null,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Description",
-                              initialValue: description,
-                              hintText: "Enter job description",
-                              maxLines: 4,
-                              onChanged: (v) => description = v,
-                              validator: (v) => v == null || v.isEmpty
-                                  ? "Enter description"
-                                  : null,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Job Summary",
-                              initialValue: jobSummary,
-                              hintText: "Brief job summary",
-                              maxLines: 3,
-                              onChanged: (v) => jobSummary = v,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Responsibilities",
-                              controller: responsibilitiesController,
-                              hintText: "Comma separated list",
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Qualifications",
-                              controller: qualificationsController,
-                              hintText: "Comma separated list",
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Company",
-                              initialValue: companyName,
-                              hintText: "Company name",
-                              onChanged: (v) => companyName = v,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Location",
-                              initialValue: jobLocation,
-                              hintText: "City, Country or Remote",
-                              onChanged: (v) => jobLocation = v,
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: CustomTextField(
-                                    label: "Salary Min",
-                                    controller: salaryMinController,
-                                    inputType: TextInputType.number,
-                                    hintText: "e.g. 30000",
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: CustomTextField(
-                                    label: "Salary Max",
-                                    controller: salaryMaxController,
-                                    inputType: TextInputType.number,
-                                    hintText: "e.g. 45000",
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Salary Currency",
-                              initialValue: salaryCurrency,
-                              hintText: "ZAR, USD, EUR",
-                              onChanged: (v) =>
-                                  salaryCurrency = v.isEmpty ? "ZAR" : v,
-                            ),
-                            const SizedBox(height: 16),
-                            DropdownButtonFormField<String>(
-                              value: salaryPeriod,
-                              decoration: const InputDecoration(
-                                labelText: "Salary Period",
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: "monthly",
-                                  child: Text("Per Month"),
-                                ),
-                                DropdownMenuItem(
-                                  value: "yearly",
-                                  child: Text("Per Year"),
-                                ),
-                              ],
-                              onChanged: (value) {
-                                if (value == null) return;
-                                setState(() => salaryPeriod = value);
-                              },
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Company Details",
-                              initialValue: companyDetails,
-                              hintText: "About the company",
-                              maxLines: 3,
-                              onChanged: (v) => companyDetails = v,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Category",
-                              initialValue: category,
-                              hintText: "Engineering, Marketing...",
-                              onChanged: (v) => category = v,
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Required Skills",
-                              controller: skillsController,
-                              hintText: "Comma separated skills",
-                            ),
-                            const SizedBox(height: 16),
-                            CustomTextField(
-                              label: "Minimum Experience (years)",
-                              controller: minExpController,
-                              inputType: TextInputType.number,
-                            ),
-                            const SizedBox(height: 16),
-                            DropdownButtonFormField<String>(
-                              initialValue: employmentType,
-                              decoration: const InputDecoration(
-                                labelText: "Employment Type",
-                              ),
-                              items: const [
-                                DropdownMenuItem(
-                                  value: "full_time",
-                                  child: Text("Full Time"),
-                                ),
-                                DropdownMenuItem(
-                                  value: "part_time",
-                                  child: Text("Part Time"),
-                                ),
-                                DropdownMenuItem(
-                                  value: "contract",
-                                  child: Text("Contract"),
-                                ),
-                                DropdownMenuItem(
-                                  value: "internship",
-                                  child: Text("Internship"),
-                                ),
-                              ],
-                              onChanged: (value) {
-                                if (value == null) return;
-                                setState(() {
-                                  employmentType = value;
-                                });
-                              },
-                            ),
-                            const SizedBox(height: 24),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                "Evaluation Weightings",
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            WeightingConfigurationWidget(
-                              weightings: weightings,
-                              errorText: weightingsError,
-                              onChanged: (updated) {
-                                setState(() {
-                                  weightings = updated;
-                                });
-                              },
-                            ),
-                            const SizedBox(height: 24),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                "Knockout Rules",
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            KnockoutRulesBuilder(
-                              rules: knockoutRules,
-                              onChanged: (updated) {
-                                setState(() {
-                                  knockoutRules = updated;
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
+                tabs: const [
+                  Tab(text: "Job Details"),
+                  Tab(text: "Assessment"),
+                ],
+                labelColor: Colors.redAccent,
+                unselectedLabelColor: themeProvider.isDarkMode
+                    ? Colors.grey.shade400
+                    : Colors.black54,
+                indicatorColor: Colors.redAccent,
+                indicatorWeight: 3,
+              ),
 
-                  // Assessment Tab
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      children: [
-                        Expanded(
-                          child: ListView.builder(
-                            itemCount: questions.length,
-                            itemBuilder: (_, index) {
-                              final q = questions[index];
-                              return Card(
-                                color: (themeProvider.isDarkMode
-                                        ? const Color(0xFF14131E)
-                                        : Colors.white)
-                                    .withOpacity(0.9),
-                                margin: const EdgeInsets.symmetric(vertical: 8),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: Column(
+              Expanded(
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    // Job Details Tab
+                    Container(
+                      color: (themeProvider.isDarkMode
+                              ? const Color(0xFF1A1A2E)
+                              : Colors.white)
+                          .withValues(alpha: 0.95),
+                      child: SingleChildScrollView(
+                        child: Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (widget.job != null &&
+                                  (widget.job!['approval_status'] ?? '')
+                                      .toString()
+                                      .isNotEmpty) ...[
+                                _hmJobFormApprovalBanner(widget.job!),
+                                const SizedBox(height: 16),
+                              ] else if (widget.job == null) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.blue),
+                                  ),
+                                  child: const Row(
                                     children: [
-                                      TextFormField(
-                                        decoration: InputDecoration(
-                                          labelText: "Question",
-                                          labelStyle: TextStyle(
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.grey.shade400
-                                                : Colors.black87,
+                                      Icon(Icons.info_outline,
+                                          color: Colors.blue, size: 20),
+                                      SizedBox(width: 8),
+                                      Expanded(
+                                          child: Text(
+                                              'This job will be submitted for approval after creation.',
+                                              style: TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.blue))),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                              Row(
+                                children: [
+                                  Icon(Icons.work,
+                                      color: Colors.redAccent, size: 24),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    "Basic Job Information",
+                                    style: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: CustomTextField(
+                                      label: "Job Title",
+                                      initialValue: title,
+                                      hintText: "Enter job title",
+                                      onChanged: (v) => title = v,
+                                      validator: (v) => v == null || v.isEmpty
+                                          ? "Enter job title"
+                                          : null,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton.filled(
+                                    onPressed: _generatingJobDetails
+                                        ? null
+                                        : _generateJobDetailsWithAI,
+                                    icon: _generatingJobDetails
+                                        ? SizedBox(
+                                            width: 20,
+                                            height: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.redAccent,
+                                            ),
+                                          )
+                                        : const Icon(Icons.auto_awesome),
+                                    tooltip: _generatingJobDetails
+                                        ? "Generating…"
+                                        : "Generate job details from title (AI)",
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              Card(
+                                elevation: 4,
+                                shadowColor: Colors.black26,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                color: (themeProvider.isDarkMode
+                                        ? const Color(0xFF1A1A2E)
+                                        : Colors.white)
+                                    .withValues(alpha: 0.95),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.assignment,
+                                            color: Colors.orangeAccent,
+                                            size: 24,
                                           ),
-                                        ),
-                                        initialValue: q["question"],
-                                        onChanged: (v) => q["question"] = v,
-                                        style: TextStyle(
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
-                                        ),
-                                      ),
-                                      ...List.generate(4, (i) {
-                                        return TextFormField(
-                                          decoration: InputDecoration(
-                                            labelText: "Option ${i + 1}",
-                                            labelStyle: TextStyle(
+                                          const SizedBox(width: 12),
+                                          Text(
+                                            "Job Requirements",
+                                            style: TextStyle(
+                                              fontFamily: 'Poppins',
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
                                               color: themeProvider.isDarkMode
-                                                  ? Colors.grey.shade400
+                                                  ? Colors.white
                                                   : Colors.black87,
                                             ),
                                           ),
-                                          initialValue: q["options"][i],
-                                          onChanged: (v) => q["options"][i] = v,
-                                          style: TextStyle(
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.white
-                                                : Colors.black87,
-                                          ),
-                                        );
-                                      }),
-                                      DropdownButton<int>(
-                                        value: q["answer"],
-                                        items: List.generate(
-                                          4,
-                                          (i) => DropdownMenuItem(
-                                            value: i,
-                                            child:
-                                                Text("Correct: Option ${i + 1}",
-                                                    style: TextStyle(
-                                                      color: themeProvider
-                                                              .isDarkMode
-                                                          ? Colors.white
-                                                          : Colors.black87,
-                                                    )),
-                                          ),
-                                        ),
-                                        onChanged: (v) =>
-                                            setState(() => q["answer"] = v!),
+                                        ],
                                       ),
-                                      TextFormField(
-                                        decoration: InputDecoration(
-                                          labelText: "Weight",
-                                          labelStyle: TextStyle(
-                                            color: themeProvider.isDarkMode
-                                                ? Colors.grey.shade400
-                                                : Colors.black87,
-                                          ),
-                                        ),
-                                        initialValue: q["weight"].toString(),
-                                        keyboardType: TextInputType.number,
-                                        onChanged: (v) => q["weight"] =
-                                            double.tryParse(v) ?? 1,
+                                      const SizedBox(height: 20),
+                                      CustomTextField(
+                                        label: "Responsibilities",
+                                        controller: responsibilitiesController,
+                                        hintText:
+                                            "Bullet points of key responsibilities",
+                                        maxLines: 4,
+                                        expands: false,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      CustomTextField(
+                                        label: "Qualifications",
+                                        controller: qualificationsController,
+                                        hintText:
+                                            "Bullet points of required qualifications",
+                                        maxLines: 4,
+                                        expands: false,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      CustomTextField(
+                                        label: "Required Skills",
+                                        controller: skillsController,
+                                        hintText:
+                                            "Bullet points of essential skills",
+                                        maxLines: 3,
+                                        expands: false,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      CustomTextField(
+                                        label: "Minimum Experience (years)",
+                                        controller: minExpController,
+                                        inputType: TextInputType.number,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        "Preferred start window",
                                         style: TextStyle(
+                                          fontFamily: 'Poppins',
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
                                           color: themeProvider.isDarkMode
                                               ? Colors.white
                                               : Colors.black87,
                                         ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: OutlinedButton.icon(
+                                              icon: const Icon(
+                                                Icons.calendar_today,
+                                                size: 18,
+                                              ),
+                                              label: Text(
+                                                _startDateFrom == null
+                                                    ? "From"
+                                                    : "${_startDateFrom!.year}-${_startDateFrom!.month.toString().padLeft(2, '0')}-${_startDateFrom!.day.toString().padLeft(2, '0')}",
+                                                style: const TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              onPressed: () async {
+                                                final d = await showDatePicker(
+                                                  context: context,
+                                                  initialDate: _startDateFrom ??
+                                                      DateTime.now(),
+                                                  firstDate: DateTime.now(),
+                                                  lastDate: DateTime.now().add(
+                                                    const Duration(
+                                                      days: 365 * 2,
+                                                    ),
+                                                  ),
+                                                );
+                                                if (d != null && mounted)
+                                                  setState(
+                                                    () => _startDateFrom = d,
+                                                  );
+                                              },
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: OutlinedButton.icon(
+                                              icon: const Icon(
+                                                Icons.calendar_today,
+                                                size: 18,
+                                              ),
+                                              label: Text(
+                                                _startDateTo == null
+                                                    ? "To"
+                                                    : "${_startDateTo!.year}-${_startDateTo!.month.toString().padLeft(2, '0')}-${_startDateTo!.day.toString().padLeft(2, '0')}",
+                                                style: const TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              onPressed: () async {
+                                                final d = await showDatePicker(
+                                                  context: context,
+                                                  initialDate: _startDateTo ??
+                                                      _startDateFrom ??
+                                                      DateTime.now(),
+                                                  firstDate: _startDateFrom ??
+                                                      DateTime.now(),
+                                                  lastDate: DateTime.now().add(
+                                                    const Duration(
+                                                      days: 365 * 2,
+                                                    ),
+                                                  ),
+                                                );
+                                                if (d != null && mounted)
+                                                  setState(
+                                                    () => _startDateTo = d,
+                                                  );
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            "Minimum years per skill",
+                                            style: TextStyle(
+                                              fontFamily: 'Poppins',
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                            ),
+                                          ),
+                                          TextButton.icon(
+                                            icon: const Icon(
+                                              Icons.add,
+                                              size: 18,
+                                            ),
+                                            label: const Text(
+                                              "Add",
+                                              style: TextStyle(fontSize: 12),
+                                            ),
+                                            onPressed: () => setState(
+                                              () => _minYearsPerSkillList.add({
+                                                "skill": "",
+                                                "years": 0.0,
+                                              }),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (_minYearsPerSkillList.isNotEmpty) ...[
+                                        ..._minYearsPerSkillList
+                                            .asMap()
+                                            .entries
+                                            .map((
+                                          entry,
+                                        ) {
+                                          final i = entry.key;
+                                          final row = entry.value;
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 8,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Expanded(
+                                                  flex: 2,
+                                                  child: TextFormField(
+                                                    initialValue: row['skill']
+                                                        ?.toString(),
+                                                    decoration:
+                                                        const InputDecoration(
+                                                      hintText: "Skill",
+                                                      isDense: true,
+                                                    ),
+                                                    style: const TextStyle(
+                                                      fontFamily: 'Poppins',
+                                                      fontSize: 13,
+                                                    ),
+                                                    onChanged: (v) => setState(
+                                                      () =>
+                                                          _minYearsPerSkillList[
+                                                              i]['skill'] = v,
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                SizedBox(
+                                                  width: 70,
+                                                  child: TextFormField(
+                                                    initialValue: row['years']
+                                                        ?.toString(),
+                                                    keyboardType:
+                                                        TextInputType.number,
+                                                    decoration:
+                                                        const InputDecoration(
+                                                      hintText: "Years",
+                                                      isDense: true,
+                                                    ),
+                                                    style: const TextStyle(
+                                                      fontFamily: 'Poppins',
+                                                      fontSize: 13,
+                                                    ),
+                                                    onChanged: (v) => setState(
+                                                      () =>
+                                                          _minYearsPerSkillList[
+                                                                  i]['years'] =
+                                                              double.tryParse(
+                                                                    v,
+                                                                  ) ??
+                                                                  0,
+                                                    ),
+                                                  ),
+                                                ),
+                                                IconButton(
+                                                  icon: const Icon(
+                                                    Icons.remove_circle_outline,
+                                                    size: 22,
+                                                  ),
+                                                  onPressed: () => setState(
+                                                    () => _minYearsPerSkillList
+                                                        .removeAt(i),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }),
+                                        const SizedBox(height: 8),
+                                      ],
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            "Must-have certifications",
+                                            style: TextStyle(
+                                              fontFamily: 'Poppins',
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                            ),
+                                          ),
+                                          TextButton.icon(
+                                            icon: const Icon(
+                                              Icons.add,
+                                              size: 18,
+                                            ),
+                                            label: const Text(
+                                              "Add",
+                                              style: TextStyle(fontSize: 12),
+                                            ),
+                                            onPressed: () {
+                                              final c = _certificationController
+                                                  .text
+                                                  .trim();
+                                              if (c.isNotEmpty) {
+                                                setState(() {
+                                                  _requiredCertifications.add(
+                                                    c,
+                                                  );
+                                                  _certificationController
+                                                      .clear();
+                                                });
+                                              }
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: TextFormField(
+                                              controller:
+                                                  _certificationController,
+                                              decoration: const InputDecoration(
+                                                hintText:
+                                                    "e.g. AWS Certified, PMP",
+                                                isDense: true,
+                                              ),
+                                              style: const TextStyle(
+                                                fontFamily: 'Poppins',
+                                                fontSize: 13,
+                                              ),
+                                              onFieldSubmitted: (v) {
+                                                if (v.trim().isNotEmpty)
+                                                  setState(() {
+                                                    _requiredCertifications.add(
+                                                      v.trim(),
+                                                    );
+                                                    _certificationController
+                                                        .clear();
+                                                  });
+                                              },
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          ElevatedButton(
+                                            child: const Text("Add"),
+                                            onPressed: () {
+                                              final c = _certificationController
+                                                  .text
+                                                  .trim();
+                                              if (c.isNotEmpty)
+                                                setState(() {
+                                                  _requiredCertifications.add(
+                                                    c,
+                                                  );
+                                                  _certificationController
+                                                      .clear();
+                                                });
+                                            },
+                                          ),
+                                        ],
+                                      ),
+                                      if (_requiredCertifications
+                                          .isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 6,
+                                          runSpacing: 6,
+                                          children: _requiredCertifications
+                                              .map(
+                                                (c) => Chip(
+                                                  label: Text(
+                                                    c,
+                                                    style: const TextStyle(
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                  deleteIcon: const Icon(
+                                                    Icons.close,
+                                                    size: 18,
+                                                  ),
+                                                  onDeleted: () => setState(
+                                                    () =>
+                                                        _requiredCertifications
+                                                            .remove(c),
+                                                  ),
+                                                ),
+                                              )
+                                              .toList(),
+                                        ),
+                                      ],
+                                      const SizedBox(height: 16),
+                                      CustomTextField(
+                                        label:
+                                            "Application deadline (YYYY-MM-DD)",
+                                        controller:
+                                            applicationDeadlineController,
+                                        hintText: "e.g. 2025-12-31",
                                       ),
                                     ],
                                   ),
                                 ),
-                              );
-                            },
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Company Information Section
+                              Card(
+                                elevation: 4,
+                                shadowColor: Colors.black26,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                color: (themeProvider.isDarkMode
+                                        ? const Color(0xFF1A1A2E)
+                                        : Colors.white)
+                                    .withValues(alpha: 0.95),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.business,
+                                            color: Colors.greenAccent,
+                                            size: 24,
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Text(
+                                            "Company Information",
+                                            style: TextStyle(
+                                              fontFamily: 'Poppins',
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 20),
+                                      CustomTextField(
+                                        label: "Description",
+                                        controller: descriptionController,
+                                        hintText: "Enter job description",
+                                        maxLines: 5,
+                                        expands: false,
+                                        onChanged: (v) => description = v,
+                                        validator: (v) => v == null || v.isEmpty
+                                            ? "Enter description"
+                                            : null,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      CustomTextField(
+                                        label: "Company Details",
+                                        controller: companyDetailsController,
+                                        hintText: "About the company",
+                                        maxLines: 4,
+                                        expands: false,
+                                        onChanged: (v) => companyDetails = v,
+                                      ),
+                                      const SizedBox(height: 20),
+                                      DropdownButtonFormField<String>(
+                                        value:
+                                            category.isEmpty ? null : category,
+                                        decoration: const InputDecoration(
+                                          labelText: "Category",
+                                        ),
+                                        items: categoryOptions
+                                            .map(
+                                              (cat) => DropdownMenuItem(
+                                                value: cat,
+                                                child: Text(cat),
+                                              ),
+                                            )
+                                            .toList(),
+                                        onChanged: (value) => setState(
+                                          () => category = value ?? '',
+                                        ),
+                                      ),
+                                      const SizedBox(height: 24),
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          "Salary",
+                                          style: TextStyle(
+                                            fontFamily: 'Poppins',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: CustomTextField(
+                                              label: "Salary Min",
+                                              controller: salaryMinController,
+                                              inputType: TextInputType.number,
+                                              hintText: "e.g. 30000",
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: CustomTextField(
+                                              label: "Salary Max",
+                                              controller: salaryMaxController,
+                                              inputType: TextInputType.number,
+                                              hintText: "e.g. 45000",
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: CustomTextField(
+                                              label: "Currency",
+                                              initialValue: salaryCurrency,
+                                              hintText: "ZAR, USD, EUR",
+                                              onChanged: (v) {
+                                                setState(() {
+                                                  salaryCurrency =
+                                                      v.isEmpty ? "ZAR" : v;
+                                                });
+                                              },
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child:
+                                                DropdownButtonFormField<String>(
+                                              value: salaryPeriod,
+                                              decoration: InputDecoration(
+                                                labelText: "Period",
+                                                border: OutlineInputBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                    8,
+                                                  ),
+                                                ),
+                                              ),
+                                              items: const [
+                                                DropdownMenuItem(
+                                                  value: "monthly",
+                                                  child: Text(
+                                                    "Per month",
+                                                    style: const TextStyle(
+                                                      fontFamily: 'Poppins',
+                                                    ),
+                                                  ),
+                                                ),
+                                                DropdownMenuItem(
+                                                  value: "yearly",
+                                                  child: Text(
+                                                    "Per year",
+                                                    style: const TextStyle(
+                                                      fontFamily: 'Poppins',
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                              onChanged: (value) {
+                                                if (value != null) {
+                                                  setState(
+                                                    () => salaryPeriod = value,
+                                                  );
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+
+                              // Assessment Configuration Section
+                              Card(
+                                elevation: 4,
+                                shadowColor: Colors.black26,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                color: (themeProvider.isDarkMode
+                                        ? const Color(0xFF1A1A2E)
+                                        : Colors.white)
+                                    .withValues(alpha: 0.95),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(20),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.assessment,
+                                            color: Colors.blueAccent,
+                                            size: 24,
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Text(
+                                            "Assessment Configuration",
+                                            style: TextStyle(
+                                              fontFamily: 'Poppins',
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 20),
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          "Evaluation weightings (must total 100%)",
+                                          style: TextStyle(
+                                            fontFamily: 'Poppins',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      WeightingConfigurationWidget(
+                                        weightings: weightings,
+                                        errorText: weightingsError,
+                                        onChanged: (updated) {
+                                          setState(() {
+                                            weightings = updated;
+                                            final total = updated.values
+                                                .fold<int>(0, (a, b) => a + b);
+                                            weightingsError = total == 100
+                                                ? null
+                                                : "Weightings must total 100%";
+                                          });
+                                        },
+                                      ),
+                                      const SizedBox(height: 20),
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: Text(
+                                          "Knockout rules",
+                                          style: TextStyle(
+                                            fontFamily: 'Poppins',
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w600,
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      KnockoutRulesBuilder(
+                                        rules: knockoutRules,
+                                        onChanged: (updated) {
+                                          setState(
+                                            () => knockoutRules = updated,
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        CustomButton(
-                            text: "Add Question", onPressed: addQuestion),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      "Cancel",
-                      style: TextStyle(
-                        color: themeProvider.isDarkMode
-                            ? Colors.grey.shade400
-                            : Colors.black87,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  CustomButton(text: "Save Job", onPressed: saveJob),
-                ],
+                    Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Use a test pack or create custom questions
+                          Text(
+                            "Assessment",
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: themeProvider.isDarkMode
+                                  ? Colors.grey.shade300
+                                  : Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Radio<bool>(
+                                value: true,
+                                groupValue: _useTestPack,
+                                onChanged: (v) =>
+                                    setState(() => _useTestPack = true),
+                                activeColor: Colors.redAccent,
+                              ),
+                              Text(
+                                "Use a test pack",
+                                style: const TextStyle(fontFamily: 'Poppins'),
+                              ),
+                              const SizedBox(width: 24),
+                              Radio<bool>(
+                                value: false,
+                                groupValue: _useTestPack,
+                                onChanged: (v) => setState(() {
+                                  _useTestPack = false;
+                                  _testPackId = null;
+                                }),
+                                activeColor: Colors.redAccent,
+                              ),
+                              Text(
+                                "Create custom questions",
+                                style: const TextStyle(fontFamily: 'Poppins'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          if (_useTestPack) ...[
+                            if (_loadingTestPacks)
+                              const Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    color: Colors.redAccent,
+                                  ),
+                                ),
+                              )
+                            else
+                              Expanded(
+                                child: DropdownButtonFormField<int?>(
+                                  isExpanded: true,
+                                  value: _testPackId,
+                                  decoration: InputDecoration(
+                                    labelText: "Select test pack",
+                                    border: const OutlineInputBorder(),
+                                    labelStyle: TextStyle(
+                                      fontFamily: 'Poppins',
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.grey.shade400
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                  dropdownColor: themeProvider.isDarkMode
+                                      ? const Color(0xFF14131E)
+                                      : Colors.white,
+                                  items: [
+                                    DropdownMenuItem<int?>(
+                                      value: null,
+                                      child: Text(
+                                        "None",
+                                        style: const TextStyle(
+                                          fontFamily: 'Poppins',
+                                        ),
+                                      ),
+                                    ),
+                                    ..._testPacks.map(
+                                      (p) => DropdownMenuItem<int?>(
+                                        value: p.id,
+                                        child: Text(
+                                          "${p.name} (${p.category}) – ${p.questionCount} questions",
+                                          style: TextStyle(
+                                            fontFamily: 'Poppins',
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                  onChanged: (v) {
+                                    setState(() {
+                                      _testPackId = v;
+                                      _cherryPickSelected = [];
+                                      if (v != null) {
+                                        for (final p in _testPacks) {
+                                          if (p.id == v) {
+                                            _cherryPickSelected = List.filled(
+                                              p.questions.length,
+                                              true,
+                                            );
+                                            break;
+                                          }
+                                        }
+                                      }
+                                    });
+                                  },
+                                ),
+                              ),
+                            const SizedBox(height: 16),
+                            if (_testPackId != null) ...[
+                              _buildCherryPickSection(themeProvider),
+                            ],
+                            if (_testPackId != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Text(
+                                  "Questions will be taken from the selected pack when candidates apply.",
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 12,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.grey.shade400
+                                        : Colors.black54,
+                                  ),
+                                ),
+                              ),
+                          ],
+                          if (!_useTestPack) ...[
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  "Assessment Questions",
+                                  style: TextStyle(
+                                    fontFamily: 'Poppins',
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: themeProvider.isDarkMode
+                                        ? Colors.white
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.green.withValues(
+                                          alpha: 0.1,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.green),
+                                      ),
+                                      child: IconButton(
+                                        icon: const Icon(
+                                          Icons.psychology,
+                                          color: Colors.green,
+                                        ),
+                                        onPressed: _showAIQuestionDialog,
+                                        tooltip: "Generate AI Questions",
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.withValues(
+                                          alpha: 0.1,
+                                        ),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: Colors.blue),
+                                      ),
+                                      child: IconButton(
+                                        icon: const Icon(
+                                          Icons.save_alt,
+                                          color: Colors.blue,
+                                        ),
+                                        onPressed: _saveAsTestPack,
+                                        tooltip: "Save as Test Pack",
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                          Expanded(
+                            child: ListView.builder(
+                              itemCount: questions.length,
+                              itemBuilder: (_, index) {
+                                final q = questions[index];
+                                return Card(
+                                  color: (themeProvider.isDarkMode
+                                          ? const Color(0xFF14131E)
+                                          : Colors.white)
+                                      .withValues(alpha: 0.9),
+                                  margin: const EdgeInsets.symmetric(
+                                    vertical: 8,
+                                  ),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        // Question Header
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue.withValues(
+                                                  alpha: 0.1,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: Colors.blue.withValues(
+                                                    alpha: 0.3,
+                                                  ),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                "Question ${index + 1}",
+                                                style: TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.blue,
+                                                ),
+                                              ),
+                                            ),
+                                            const Spacer(),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: Colors.orange.withValues(
+                                                  alpha: 0.1,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                                border: Border.all(
+                                                  color: Colors.orange
+                                                      .withValues(alpha: 0.3),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                "Weight: ${q["weight"] ?? 1}",
+                                                style: TextStyle(
+                                                  fontFamily: 'Poppins',
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: Colors.orange,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 12),
+
+                                        // Question Field
+                                        CustomTextField(
+                                          label: "Question",
+                                          initialValue: q["question"],
+                                          hintText: "Enter your question here",
+                                          maxLines: 3,
+                                          expands: false,
+                                          onChanged: (v) => q["question"] = v,
+                                        ),
+                                        const SizedBox(height: 16),
+
+                                        // Options Section
+                                        Text(
+                                          "Answer Options",
+                                          style: TextStyle(
+                                            fontFamily: 'Poppins',
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : Colors.black87,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        ...List.generate(4, (i) {
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 12,
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                // Option Indicator
+                                                Container(
+                                                  width: 32,
+                                                  height: 32,
+                                                  decoration: BoxDecoration(
+                                                    color: q["answer"] == i
+                                                        ? Colors.green
+                                                            .withValues(
+                                                            alpha: 0.2,
+                                                          )
+                                                        : Colors.grey
+                                                            .withValues(
+                                                            alpha: 0.1,
+                                                          ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                      8,
+                                                    ),
+                                                    border: Border.all(
+                                                      color: q["answer"] == i
+                                                          ? Colors.green
+                                                          : Colors.grey
+                                                              .withValues(
+                                                              alpha: 0.3,
+                                                            ),
+                                                      width: q["answer"] == i
+                                                          ? 2
+                                                          : 1,
+                                                    ),
+                                                  ),
+                                                  child: Center(
+                                                    child: Text(
+                                                      String.fromCharCode(
+                                                        65 + i,
+                                                      ), // A, B, C, D
+                                                      style: TextStyle(
+                                                        fontFamily: 'Poppins',
+                                                        fontSize: 14,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color: q["answer"] == i
+                                                            ? Colors.green
+                                                            : Colors
+                                                                .grey.shade600,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+
+                                                // Option Field
+                                                Expanded(
+                                                  child: CustomTextField(
+                                                    label:
+                                                        "Option ${String.fromCharCode(65 + i)}",
+                                                    initialValue: q["options"]
+                                                        [i],
+                                                    hintText:
+                                                        "Enter option ${String.fromCharCode(65 + i)}",
+                                                    maxLines: 2,
+                                                    expands: false,
+                                                    onChanged: (v) =>
+                                                        q["options"][i] = v,
+                                                  ),
+                                                ),
+
+                                                // Correct Answer Indicator
+                                                IconButton(
+                                                  onPressed: () => setState(
+                                                    () => q["answer"] = i,
+                                                  ),
+                                                  icon: Icon(
+                                                    q["answer"] == i
+                                                        ? Icons.check_circle
+                                                        : Icons
+                                                            .radio_button_unchecked,
+                                                    color: q["answer"] == i
+                                                        ? Colors.green
+                                                        : Colors.grey.shade400,
+                                                  ),
+                                                  tooltip:
+                                                      "Mark as correct answer",
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }),
+
+                                        const SizedBox(height: 16),
+
+                                        // Weight Field
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: CustomTextField(
+                                                label: "Question Weight",
+                                                initialValue:
+                                                    q["weight"].toString(),
+                                                hintText: "Enter weight (1-10)",
+                                                inputType: TextInputType.number,
+                                                onChanged: (v) => q["weight"] =
+                                                    double.tryParse(v) ?? 1,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 16),
+                                            Container(
+                                              decoration: BoxDecoration(
+                                                color: Colors.red.withValues(
+                                                  alpha: 0.1,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                border: Border.all(
+                                                  color: Colors.red.withValues(
+                                                    alpha: 0.3,
+                                                  ),
+                                                ),
+                                              ),
+                                              child: IconButton(
+                                                icon: const Icon(
+                                                  Icons.delete,
+                                                  color: Colors.red,
+                                                ),
+                                                onPressed: () {
+                                                  setState(() {
+                                                    questions.removeAt(index);
+                                                  });
+                                                },
+                                                tooltip: "Delete Question",
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          if (!_useTestPack) ...[
+                            const SizedBox(height: 12),
+                            CustomButton(
+                              text: "Add Question",
+                              onPressed: addQuestion,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ), // End of TabBarView
               ),
+
+              Container(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        "Cancel",
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          color: themeProvider.isDarkMode
+                              ? Colors.grey.shade400
+                              : Colors.black87,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    CustomButton(text: "Save Job", onPressed: saveJob),
+                  ],
+                ),
+              ), // Closing Container
+            ], // Closing Column children
+          ),
+        ), // Form
+      ),
+    );
+  }
+}
+
+// AI Question Generation Dialog
+class AIQuestionDialog extends StatefulWidget {
+  final String jobTitle;
+  final Function(List<Map<String, dynamic>>) onQuestionsGenerated;
+
+  const AIQuestionDialog({
+    super.key,
+    required this.jobTitle,
+    required this.onQuestionsGenerated,
+  });
+
+  @override
+  _AIQuestionDialogState createState() => _AIQuestionDialogState();
+}
+
+class _AIQuestionDialogState extends State<AIQuestionDialog> {
+  final _formKey = GlobalKey<FormState>();
+  String difficulty = 'Medium';
+  int questionCount = 5;
+  bool _isGenerating = false;
+
+  final List<String> difficultyLevels = ['Easy', 'Medium', 'Hard'];
+  final List<int> questionCounts = [3, 5, 8, 10];
+
+  Future<void> _generateQuestions() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _isGenerating = true);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Generating assessment questions with AI…'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+
+    try {
+      final questions = await AIService.generateAssessmentQuestions(
+        jobTitle: widget.jobTitle,
+        difficulty: difficulty,
+        questionCount: questionCount,
+      );
+
+      if (questions.isNotEmpty) {
+        widget.onQuestionsGenerated(questions);
+        Navigator.pop(context);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Generated $questionCount questions successfully!"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        // Fallback to manual question creation
+        _showManualQuestionDialog();
+      }
+    } catch (e) {
+      debugPrint('Error generating questions: $e');
+      String errorMessage = 'AI generation failed';
+
+      // Check for specific error types
+      if (e.toString().contains('503') ||
+          e.toString().contains('quota') ||
+          e.toString().contains('credits')) {
+        errorMessage =
+            'AI services are currently unavailable due to quota limits. Please try again later or create questions manually.';
+      } else if (e.toString().contains('network') ||
+          e.toString().contains('connection')) {
+        errorMessage =
+            'Network error occurred. Please check your connection and try again.';
+      } else {
+        errorMessage =
+            'AI generation failed: $e. You can create questions manually.';
+      }
+
+      _showErrorDialog(errorMessage);
+    } finally {
+      if (mounted) setState(() => _isGenerating = false);
+    }
+  }
+
+  void _showManualQuestionDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Create Questions Manually'),
+        content: Text(
+          'AI generation failed. Would you like to create questions manually?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _showManualQuestionForm();
+            },
+            child: Text('Create Manually'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showManualQuestionForm() {
+    // Implement manual question creation form
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Manual Question Creation'),
+        content: Text(
+          'Manual question creation form would go here. For now, using fallback questions.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              // Create fallback questions
+              final fallbackQuestions = _generateFallbackQuestions();
+              widget.onQuestionsGenerated(fallbackQuestions);
+              Navigator.pop(context);
+              Navigator.pop(context); // Close the manual form dialog too
+            },
+            child: Text('Use Fallback Questions'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Map<String, dynamic>> _generateFallbackQuestions() {
+    return List.generate(
+      questionCount,
+      (index) => {
+        'id': 'fallback-$index',
+        'question':
+            'Describe your approach to ${widget.jobTitle} task #${index + 1}.',
+        'type': 'text',
+        'difficulty': difficulty.toLowerCase(),
+        'points': 10,
+      },
+    );
+  }
+
+  void _showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Error'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
+    return Dialog(
+      insetPadding: const EdgeInsets.all(20),
+      child: Container(
+        width: 450,
+        height: 400,
+        decoration: BoxDecoration(
+          color: (themeProvider.isDarkMode
+                  ? const Color(0xFF14131E)
+                  : Colors.white)
+              .withValues(alpha: 0.95),
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    Icon(Icons.psychology, color: Colors.green, size: 28),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        "Generate AI Questions",
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: themeProvider.isDarkMode
+                              ? Colors.white
+                              : Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // Job Title Display
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.work, size: 20, color: Colors.grey.shade600),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "Job: ${widget.jobTitle}",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: themeProvider.isDarkMode
+                                ? Colors.white
+                                : Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Difficulty Level
+                Text(
+                  "Difficulty Level",
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: themeProvider.isDarkMode
+                        ? Colors.white
+                        : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: difficulty,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    filled: true,
+                    fillColor: themeProvider.isDarkMode
+                        ? Colors.grey.shade800
+                        : Colors.grey.shade100,
+                  ),
+                  items: difficultyLevels.map((level) {
+                    return DropdownMenuItem(
+                      value: level,
+                      child: Text(
+                        level,
+                        style: const TextStyle(fontFamily: 'Poppins'),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() => difficulty = value!);
+                  },
+                ),
+                const SizedBox(height: 20),
+
+                // Number of Questions
+                Text(
+                  "Number of Questions",
+                  style: TextStyle(
+                    fontFamily: 'Poppins',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: themeProvider.isDarkMode
+                        ? Colors.white
+                        : Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<int>(
+                  value: questionCount,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    filled: true,
+                    fillColor: themeProvider.isDarkMode
+                        ? Colors.grey.shade800
+                        : Colors.grey.shade100,
+                  ),
+                  items: questionCounts.map((count) {
+                    return DropdownMenuItem(
+                      value: count,
+                      child: Text(
+                        "$count questions",
+                        style: const TextStyle(fontFamily: 'Poppins'),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    setState(() => questionCount = value!);
+                  },
+                ),
+                const Spacer(),
+
+                // Buttons
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          "Cancel",
+                          style: TextStyle(
+                            fontFamily: 'Poppins',
+                            color: themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.black54,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: _isGenerating ? null : _generateQuestions,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: _isGenerating
+                            ? Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      valueColor: AlwaysStoppedAnimation<Color>(
+                                        Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    "Generating...",
+                                    style: const TextStyle(
+                                      fontFamily: 'Poppins',
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : Text(
+                                "Generate Questions",
+                                style: const TextStyle(fontFamily: 'Poppins'),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

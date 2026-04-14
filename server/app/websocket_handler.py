@@ -23,6 +23,8 @@ def socket_auth_required(f):
             token = request.args.get('token')
             if not token:
                 current_app.logger.error("❌ WebSocket: No token provided")
+                if request.event["message"] == "connect":
+                    return False
                 emit('error', {'message': 'Authentication required'})
                 disconnect()
                 return
@@ -44,6 +46,8 @@ def socket_auth_required(f):
             user_id_claim = payload.get('sub')
             if not user_id_claim:
                 current_app.logger.error("❌ WebSocket: No user ID in token")
+                if request.event["message"] == "connect":
+                    return False
                 emit('error', {'message': 'Invalid token: No user ID'})
                 disconnect()
                 return
@@ -56,6 +60,8 @@ def socket_auth_required(f):
                 )
             except (ValueError, TypeError) as e:
                 current_app.logger.error(f"❌ WebSocket: Invalid user ID format: {user_id_claim}")
+                if request.event["message"] == "connect":
+                    return False
                 emit('error', {'message': f'Invalid user ID format: {user_id_claim}'})
                 disconnect()
                 return
@@ -64,12 +70,16 @@ def socket_auth_required(f):
             user = User.query.get(request.user_id)
             if not user:
                 current_app.logger.error(f"❌ WebSocket: User {request.user_id} not found")
+                if request.event["message"] == "connect":
+                    return False
                 emit('error', {'message': 'User not found'})
                 disconnect()
                 return
             
             if not getattr(user, 'is_active', True):
                 current_app.logger.error(f"❌ WebSocket: User {request.user_id} is inactive")
+                if request.event["message"] == "connect":
+                    return False
                 emit('error', {'message': 'User account is inactive'})
                 disconnect()
                 return
@@ -79,16 +89,22 @@ def socket_auth_required(f):
             
         except jwt.ExpiredSignatureError:
             current_app.logger.error("❌ WebSocket: Token expired")
+            if request.event["message"] == "connect":
+                return False
             emit('error', {'message': 'Token expired'})
             disconnect()
             return
         except jwt.InvalidTokenError as e:
             current_app.logger.error(f"❌ WebSocket: Invalid token: {e}")
+            if request.event["message"] == "connect":
+                return False
             emit('error', {'message': f'Invalid token: {str(e)}'})
             disconnect()
             return
         except Exception as e:
             current_app.logger.error(f"❌ WebSocket: Authentication error: {e}")
+            if request.event["message"] == "connect":
+                return False
             emit('error', {'message': 'Authentication failed'})
             disconnect()
             return
@@ -569,5 +585,278 @@ def register_websocket_handlers(app):
         except Exception as e:
             current_app.logger.error(f"❌ Error getting threads: {e}")
             emit('error', {'message': f'Failed to get threads: {str(e)}'})
+
+    # ==================== DASHBOARD WEBSOCKET HANDLERS ====================
+    
+    @socketio.on('subscribe_dashboard')
+    @socket_auth_required
+    def handle_subscribe_dashboard(data: Dict[str, Any]):
+        """
+        Handle client subscription to dashboard events.
+        
+        Expected data format:
+        {
+            'user_id': 'user_id_string',
+            'role': 'admin'  # optional
+        }
+        """
+        try:
+            user_id = request.user_id
+            role = data.get('role', 'admin') if isinstance(data, dict) else 'admin'
+            
+            room = f'dashboard_{user_id}'
+            join_room(room)
+            current_app.logger.info(f"📊 WebSocket: User {user_id} subscribed to dashboard (role: {role})")
+            
+            emit('dashboard_subscribed', {
+                'status': 'success',
+                'message': f'Subscribed to dashboard',
+                'room': room,
+                'user_id': user_id,
+                'role': role,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+            
+        except Exception as e:
+            current_app.logger.error(f"❌ WebSocket: Error in subscribe_dashboard: {e}")
+            emit('error', {'message': f'Failed to subscribe to dashboard: {str(e)}'})
+    
+    @socketio.on('unsubscribe_dashboard')
+    @socket_auth_required
+    def handle_unsubscribe_dashboard(data: Dict[str, Any]):
+        """
+        Handle client unsubscription from dashboard events.
+        """
+        try:
+            user_id = request.user_id
+            
+            room = f'dashboard_{user_id}'
+            leave_room(room)
+            current_app.logger.info(f"📊 WebSocket: User {user_id} unsubscribed from dashboard")
+            
+            emit('dashboard_unsubscribed', {
+                'status': 'success',
+                'message': f'Unsubscribed from dashboard',
+                'room': room,
+                'user_id': user_id,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+            
+        except Exception as e:
+            current_app.logger.error(f"❌ WebSocket: Error in unsubscribe_dashboard: {e}")
+            emit('error', {'message': f'Failed to unsubscribe from dashboard: {str(e)}'})
     
     app.logger.info("✅ WebSocket handlers registered successfully")
+
+
+# ==================== DASHBOARD EVENT EMITTERS ====================
+
+def emit_interview_created(interview_data: Dict[str, Any], user_id: Optional[str] = None) -> None:
+    """
+    Emit interview_created event to dashboard subscribers.
+    
+    Args:
+        interview_data: Dictionary containing interview details
+        user_id: Optional specific user to notify (if None, broadcasts to all admin dashboards)
+    """
+    try:
+        payload = {
+            'id': interview_data.get('id'),
+            'job_title': interview_data.get('job_title'),
+            'candidate_name': interview_data.get('candidate_name'),
+            'candidate_id': interview_data.get('candidate_id'),
+            'scheduled_time': interview_data.get('scheduled_time'),
+            'status': interview_data.get('status', 'scheduled'),
+            'hiring_manager_id': interview_data.get('hiring_manager_id'),
+            'created_at': interview_data.get('created_at'),
+        }
+        
+        if user_id:
+            room = f'dashboard_{user_id}'
+            socketio.emit('interview_created', payload, room=room)
+        else:
+            socketio.emit('interview_created', payload)
+        
+        current_app.logger.info(f"📊 WebSocket: interview_created event emitted")
+    except Exception as e:
+        current_app.logger.error(f"❌ WebSocket: Failed to emit interview_created: {e}")
+
+
+def emit_interview_updated(interview_data: Dict[str, Any], user_id: Optional[str] = None) -> None:
+    """Emit interview_updated event to dashboard subscribers."""
+    try:
+        payload = {
+            'id': interview_data.get('id'),
+            'job_title': interview_data.get('job_title'),
+            'candidate_name': interview_data.get('candidate_name'),
+            'scheduled_time': interview_data.get('scheduled_time'),
+            'status': interview_data.get('status'),
+            'old_status': interview_data.get('old_status'),
+            'updated_at': interview_data.get('updated_at'),
+        }
+        
+        if user_id:
+            room = f'dashboard_{user_id}'
+            socketio.emit('interview_updated', payload, room=room)
+        else:
+            socketio.emit('interview_updated', payload)
+        
+        current_app.logger.info(f"📊 WebSocket: interview_updated event emitted")
+    except Exception as e:
+        current_app.logger.error(f"❌ WebSocket: Failed to emit interview_updated: {e}")
+
+
+def emit_interview_deleted(interview_id: int, user_id: Optional[str] = None) -> None:
+    """Emit interview_deleted event to dashboard subscribers."""
+    try:
+        payload = {'id': interview_id}
+        
+        if user_id:
+            room = f'dashboard_{user_id}'
+            socketio.emit('interview_deleted', payload, room=room)
+        else:
+            socketio.emit('interview_deleted', payload)
+        
+        current_app.logger.info(f"📊 WebSocket: interview_deleted event emitted")
+    except Exception as e:
+        current_app.logger.error(f"❌ WebSocket: Failed to emit interview_deleted: {e}")
+
+
+def emit_meeting_created(meeting_data: Dict[str, Any], user_id: Optional[str] = None) -> None:
+    """Emit meeting_created event to dashboard subscribers."""
+    try:
+        payload = {
+            'id': meeting_data.get('id'),
+            'title': meeting_data.get('title'),
+            'start_time': meeting_data.get('start_time'),
+            'end_time': meeting_data.get('end_time'),
+            'organizer_id': meeting_data.get('organizer_id'),
+            'participants': meeting_data.get('participants', []),
+            'created_at': meeting_data.get('created_at'),
+        }
+        
+        if user_id:
+            room = f'dashboard_{user_id}'
+            socketio.emit('meeting_created', payload, room=room)
+        else:
+            socketio.emit('meeting_created', payload)
+        
+        current_app.logger.info(f"📊 WebSocket: meeting_created event emitted")
+    except Exception as e:
+        current_app.logger.error(f"❌ WebSocket: Failed to emit meeting_created: {e}")
+
+
+def emit_meeting_updated(meeting_data: Dict[str, Any], user_id: Optional[str] = None) -> None:
+    """Emit meeting_updated event to dashboard subscribers."""
+    try:
+        payload = {
+            'id': meeting_data.get('id'),
+            'title': meeting_data.get('title'),
+            'start_time': meeting_data.get('start_time'),
+            'end_time': meeting_data.get('end_time'),
+            'status': meeting_data.get('status'),
+            'updated_at': meeting_data.get('updated_at'),
+        }
+        
+        if user_id:
+            room = f'dashboard_{user_id}'
+            socketio.emit('meeting_updated', payload, room=room)
+        else:
+            socketio.emit('meeting_updated', payload)
+        
+        current_app.logger.info(f"📊 WebSocket: meeting_updated event emitted")
+    except Exception as e:
+        current_app.logger.error(f"❌ WebSocket: Failed to emit meeting_updated: {e}")
+
+
+def emit_job_status_changed(job_data: Dict[str, Any], user_id: Optional[str] = None) -> None:
+    """Emit job_status_changed event to dashboard subscribers."""
+    try:
+        payload = {
+            'id': job_data.get('id'),
+            'title': job_data.get('title'),
+            'department': job_data.get('department'),
+            'status': job_data.get('status'),
+            'old_status': job_data.get('old_status'),
+            'updated_at': job_data.get('updated_at'),
+        }
+        
+        if user_id:
+            room = f'dashboard_{user_id}'
+            socketio.emit('job_status_changed', payload, room=room)
+        else:
+            socketio.emit('job_status_changed', payload)
+        
+        current_app.logger.info(f"📊 WebSocket: job_status_changed event emitted")
+    except Exception as e:
+        current_app.logger.error(f"❌ WebSocket: Failed to emit job_status_changed: {e}")
+
+
+def emit_cv_review_completed(review_data: Dict[str, Any], user_id: Optional[str] = None) -> None:
+    """Emit cv_review_completed event to dashboard subscribers."""
+    try:
+        payload = {
+            'id': review_data.get('id'),
+            'candidate_name': review_data.get('candidate_name'),
+            'candidate_id': review_data.get('candidate_id'),
+            'score': review_data.get('score'),
+            'status': review_data.get('status'),
+            'reviewed_at': review_data.get('reviewed_at'),
+        }
+        
+        if user_id:
+            room = f'dashboard_{user_id}'
+            socketio.emit('cv_review_completed', payload, room=room)
+        else:
+            socketio.emit('cv_review_completed', payload)
+        
+        current_app.logger.info(f"📊 WebSocket: cv_review_completed event emitted")
+    except Exception as e:
+        current_app.logger.error(f"❌ WebSocket: Failed to emit cv_review_completed: {e}")
+
+
+def emit_candidate_applied(application_data: Dict[str, Any], user_id: Optional[str] = None) -> None:
+    """Emit candidate_applied event to dashboard subscribers."""
+    try:
+        payload = {
+            'id': application_data.get('id'),
+            'job_id': application_data.get('job_id'),
+            'job_title': application_data.get('job_title'),
+            'candidate_name': application_data.get('candidate_name'),
+            'candidate_id': application_data.get('candidate_id'),
+            'applied_at': application_data.get('applied_at'),
+        }
+        
+        if user_id:
+            room = f'dashboard_{user_id}'
+            socketio.emit('candidate_applied', payload, room=room)
+        else:
+            socketio.emit('candidate_applied', payload)
+        
+        current_app.logger.info(f"📊 WebSocket: candidate_applied event emitted")
+    except Exception as e:
+        current_app.logger.error(f"❌ WebSocket: Failed to emit candidate_applied: {e}")
+
+
+def emit_audit_created(audit_data: Dict[str, Any], user_id: Optional[str] = None) -> None:
+    """Emit audit_created event to dashboard subscribers."""
+    try:
+        payload = {
+            'id': audit_data.get('id'),
+            'action': audit_data.get('action'),
+            'user': audit_data.get('user'),
+            'user_id': audit_data.get('user_id'),
+            'target': audit_data.get('target'),
+            'details': audit_data.get('details'),
+            'timestamp': audit_data.get('timestamp'),
+        }
+        
+        if user_id:
+            room = f'dashboard_{user_id}'
+            socketio.emit('audit_created', payload, room=room)
+        else:
+            socketio.emit('audit_created', payload)
+        
+        current_app.logger.info(f"📊 WebSocket: audit_created event emitted")
+    except Exception as e:
+        current_app.logger.error(f"❌ WebSocket: Failed to emit audit_created: {e}")

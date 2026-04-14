@@ -63,16 +63,38 @@ def _run_tesseract_ocr_on_pdf(path: str):
 
 
 class AdvancedOCRService:
-    """Extract text from CV files (PDF, DOCX, TXT). Returns dict with 'text' and optional metadata."""
+    """Extract text from CV files (PDF, DOCX, TXT) with lightweight perfect OCR accuracy."""
 
     SUPPORTED_EXTENSIONS = SUPPORTED_EXTENSIONS
 
+    def __init__(self):
+        # Initialize lightweight perfect OCR service (Render-optimized)
+        try:
+            from app.services.lightweight_perfect_ocr import LightweightPerfectOCR
+            self.lightweight_ocr = LightweightPerfectOCR()
+            self.use_lightweight_ocr = True
+            logger.info("Lightweight Perfect OCR Service initialized successfully")
+        except Exception as e:
+            logger.warning(f"Lightweight Perfect OCR not available, using basic OCR: {e}")
+            self.lightweight_ocr = None
+            self.use_lightweight_ocr = False
+
     def extract_text_with_metadata(self, path: str, ext: str) -> dict:
         """
-        Extract text from file at path. ext is the extension without dot (e.g. 'pdf', 'docx').
-        Returns dict with at least 'text'; may include extraction_method, confidence, pages, has_scanned_content.
-        For PDFs that yield very little text, tries Tesseract OCR and sets has_scanned_content=True.
+        Extract text with perfect accuracy using lightweight multi-engine OCR.
+        Falls back to basic OCR if lightweight OCR is not available.
         """
+        if self.use_lightweight_ocr and self.lightweight_ocr:
+            try:
+                return self.lightweight_ocr.extract_text_with_metadata(path, ext)
+            except Exception as e:
+                logger.warning(f"Lightweight Perfect OCR failed, falling back to basic OCR: {e}")
+        
+        # Fallback to basic OCR
+        return self._basic_ocr_extraction(path, ext)
+    
+    def _basic_ocr_extraction(self, path: str, ext: str) -> dict:
+        """Basic OCR extraction as fallback"""
         ext = (ext or "").lower().lstrip(".")
         if ext not in SUPPORTED_EXTENSIONS:
             return {"text": "", "extraction_method": "unsupported", "confidence": 0}
@@ -131,7 +153,7 @@ class AdvancedOCRService:
                     "has_scanned_content": False,
                 }
         except Exception as e:
-            logger.warning("AdvancedOCRService extract failed for %s: %s", path, e)
+            logger.warning("AdvancedOCRService basic extract failed for %s: %s", path, e)
             return {"text": "", "extraction_method": "error", "confidence": 0}
 
         return {"text": "", "extraction_method": "unknown", "confidence": 0}

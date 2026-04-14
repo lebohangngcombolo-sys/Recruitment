@@ -1,0 +1,16 @@
+<!doctype html>
+<html>
+  <body style="font-family: Arial, sans-serif; line-height: 1.5;">
+    <h2>Job approved</h2>
+    <p>Your job has been approved and will be visible to candidates.</p>
+    <p>
+      <strong>Title:</strong> {{ job_title }}<br/>
+      <strong>Company:</strong> {{ company }}<br/>
+      <strong>Approved by:</strong> {{ approved_by_name }} ({{ approved_by_email }})<br/>
+      <strong>Approved at:</strong> {{ approved_at }}
+    </p>
+    {% if note %}
+    <p><strong>Note:</strong> {{ note }}</p>
+    {% endif %}
+  </body>
+</html>

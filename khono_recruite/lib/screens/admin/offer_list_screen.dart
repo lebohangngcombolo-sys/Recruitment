@@ -1,17 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../models/offer.dart';
 import '../../models/application.dart';
 import '../../services/offer_service.dart';
 import '../../widgets/offer_card.dart';
 import '../../widgets/status_badge.dart';
+import '../../widgets/filter_chip.dart';
+import '../../widgets/themed_surface_card.dart';
 import '../../widgets/application_picker_dialog.dart';
 import 'draft_offer_screen.dart';
+import '../../providers/theme_provider.dart';
+import '../../widgets/state_widgets.dart';
 
 class AdminOfferListScreen extends StatefulWidget {
   final String? initialStatus;
   final String? token;
+  final bool embedded;
 
-  const AdminOfferListScreen({super.key, this.initialStatus, this.token});
+  const AdminOfferListScreen({
+    super.key,
+    this.initialStatus,
+    this.token,
+    this.embedded = false,
+  });
 
   @override
   _AdminOfferListScreenState createState() => _AdminOfferListScreenState();
@@ -72,40 +84,84 @@ class _AdminOfferListScreenState extends State<AdminOfferListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.isDarkMode;
+
+    Widget content = Column(
+      children: [
+        _buildFilterSection(),
+        Expanded(
+          child: _isLoading
+              ? const ThemedLoadingState(
+                  message: 'Loading Offers...',
+                )
+              : offers.isEmpty
+                  ? _buildEmptyState()
+                  : _buildOffersList(),
+        ),
+      ],
+    );
+
+    if (widget.embedded) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: content,
+      );
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Manage Offers'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadOffers,
+      body: Container(
+        decoration: BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage(themeProvider.backgroundImage),
+            fit: BoxFit.cover,
           ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildFilterSection(),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : offers.isEmpty
-                    ? _buildEmptyState()
-                    : _buildOffersList(),
+        ),
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            title: Text(
+              'Manage Offers',
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+            ),
+            backgroundColor: (isDark ? const Color(0xFF14131E) : Colors.white)
+                .withValues(alpha: 0.9),
+            elevation: 0,
+            foregroundColor: isDark ? Colors.white : Colors.black87,
+            iconTheme:
+                IconThemeData(color: isDark ? Colors.white : Colors.black87),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: _loadOffers,
+                tooltip: 'Refresh',
+              ),
+            ],
           ),
-        ],
+          body: content,
+        ),
       ),
     );
   }
 
   Widget _buildFilterSection() {
-    return Card(
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.isDarkMode;
+
+    final statusOptionsUi = _statusOptions
+        .map((s) => s == 'all' ? 'All' : s)
+        .toList(growable: false);
+    final selectedUi = (_selectedStatus ?? 'all') == 'all'
+        ? 'All'
+        : (_selectedStatus ?? 'all');
+
+    return ThemedSurfaceCard(
       margin: const EdgeInsets.all(12),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- Create Draft Offer Button ---
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -136,39 +192,24 @@ class _AdminOfferListScreenState extends State<AdminOfferListScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
-            const Text(
+            Text(
               'Filter Offers',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w600,
                 fontSize: 16,
+                color: isDark ? Colors.white : Colors.black87,
               ),
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _statusOptions.map((status) {
-                final isSelected = _selectedStatus == status;
-                return FilterChip(
-                  label: Text(
-                    status == 'all' ? 'All Offers' : status,
-                    style: TextStyle(
-                      color: isSelected ? Colors.white : null,
-                    ),
-                  ),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    setState(() {
-                      _selectedStatus = selected ? status : 'all';
-                    });
-                    _loadOffers();
-                  },
-                  backgroundColor: isSelected
-                      ? Theme.of(context).primaryColor
-                      : Colors.grey[200],
-                );
-              }).toList(),
+            FilterChipGroup(
+              options: statusOptionsUi,
+              selectedValue: selectedUi,
+              onSelected: (value) {
+                setState(() {
+                  _selectedStatus = value == 'All' ? 'all' : value;
+                });
+                _loadOffers();
+              },
             ),
           ],
         ),
@@ -177,32 +218,12 @@ class _AdminOfferListScreenState extends State<AdminOfferListScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.description,
-            size: 80,
-            color: Colors.grey,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            _selectedStatus == 'all'
-                ? 'No offers found'
-                : 'No ${_selectedStatus} offers',
-            style: const TextStyle(
-              fontSize: 18,
-              color: Colors.grey,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Try changing filters or check back later',
-            style: TextStyle(color: Colors.grey),
-          ),
-        ],
-      ),
+    return ThemedEmptyState(
+      title: _selectedStatus == 'all'
+          ? 'No offers found'
+          : 'No ${_selectedStatus} offers',
+      subtitle: 'Try changing filters or check back later',
+      icon: Icons.description_outlined,
     );
   }
 
@@ -273,7 +294,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
   }
 
   Widget _buildHeaderSection() {
-    return Card(
+    return ThemedSurfaceCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -323,7 +344,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
   }
 
   Widget _buildOfferDetails() {
-    return Card(
+    return ThemedSurfaceCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -363,7 +384,7 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
   }
 
   Widget _buildCompensationDetails() {
-    return Card(
+    return ThemedSurfaceCard(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

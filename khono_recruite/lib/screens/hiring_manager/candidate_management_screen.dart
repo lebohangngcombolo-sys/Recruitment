@@ -107,7 +107,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     });
 
     try {
-      List<dynamic> rawApplications;
+      List<dynamic> rawApplications = [];
       if (widget.jobId <= 0) {
         rawApplications = await admin.getAllApplicationsForMyJobs();
       } else {
@@ -135,6 +135,7 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
               (map['scoring_breakdown']?['overall'] ?? 0),
           'job_title': map['job_title'],
           'job_id': map['job_id'],
+          'cv_url': map['cv_url'] ?? candidateData['cv_url'],
           'cv_parser_result': map['cv_parser_result'] ?? {},
           'candidate': candidateData,
           'recommendation': map['recommendation'],
@@ -230,9 +231,9 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not load fonts: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not load fonts: $e')));
       }
       return null;
     }
@@ -378,9 +379,9 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
       await analytics_export.downloadShortlistCsv(context, csv, filename);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
       }
     } finally {
       if (mounted) setState(() => _isExportingCsv = false);
@@ -407,9 +408,9 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
       analytics_export.downloadShortlistPdf(context, bytes, filename);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
       }
     } finally {
       if (mounted) setState(() => _isExportingShortlist = false);

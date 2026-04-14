@@ -14,6 +14,7 @@ import 'job_details_page.dart';
 import 'assessment_page.dart';
 import 'redirect_to_assessment_page.dart';
 import '../../services/candidate_service.dart';
+import '../../services/unified_api_service.dart';
 import 'assessments_results_screen.dart';
 import '../../screens/candidate/user_profile_page.dart';
 import 'saved_application_screen.dart';
@@ -38,7 +39,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     'Featured',
     'Full Time',
     'Part Time',
-    'Remote'
+    'Remote',
   ];
   static const int _jobListPageSize = 8;
   int _jobListCurrentPage = 0;
@@ -100,12 +101,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       if (response['unauthorized'] == true && mounted) {
         // Token expired and refresh failed; keep showing persisted name if any, and prompt re-login
         final persisted = await AuthService.getPersistedDisplayName();
-        _safeSetState(() => _userName =
-            (persisted != null && persisted.isNotEmpty) ? persisted : null);
+        _safeSetState(
+          () => _userName =
+              (persisted != null && persisted.isNotEmpty) ? persisted : null,
+        );
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(response['error']?.toString() ??
-                'Session expired. Please log in again.'),
+            content: Text(
+              response['error']?.toString() ??
+                  'Session expired. Please log in again.',
+            ),
             backgroundColor: Colors.red.shade700,
             action: SnackBarAction(
               label: 'Log in',
@@ -140,15 +145,18 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       }
 
       if (mounted)
-        _safeSetState(() => _userName =
-            (displayName != null && displayName.isNotEmpty)
-                ? displayName
-                : null);
+        _safeSetState(
+          () => _userName = (displayName != null && displayName.isNotEmpty)
+              ? displayName
+              : null,
+        );
     } catch (_) {
       if (mounted) {
         final persisted = await AuthService.getPersistedDisplayName();
-        _safeSetState(() => _userName =
-            (persisted != null && persisted.isNotEmpty) ? persisted : null);
+        _safeSetState(
+          () => _userName =
+              (persisted != null && persisted.isNotEmpty) ? persisted : null,
+        );
       }
     }
   }
@@ -158,9 +166,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   Future<void> _fetchJobs() async {
     _safeSetState(() => _loadingJobs = true);
     try {
-      final list = await CandidateService.getAvailableJobs(widget.token)
-          .timeout(_jobsFetchTimeout,
-              onTimeout: () => <Map<String, dynamic>>[]);
+      // Use the widget token directly instead of relying on storage
+      final token = widget.token.trim().isNotEmpty ? widget.token : await AuthService.getAccessToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('No authentication token available');
+      }
+      
+      final list = await UnifiedApiService.getJobsWithToken(token).timeout(
+        _jobsFetchTimeout,
+        onTimeout: () => <Map<String, dynamic>>[],
+      );
       if (mounted)
         _safeSetState(() {
           _jobs = list;
@@ -207,6 +222,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
 
   /// Form submitted but assessment not done (status 'applied') — show "Applied" on job cards, not in Continue section.
   List<Map<String, dynamic>> _appliedOnlyApplications = [];
+  /// All application records (irrespective of status) so we can reliably hide already-applied jobs
+  /// from Recommended Jobs even when backend status values vary.
+  List<Map<String, dynamic>> _allApplications = [];
   int _interviewsScheduledCount = 0;
   bool _dashboardCountsLoaded = false;
   static const String _kCachedInProgressApps =
@@ -237,7 +255,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   Future<void> _saveCachedInProgressApplications(
-      List<Map<String, dynamic>> list) async {
+    List<Map<String, dynamic>> list,
+  ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_kCachedInProgressApps, jsonEncode(list));
@@ -253,6 +272,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       ]);
       if (mounted) {
         final apps = List<dynamic>.from(results[0] as Iterable<dynamic>);
+        final allAppsMaps = apps
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
         final submittedOrCompletedList =
             apps.where(_isSubmittedOrCompletedApplication).toList();
         final submittedOrCompletedMaps = submittedOrCompletedList
@@ -282,7 +305,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             : <String, dynamic>{};
         final scheduledCount = interviewData['scheduled_count'] is int
             ? interviewData['scheduled_count'] as int
-            : (int.tryParse(interviewData['scheduled_count']?.toString() ?? '') ??
+            : (int.tryParse(
+                  interviewData['scheduled_count']?.toString() ?? '',
+                ) ??
                 0);
         _safeSetState(() {
           _applicationsCount = submittedOrCompletedMaps.length;
@@ -291,6 +316,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           _inProgressApplications = inProgressMaps;
           _completedApplications = completedMaps;
           _appliedOnlyApplications = appliedOnlyMaps;
+          _allApplications = allAppsMaps;
           _interviewsScheduledCount = scheduledCount;
           _dashboardCountsLoaded = true;
         });
@@ -323,10 +349,24 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           _inProgressApplications = [];
           _completedApplications = [];
           _appliedOnlyApplications = [];
+          _allApplications = [];
           _interviewsScheduledCount = 0;
           _dashboardCountsLoaded = true;
         });
     }
+  }
+
+  int? _toIntId(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    return int.tryParse(v.toString());
+  }
+
+  bool _idsEqual(dynamic a, dynamic b) {
+    final ia = _toIntId(a);
+    final ib = _toIntId(b);
+    if (ia == null || ib == null) return false;
+    return ia == ib;
   }
 
   /// In-progress application for this job, if any (so we can show Continue instead of Apply Now). Only draft/in_progress.
@@ -334,7 +374,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     final jobId = job['id'];
     if (jobId == null) return null;
     for (final app in _inProgressApplications) {
-      if (app['job_id'] == jobId) return app;
+      if (_idsEqual(app['job_id'], jobId)) return app;
     }
     return null;
   }
@@ -344,7 +384,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     final jobId = job['id'];
     if (jobId == null) return null;
     for (final app in _appliedOnlyApplications) {
-      if (app['job_id'] == jobId) return app;
+      if (_idsEqual(app['job_id'], jobId)) return app;
     }
     return null;
   }
@@ -354,7 +394,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     final jobId = job['id'];
     if (jobId == null) return null;
     for (final app in _completedApplications) {
-      if (app['job_id'] == jobId) return app;
+      if (_idsEqual(app['job_id'], jobId)) return app;
     }
     return null;
   }
@@ -380,37 +420,19 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   Future<void> _fetchNotifications() async {
-    if (widget.token.isEmpty) return;
     try {
-      final response = await http.get(
-        Uri.parse('$apiBase/notifications'),
-        headers: {'Authorization': 'Bearer ${widget.token}'},
-      );
-
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is List) {
-          _safeSetState(() {
-            notifications = decoded
-                .whereType<Map>()
-                .map((e) => Map<String, dynamic>.from(e))
-                .toList();
-          });
-        } else if (decoded is Map<String, dynamic>) {
-          final ok = decoded['success'];
-          final isSuccess = ok == true || ok == 'true';
-          final list = decoded['notifications'];
-          if (isSuccess && list is List) {
-            _safeSetState(() {
-              notifications = list
-                  .whereType<Map>()
-                  .map((e) => Map<String, dynamic>.from(e))
-                  .toList();
-            });
-          }
-        }
+      // Use the widget token directly instead of relying on storage
+      final token = widget.token.trim().isNotEmpty ? widget.token : await AuthService.getAccessToken();
+      if (token == null || token.isEmpty) {
+        throw Exception('No authentication token available');
       }
-      // 401: ignore (token expired or not logged in); avoid spamming console
+      
+      final notificationList = await UnifiedApiService.getNotificationsWithToken(token);
+      if (mounted) {
+        _safeSetState(() {
+          notifications = notificationList;
+        });
+      }
     } catch (e) {
       if (kIsWeb && e.toString().contains('Failed to fetch')) {
         // Likely CORS or server unreachable; avoid noisy log
@@ -420,17 +442,72 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     }
   }
 
+  /// Treat missing [is_read] as unread (older API responses).
+  bool _isNotificationUnread(Map<String, dynamic> n) {
+    final r = n['is_read'];
+    if (r == null) return true;
+    if (r is bool) return !r;
+    if (r is int) return r == 0;
+    final s = r.toString().toLowerCase();
+    return s != 'true' && s != '1';
+  }
+
+  int _unreadNotificationCount() =>
+      notifications.where(_isNotificationUnread).length;
+
+  int _compareCreatedAtDesc(
+    Map<String, dynamic> a,
+    Map<String, dynamic> b,
+  ) {
+    final da = DateTime.tryParse(a['created_at']?.toString() ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    final db = DateTime.tryParse(b['created_at']?.toString() ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0);
+    return db.compareTo(da);
+  }
+
+  Future<void> _markNotificationSeen(Map<String, dynamic> n) async {
+    if (!_isNotificationUnread(n)) return;
+    final rawId = n['id'];
+    if (rawId == null) return;
+    final id = int.tryParse(rawId.toString());
+    if (id == null) return;
+    try {
+      await UnifiedApiService.markNotificationRead(id);
+      if (!mounted) return;
+      _safeSetState(() {
+        final i = notifications.indexWhere(
+          (e) => e['id'].toString() == rawId.toString(),
+        );
+        if (i >= 0) {
+          notifications[i] = {...notifications[i], 'is_read': true};
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Could not update notification: $e',
+              style: GoogleFonts.poppins(fontSize: 13),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   void _showNotificationsDialog() {
     const double panelWidth = 360;
-    const double maxPanelHeight = 420;
+    const double maxPanelHeight = 480;
+    bool showUnreadTab = true;
     showDialog(
       context: context,
       barrierColor: Colors.black26,
       builder: (context) => Dialog(
         backgroundColor: Colors.transparent,
         alignment: Alignment.topRight,
-        insetPadding:
-            EdgeInsets.only(top: 72, right: 12, left: 24, bottom: 24),
+        insetPadding: EdgeInsets.only(top: 72, right: 12, left: 24, bottom: 24),
         child: ConstrainedBox(
           constraints: BoxConstraints(
             maxWidth: panelWidth,
@@ -458,11 +535,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                     children: [
                       IconButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        icon: Icon(Icons.arrow_back,
-                            size: 22, color: Colors.black87),
+                        icon: Icon(
+                          Icons.arrow_back,
+                          size: 22,
+                          color: Colors.black87,
+                        ),
                         padding: EdgeInsets.zero,
-                        constraints:
-                            BoxConstraints(minWidth: 40, minHeight: 40),
+                        constraints: BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
                       ),
                       SizedBox(width: 4),
                       Text(
@@ -476,11 +558,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       Spacer(),
                       IconButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        icon:
-                            Icon(Icons.close, size: 22, color: Colors.black87),
+                        icon: Icon(
+                          Icons.close,
+                          size: 22,
+                          color: Colors.black87,
+                        ),
                         padding: EdgeInsets.zero,
-                        constraints:
-                            BoxConstraints(minWidth: 40, minHeight: 40),
+                        constraints: BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
                       ),
                     ],
                   ),
@@ -491,7 +578,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                   child: notifications.isEmpty
                       ? Padding(
                           padding: EdgeInsets.symmetric(
-                              vertical: 32, horizontal: 20),
+                            vertical: 32,
+                            horizontal: 20,
+                          ),
                           child: Text(
                             'No notifications yet. Updates from hiring managers will appear here.',
                             textAlign: TextAlign.center,
@@ -501,45 +590,230 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                             ),
                           ),
                         )
-                      : ListView.builder(
-                          shrinkWrap: true,
-                          padding: EdgeInsets.symmetric(vertical: 4),
-                          itemCount: notifications.length,
-                          itemBuilder: (context, index) {
-                            final notification = notifications[index];
-                            final messageText =
-                                _getNotificationMessage(notification);
-                            final dateText = _formatDate(
-                              notification['created_at']?.toString(),
-                            );
-                            return ListTile(
-                              dense: true,
-                              contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 4),
-                              leading: Icon(
-                                Icons.notifications_outlined,
-                                color: primaryColor,
-                                size: 22,
-                              ),
-                              title: Text(
-                                messageText,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  color: Colors.black87,
+                      : StatefulBuilder(
+                          builder: (context, setDialogState) {
+                            final unread = notifications
+                                .where(_isNotificationUnread)
+                                .toList()
+                              ..sort(_compareCreatedAtDesc);
+                            final read = notifications
+                                .where((n) => !_isNotificationUnread(n))
+                                .toList()
+                              ..sort(_compareCreatedAtDesc);
+
+                            Widget emptyHint(String text) {
+                              return Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 20,
+                                  vertical: 20,
                                 ),
-                                maxLines: 3,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: Padding(
-                                padding: EdgeInsets.only(top: 2),
                                 child: Text(
-                                  dateText,
+                                  text,
                                   style: GoogleFonts.poppins(
-                                    fontSize: 11,
-                                    color: Colors.black54,
+                                    fontSize: 12,
+                                    color: Colors.black45,
                                   ),
                                 ),
-                              ),
+                              );
+                            }
+
+                            Widget tile(Map<String, dynamic> notification,
+                                {required bool unreadStyle}) {
+                              final messageText =
+                                  _getNotificationMessage(notification);
+                              final dateText = _formatDate(
+                                notification['created_at']?.toString(),
+                              );
+                              return Material(
+                                color: unreadStyle
+                                    ? primaryColor.withValues(alpha: 0.06)
+                                    : Colors.transparent,
+                                child: InkWell(
+                                  onTap: () async {
+                                    await _markNotificationSeen(notification);
+                                    setDialogState(() {
+                                      if (showUnreadTab && unread.length == 1) {
+                                        showUnreadTab = false;
+                                      }
+                                    });
+                                  },
+                                  child: Container(
+                                    decoration: unreadStyle
+                                        ? BoxDecoration(
+                                            border: Border(
+                                              left: BorderSide(
+                                                color: strokeColor,
+                                                width: 3,
+                                              ),
+                                            ),
+                                          )
+                                        : null,
+                                    child: ListTile(
+                                      dense: true,
+                                      contentPadding: EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 6,
+                                      ),
+                                      leading: Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          Icon(
+                                            Icons.notifications_outlined,
+                                            color: primaryColor,
+                                            size: 22,
+                                          ),
+                                          if (unreadStyle)
+                                            Positioned(
+                                              right: -2,
+                                              top: -2,
+                                              child: Container(
+                                                width: 8,
+                                                height: 8,
+                                                decoration: BoxDecoration(
+                                                  color: strokeColor,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      title: Text(
+                                        messageText,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          color: Colors.black87,
+                                          fontWeight: unreadStyle
+                                              ? FontWeight.w600
+                                              : FontWeight.w400,
+                                        ),
+                                        maxLines: 4,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      subtitle: Padding(
+                                        padding: EdgeInsets.only(top: 4),
+                                        child: Text(
+                                          dateText,
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 11,
+                                            color: Colors.black54,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            Widget tabButton({
+                              required String label,
+                              required int count,
+                              required bool active,
+                              required VoidCallback onTap,
+                            }) {
+                              return Expanded(
+                                child: GestureDetector(
+                                  onTap: onTap,
+                                  child: AnimatedContainer(
+                                    duration: Duration(milliseconds: 180),
+                                    padding: EdgeInsets.symmetric(vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: active
+                                          ? primaryColor.withValues(alpha: 0.09)
+                                          : Colors.transparent,
+                                      border: Border(
+                                        bottom: BorderSide(
+                                          color:
+                                              active ? strokeColor : Colors.black12,
+                                          width: active ? 2 : 1,
+                                        ),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Text(
+                                          label,
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: active
+                                                ? strokeColor
+                                                : Colors.black54,
+                                          ),
+                                        ),
+                                        SizedBox(width: 6),
+                                        Container(
+                                          padding: EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: active
+                                                ? strokeColor
+                                                : Colors.black12,
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Text(
+                                            '$count',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: active
+                                                  ? Colors.white
+                                                  : Colors.black87,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final activeList = showUnreadTab ? unread : read;
+
+                            return Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    tabButton(
+                                      label: 'Unread',
+                                      count: unread.length,
+                                      active: showUnreadTab,
+                                      onTap: () =>
+                                          setDialogState(() => showUnreadTab = true),
+                                    ),
+                                    tabButton(
+                                      label: 'Read',
+                                      count: read.length,
+                                      active: !showUnreadTab,
+                                      onTap: () => setDialogState(
+                                          () => showUnreadTab = false),
+                                    ),
+                                  ],
+                                ),
+                                Expanded(
+                                  child: activeList.isEmpty
+                                      ? emptyHint(
+                                          showUnreadTab
+                                              ? "You're all caught up — no new alerts."
+                                              : 'Opened notifications appear here.',
+                                        )
+                                      : ListView(
+                                          padding: EdgeInsets.only(bottom: 12),
+                                          children: activeList
+                                              .map(
+                                                (n) => tile(
+                                                  n,
+                                                  unreadStyle: showUnreadTab,
+                                                ),
+                                              )
+                                              .toList(),
+                                        ),
+                                ),
+                              ],
                             );
                           },
                         ),
@@ -656,10 +930,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 SizedBox(height: 20),
                 Expanded(
                   child: SingleChildScrollView(
-                    child: Text(
-                      analysis,
-                      style: GoogleFonts.poppins(),
-                    ),
+                    child: Text(analysis, style: GoogleFonts.poppins()),
                   ),
                 ),
                 SizedBox(height: 20),
@@ -709,10 +980,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                   ),
                 ),
                 SizedBox(height: 20),
-                Text(
-                  message,
-                  style: GoogleFonts.poppins(),
-                ),
+                Text(message, style: GoogleFonts.poppins()),
                 SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: () => Navigator.of(context).pop(),
@@ -827,8 +1095,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   /// Primary nav link with optional tap and subtle active state (dashboard theme).
-  Widget _buildNavLink(String label,
-      {bool isActive = false, VoidCallback? onTap}) {
+  Widget _buildNavLink(
+    String label, {
+    bool isActive = false,
+    VoidCallback? onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Padding(
@@ -849,8 +1120,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   void _scrollToJobsSection() {
     final ctx = _jobsSectionKey.currentContext;
     if (ctx != null) {
-      Scrollable.ensureVisible(ctx,
-          duration: Duration(milliseconds: 400), alignment: 0.1);
+      Scrollable.ensureVisible(
+        ctx,
+        duration: Duration(milliseconds: 400),
+        alignment: 0.1,
+      );
     }
   }
 
@@ -863,6 +1137,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
         border: Border(bottom: BorderSide(color: Colors.white12, width: 1)),
       ),
       child: Row(
@@ -894,14 +1169,19 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     final location = (job['location']?.toString().trim().isNotEmpty == true)
         ? (job['location'] ?? '')
         : '—';
-    final jobType =
-        _formatJobType(job['type'] ?? job['employment_type'] ?? 'Full Time');
+    final jobType = _formatJobType(
+      job['type'] ?? job['employment_type'] ?? 'Full Time',
+    );
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.015),
         border: Border(
-            bottom: BorderSide(
-                color: Colors.white.withValues(alpha: 0.08), width: 1)),
+          bottom: BorderSide(
+            color: Colors.white.withValues(alpha: 0.08),
+            width: 1,
+          ),
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -956,16 +1236,15 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (_) => JobDetailsPage(job: job),
-                    ),
+                    MaterialPageRoute(builder: (_) => JobDetailsPage(job: job)),
                   );
                 },
                 style: OutlinedButton.styleFrom(
                   backgroundColor: Color(0xFF3A3A3A),
                   side: BorderSide(color: Colors.white38),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
                   padding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 ),
                 child: Text(
@@ -1005,9 +1284,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               },
         style: ElevatedButton.styleFrom(
           backgroundColor: strokeColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
         child: Text(
           'Continue',
@@ -1035,9 +1312,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               },
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.grey.shade700,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
         child: Text(
           'View results',
@@ -1054,9 +1329,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           backgroundColor: Colors.grey.shade700,
           disabledBackgroundColor: Colors.grey.shade700,
           disabledForegroundColor: Colors.white70,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
         child: Text(
           'Applied',
@@ -1068,14 +1341,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       onPressed: () => _handleApplyNow(job),
       style: ElevatedButton.styleFrom(
         backgroundColor: strokeColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
-      child: Text(
-        'Apply Now',
-        style: GoogleFonts.poppins(color: Colors.white),
-      ),
+      child: Text('Apply Now', style: GoogleFonts.poppins(color: Colors.white)),
     );
   }
 
@@ -1090,9 +1358,18 @@ class _CandidateDashboardState extends State<CandidateDashboard>
 
   /// True if the candidate has any application for this job (in progress, completed, or applied); such jobs are hidden from Recommended Jobs.
   bool _hasAnyApplicationForJob(Map<String, dynamic> job) {
-    return _inProgressForJob(job) != null ||
-        _completedApplicationForJob(job) != null ||
-        _appliedOnlyForJob(job) != null;
+    final jobId = job['id'];
+    if (jobId == null) return false;
+    final jid = _toIntId(jobId);
+    if (jid == null) return false;
+    for (final app in _allApplications) {
+      final appJobId = app['job_id'] ??
+          app['requisition_id'] ??
+          app['jobId'] ??
+          app['requisitionId'];
+      if (_idsEqual(appJobId, jid)) return true;
+    }
+    return false;
   }
 
   List<Map<String, dynamic>> _getFilteredJobs(int typeIndex) {
@@ -1138,9 +1415,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       );
     }
     if (jobs.isEmpty) {
-      return Center(
+      return Align(
+        alignment: Alignment.topCenter,
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.only(top: 32, left: 24, right: 24),
           child: Text(
             'No jobs found.',
             style: GoogleFonts.poppins(fontSize: 16, color: Colors.white70),
@@ -1156,25 +1434,36 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       children: [
         Container(
           decoration: BoxDecoration(
-            color: Color(0xFF2A2A2A),
+            // Glassmorphic container so it blends with the dark background.
+            color: Colors.white.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.28),
+                blurRadius: 22,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildJobTableHeader(),
-                ...paginatedJobs.map((job) {
-                  final j = Map<String, dynamic>.from(job);
-                  if (!j.containsKey('type') &&
-                      j.containsKey('employment_type')) {
-                    j['type'] = j['employment_type'];
-                  }
-                  return _buildJobTableRow(j);
-                }),
-              ],
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildJobTableHeader(),
+                  ...paginatedJobs.map((job) {
+                    final j = Map<String, dynamic>.from(job);
+                    if (!j.containsKey('type') &&
+                        j.containsKey('employment_type')) {
+                      j['type'] = j['employment_type'];
+                    }
+                    return _buildJobTableRow(j);
+                  }),
+                ],
+              ),
             ),
           ),
         ),
@@ -1217,9 +1506,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       return;
     }
     if (job['id'] == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid job.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid job.')));
       return;
     }
     // Navigate to redirect page immediately; it will call apply API then show countdown.
@@ -1268,7 +1557,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             child: Text(
               'Create account',
               style: GoogleFonts.poppins(
-                  color: strokeColor, fontWeight: FontWeight.w600),
+                color: strokeColor,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           ElevatedButton(
@@ -1282,12 +1573,15 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               backgroundColor: strokeColor,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: Text(
               'Log in',
               style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w600, fontSize: 14),
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+              ),
             ),
           ),
         ],
@@ -1318,10 +1612,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 : (_applicationsCount != null && _applicationsCount! > 0)
                     ? 'You have $_applicationsCount submitted application${_applicationsCount == 1 ? '' : 's'}.'
                     : 'Explore your opportunities and applications today',
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              color: Colors.white70,
-            ),
+            style: GoogleFonts.poppins(fontSize: 16, color: Colors.white70),
           ),
           SizedBox(height: 24),
         ],
@@ -1348,7 +1639,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               ),
               onTap: () {
                 context.push(
-                    '/jobs-applied?token=${Uri.encodeComponent(widget.token)}');
+                  '/jobs-applied?token=${Uri.encodeComponent(widget.token)}',
+                );
               },
             ),
           ),
@@ -1367,7 +1659,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               ),
               onTap: () {
                 context.push(
-                    '/my-interviews?token=${Uri.encodeComponent(widget.token)}');
+                  '/my-interviews?token=${Uri.encodeComponent(widget.token)}',
+                );
               },
             ),
           ),
@@ -1405,9 +1698,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     if (job == null) return;
     final jobId = job['id'];
     if (jobId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid job.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid job.')));
       return;
     }
     _safeSetState(() => _continuingApplication = true);
@@ -1437,8 +1730,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => AssessmentPage(
+            builder: (_) => RedirectToAssessmentPage(
               applicationId: data['application_id'] as int,
+              jobTitle: job['title']?.toString(),
             ),
           ),
         );
@@ -1452,14 +1746,18 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text(
-                    'This application is already in your list. Refreshing.')),
+              content: Text(
+                'This application is already in your list. Refreshing.',
+              ),
+            ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content:
-                    Text(err.isNotEmpty ? err : 'Could not start application')),
+              content: Text(
+                err.isNotEmpty ? err : 'Could not start application',
+              ),
+            ),
           );
         }
       } else {
@@ -1476,9 +1774,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
     } finally {
       if (mounted) _safeSetState(() => _continuingApplication = false);
     }
@@ -1592,10 +1890,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               _dashboardCountsLoaded
                   ? 'No applications in progress. Browse jobs below.'
                   : 'Loading your applications...',
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: Colors.white70,
-              ),
+              style: GoogleFonts.poppins(fontSize: 14, color: Colors.white70),
             ),
             SizedBox(height: 16),
           ],
@@ -1627,8 +1922,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               itemBuilder: (context, index) {
                 return SizedBox(
                   width: 380,
-                  child: _buildIncompleteApplicationCard(items[index],
-                      compact: true),
+                  child: _buildIncompleteApplicationCard(
+                    items[index],
+                    compact: true,
+                  ),
                 );
               },
             ),
@@ -1640,7 +1937,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
 
   /// Estimate progress 0–100 from draft_data / last_saved_screen.
   int _progressPercent(
-      Map<String, dynamic>? draftData, String? lastSavedScreen) {
+    Map<String, dynamic>? draftData,
+    String? lastSavedScreen,
+  ) {
     if (draftData == null || draftData.isEmpty)
       return lastSavedScreen != null ? 25 : 0;
     final screen = (lastSavedScreen ?? '').toString().toLowerCase();
@@ -1654,8 +1953,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     return 25;
   }
 
-  Widget _buildIncompleteApplicationCard(Map<String, dynamic> item,
-      {bool compact = false}) {
+  Widget _buildIncompleteApplicationCard(
+    Map<String, dynamic> item, {
+    bool compact = false,
+  }) {
     final type = item['type'] as String?;
     String title;
     String? company;
@@ -1765,8 +2066,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               SizedBox(height: 6),
               Row(
                 children: [
-                  Icon(Icons.location_on_outlined,
-                      size: 14, color: Colors.white54),
+                  Icon(
+                    Icons.location_on_outlined,
+                    size: 14,
+                    color: Colors.white54,
+                  ),
                   SizedBox(width: 4),
                   Expanded(
                     child: Text(
@@ -1804,8 +2108,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 if (showProgressBar && progressPercent >= 25)
                   Padding(
                     padding: EdgeInsets.only(right: 6),
-                    child: Icon(Icons.check_circle,
-                        size: 14, color: Colors.green.shade400),
+                    child: Icon(
+                      Icons.check_circle,
+                      size: 14,
+                      color: Colors.green.shade400,
+                    ),
                   ),
                 Expanded(
                   child: Text(
@@ -1847,8 +2154,11 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       ),
                     ),
                     SizedBox(width: 4),
-                    Icon(Icons.arrow_forward_rounded,
-                        size: 18, color: Colors.white),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 18,
+                      color: Colors.white,
+                    ),
                   ],
                 ),
               ),
@@ -1974,10 +2284,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
               ),
             // Fixed background that fills the entire screen
             Positioned.fill(
-              child: Image.asset(
-                'assets/images/dark.png',
-                fit: BoxFit.cover,
-              ),
+              child: Image.asset('assets/images/dark.png', fit: BoxFit.cover),
             ),
 
             // Main content with transparent background
@@ -1999,46 +2306,60 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       SizedBox(width: 28),
                       _buildNavLink('Browse Jobs', onTap: _scrollToJobsSection),
                       SizedBox(width: 28),
-                      _buildNavLink('Applications', onTap: () {
-                        context.push(
-                            '/jobs-applied?token=${Uri.encodeComponent(widget.token)}');
-                      }),
+                      _buildNavLink(
+                        'Applications',
+                        onTap: () {
+                          context.push(
+                            '/jobs-applied?token=${Uri.encodeComponent(widget.token)}',
+                          );
+                        },
+                      ),
                       SizedBox(width: 28),
-                      _buildNavLink('Assessments', onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                AssessmentResultsPage(token: widget.token),
-                          ),
-                        );
-                      }),
+                      _buildNavLink(
+                        'Assessments',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  AssessmentResultsPage(token: widget.token),
+                            ),
+                          );
+                        },
+                      ),
                       SizedBox(width: 40),
                       Stack(
                         clipBehavior: Clip.none,
                         children: [
                           IconButton(
-                            icon: Icon(Icons.notifications_outlined,
-                                color: Colors.white, size: 24),
+                            icon: Icon(
+                              Icons.notifications_outlined,
+                              color: Colors.white,
+                              size: 24,
+                            ),
                             onPressed: () => _showNotificationsDialog(),
                           ),
-                          if (notifications.isNotEmpty)
+                          if (_unreadNotificationCount() > 0)
                             Positioned(
                               right: 6,
                               top: 6,
                               child: Container(
                                 padding: EdgeInsets.symmetric(
-                                    horizontal: 5, vertical: 2),
+                                  horizontal: 5,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: strokeColor,
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
-                                  notifications.length > 99
+                                  _unreadNotificationCount() > 99
                                       ? '99+'
-                                      : notifications.length.toString(),
+                                      : _unreadNotificationCount().toString(),
                                   style: GoogleFonts.poppins(
-                                      color: Colors.white, fontSize: 10),
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                  ),
                                 ),
                               ),
                             ),
@@ -2048,16 +2369,18 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       PopupMenuButton<String>(
                         offset: Offset(0, 48),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         color: Color(0xFF2C2C2C),
                         onSelected: (value) {
                           if (value == 'profile') {
                             Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      ProfilePage(token: widget.token),
-                                ));
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ProfilePage(token: widget.token),
+                              ),
+                            );
                           } else if (value == 'logout') {
                             _showLogoutConfirmation(context);
                           }
@@ -2067,12 +2390,18 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                             value: 'profile',
                             child: Row(
                               children: [
-                                Icon(Icons.person_outline,
-                                    color: Colors.white70, size: 20),
+                                Icon(
+                                  Icons.person_outline,
+                                  color: Colors.white70,
+                                  size: 20,
+                                ),
                                 SizedBox(width: 12),
-                                Text('My Profile',
-                                    style: GoogleFonts.poppins(
-                                        color: Colors.white)),
+                                Text(
+                                  'My Profile',
+                                  style: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -2081,24 +2410,35 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                             value: 'logout',
                             child: Row(
                               children: [
-                                Icon(Icons.logout,
-                                    color: Colors.white70, size: 20),
+                                Icon(
+                                  Icons.logout,
+                                  color: Colors.white70,
+                                  size: 20,
+                                ),
                                 SizedBox(width: 12),
-                                Text('Log Out',
-                                    style: GoogleFonts.poppins(
-                                        color: Colors.white)),
+                                Text(
+                                  'Log Out',
+                                  style: GoogleFonts.poppins(
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                         ],
                         child: Padding(
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           child: CircleAvatar(
                             radius: 18,
                             backgroundColor: primaryColor,
-                            child: Icon(Icons.person,
-                                color: Colors.white, size: 22),
+                            child: Icon(
+                              Icons.person,
+                              color: Colors.white,
+                              size: 22,
+                            ),
                           ),
                         ),
                       ),
@@ -2107,12 +2447,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                   ),
 
                   // Opportunities Section
-                  SliverToBoxAdapter(
-                    child: _buildOpportunitiesHeader(),
-                  ),
-                  SliverToBoxAdapter(
-                    child: _buildOpportunitiesCards(),
-                  ),
+                  SliverToBoxAdapter(child: _buildOpportunitiesHeader()),
+                  SliverToBoxAdapter(child: _buildOpportunitiesCards()),
 
                   // Continue Your Application section (always visible immediately after login)
                   SliverToBoxAdapter(
@@ -2130,9 +2466,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                           Text(
                             'Recommended Jobs',
                             style: GoogleFonts.poppins(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white),
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                           SizedBox(height: 24),
                           DefaultTabController(
@@ -2144,11 +2481,14 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                                   isScrollable: true,
                                   tabAlignment: TabAlignment.start,
                                   labelStyle: GoogleFonts.poppins(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 15),
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
+                                  ),
                                   unselectedLabelStyle: GoogleFonts.poppins(
-                                      color: Colors.white70, fontSize: 15),
+                                    color: Colors.white70,
+                                    fontSize: 15,
+                                  ),
                                   labelColor: Colors.white,
                                   unselectedLabelColor: Colors.white70,
                                   indicatorColor: primaryColor,
@@ -2158,10 +2498,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                                     _jobListCurrentPage = 0;
                                   }),
                                   tabs: _jobTypes
-                                      .map((type) => Tab(
-                                          child: Text(type,
-                                              style: GoogleFonts.poppins(
-                                                  color: Colors.white))))
+                                      .map(
+                                        (type) => Tab(
+                                          child: Text(
+                                            type,
+                                            style: GoogleFonts.poppins(
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ),
+                                      )
                                       .toList(),
                                 ),
                                 Container(
@@ -2194,7 +2540,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       width: double.infinity,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 60, vertical: 40),
+                          horizontal: 60,
+                          vertical: 40,
+                        ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
@@ -2203,15 +2551,19 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Image.asset('assets/images/logo3.png',
-                                    width: 220,
-                                    height: 120,
-                                    fit: BoxFit.contain),
+                                Image.asset(
+                                  'assets/images/logo3.png',
+                                  width: 220,
+                                  height: 120,
+                                  fit: BoxFit.contain,
+                                ),
                                 const SizedBox(width: 20),
                                 Text(
                                   "┬⌐ 2025 Khonology. All rights reserved.",
                                   style: GoogleFonts.poppins(
-                                      color: Colors.white54, fontSize: 12),
+                                    color: Colors.white54,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ],
                             ),

@@ -73,6 +73,26 @@ services:
         sync: false
       - key: TEST_EMAIL_SECRET
         sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_KEY_FILE
+        sync: false
+      - key: ANALYSIS_SERVICE_URL
+        sync: false
+      - key: ANALYSIS_SERVICE_API_KEY
+        sync: false
+      - key: CV_ANALYSER_SIGNING_SECRET
+        sync: false
+      - key: RECRUITEE_ENABLED
+        sync: false
+      - key: RECRUITEE_COMPANY_ID
+        sync: false
+      - key: RECRUITEE_API_TOKEN
+        sync: false
+      - key: RECRUITEE_WEBHOOK_SECRET
+        sync: false
+      - key: ANALYSER_DATABASE_URL
+        sync: false
+      - key: APP_VERSION
+        sync: false
 
   - type: web
     name: recruitment-web

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
 import '../../services/admin_service.dart';
-import '../../widgets/custom_button.dart';
 import 'candidate_detail_screen.dart';
 import '../../providers/theme_provider.dart';
 import '../../constants/app_colors.dart';
+import '../../widgets/state_widgets.dart';
+import '../../widgets/themed_surface_card.dart';
 
 class CandidateManagementScreen extends StatefulWidget {
   final int jobId;
@@ -144,21 +146,9 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
 
             // Stats Overview
             if (!loading && candidates.isNotEmpty)
-              Container(
+              ThemedSurfaceCard(
                 padding: const EdgeInsets.all(20),
                 margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: (isDark ? const Color(0xFF14131E) : Colors.white)
-                      .withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 15,
-                      offset: const Offset(0, 5),
-                    ),
-                  ],
-                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -194,42 +184,26 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
 
             // Main Content Section
             Expanded(
-              child: Container(
+              child: ThemedSurfaceCard(
                 padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: isDark
-                        ? [
-                            Color(0xFF1E1B2E).withValues(alpha: 0.8),
-                            Color(0xFF14131E).withValues(alpha: 0.9),
-                          ]
-                        : [
-                            Colors.white.withValues(alpha: 0.9),
-                            Colors.grey.shade50.withValues(alpha: 0.9),
-                          ],
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                  border: Border.all(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.1)
-                        : Colors.black.withValues(alpha: 0.05),
-                  ),
-                ),
                 child: loading
-                    ? _buildLoadingState(primaryRed)
+                    ? const ThemedLoadingState(
+                        message: 'Loading Candidates...',
+                      )
                     : errorMessage != null
-                        ? _buildErrorState(errorMessage!, isDark)
+                        ? ThemedErrorState(
+                            title: 'Unable to load candidates',
+                            subtitle: errorMessage,
+                            icon: Icons.error_outline_rounded,
+                            onRetry: fetchShortlist,
+                          )
                         : candidates.isEmpty
-                            ? _buildEmptyState(isDark)
+                            ? const ThemedEmptyState(
+                                title: 'No Candidates Found',
+                                subtitle:
+                                    'No shortlisted candidates available for this position',
+                                icon: Icons.people_alt_outlined,
+                              )
                             : _buildCandidateList(isDark, primaryRed),
               ),
             ),
@@ -272,118 +246,6 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     );
   }
 
-  Widget _buildLoadingState(Color primaryRed) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 60,
-            height: 60,
-            child: CircularProgressIndicator(
-              strokeWidth: 3,
-              color: primaryRed,
-              backgroundColor: primaryRed.withValues(alpha: 0.2),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            "Loading Candidates...",
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildErrorState(String error, bool isDark) {
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Colors.red.shade50.withValues(alpha: 0.9),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.red.shade200),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.error_outline_rounded,
-              color: Colors.red,
-              size: 48,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              "Unable to load candidates",
-              style: TextStyle(
-                color: Colors.red.shade800,
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              error,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.red.shade600,
-                fontSize: 14,
-              ),
-            ),
-            const SizedBox(height: 20),
-            CustomButton(
-              text: "Try Again",
-              onPressed: fetchShortlist,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(bool isDark) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.people_alt_outlined,
-            size: 80,
-            color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
-          ),
-          const SizedBox(height: 20),
-          Text(
-            "No Candidates Found",
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "No shortlisted candidates available for this position",
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
-            ),
-          ),
-          const SizedBox(height: 20),
-          CustomButton(
-            text: "Refresh List",
-            onPressed: fetchShortlist,
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildCandidateList(bool isDark, Color primaryRed) {
     return RefreshIndicator(
       onRefresh: fetchShortlist,
@@ -422,39 +284,11 @@ class _CandidateManagementScreenState extends State<CandidateManagementScreen> {
     int rank,
   ) {
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
+      cursor: kIsWeb ? SystemMouseCursors.click : MouseCursor.defer,
       child: GestureDetector(
         onTap: () => openCandidateDetails(candidate),
-        child: Container(
+        child: ThemedSurfaceCard(
           padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: isDark
-                  ? [
-                      Color(0xFF1E1B2E).withValues(alpha: 0.8),
-                      Color(0xFF14131E).withValues(alpha: 0.9),
-                    ]
-                  : [
-                      Colors.white.withValues(alpha: 0.95),
-                      Colors.grey.shade50.withValues(alpha: 0.95),
-                    ],
-            ),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 15,
-                offset: const Offset(0, 6),
-              ),
-            ],
-            border: Border.all(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.1)
-                  : Colors.black.withValues(alpha: 0.05),
-            ),
-          ),
           child: Row(
             children: [
               // Rank Badge

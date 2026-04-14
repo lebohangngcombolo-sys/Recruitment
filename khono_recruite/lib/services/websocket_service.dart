@@ -22,7 +22,7 @@ class WebSocketService {
 
   // Reconnection settings
   final int _maxReconnectAttempts = 5;
-  final int _reconnectDelay = 1000;
+  final int _reconnectDelay = 5000;
   int _reconnectAttempts = 0;
   Timer? _reconnectTimer;
 
@@ -31,8 +31,11 @@ class WebSocketService {
   VoidCallback? onDisconnected;
   Function(String error)? onError;
   Function(Map<String, dynamic> data)? onNewMessage;
-  Function(Map<String, dynamic> data)? onUserTyping;
+  Function(Map<String, dynamic> data)? onMention;
+  Function(Map<String, dynamic> data)? onMeetingInvite;
+  Function(Map<String, dynamic> data)? onMeetingResponse;
   Function(Map<String, dynamic> data)? onPresenceUpdate;
+  Function(Map<String, dynamic> data)? onUserTyping;
   Function(Map<String, dynamic> data)? onNewThread;
   Function(Map<String, dynamic> data)? onMessageSent;
   Function(Map<String, dynamic> data)? onMessagesRead;
@@ -41,6 +44,17 @@ class WebSocketService {
   Function(Map<String, dynamic> data)? onMessageDeleted;
   Function(Map<String, dynamic> data)? onParticipantAdded;
   Function(Map<String, dynamic> data)? onThreadsData;
+
+  // Dashboard-specific event callbacks (real-time updates)
+  Function(Map<String, dynamic> data)? onInterviewCreated;
+  Function(Map<String, dynamic> data)? onInterviewUpdated;
+  Function(Map<String, dynamic> data)? onInterviewDeleted;
+  Function(Map<String, dynamic> data)? onMeetingCreated;
+  Function(Map<String, dynamic> data)? onMeetingUpdated;
+  Function(Map<String, dynamic> data)? onJobStatusChanged;
+  Function(Map<String, dynamic> data)? onCvReviewCompleted;
+  Function(Map<String, dynamic> data)? onCandidateApplied;
+  Function(Map<String, dynamic> data)? onAuditCreated;
 
   /// Initialize WebSocket connection
   Future<void> initialize() async {
@@ -238,6 +252,55 @@ class WebSocketService {
       _handleEvent('threads_data', data, onThreadsData);
     });
 
+    _socket!.on('mention', (data) {
+      _handleEvent('mention', data, onMention);
+    });
+
+    _socket!.on('meeting_invite', (data) {
+      _handleEvent('meeting_invite', data, onMeetingInvite);
+    });
+
+    _socket!.on('meeting_response', (data) {
+      _handleEvent('meeting_response', data, onMeetingResponse);
+    });
+
+    // Dashboard real-time events
+    _socket!.on('interview_created', (data) {
+      _handleEvent('interview_created', data, onInterviewCreated);
+    });
+
+    _socket!.on('interview_updated', (data) {
+      _handleEvent('interview_updated', data, onInterviewUpdated);
+    });
+
+    _socket!.on('interview_deleted', (data) {
+      _handleEvent('interview_deleted', data, onInterviewDeleted);
+    });
+
+    _socket!.on('meeting_created', (data) {
+      _handleEvent('meeting_created', data, onMeetingCreated);
+    });
+
+    _socket!.on('meeting_updated', (data) {
+      _handleEvent('meeting_updated', data, onMeetingUpdated);
+    });
+
+    _socket!.on('job_status_changed', (data) {
+      _handleEvent('job_status_changed', data, onJobStatusChanged);
+    });
+
+    _socket!.on('cv_review_completed', (data) {
+      _handleEvent('cv_review_completed', data, onCvReviewCompleted);
+    });
+
+    _socket!.on('candidate_applied', (data) {
+      _handleEvent('candidate_applied', data, onCandidateApplied);
+    });
+
+    _socket!.on('audit_created', (data) {
+      _handleEvent('audit_created', data, onAuditCreated);
+    });
+
     _socket!.on('error', (data) {
       if (data is Map<String, dynamic>) {
         final error = data['message'] ?? 'Unknown error';
@@ -367,8 +430,39 @@ class WebSocketService {
       return;
     }
 
-    debugPrint('📨 Joining thread $threadId');
-    _socket!.emit('join_thread', {'thread_id': threadId});
+    try {
+      debugPrint('📨 Joining thread $threadId');
+      _socket!.emit('join_thread', {'thread_id': threadId});
+    } catch (e) {
+      debugPrint('❌ Error joining thread: $e');
+      onError?.call('Failed to join thread: $e');
+    }
+  }
+
+  /// Subscribe to dashboard events for real-time updates
+  void subscribeToDashboard(String userId, {String role = 'admin'}) {
+    if (!_isConnected || _socket == null) {
+      debugPrint('⚠️ Cannot subscribe to dashboard - socket not connected');
+      return;
+    }
+
+    try {
+      debugPrint('📊 Subscribing to dashboard events for user $userId');
+      _socket!.emit('subscribe_dashboard', {
+        'user_id': userId,
+        'role': role,
+      });
+    } catch (e) {
+      debugPrint('❌ Error subscribing to dashboard: $e');
+    }
+  }
+
+  /// Unsubscribe from dashboard events
+  void unsubscribeFromDashboard(String userId) {
+    if (_isConnected && _socket != null) {
+      debugPrint('📊 Unsubscribing from dashboard events for user $userId');
+      _socket!.emit('unsubscribe_dashboard', {'user_id': userId});
+    }
   }
 
   /// Leave a chat thread

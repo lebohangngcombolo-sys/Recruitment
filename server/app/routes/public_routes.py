@@ -34,6 +34,7 @@ def healthz():
 
     payload = {
         "status": "ok",
+        "app_version": current_app.config.get("APP_VERSION", "unknown"),
         "git_sha": git_sha,
         "alembic_revision": alembic_revision,
     }
@@ -46,7 +47,8 @@ def get_public_jobs():
     try:
         jobs = Requisition.query.filter(
             Requisition.is_active == True,
-            Requisition.deleted_at == None
+            Requisition.deleted_at == None,
+            Requisition.approval_status == "approved",
         ).order_by(Requisition.published_on.desc()).all()
 
         result = [_job_list_item(job) for job in jobs]
