@@ -65,6 +65,87 @@ OAUTH_PROVIDERS = {
 }
 
 
+def _merge_hf_cv_autofill_with_local(hf, local):
+    """
+    Start from offline/local parser output, then overlay HF fields only where HF
+    has non-empty values. Avoids sparse HF payloads (e.g. only name + email)
+    replacing richer local extraction (phone, education, skills, experience).
+    """
+    out = dict(local) if isinstance(local, dict) else {}
+    if not isinstance(hf, dict):
+        return out
+    for k, v in hf.items():
+        if v is None:
+            continue
+        if isinstance(v, str):
+            if v.strip():
+                out[k] = v
+        elif isinstance(v, list):
+            if len(v) > 0:
+                out[k] = v
+        elif isinstance(v, dict):
+            if len(v) > 0:
+                out[k] = v
+        else:
+            out[k] = v
+    return out
+
+
+def _summarize_cv_fields(d):
+    """Compact summary for cv_parse_debug (without huge blobs)."""
+    if not isinstance(d, dict):
+        return {"_invalid": True}
+    cv_text = d.get("cv_text")
+    cv_text_len = len(cv_text) if isinstance(cv_text, str) else 0
+    edu = d.get("education")
+    sk = d.get("skills")
+    prev = d.get("previous_companies")
+
+    def nz_str(k):
+        v = d.get(k)
+        return bool(isinstance(v, str) and v.strip())
+
+    def nz_list(k):
+        v = d.get(k)
+        return isinstance(v, list) and len(v) > 0
+
+    prev_ok = nz_list("previous_companies") or (
+        isinstance(prev, str) and prev.strip()
+    )
+    return {
+        "cv_text_len": cv_text_len,
+        "cv_text_preview": (
+            (cv_text[:280] + "…") if cv_text_len > 280 else (cv_text or "")
+        ) if isinstance(cv_text, str) else None,
+        "fields": {
+            "full_name": nz_str("full_name"),
+            "email": nz_str("email"),
+            "phone": nz_str("phone"),
+            "education_non_empty": nz_list("education"),
+            "education_item_count": len(edu) if isinstance(edu, list) else 0,
+            "skills_non_empty": nz_list("skills"),
+            "skills_item_count": len(sk) if isinstance(sk, list) else 0,
+            "experience": nz_str("experience"),
+            "position": nz_str("position"),
+            "previous_companies": bool(prev_ok),
+        },
+        "parser_error": d.get("error"),
+    }
+
+
+def _cv_parse_debug_enabled():
+    """Set CV_PARSE_DEBUG=1 in .env to always attach; CV_PARSE_DEBUG=0 to disable."""
+    raw = (os.environ.get("CV_PARSE_DEBUG") or "").strip().lower()
+    if raw in ("0", "false", "no", "off"):
+        return False
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    try:
+        return bool(current_app and current_app.debug)
+    except RuntimeError:
+        return False
+
+
 def init_auth_routes(app):
 
     enrollment_schema = EnrollmentSchema()
@@ -1149,14 +1230,59 @@ def init_auth_routes(app):
                     mapped_data["cv_text"] = result["cv_text"]
                 if "extraction_debug" in result:
                     mapped_data["extraction_metadata"] = result["extraction_debug"]
-                
+
+                hf_before_local = dict(mapped_data)
+
+                # Always merge local (regex + hybrid) extraction with HF: HF wins per-field
+                # when non-empty; otherwise keep local so sparse HF never drops phone/education/etc.
+                # Use bytes captured above — do not re-read ``cv_file`` after ``read()``.
+                local_data = AIParser.extract_cv_data_from_bytes(
+                    file_content, filename or "cv.pdf"
+                )
+                mapped_data = _merge_hf_cv_autofill_with_local(
+                    mapped_data,
+                    local_data if isinstance(local_data, dict) else {},
+                )
+
+                if _cv_parse_debug_enabled():
+                    mapped_data["cv_parse_debug"] = {
+                        "path": "hf_then_merge_local",
+                        "analysis_service_url": AnalysisServiceClient._base_url()
+                        or "(unset — set ANALYSIS_SERVICE_URL)",
+                        "hf_analysis_id": analysis_id,
+                        "file": {
+                            "filename": filename,
+                            "size_bytes": len(file_content or b""),
+                        },
+                        "summary_after_hf_map": _summarize_cv_fields(hf_before_local),
+                        "summary_local_only": _summarize_cv_fields(
+                            local_data if isinstance(local_data, dict) else {}
+                        ),
+                        "summary_merged": _summarize_cv_fields(mapped_data),
+                    }
+
                 return jsonify(mapped_data), 200
                 
             except Exception as e:
                 current_app.logger.warning(f"HF unified extraction failed, falling back to local: {e}")
-                if hasattr(cv_file, "seek"):
-                    cv_file.seek(0)
-                return jsonify(AIParser.extract_cv_data(cv_file)), 200
+                local_payload = AIParser.extract_cv_data_from_bytes(
+                    file_content, filename or "cv.pdf"
+                )
+                if not isinstance(local_payload, dict):
+                    local_payload = {"error": "invalid local parse result"}
+                if _cv_parse_debug_enabled():
+                    local_payload["cv_parse_debug"] = {
+                        "path": "local_only_hf_failed",
+                        "analysis_service_url": AnalysisServiceClient._base_url()
+                        or "(unset — set ANALYSIS_SERVICE_URL)",
+                        "hf_error": str(e),
+                        "file": {
+                            "filename": filename,
+                            "size_bytes": len(file_content or b""),
+                        },
+                        "summary_local_only": _summarize_cv_fields(local_payload),
+                    }
+                return jsonify(local_payload), 200
 
             # If enhanced parsing succeeded, still try to get AI analysis for additional insights
             if extracted_data and not extracted_data.get("error"):

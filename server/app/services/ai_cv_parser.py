@@ -12,6 +12,32 @@ logger = logging.getLogger(__name__)
 
 _analyzer = None
 
+
+def _merge_autofill_overlay_non_empty(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Keep rich regex/offline fields; overlay keys from AI only when overlay has a
+    non-empty value. Prevents parsed_data from wiping phone/skills/education with
+    "" or [] when AI returns a partial schema.
+    """
+    out = dict(base) if isinstance(base, dict) else {}
+    if not isinstance(overlay, dict):
+        return out
+    for k, v in overlay.items():
+        if v is None:
+            continue
+        if isinstance(v, str):
+            if v.strip():
+                out[k] = v
+        elif isinstance(v, list):
+            if len(v) > 0:
+                out[k] = v
+        elif isinstance(v, dict):
+            if len(v) > 0:
+                out[k] = v
+        else:
+            out[k] = v
+    return out
+
 def _get_analyzer():
     """Lazy-load HybridResumeAnalyzer so app starts without loading spaCy/SentenceTransformer."""
     global _analyzer
@@ -32,6 +58,28 @@ class _AnalyzerProxy:
 analyzer = _AnalyzerProxy()
 
 class AIParser:
+
+    @staticmethod
+    def extract_cv_data_from_bytes(
+        file_content: bytes, filename: str, job_id: int = 0
+    ) -> Dict[str, Any]:
+        """
+        Parse CV from raw bytes. Use this after ``request.files['cv'].read()`` so local
+        extraction always sees the full file.
+        """
+        from io import BytesIO
+        from werkzeug.datastructures import FileStorage
+
+        if not file_content:
+            logger.warning("extract_cv_data_from_bytes: empty upload")
+            return {"cv_text": "", "error": "Empty file"}
+
+        stream = BytesIO(file_content)
+        fs = FileStorage(
+            stream=stream,
+            filename=(filename or "cv.pdf").strip() or "cv.pdf",
+        )
+        return AIParser.extract_cv_data(fs, job_id=job_id)
 
     @staticmethod
     def extract_cv_data(cv_file, job_id: int = 0) -> Dict[str, Any]:
@@ -56,8 +104,12 @@ class AIParser:
             # Step 2: Offline fallback extraction
             fallback_data = AIParser.offline_extract(cv_text)
 
-            # Step 3: Merge AI results with fallback (AI overrides fallback if present)
-            merged = {**fallback_data, **parsed_data} if parsed_data else fallback_data
+            # Step 3: Merge AI results with fallback (AI overlays only non-empty values)
+            merged = (
+                _merge_autofill_overlay_non_empty(fallback_data, parsed_data)
+                if parsed_data
+                else fallback_data
+            )
             merged["cv_text"] = cv_text
 
             # Ensure all expected keys exist

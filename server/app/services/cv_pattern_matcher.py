@@ -199,10 +199,13 @@ class CVPatternMatcher:
         m = re.search(pattern, t, re.I)
         return (m.group(0) or "").strip() if m else ""
 
-        # Rule 1: Look for "KATEKO ROSE MABUNDA" (all caps, start of document)
+    def _guess_name(self, t: str) -> str:
+        """Best-effort name extraction from top CV lines."""
+        lines = [ln.strip() for ln in (t or "").splitlines() if ln.strip()]
+
+        # Rule 1: Look for all-caps full name at the very top.
         if lines:
             first_line = lines[0]
-            # If first line is all caps and 2-4 words, it's likely a name
             if re.match(r'^[A-Z][A-Z\s\-]{5,50}$', first_line) and 2 <= len(first_line.split()) <= 5:
                 return first_line.title()
                 
@@ -228,6 +231,8 @@ class CVPatternMatcher:
                 if "south africa" in ln.lower() or "johannesburg" in ln.lower() or "capetown" in ln.lower():
                     continue
                 return ln
+
+        return ""
 
     def _extract_section_text(self, t: str, headers: List[str], stop_words: List[str]) -> str:
         """Extract text between section headers"""

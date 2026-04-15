@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../providers/theme_provider.dart';
 import 'job_details_page.dart';
 
 class SavedJobsScreen extends StatefulWidget {
@@ -18,6 +20,15 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
 
   final Color primaryColor = Color(0xFF991A1A);
   final Color strokeColor = Color(0xFFC10D00);
+  bool _isDarkMode = true;
+  Color get _textPrimary =>
+      _isDarkMode ? Colors.white : const Color(0xFF090812);
+  Color get _textSecondary => _isDarkMode
+      ? Colors.white70
+      : const Color(0xFF090812).withValues(alpha: 0.72);
+  Color get _textSoft => _isDarkMode
+      ? Colors.white54
+      : const Color(0xFF090812).withValues(alpha: 0.58);
 
   @override
   void initState() {
@@ -260,13 +271,15 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    _isDarkMode = themeProvider.isDarkMode;
     return Scaffold(
-      backgroundColor: Color(0xFF1a1a1a),
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(Icons.arrow_back, color: _textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
@@ -274,14 +287,14 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
           style: GoogleFonts.poppins(
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: Colors.white,
+            color: _textPrimary,
           ),
         ),
       ),
       body: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/dark.png'),
+            image: AssetImage(themeProvider.backgroundImage),
             fit: BoxFit.cover,
           ),
         ),
@@ -298,7 +311,7 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
                       children: [
                         Icon(
                           Icons.favorite_border,
-                          color: Colors.white54,
+                          color: _textSoft,
                           size: 64,
                         ),
                         SizedBox(height: 16),
@@ -306,7 +319,7 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
                           'No saved jobs yet',
                           style: GoogleFonts.poppins(
                             fontSize: 18,
-                            color: Colors.white70,
+                            color: _textSecondary,
                           ),
                         ),
                         SizedBox(height: 8),
@@ -314,7 +327,7 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
                           'Tap the heart icon on jobs to save them here.',
                           style: GoogleFonts.poppins(
                             fontSize: 14,
-                            color: Colors.white54,
+                            color: _textSoft,
                           ),
                           textAlign: TextAlign.center,
                         ),

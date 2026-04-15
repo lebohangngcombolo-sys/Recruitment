@@ -4,7 +4,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../providers/theme_provider.dart';
 import '../../utils/api_endpoints.dart';
 import '../../services/auth_service.dart';
 import '../../services/candidate_service.dart';
@@ -29,16 +31,23 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
   static const int _rowsPerPage = 6;
   static const String _resultsCacheKey = 'candidate_assessment_results_cache';
 
+  bool _isDarkMode = true;
   // Enrollment-style Theme
-  final Color _primaryDark = Colors.transparent; // Background
-  final Color _cardDark = Colors.black.withOpacity(0.55); // Card background
+  Color get _primaryDark => Colors.transparent; // Background
+  Color get _cardDark => _isDarkMode
+      ? Colors.black.withValues(alpha: 0.55)
+      : Colors.white.withValues(alpha: 0.82); // Card background
   final Color _accentRed = const Color(0xFFC10D00); // Main red
   final Color _accentBlue = const Color(0xFFC10D00); // Light red
-  final Color _accentGreen = Color(0xFF43A047); // Success
-  final Color _textPrimary = Colors.white; // Main text
-  final Color _textSecondary = Colors.grey.shade300; // Secondary text
-  final Color _surfaceOverlay =
-      Colors.white.withOpacity(0.08); // subtle overlay
+  final Color _accentGreen = const Color(0xFF43A047); // Success
+  Color get _textPrimary =>
+      _isDarkMode ? Colors.white : const Color(0xFF090812); // Main text
+  Color get _textSecondary => _isDarkMode
+      ? Colors.grey.shade300
+      : const Color(0xFF090812).withValues(alpha: 0.72); // Secondary text
+  Color get _surfaceOverlay => _isDarkMode
+      ? Colors.white.withValues(alpha: 0.08)
+      : const Color(0xFF090812).withValues(alpha: 0.10); // subtle overlay
 
   int get _totalPages => _filteredApplications.isEmpty
       ? 1
@@ -57,11 +66,26 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
     return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 
+  bool _hasRecordedAssessment(dynamic app) {
+    final status = (app['status']?.toString() ?? '').toLowerCase().trim();
+    if (status == 'assessment_submitted' ||
+        status == 'assessment' ||
+        status == 'disqualified') {
+      return true;
+    }
+    final result = app['assessment_result'];
+    if (result is Map && result.isNotEmpty) return true;
+    // Keep this as a final fallback for legacy payloads.
+    return _safeDouble(app['assessment_score']) > 0;
+  }
+
   String _resultStatus(dynamic app) {
+    if (!_hasRecordedAssessment(app)) return 'Pending';
     final assessmentScore = _safeDouble(app['assessment_score']);
     final finalScore = _safeDouble(
       app['scoring_breakdown']?['overall'] ?? app['final_score'],
     );
+    if (assessmentScore <= 0 && finalScore <= 0) return 'Pending';
     final effective = finalScore > 0 ? finalScore : assessmentScore;
     return effective >= 60 ? 'Passed' : 'Failed';
   }
@@ -152,11 +176,17 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
         contentColor = Colors.white;
         fillAlpha = 0.88;
         break;
+      case 'Pending':
+        tone = const Color(0xFFB58900);
+        icon = Icons.hourglass_top_rounded;
+        contentColor = _isDarkMode ? Colors.white : const Color(0xFF090812);
+        fillAlpha = _isDarkMode ? 0.88 : 0.35;
+        break;
       default:
-        tone = _accentRed;
-        icon = Icons.cancel_outlined;
-        contentColor = Colors.white;
-        fillAlpha = 0.88;
+        tone = const Color(0xFFB58900);
+        icon = Icons.hourglass_top_rounded;
+        contentColor = _isDarkMode ? Colors.white : const Color(0xFF090812);
+        fillAlpha = _isDarkMode ? 0.88 : 0.35;
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -560,10 +590,8 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
         if (filtered.isNotEmpty) {
           data = filtered;
         } else {
-          // Fallback to non-empty results list instead of hard empty UI.
-          data = data
-              .where((a) => (a['assessment_score'] ?? 0).toDouble() > 0)
-              .toList();
+          // Fallback to any recorded assessment result instead of hard empty UI.
+          data = data.where(_hasRecordedAssessment).toList();
         }
       }
       if (!mounted) return;
@@ -606,12 +634,12 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
             final id = raw is int ? raw : int.tryParse(raw?.toString() ?? '');
             return id == widget.applicationId;
           }).toList();
-          // If that specific record is unavailable/stale, show available results.
+          // If that specific record is unavailable/stale, show recorded assessments.
           data = filtered.isNotEmpty
               ? filtered
-              : allData
-                  .where((a) => (a['assessment_score'] ?? 0).toDouble() > 0)
-                  .toList();
+              : allData.where(_hasRecordedAssessment).toList();
+        } else {
+          data = allData.where(_hasRecordedAssessment).toList();
         }
         if (!mounted) return;
         setState(() {
@@ -1194,16 +1222,18 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
     );
   }
 
-  Widget _buildBackground(Widget child) {
+  Widget _buildBackground(Widget child, String backgroundImage) {
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         image: DecorationImage(
-          image: AssetImage("assets/images/dark.png"),
+          image: AssetImage(backgroundImage),
           fit: BoxFit.cover,
         ),
       ),
       child: Container(
-        color: Colors.black.withValues(alpha: 0.35),
+        color: _isDarkMode
+            ? Colors.black.withValues(alpha: 0.35)
+            : Colors.white.withValues(alpha: 0.20),
         child: child,
       ),
     );
@@ -1211,6 +1241,8 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    _isDarkMode = themeProvider.isDarkMode;
     return Scaffold(
       backgroundColor: _primaryDark,
       body: _buildBackground(
@@ -1236,8 +1268,8 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
                           color: _surfaceOverlay,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(Icons.arrow_back,
-                            size: 24, color: Colors.white),
+                        child: Icon(Icons.arrow_back,
+                            size: 24, color: _textPrimary),
                       ),
                       onPressed: () {
                         if (Navigator.canPop(context)) {
@@ -1450,6 +1482,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
                                           DataColumn(label: Text('Action')),
                                         ],
                                         rows: _pagedApplications.map((app) {
+                                          final hasRecorded = _hasRecordedAssessment(app);
                                           final assessment = _safeDouble(app['assessment_score']);
                                           final cv = _safeDouble(app['cv_score']);
                                           final finalWeighted = _safeDouble(
@@ -1470,7 +1503,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
                                               ),
                                               DataCell(
                                                 Text(
-                                                  assessment > 0
+                                                  hasRecorded
                                                       ? '${assessment.toStringAsFixed(0)}%'
                                                       : 'Pending',
                                                   style: GoogleFonts.inter(color: _textPrimary),
@@ -1497,8 +1530,15 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
                                                   icon: const Icon(Icons.visibility_outlined, size: 16),
                                                   label: const Text('View Results'),
                                                   style: TextButton.styleFrom(
-                                                    foregroundColor: Colors.white,
-                                                    backgroundColor: Colors.white.withValues(alpha: 0.06),
+                                                    foregroundColor: _isDarkMode
+                                                        ? Colors.white
+                                                        : const Color(0xFF090812),
+                                                    backgroundColor: _isDarkMode
+                                                        ? Colors.white.withValues(alpha: 0.08)
+                                                        : Colors.white.withValues(alpha: 0.95),
+                                                    side: BorderSide(
+                                                      color: _accentRed.withValues(alpha: 0.45),
+                                                    ),
                                                     padding: const EdgeInsets.symmetric(
                                                       horizontal: 12,
                                                       vertical: 8,
@@ -1566,6 +1606,7 @@ class _AssessmentResultsPageState extends State<AssessmentResultsPage> {
             ],
           ),
         ),
+        themeProvider.backgroundImage,
       ),
     );
   }

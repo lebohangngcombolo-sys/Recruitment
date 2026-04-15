@@ -1100,7 +1100,9 @@ def submit_assessment(application_id):
             violations = JobService.evaluate_knockout_rules(job, candidate)
 
         application.knockout_rule_violations = violations
-        application.status = "rejected" if violations else "assessment"
+        # Keep candidate-facing status aligned with dashboard/applications filters.
+        # Use assessment_submitted once answers are persisted.
+        application.status = "rejected" if violations else "assessment_submitted"
         application.assessed_date = datetime.utcnow()
         db.session.commit()
 

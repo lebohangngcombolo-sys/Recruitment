@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/candidate_service.dart';
 import '../../utils/api_endpoints.dart';
@@ -36,8 +38,24 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
 
   static const Color _accentRed = Color(0xFFC10D00);
   static const Color _actionBlue = Color(0xFF6EA8FE);
-  static const Color _cardDark = Color(0xFF252525);
-  static const Color _borderLight = Color(0xFF3A3A3A);
+  bool _isDarkMode = true;
+
+  Color get _textPrimary =>
+      _isDarkMode ? Colors.white : const Color(0xFF090812);
+  Color get _textSecondary => _isDarkMode
+      ? Colors.white70
+      : const Color(0xFF090812).withValues(alpha: 0.72);
+  Color get _textSoft => _isDarkMode
+      ? Colors.white54
+      : const Color(0xFF090812).withValues(alpha: 0.58);
+  Color get _cardBg => _isDarkMode
+      ? const Color(0xFF252525).withValues(alpha: 0.6)
+      : Colors.white.withValues(alpha: 0.78);
+  Color get _tabBg =>
+      _isDarkMode ? Colors.white.withValues(alpha: 0.08) : Colors.black12;
+  Color get _borderLight => _isDarkMode
+      ? const Color(0xFF3A3A3A)
+      : const Color(0xFF090812).withValues(alpha: 0.2);
 
   @override
   void initState() {
@@ -64,6 +82,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
     final status = raw?.toLowerCase().trim();
     if (status == null || status.isEmpty) return false;
     return status == 'applied' ||
+        status == 'assessment' ||
         status == 'assessment_submitted' ||
         status == 'disqualified' ||
         status.contains('offer');
@@ -120,17 +139,22 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
       applications.where((a) => _showInRejected(_toDisplayStatus(a))).length;
 
   Future<void> _fetchApplications() async {
-    setState(() => loading = true);
+    final shouldShowBlockingLoader = applications.isEmpty;
+    if (shouldShowBlockingLoader && mounted) {
+      setState(() => loading = true);
+    }
     final role = await AuthService.getRole();
     if (role != 'candidate') {
-      if (mounted) setState(() => loading = false);
+      if (mounted && shouldShowBlockingLoader) setState(() => loading = false);
       return;
     }
     try {
       // Use current token from storage so we don't use a stale token from the dashboard URL
       final token = await AuthService.getAccessToken() ?? widget.token;
       if (token.isEmpty && mounted) {
-        setState(() => applications = []);
+        if (applications.isEmpty) {
+          setState(() => applications = []);
+        }
         return;
       }
       final apps = await CandidateService.getApplications(token);
@@ -148,9 +172,9 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
       _cachedTrackableApplications = List<Map<String, dynamic>>.from(trackable);
     } catch (e) {
       debugPrint("Error fetching applications: $e");
-      if (mounted) setState(() => applications = []);
+      if (mounted && applications.isEmpty) setState(() => applications = []);
     } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted && shouldShowBlockingLoader) setState(() => loading = false);
     }
   }
 
@@ -209,6 +233,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
 
   static bool _assessmentCompleted(Map<String, dynamic> app) {
     final status = app['status']?.toString() ?? '';
+    if (status == 'assessment') return true;
     if (status == 'assessment_submitted') return true;
     final result = app['assessment_result'];
     return result != null && result is Map && result.isNotEmpty;
@@ -257,12 +282,14 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    _isDarkMode = themeProvider.isDarkMode;
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage("assets/images/dark.png"),
+            image: AssetImage(themeProvider.backgroundImage),
             fit: BoxFit.cover,
           ),
         ),
@@ -289,7 +316,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+            icon: Icon(Icons.arrow_back, color: _textPrimary, size: 28),
             onPressed: () async {
               if (context.canPop()) {
                 context.pop();
@@ -310,12 +337,12 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
               style: GoogleFonts.poppins(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.white,
+                color: _textPrimary,
               ),
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white, size: 24),
+            icon: Icon(Icons.refresh, color: _textPrimary, size: 24),
             onPressed: loading ? null : _fetchApplications,
           ),
         ],
@@ -339,8 +366,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
           return Padding(
             padding: const EdgeInsets.only(right: 12),
             child: Material(
-              color:
-                  selected ? _accentRed : Colors.white.withValues(alpha: 0.08),
+              color: selected ? _accentRed : _tabBg,
               borderRadius: BorderRadius.circular(8),
               child: InkWell(
                 onTap: () => setState(() {
@@ -354,7 +380,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: selected ? _accentRed : Colors.white24,
+                      color: selected ? _accentRed : _borderLight,
                       width: 1,
                     ),
                   ),
@@ -366,7 +392,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                         style: GoogleFonts.poppins(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                          color: _textPrimary,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -374,7 +400,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                         '${tabCounts[i]}',
                         style: GoogleFonts.poppins(
                           fontSize: 13,
-                          color: Colors.white70,
+                          color: _textSecondary,
                         ),
                       ),
                     ],
@@ -410,20 +436,20 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.work_off_outlined, size: 56, color: Colors.white38),
+            Icon(Icons.work_off_outlined, size: 56, color: _textSoft),
             const SizedBox(height: 16),
             Text(
               _emptyStateTitle(),
               style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: _textPrimary,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               _emptyStateSubtitle(),
-              style: GoogleFonts.poppins(fontSize: 14, color: Colors.white54),
+              style: GoogleFonts.poppins(fontSize: 14, color: _textSoft),
             ),
           ],
         ),
@@ -463,7 +489,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
               Container(
                 width: tableWidth,
                 decoration: BoxDecoration(
-                  color: _cardDark.withValues(alpha: 0.6),
+                  color: _cardBg,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: _borderLight, width: 1),
                   boxShadow: [
@@ -484,13 +510,13 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                       headingTextStyle: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: Colors.white70,
+                        color: _textSecondary,
                       ),
                       dataRowColor: WidgetStateProperty.resolveWith((states) {
                         return Colors.transparent;
                       }),
                       dataTextStyle: GoogleFonts.poppins(
-                          fontSize: 14, color: Colors.white),
+                          fontSize: 14, color: _textPrimary),
                       dataRowMinHeight: 44,
                       dataRowMaxHeight: 50,
                       border: TableBorder(
@@ -577,7 +603,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                                 child: TextButton(
                                   onPressed: () => _openDrawer(app),
                                   style: TextButton.styleFrom(
-                                    foregroundColor: Colors.white,
+                                    foregroundColor: _textPrimary,
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 8,
                                       vertical: 6,
@@ -588,7 +614,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                                     style: GoogleFonts.poppins(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w500,
-                                      color: Colors.white,
+                                      color: _textPrimary,
                                     ),
                                   ),
                                 ),
@@ -612,7 +638,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                         'Showing ${start + 1}-${end} of ${rows.length}',
                         style: GoogleFonts.poppins(
                           fontSize: 12,
-                          color: Colors.white70,
+                          color: _textSecondary,
                         ),
                       ),
                       const Spacer(),
@@ -629,7 +655,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                           ),
                         ),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
+                          foregroundColor: _textPrimary,
                           side: BorderSide(
                             color: _currentPage > 0
                                 ? Colors.white30
@@ -644,7 +670,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                         '${_currentPage + 1} / $totalPages',
                         style: GoogleFonts.poppins(
                           fontSize: 12,
-                          color: Colors.white70,
+                          color: _textSecondary,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -662,7 +688,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                           ),
                         ),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.white,
+                          foregroundColor: _textPrimary,
                           side: BorderSide(
                             color: _currentPage < totalPages - 1
                                 ? Colors.white30
@@ -686,26 +712,57 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
   Widget _buildStatusPill(_DisplayStatus status) {
     String label;
     Color bg;
+    Color border;
     switch (status) {
       case _DisplayStatus.inProgress:
         label = 'In progress';
-        bg = Colors.grey.shade700.withValues(alpha: 0.4);
+        if (_isDarkMode) {
+          bg = Colors.grey.shade700.withValues(alpha: 0.50);
+          border = Colors.grey.shade500.withValues(alpha: 0.85);
+        } else {
+          bg = const Color(0xFFE5E7EB);
+          border = const Color(0xFF9CA3AF);
+        }
         break;
       case _DisplayStatus.applied:
         label = 'Applied';
-        bg = Colors.amber.shade700.withValues(alpha: 0.25);
+        if (_isDarkMode) {
+          bg = Colors.amber.shade700.withValues(alpha: 0.35);
+          border = Colors.amber.shade500.withValues(alpha: 0.85);
+        } else {
+          bg = const Color(0xFFFDE68A);
+          border = const Color(0xFFF59E0B);
+        }
         break;
       case _DisplayStatus.interview:
         label = 'Interview';
-        bg = Colors.blue.shade700.withValues(alpha: 0.25);
+        if (_isDarkMode) {
+          bg = Colors.blue.shade700.withValues(alpha: 0.35);
+          border = Colors.blue.shade400.withValues(alpha: 0.85);
+        } else {
+          bg = const Color(0xFFBFDBFE);
+          border = const Color(0xFF2563EB);
+        }
         break;
       case _DisplayStatus.offer:
         label = 'Offer';
-        bg = Colors.green.shade700.withValues(alpha: 0.25);
+        if (_isDarkMode) {
+          bg = Colors.green.shade700.withValues(alpha: 0.35);
+          border = Colors.green.shade400.withValues(alpha: 0.85);
+        } else {
+          bg = const Color(0xFFBBF7D0);
+          border = const Color(0xFF16A34A);
+        }
         break;
       case _DisplayStatus.rejected:
         label = 'Unsuccessful';
-        bg = Colors.red.shade700.withValues(alpha: 0.25);
+        if (_isDarkMode) {
+          bg = Colors.red.shade700.withValues(alpha: 0.35);
+          border = Colors.red.shade400.withValues(alpha: 0.85);
+        } else {
+          bg = const Color(0xFFFECACA);
+          border = const Color(0xFFDC2626);
+        }
         break;
     }
     return Container(
@@ -713,14 +770,14 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: bg.withValues(alpha: 0.6)),
+        border: Border.all(color: border),
       ),
       child: Text(
         label,
         style: GoogleFonts.poppins(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: Colors.white,
+          color: _isDarkMode ? Colors.white : const Color(0xFF090812),
         ),
       ),
     );
@@ -756,7 +813,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
             shadowColor: Colors.black54,
             child: Container(
               decoration: BoxDecoration(
-                color: _cardDark,
+                color: _cardBg,
                 border: Border(left: BorderSide(color: _borderLight)),
                 boxShadow: [
                   BoxShadow(
@@ -859,7 +916,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                                       'CV uploaded',
                                       style: GoogleFonts.poppins(
                                         fontSize: 14,
-                                        color: Colors.white70,
+                                        color: _textSecondary,
                                       ),
                                     ),
                                   ),
@@ -890,10 +947,6 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                                   ),
                                 ],
                               ),
-                            ],
-                            if (app['cv_analysis'] != null) ...[
-                              const SizedBox(height: 24),
-                              _buildCVAnalysisSection(app['cv_analysis']),
                             ],
                           ],
                         ],
@@ -949,7 +1002,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                   style: GoogleFonts.poppins(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                    color: _textPrimary,
                   ),
                 ),
               ],
@@ -957,7 +1010,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
             const SizedBox(height: 8),
             Text(
               '$type — $dateLabel',
-              style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70),
+              style: GoogleFonts.poppins(fontSize: 13, color: _textSecondary),
             ),
             if (meetingLink != null && meetingLink.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -991,7 +1044,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                   style: GoogleFonts.poppins(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: _textPrimary,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -999,7 +1052,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                   app['company']?.toString() ?? '—',
                   style: GoogleFonts.poppins(
                     fontSize: 14,
-                    color: Colors.white70,
+                    color: _textSecondary,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -1007,14 +1060,14 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                   'Applied: ${_dateApplied(app)}',
                   style: GoogleFonts.poppins(
                     fontSize: 13,
-                    color: Colors.white54,
+                    color: _textSoft,
                   ),
                 ),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.close, color: Colors.white, size: 24),
+            icon: Icon(Icons.close, color: _textPrimary, size: 24),
             onPressed: _closeDrawer,
           ),
         ],
@@ -1074,7 +1127,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
             style: GoogleFonts.poppins(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: Colors.white70,
+              color: _textSecondary,
             ),
           ),
           const SizedBox(height: 8),
@@ -1097,7 +1150,7 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
       style: GoogleFonts.poppins(
         fontSize: 13,
         fontWeight: FontWeight.w600,
-        color: Colors.white70,
+        color: _textSecondary,
       ),
     );
   }
@@ -1115,144 +1168,10 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
           '$label: ${completed ? "Completed" : (label == "CV Upload" ? "Missing" : "Incomplete")}',
           style: GoogleFonts.poppins(
             fontSize: 14,
-            color: completed ? Colors.white : Colors.white70,
+            color: completed ? _textPrimary : _textSecondary,
           ),
         ),
       ],
     );
   }
-
-  Widget _buildCVAnalysisSection(Map<String, dynamic> analysis) {
-    final status = analysis['status']?.toString() ?? 'pending';
-    final result = analysis['result'] is Map
-        ? analysis['result'] as Map<String, dynamic>
-        : {};
-    final advice = result['advice'] ??
-        result['feedback'] ??
-        result['analysis_summary'] ??
-        '';
-    final score = analysis['overall_score'] ?? 0.0;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.auto_awesome, color: Colors.amber.shade300, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                'AI CV Feedback & Advice',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.amber.shade300,
-                ),
-              ),
-              const Spacer(),
-              if (status == 'completed')
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${(score * 10).toStringAsFixed(0)}/10',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green.shade300,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (status == 'processing' || status == 'pending')
-            Row(
-              children: [
-                SizedBox(
-                  width: 12,
-                  height: 12,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Analysis in progress...',
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontStyle: FontStyle.italic,
-                    color: Colors.white60,
-                  ),
-                ),
-              ],
-            )
-          else if (status == 'failed')
-            Text(
-              'Analysis failed or not available for this CV.',
-              style: GoogleFonts.poppins(fontSize: 13, color: Colors.white54),
-            )
-          else ...[
-            Text(
-              advice.isEmpty
-                  ? 'Your CV has been successfully processed against this job description.'
-                  : advice,
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                height: 1.5,
-                color: Colors.white.withValues(alpha: 0.9),
-              ),
-            ),
-            if (result['strengths'] != null &&
-                (result['strengths'] as List).isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(
-                'Key Strengths:',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white70,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: (result['strengths'] as List)
-                    .map((s) => Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                                color: Colors.blue.withValues(alpha: 0.2)),
-                          ),
-                          child: Text(
-                            s.toString(),
-                            style: GoogleFonts.poppins(
-                                fontSize: 11, color: Colors.blue.shade200),
-                          ),
-                        ))
-                    .toList(),
-              ),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
 }
-
-/// Full-screen in-app CV preview using backend proxy (avoids Cloudinary 401).

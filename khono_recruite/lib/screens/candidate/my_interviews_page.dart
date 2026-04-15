@@ -1,7 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../providers/theme_provider.dart';
 import '../../services/candidate_service.dart';
 
 class MyInterviewsPage extends StatefulWidget {
@@ -24,6 +26,19 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
 
   static const Color _primaryRed = Color(0xFF991A1A);
   static const Color _accentRed = Color(0xFFC10D00);
+  bool _isDarkMode = true;
+
+  Color get _textPrimary =>
+      _isDarkMode ? Colors.white : const Color(0xFF090812);
+  Color get _textSecondary => _isDarkMode
+      ? Colors.white70
+      : const Color(0xFF090812).withValues(alpha: 0.72);
+  Color get _textSoft => _isDarkMode
+      ? Colors.white54
+      : const Color(0xFF090812).withValues(alpha: 0.58);
+  Color get _surfaceBg => _isDarkMode
+      ? Colors.white.withValues(alpha: 0.08)
+      : const Color(0xFF090812).withValues(alpha: 0.08);
 
   @override
   void initState() {
@@ -259,16 +274,22 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    _isDarkMode = themeProvider.isDarkMode;
     return Scaffold(
-      backgroundColor: const Color(0xFF0D0D0D),
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
           Positioned.fill(
             child: Image.asset(
-              'assets/images/dark.png',
+              themeProvider.backgroundImage,
               fit: BoxFit.cover,
             ),
           ),
+          if (_isDarkMode)
+            Positioned.fill(
+              child: Container(color: Colors.black.withValues(alpha: 0.30)),
+            ),
           SafeArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -300,9 +321,10 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
           children: [
             IconButton(
               onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 24),
+              icon:
+                  Icon(Icons.arrow_back_rounded, color: _textPrimary, size: 24),
               style: IconButton.styleFrom(
-                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                backgroundColor: _surfaceBg,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
             ),
@@ -317,18 +339,20 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
                     style: GoogleFonts.poppins(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                      color: _textPrimary,
                     ),
                   ),
                   if (_upcomingCount > 0)
                     Text(
                       '$_upcomingCount upcoming',
-                      style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70),
+                      style:
+                          GoogleFonts.poppins(fontSize: 12, color: _textSecondary),
                     )
                   else if (_interviews.isNotEmpty)
                     Text(
                       _scheduledCount > 0 ? '$_scheduledCount scheduled' : '${_interviews.length} interviews',
-                      style: GoogleFonts.poppins(fontSize: 12, color: Colors.white70),
+                      style:
+                          GoogleFonts.poppins(fontSize: 12, color: _textSecondary),
                     ),
                 ],
               ),
@@ -351,9 +375,10 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
         children: [
           IconButton(
             onPressed: () => setState(() => _showDetailView = false),
-            icon: const Icon(Icons.arrow_back_rounded, color: Colors.white, size: 24),
+            icon:
+                Icon(Icons.arrow_back_rounded, color: _textPrimary, size: 24),
             style: IconButton.styleFrom(
-              backgroundColor: Colors.white.withValues(alpha: 0.08),
+              backgroundColor: _surfaceBg,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
           ),
@@ -368,7 +393,7 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
                   style: GoogleFonts.poppins(
                     fontSize: 20,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                    color: _textPrimary,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -389,7 +414,7 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
                 style: GoogleFonts.poppins(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  color: Colors.white,
+                  color: _textPrimary,
                 ),
               ),
             ),
@@ -409,11 +434,12 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
             Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.06),
+                color: _surfaceBg,
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                border: Border.all(color: _textSoft.withValues(alpha: 0.3)),
               ),
-              child: Icon(Icons.event_available_rounded, size: 56, color: Colors.white.withValues(alpha: 0.5)),
+              child: Icon(Icons.event_available_rounded,
+                  size: 56, color: _textSoft.withValues(alpha: 0.85)),
             ),
             const SizedBox(height: 24),
             Text(
@@ -421,14 +447,15 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
               style: GoogleFonts.poppins(
                 fontSize: 20,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: _textPrimary,
               ),
             ),
             const SizedBox(height: 12),
             Text(
               'When a hiring manager schedules an interview, it will appear here. You can accept or decline invites from this screen.',
               textAlign: TextAlign.center,
-              style: GoogleFonts.poppins(fontSize: 14, color: Colors.white60, height: 1.5),
+              style: GoogleFonts.poppins(
+                  fontSize: 14, color: _textSecondary, height: 1.5),
             ),
           ],
         ),
@@ -457,7 +484,7 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
               'Preparing your interviews',
               style: GoogleFonts.poppins(
                 fontSize: 14,
-                color: Colors.white70,
+                color: _textSecondary,
               ),
             ),
             const SizedBox(height: 20),
@@ -466,7 +493,7 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
                 fontSize: 13,
-                color: Colors.white70,
+                color: _textSecondary,
                 height: 1.5,
               ),
             ),
@@ -551,7 +578,7 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
         style: GoogleFonts.poppins(
           fontSize: 14,
           fontWeight: FontWeight.w600,
-          color: Colors.white70,
+          color: _textSecondary,
         ),
       ),
     );
@@ -585,10 +612,12 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
               decoration: BoxDecoration(
                 color: isNextUp
                     ? Colors.white.withValues(alpha: 0.12)
-                    : Colors.white.withValues(alpha: 0.08),
+                    : _surfaceBg,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: isNextUp ? _accentRed.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.12),
+                  color: isNextUp
+                      ? _accentRed.withValues(alpha: 0.4)
+                      : _textSoft.withValues(alpha: 0.3),
                   width: isNextUp ? 1.5 : 1,
                 ),
               ),
@@ -607,7 +636,7 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
                         ),
                         child: Icon(
                           upcoming ? Icons.video_call_rounded : Icons.event_note_rounded,
-                          color: upcoming ? _accentRed : Colors.white70,
+                          color: upcoming ? _accentRed : _textSecondary,
                           size: 20,
                         ),
                       ),
@@ -621,7 +650,7 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
                               style: GoogleFonts.poppins(
                                 fontSize: 17,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.white,
+                                color: _textPrimary,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -629,17 +658,20 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
                               children: [
                                 Text(
                                   _formatDate(scheduledTime),
-                                  style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70),
+                                  style: GoogleFonts.poppins(
+                                      fontSize: 13, color: _textSecondary),
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
                                   _formatTime(scheduledTime),
-                                  style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70),
+                                  style: GoogleFonts.poppins(
+                                      fontSize: 13, color: _textSecondary),
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
                                   '· $interviewType',
-                                  style: GoogleFonts.poppins(fontSize: 13, color: Colors.white54),
+                                  style:
+                                      GoogleFonts.poppins(fontSize: 13, color: _textSoft),
                                 ),
                               ],
                             ),
@@ -656,7 +688,10 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
                           ),
                           child: Text(
                             'Starts in $countdown',
-                            style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white),
+                            style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: _textPrimary),
                           ),
                         )
                       else if (isNextUp && !upcoming)
@@ -668,11 +703,14 @@ class _MyInterviewsPageState extends State<MyInterviewsPage> {
                           ),
                           child: Text(
                             'Past',
-                            style: GoogleFonts.poppins(fontSize: 11, color: Colors.white70, fontWeight: FontWeight.w500),
+                            style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                color: _textSecondary,
+                                fontWeight: FontWeight.w500),
                           ),
                         ),
                       const SizedBox(width: 8),
-                      Icon(Icons.chevron_right_rounded, color: Colors.white54, size: 24),
+                      Icon(Icons.chevron_right_rounded, color: _textSoft, size: 24),
                     ],
                   ),
                 ],

@@ -7,8 +7,6 @@ import 'screens/landing_page/splash_landing_page.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/auth/forgot_password_screen.dart';
-import 'screens/auth/verification_screen.dart';
-import 'screens/enrollment/enrollment_screen.dart';
 import 'screens/candidate/candidate_dashboard.dart';
 import 'screens/candidate/saved_application_screen.dart';
 import 'screens/candidate/jobs_applied_page.dart';
@@ -22,6 +20,7 @@ import 'screens/hr/hr_dashboard.dart';
 import 'screens/hiring_manager/hiring_manager_dashboard.dart';
 import 'screens/candidate/job_details_page.dart';
 import 'screens/candidate/redirect_to_assessment_page.dart';
+import 'screens/enrollment/enrollment_screen.dart';
 
 // Import services
 import 'services/auth_service.dart';
@@ -63,8 +62,7 @@ GoRouter _createAppRouter(
             path.startsWith('/login') ||
             path.startsWith('/register') ||
             path.startsWith('/forgot-password') ||
-            path.startsWith('/oauth-callback') ||
-            path.startsWith('/verify-email');
+            path.startsWith('/oauth-callback');
         if (!allowedUnauth) {
           return '/';
         }
@@ -109,23 +107,6 @@ GoRouter _createAppRouter(
           refreshToken: state.uri.queryParameters['refresh_token'],
           role: state.uri.queryParameters['role'],
           dashboard: state.uri.queryParameters['dashboard'],
-        ),
-      ),
-      GoRoute(
-        path: '/verify-email',
-        builder: (context, state) {
-          final email = state.uri.queryParameters['email'] ?? '';
-          final code = state.uri.queryParameters['code'];
-          return VerificationScreen(
-            email: email,
-            initialCode: code,
-          );
-        },
-      ),
-      GoRoute(
-        path: '/enrollment',
-        builder: (context, state) => EnrollmentScreen(
-          token: state.uri.queryParameters['token'] ?? '',
         ),
       ),
 
@@ -207,6 +188,12 @@ GoRouter _createAppRouter(
               int.tryParse(state.uri.queryParameters['applicationId'] ?? '0') ??
                   0,
           jobTitle: state.uri.queryParameters['jobTitle'],
+        ),
+      ),
+      GoRoute(
+        path: '/enrollment',
+        builder: (context, state) => EnrollmentScreen(
+          token: state.uri.queryParameters['token'] ?? '',
         ),
       ),
 
@@ -336,7 +323,8 @@ class _OAuthCallbackPageState extends State<OAuthCallbackPage> {
       'admin' => '/admin-dashboard?token=$encodedToken',
       'hiring_manager' => '/hiring-manager-dashboard?token=$encodedToken',
       'hr' => '/hr-dashboard?token=$encodedToken',
-      'candidate' when dashboard == '/enrollment' => '/enrollment?token=$encodedToken',
+      'candidate' when dashboard == '/enrollment' =>
+        '/enrollment?token=$encodedToken',
       _ => '/candidate-dashboard?token=$encodedToken',
     };
     context.go(nextPath);
