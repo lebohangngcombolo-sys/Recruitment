@@ -1943,7 +1943,7 @@ def submit_draft(draft_id):
 
         draft.is_draft = False
         draft.status = "screening"  # Stay in screening until assessment is submitted
-        draft.created_at = datetime.utcnow()
+        draft.updated_at = datetime.utcnow()
         db.session.commit()
         
         # Audit log
