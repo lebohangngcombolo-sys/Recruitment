@@ -166,6 +166,39 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   DateTime focusedDay = DateTime.now();
   DateTime selectedDay = DateTime.now();
 
+  // Navigation helpers for calendar
+  void _previousMonth() {
+    setState(() {
+      focusedDay = DateTime(focusedDay.year, focusedDay.month - 1, 1);
+    });
+    _loadCalendarData();
+  }
+
+  void _nextMonth() {
+    setState(() {
+      focusedDay = DateTime(focusedDay.year, focusedDay.month + 1, 1);
+    });
+    _loadCalendarData();
+  }
+
+  String _monthName(int month) {
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December'
+    ];
+    return months[month - 1];
+  }
+
   final AdminService admin = AdminService();
 
   List<String> recentActivities = [];
@@ -2660,94 +2693,136 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   color: isDark ? _palettePrimary : null,
                 ),
               )
-            : SfCalendar(
-                view: CalendarView.month,
-                headerHeight: 0,
-                backgroundColor: isDark ? Colors.transparent : null,
-                cellBorderColor:
-                    isDark ? _paletteWhite.withValues(alpha: 0.12) : null,
-                viewHeaderStyle: ViewHeaderStyle(
-                  backgroundColor: isDark ? Colors.transparent : null,
-                  dayTextStyle: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? _pureWhite : _pureBlack,
+            : Column(
+                children: [
+                  // Custom header with Material Icons (replaces broken Syncfusion icons)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.chevron_left,
+                          color: isDark ? _pureWhite : _paletteInk,
+                        ),
+                        onPressed: _previousMonth,
+                        tooltip: 'Previous month',
+                      ),
+                      Text(
+                        '${_monthName(focusedDay.month)} ${focusedDay.year}',
+                        style: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? _pureWhite : _paletteInk,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.chevron_right,
+                          color: isDark ? _pureWhite : _paletteInk,
+                        ),
+                        onPressed: _nextMonth,
+                        tooltip: 'Next month',
+                      ),
+                    ],
                   ),
-                ),
-                todayTextStyle: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? _pureWhite : _palettePrimary,
-                ),
-                dataSource: _DashboardCalendarDataSource(_calendarAppointments),
-                onViewChanged: (ViewChangedDetails details) {
-                  final visibleDates = details.visibleDates;
-                  if (visibleDates.isNotEmpty &&
-                      (focusedDay.year != visibleDates.first.year ||
-                          focusedDay.month != visibleDates.first.month)) {
-                    final nextFocusedDay = visibleDates.first;
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (!mounted) return;
-                      setState(() {
-                        focusedDay = nextFocusedDay;
-                      });
-                      _loadCalendarData();
-                    });
-                  }
-                },
-                onTap: (CalendarTapDetails details) {
-                  if (details.targetElement == CalendarElement.calendarCell) {
-                    _showDayEventsDialog(details.date!);
-                  }
-                },
-                onLongPress: (CalendarLongPressDetails details) {
-                  if (details.targetElement == CalendarElement.calendarCell) {
-                    _showQuickEventCreationMenu(details.date!);
-                  }
-                },
-                monthViewSettings: MonthViewSettings(
-                  appointmentDisplayMode:
-                      MonthAppointmentDisplayMode.appointment,
-                  showAgenda: false,
-                  monthCellStyle: MonthCellStyle(
-                    backgroundColor: isDark ? Colors.transparent : null,
-                    todayBackgroundColor:
-                        isDark ? _palettePrimary.withValues(alpha: 0.22) : null,
-                    leadingDatesBackgroundColor:
-                        isDark ? Colors.transparent : null,
-                    trailingDatesBackgroundColor:
-                        isDark ? Colors.transparent : null,
-                    textStyle: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 14,
-                      color: isDark ? _pureWhite : _pureBlack,
-                    ),
-                    leadingDatesTextStyle: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 14,
-                      color: isDark
-                          ? _pureWhite.withValues(alpha: 0.55)
-                          : _pureBlack.withValues(alpha: 0.45),
-                    ),
-                    trailingDatesTextStyle: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 14,
-                      color: isDark
-                          ? _pureWhite.withValues(alpha: 0.55)
-                          : _pureBlack.withValues(alpha: 0.45),
+                  Expanded(
+                    child: SfCalendar(
+                      view: CalendarView.month,
+                      headerHeight:
+                          0, // Hide Syncfusion header with broken icons
+                      backgroundColor: isDark ? Colors.transparent : null,
+                      cellBorderColor:
+                          isDark ? _paletteWhite.withValues(alpha: 0.12) : null,
+                      viewHeaderStyle: ViewHeaderStyle(
+                        backgroundColor: isDark ? Colors.transparent : null,
+                        dayTextStyle: TextStyle(
+                          fontFamily: 'Poppins',
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? _pureWhite : _pureBlack,
+                        ),
+                      ),
+                      todayTextStyle: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? _pureWhite : _palettePrimary,
+                      ),
+                      dataSource:
+                          _DashboardCalendarDataSource(_calendarAppointments),
+                      onViewChanged: (ViewChangedDetails details) {
+                        final visibleDates = details.visibleDates;
+                        if (visibleDates.isNotEmpty &&
+                            (focusedDay.year != visibleDates.first.year ||
+                                focusedDay.month != visibleDates.first.month)) {
+                          final nextFocusedDay = visibleDates.first;
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (!mounted) return;
+                            setState(() {
+                              focusedDay = nextFocusedDay;
+                            });
+                            _loadCalendarData();
+                          });
+                        }
+                      },
+                      onTap: (CalendarTapDetails details) {
+                        if (details.targetElement ==
+                            CalendarElement.calendarCell) {
+                          _showDayEventsDialog(details.date!);
+                        }
+                      },
+                      onLongPress: (CalendarLongPressDetails details) {
+                        if (details.targetElement ==
+                            CalendarElement.calendarCell) {
+                          _showQuickEventCreationMenu(details.date!);
+                        }
+                      },
+                      monthViewSettings: MonthViewSettings(
+                        appointmentDisplayMode:
+                            MonthAppointmentDisplayMode.appointment,
+                        showAgenda: false,
+                        monthCellStyle: MonthCellStyle(
+                          backgroundColor: isDark ? Colors.transparent : null,
+                          todayBackgroundColor: isDark
+                              ? _palettePrimary.withValues(alpha: 0.22)
+                              : null,
+                          leadingDatesBackgroundColor:
+                              isDark ? Colors.transparent : null,
+                          trailingDatesBackgroundColor:
+                              isDark ? Colors.transparent : null,
+                          textStyle: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 14,
+                            color: isDark ? _pureWhite : _pureBlack,
+                          ),
+                          leadingDatesTextStyle: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 14,
+                            color: isDark
+                                ? _pureWhite.withValues(alpha: 0.55)
+                                : _pureBlack.withValues(alpha: 0.45),
+                          ),
+                          trailingDatesTextStyle: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 14,
+                            color: isDark
+                                ? _pureWhite.withValues(alpha: 0.55)
+                                : _pureBlack.withValues(alpha: 0.45),
+                          ),
+                        ),
+                      ),
+                      todayHighlightColor: _palettePrimary,
+                      selectionDecoration: BoxDecoration(
+                        color: isDark
+                            ? _palettePrimary.withValues(alpha: 0.28)
+                            : _palettePeriwinkle.withValues(alpha: 0.25),
+                        border: Border.all(color: _palettePrimary, width: 2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ),
-                ),
-                todayHighlightColor: _palettePrimary,
-                selectionDecoration: BoxDecoration(
-                  color: isDark
-                      ? _palettePrimary.withValues(alpha: 0.28)
-                      : _palettePeriwinkle.withValues(alpha: 0.25),
-                  border: Border.all(color: _palettePrimary, width: 2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                ],
               ),
       ),
     );
