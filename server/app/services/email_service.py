@@ -79,6 +79,12 @@ class EmailService:
     @staticmethod
     def send_verification_email(email, verification_code):
         """Send email verification code. Candidate receives the 6-digit code in the email."""
+        # Check if email is configured
+        from app.services.email_config_service import EmailConfigService
+        if not EmailConfigService.is_configured():
+            current_app.logger.error("Email service not configured. Cannot send verification email.")
+            return False
+            
         subject = "Verify Your Email Address"
         app_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/") or "http://localhost:3000"
         try:

@@ -306,7 +306,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     }
   }
 
-  Future<void> _completeEnrollmentInBackground(
+  Future<Map<String, dynamic>> _completeEnrollmentInBackground(
       Map<String, dynamic> data) async {
     try {
       final response = await AuthService.completeEnrollment(widget.token, data);
@@ -314,12 +314,14 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         final message = response['error']?.toString() ?? 'Enrollment failed';
         debugPrint(
             'Enrollment background error: $message; details: ${response['details']}');
-        return;
+        return response;
       }
       await AuthService.getCurrentUser(token: widget.token)
           .catchError((_) => <String, dynamic>{});
+      return {'success': true};
     } catch (e) {
       debugPrint('Enrollment background request failed: $e');
+      return {'error': 'Enrollment request failed: $e'};
     } finally {
       if (mounted) {
         setState(() => loading = false);
@@ -378,9 +380,28 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       data["dob"] = dobController.text.trim();
     }
 
-    // Make "Finish" feel instant: navigate now, complete enrollment in background.
+    // Complete enrollment and wait for result before navigating
     setState(() => _loggingIn = true);
-    unawaited(_completeEnrollmentInBackground(data));
+    final response = await _completeEnrollmentInBackground(data);
+
+    if (response.containsKey('error')) {
+      // Show error and stay on enrollment screen
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Enrollment failed: ${response['error']}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        setState(() {
+          loading = false;
+          _loggingIn = false;
+        });
+      }
+      return;
+    }
+
+    // Only navigate after successful enrollment
     context.go(
       '/candidate-dashboard?token=${Uri.encodeComponent(widget.token)}',
     );
@@ -1457,8 +1478,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     TextButton(
-                      onPressed:
-                          loading ? null : () => setState(() => _onboardingStep = 1),
+                      onPressed: loading
+                          ? null
+                          : () => setState(() => _onboardingStep = 1),
                       child: Text(
                         'Previous',
                         style: GoogleFonts.poppins(
@@ -3205,8 +3227,8 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       }
       Map<String, dynamic> normalized;
       try {
-        normalized = _normalizeCvParseResponse(
-            Map<String, dynamic>.from(response));
+        normalized =
+            _normalizeCvParseResponse(Map<String, dynamic>.from(response));
       } catch (_) {
         setState(() {
           _processingError = true;
@@ -3402,10 +3424,12 @@ class _EditPersonalSheet extends StatelessWidget {
       ? Colors.white.withValues(alpha: 0.08)
       : const Color(0xFF090812).withValues(alpha: 0.04);
   Color get _text => isDarkMode ? Colors.white : const Color(0xFF090812);
-  Color get _muted =>
-      isDarkMode ? Colors.white70 : const Color(0xFF090812).withValues(alpha: 0.72);
-  Color get _border =>
-      isDarkMode ? Colors.white24 : const Color(0xFF090812).withValues(alpha: 0.22);
+  Color get _muted => isDarkMode
+      ? Colors.white70
+      : const Color(0xFF090812).withValues(alpha: 0.72);
+  Color get _border => isDarkMode
+      ? Colors.white24
+      : const Color(0xFF090812).withValues(alpha: 0.22);
 
   Widget _label(String text, {bool required = false}) {
     return Padding(
@@ -3415,9 +3439,7 @@ class _EditPersonalSheet extends StatelessWidget {
           Text(
             text,
             style: GoogleFonts.poppins(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: _muted),
+                fontSize: 13, fontWeight: FontWeight.w600, color: _muted),
           ),
           if (required)
             Text(
@@ -3480,9 +3502,7 @@ class _EditPersonalSheet extends StatelessWidget {
             Text(
               'Edit Personal Details',
               style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: _text),
+                  fontSize: 18, fontWeight: FontWeight.w700, color: _text),
             ),
             const SizedBox(height: 20),
             _label('Full Name', required: true),
@@ -3493,7 +3513,8 @@ class _EditPersonalSheet extends StatelessWidget {
                 border: const OutlineInputBorder(),
                 filled: true,
                 fillColor: _fieldBg,
-                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+                enabledBorder:
+                    OutlineInputBorder(borderSide: BorderSide(color: _border)),
                 focusedBorder: OutlineInputBorder(
                     borderSide: BorderSide(color: _kKhonologyRed)),
               ),
@@ -3508,7 +3529,8 @@ class _EditPersonalSheet extends StatelessWidget {
                 border: const OutlineInputBorder(),
                 filled: true,
                 fillColor: _fieldBg,
-                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+                enabledBorder:
+                    OutlineInputBorder(borderSide: BorderSide(color: _border)),
                 focusedBorder: OutlineInputBorder(
                     borderSide: BorderSide(color: _kKhonologyRed)),
               ),
@@ -3523,7 +3545,8 @@ class _EditPersonalSheet extends StatelessWidget {
                 border: const OutlineInputBorder(),
                 filled: true,
                 fillColor: _fieldBg,
-                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+                enabledBorder:
+                    OutlineInputBorder(borderSide: BorderSide(color: _border)),
                 focusedBorder: OutlineInputBorder(
                     borderSide: BorderSide(color: _kKhonologyRed)),
               ),
@@ -3535,12 +3558,12 @@ class _EditPersonalSheet extends StatelessWidget {
               style: GoogleFonts.poppins(color: _text),
               decoration: InputDecoration(
                 hintText: 'e.g. https://linkedin.com/in/yourprofile',
-                hintStyle:
-                    GoogleFonts.poppins(color: _muted, fontSize: 14),
+                hintStyle: GoogleFonts.poppins(color: _muted, fontSize: 14),
                 border: const OutlineInputBorder(),
                 filled: true,
                 fillColor: _fieldBg,
-                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+                enabledBorder:
+                    OutlineInputBorder(borderSide: BorderSide(color: _border)),
                 focusedBorder: OutlineInputBorder(
                     borderSide: BorderSide(color: _kKhonologyRed)),
               ),
@@ -3591,10 +3614,12 @@ class _EditEducationSheet extends StatelessWidget {
       ? Colors.white.withValues(alpha: 0.08)
       : const Color(0xFF090812).withValues(alpha: 0.04);
   Color get _text => isDarkMode ? Colors.white : const Color(0xFF090812);
-  Color get _muted =>
-      isDarkMode ? Colors.white70 : const Color(0xFF090812).withValues(alpha: 0.72);
-  Color get _border =>
-      isDarkMode ? Colors.white24 : const Color(0xFF090812).withValues(alpha: 0.22);
+  Color get _muted => isDarkMode
+      ? Colors.white70
+      : const Color(0xFF090812).withValues(alpha: 0.72);
+  Color get _border => isDarkMode
+      ? Colors.white24
+      : const Color(0xFF090812).withValues(alpha: 0.22);
 
   @override
   Widget build(BuildContext context) {
@@ -3628,7 +3653,8 @@ class _EditEducationSheet extends StatelessWidget {
               border: const OutlineInputBorder(),
               filled: true,
               fillColor: _fieldBg,
-              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+              enabledBorder:
+                  OutlineInputBorder(borderSide: BorderSide(color: _border)),
               focusedBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: _kKhonologyRed)),
             ),
@@ -3643,7 +3669,8 @@ class _EditEducationSheet extends StatelessWidget {
               border: const OutlineInputBorder(),
               filled: true,
               fillColor: _fieldBg,
-              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+              enabledBorder:
+                  OutlineInputBorder(borderSide: BorderSide(color: _border)),
               focusedBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: _kKhonologyRed)),
             ),
@@ -3659,7 +3686,8 @@ class _EditEducationSheet extends StatelessWidget {
               border: const OutlineInputBorder(),
               filled: true,
               fillColor: _fieldBg,
-              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+              enabledBorder:
+                  OutlineInputBorder(borderSide: BorderSide(color: _border)),
               focusedBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: _kKhonologyRed)),
             ),
@@ -3700,10 +3728,12 @@ class _EditSkillsSheet extends StatelessWidget {
       ? Colors.white.withValues(alpha: 0.08)
       : const Color(0xFF090812).withValues(alpha: 0.04);
   Color get _text => isDarkMode ? Colors.white : const Color(0xFF090812);
-  Color get _muted =>
-      isDarkMode ? Colors.white70 : const Color(0xFF090812).withValues(alpha: 0.72);
-  Color get _border =>
-      isDarkMode ? Colors.white24 : const Color(0xFF090812).withValues(alpha: 0.22);
+  Color get _muted => isDarkMode
+      ? Colors.white70
+      : const Color(0xFF090812).withValues(alpha: 0.72);
+  Color get _border => isDarkMode
+      ? Colors.white24
+      : const Color(0xFF090812).withValues(alpha: 0.22);
 
   @override
   Widget build(BuildContext context) {
@@ -3791,10 +3821,12 @@ class _EditExperienceSheet extends StatelessWidget {
       ? Colors.white.withValues(alpha: 0.08)
       : const Color(0xFF090812).withValues(alpha: 0.04);
   Color get _text => isDarkMode ? Colors.white : const Color(0xFF090812);
-  Color get _muted =>
-      isDarkMode ? Colors.white70 : const Color(0xFF090812).withValues(alpha: 0.72);
-  Color get _border =>
-      isDarkMode ? Colors.white24 : const Color(0xFF090812).withValues(alpha: 0.22);
+  Color get _muted => isDarkMode
+      ? Colors.white70
+      : const Color(0xFF090812).withValues(alpha: 0.72);
+  Color get _border => isDarkMode
+      ? Colors.white24
+      : const Color(0xFF090812).withValues(alpha: 0.22);
 
   @override
   Widget build(BuildContext context) {
@@ -3828,7 +3860,8 @@ class _EditExperienceSheet extends StatelessWidget {
               border: const OutlineInputBorder(),
               filled: true,
               fillColor: _fieldBg,
-              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+              enabledBorder:
+                  OutlineInputBorder(borderSide: BorderSide(color: _border)),
               focusedBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: _kKhonologyRed)),
             ),
@@ -3843,7 +3876,8 @@ class _EditExperienceSheet extends StatelessWidget {
               border: const OutlineInputBorder(),
               filled: true,
               fillColor: _fieldBg,
-              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+              enabledBorder:
+                  OutlineInputBorder(borderSide: BorderSide(color: _border)),
               focusedBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: _kKhonologyRed)),
             ),
@@ -3859,7 +3893,8 @@ class _EditExperienceSheet extends StatelessWidget {
               border: const OutlineInputBorder(),
               filled: true,
               fillColor: _fieldBg,
-              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+              enabledBorder:
+                  OutlineInputBorder(borderSide: BorderSide(color: _border)),
               focusedBorder: OutlineInputBorder(
                   borderSide: BorderSide(color: _kKhonologyRed)),
             ),

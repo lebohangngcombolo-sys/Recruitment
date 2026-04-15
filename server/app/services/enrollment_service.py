@@ -587,12 +587,6 @@ class EnrollmentService:
                     saved_fields.add(field)
 
             # ------------------------------------
-            # Prevent false success
-            # ------------------------------------
-            if not saved_fields:
-                return {"error": "No valid enrollment data provided"}, 400
-
-            # ------------------------------------
             # Sync display name to User.profile so /api/auth/me and users table stay consistent
             # (CV upload and manual enrollment both save here; users.profile will have full_name)
             # ------------------------------------

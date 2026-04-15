@@ -470,12 +470,26 @@ class AuthService {
       });
 
       // --------------------
-      // Optional CV upload (fromPath not supported on web)
+      // Optional CV upload (works on both mobile and web)
       // --------------------
-      if (cvFile != null && !kIsWeb) {
-        request.files.add(
-          await http.MultipartFile.fromPath('cv', cvFile.path),
-        );
+      if (cvFile != null) {
+        if (kIsWeb) {
+          // On web: read file as bytes and use fromBytes
+          final bytes = await cvFile.readAsBytes();
+          final filename = cvFile.path.split('/').last;
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'cv',
+              bytes,
+              filename: filename,
+            ),
+          );
+        } else {
+          // On mobile: use fromPath
+          request.files.add(
+            await http.MultipartFile.fromPath('cv', cvFile.path),
+          );
+        }
       }
 
       final streamedResponse = await request.send();
