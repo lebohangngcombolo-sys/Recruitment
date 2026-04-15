@@ -336,8 +336,7 @@ class _OAuthCallbackPageState extends State<OAuthCallbackPage> {
       'admin' => '/admin-dashboard?token=$encodedToken',
       'hiring_manager' => '/hiring-manager-dashboard?token=$encodedToken',
       'hr' => '/hr-dashboard?token=$encodedToken',
-      'candidate' when dashboard == '/enrollment' =>
-        '/enrollment?token=$encodedToken',
+      'candidate' when dashboard == '/enrollment' => '/enrollment?token=$encodedToken',
       _ => '/candidate-dashboard?token=$encodedToken',
     };
     context.go(nextPath);
