@@ -24,6 +24,7 @@ import fitz
 from flask import jsonify, request, current_app
 import json
 import re
+import uuid
 
 
 
@@ -181,6 +182,50 @@ def apply_job(job_id):
             "candidate_id": user_id,
             "applied_at": datetime.utcnow().isoformat()
         }, user_id=str(job.created_by))
+
+        # --- Trigger CV Analysis Feedback Loop (Hugging Face) ---
+        if candidate.cv_text and candidate.cv_text.strip():
+            try:
+                from app.services.analysis_service_client import AnalysisServiceClient
+                # Extract job description for context
+                job_desc = job.description or ""
+                if job.responsibilities:
+                    job_desc += "\nResponsibilities:\n" + "\n".join(job.responsibilities)
+                if job.qualifications:
+                    job_desc += "\nQualifications:\n" + "\n".join(job.qualifications)
+                
+                # Submit for analysis
+                analysis_result = AnalysisServiceClient.submit_cv_text(
+                    cv_text=candidate.cv_text,
+                    job_description=job_desc,
+                    industry=getattr(job, "category", None)
+                )
+                
+                if analysis_result and analysis_result.get("analysis_id"):
+                    # Create local CVAnalysis record (analyser db binding)
+                    new_analysis = CVAnalysis(
+                        id=str(uuid.uuid4()),
+                        candidate_id=candidate.id,
+                        application_id=application.id,
+                        requisition_id=job.id,
+                        external_analysis_id=analysis_result["analysis_id"],
+                        cv_text=candidate.cv_text,
+                        job_description=job_desc,
+                        status="processing"
+                    )
+                    db.session.add(new_analysis)
+                    db.session.commit()
+                    
+                    # Store link on candidate for status tracking
+                    candidate.analyser_id = analysis_result["analysis_id"]
+                    candidate.cv_analysis_status = "processing"
+                    candidate.last_cv_analysis_id = new_analysis.id
+                    db.session.commit()
+                    
+                    current_app.logger.info(f"Triggered CV analysis {analysis_result['analysis_id']} for application {application.id}")
+            except Exception as ae:
+                current_app.logger.warning(f"Failed to auto-trigger CV analysis feedback: {ae}")
+                # Don't fail the whole application if analysis trigger fails
 
         return jsonify({"message": "Applied successfully!", "application_id": application.id}), 201
 
@@ -689,6 +734,12 @@ def get_applications():
             breakdown_stale = breakdown_cv is None or float(breakdown_cv) != float(cv_score)
             if score_ready and (breakdown_missing or breakdown_stale):
                 _, breakdown = AssessmentService.recompute_application_scores(app)
+            cv_analysis = CVAnalysis.query.filter_by(application_id=app.id).order_by(CVAnalysis.created_at.desc()).first()
+            if cv_analysis and cv_analysis.status == "processing":
+                from app.services.analysis_service_client import AnalysisServiceClient
+                # Lazy refresh to check if analysis is done
+                AnalysisServiceClient.refresh_if_needed(cv_analysis)
+
             result.append({
                 "application_id": app.id,
                 "job_id": app.requisition_id,
@@ -715,6 +766,7 @@ def get_applications():
                 "interview_feedback_score": app.interview_feedback_score,
                 "assessment_result": assessment_result.to_dict() if assessment_result else None,
                 "scheduled_interview": _next_scheduled_interview_for_application(app),
+                "cv_analysis": cv_analysis.to_dict() if cv_analysis else None,
             })
             
         # Audit log

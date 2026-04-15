@@ -1801,6 +1801,7 @@ class _ProfilePageState extends State<ProfilePage>
                       const SizedBox(height: 40),
                       // Navigation buttons
                       _sidebarButton("Profile", Icons.person_outline_rounded),
+                      _sidebarButton("Documents", Icons.description_outlined),
                       _sidebarButton("Settings", Icons.settings_outlined),
                       _sidebarButton("2FA", Icons.security_outlined),
                       _sidebarButton(
@@ -1894,6 +1895,8 @@ class _ProfilePageState extends State<ProfilePage>
     switch (selectedSidebar) {
       case "Profile":
         return _buildProfileForm();
+      case "Documents":
+        return _buildDocumentsTab();
       case "Settings":
         return _buildSettingsTab();
       case "2FA":
@@ -3820,6 +3823,172 @@ class _ProfilePageState extends State<ProfilePage>
           ),
         ),
       ],
+    );
+  }
+  // Documents Tab
+  Widget _buildDocumentsTab() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(bottom: 30),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.redAccent.withValues(alpha: 0.1),
+                  blurRadius: 20,
+                  spreadRadius: 2,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+              border: Border.all(
+                color: Colors.grey.shade100,
+                width: 1,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "My Documents",
+                            style: GoogleFonts.poppins(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "Manage and preview your uploaded documents or CV.",
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(Icons.description, color: Colors.redAccent, size: 28),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          
+          if (documents.isEmpty && (cvUrlController.text.isEmpty))
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(40),
+                child: Column(
+                  children: [
+                    Icon(Icons.folder_open, size: 64, color: Colors.grey.shade300),
+                    const SizedBox(height: 16),
+                    Text(
+                      "No documents found",
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else ...[
+            if (cvUrlController.text.isNotEmpty)
+             _buildDocumentItem({'fileName': 'Primary Resume/CV', 'fileUrl': cvUrlController.text, 'documentType': 'cv'}),
+            ...documents.map((doc) => _buildDocumentItem(doc)),
+          ]
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDocumentItem(dynamic doc) {
+    if (doc is! Map) return const SizedBox.shrink();
+    
+    final fileName = doc['file_name'] ?? doc['name'] ?? doc['fileName'] ?? 'Document';
+    final fileUrl = doc['file_url'] ?? doc['url'] ?? doc['fileUrl'] ?? '';
+    final type = doc['document_type'] ?? doc['type'] ?? doc['documentType'] ?? 'document';
+    
+    if (fileUrl.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.redAccent.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              fileName.toLowerCase().endsWith('.pdf') ? Icons.picture_as_pdf : Icons.insert_drive_file,
+              color: Colors.redAccent,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  fileName,
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  "Type: ${type.toString().toUpperCase()}",
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.download, color: Colors.grey.shade700),
+            tooltip: "Download/View",
+            onPressed: () async {
+              final Uri url = Uri.parse(fileUrl);
+              if (await canLaunchUrl(url)) {
+                await launchUrl(url, mode: LaunchMode.externalApplication);
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 

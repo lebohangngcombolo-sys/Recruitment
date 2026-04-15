@@ -65,7 +65,7 @@ def review_offer(offer_id):
     return jsonify(offer.to_dict()), 200
 
 @offer_bp.route("/<int:offer_id>/approve", methods=["POST"])
-@role_required("hr")
+@role_required(["hr", "admin"])
 @audit_action("Approved and sent offer")
 def approve_offer(offer_id):
     offer = Offer.query.get_or_404(offer_id)

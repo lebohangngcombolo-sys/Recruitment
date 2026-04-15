@@ -182,7 +182,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         fit: StackFit.expand,
         children: [
           Positioned.fill(
-            child: Image.asset(themeProvider.backgroundImage, fit: BoxFit.cover),
+            child:
+                Image.asset(themeProvider.backgroundImage, fit: BoxFit.cover),
           ),
           Positioned.fill(
             child: Container(
@@ -195,7 +196,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: ScrollConfiguration(
               behavior: _NoScrollbarScrollBehavior(),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minHeight: size.height - 40),
                   child: Column(
@@ -227,7 +229,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     style: GoogleFonts.poppins(
                                       color: onSurface,
                                       fontSize: headingFontSize,
-                                      height: headingLineHeight / headingFontSize,
+                                      height:
+                                          headingLineHeight / headingFontSize,
                                       letterSpacing: headingLetterSpacing,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -277,7 +280,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 validator: (value) {
                                   final v = value?.trim() ?? '';
                                   if (v.isEmpty) return 'Email is required';
-                                  if (!v.contains('@')) return 'Enter a valid email';
+                                  if (!v.contains('@'))
+                                    return 'Enter a valid email';
                                   return null;
                                 },
                               ),
@@ -298,13 +302,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     color: onSurfaceMuted,
                                     size: 18,
                                   ),
-                                  onPressed: () =>
-                                      setState(() => _obscurePassword = !_obscurePassword),
+                                  onPressed: () => setState(() =>
+                                      _obscurePassword = !_obscurePassword),
                                 ),
                                 validator: (value) {
                                   final v = value?.trim() ?? '';
                                   if (v.isEmpty) return 'Password is required';
-                                  if (v.length < 6) return 'At least 6 characters';
+                                  if (v.length < 6)
+                                    return 'At least 6 characters';
                                   return null;
                                 },
                               ),
@@ -320,44 +325,53 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                         child: SizedBox(
                                           height: buttonHeight,
                                           child: ElevatedButton(
-                                        onPressed: loading ? null : register,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFFC10D00),
-                                          foregroundColor: Colors.white,
-                                          elevation: 0,
-                                          shadowColor: Colors.transparent,
-                                          minimumSize: Size.zero,
-                                          tapTargetSize:
-                                              MaterialTapTargetSize.shrinkWrap,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(20.32),
-                                          ),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 20.32,
-                                            vertical: 0,
-                                          ),
-                                        ),
-                                          child: loading
-                                              ? const SizedBox(
-                                                  width: 14,
-                                                  height: 14,
-                                                  child: CircularProgressIndicator(
-                                                    strokeWidth: 2,
-                                                    valueColor:
-                                                        AlwaysStoppedAnimation<Color>(
-                                                      Colors.white,
+                                            onPressed:
+                                                loading ? null : register,
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  const Color(0xFFC10D00),
+                                              foregroundColor: Colors.white,
+                                              elevation: 0,
+                                              shadowColor: Colors.transparent,
+                                              minimumSize: Size.zero,
+                                              tapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                        20.32),
+                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 20.32,
+                                                vertical: 0,
+                                              ),
+                                            ),
+                                            child: loading
+                                                ? const SizedBox(
+                                                    width: 14,
+                                                    height: 14,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      valueColor:
+                                                          AlwaysStoppedAnimation<
+                                                              Color>(
+                                                        Colors.white,
+                                                      ),
+                                                    ),
+                                                  )
+                                                : Text(
+                                                    'REGISTER',
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 11.06,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                      letterSpacing: 0.11,
+                                                      height: 1,
                                                     ),
                                                   ),
-                                                )
-                                              : Text(
-                                                  'REGISTER',
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 11.06,
-                                                    fontWeight: FontWeight.w700,
-                                                    letterSpacing: 0.11,
-                                                    height: 1,
-                                                  ),
-                                                ),
                                           ),
                                         ),
                                       ),
@@ -366,32 +380,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                         child: SizedBox(
                                           height: buttonHeight,
                                           child: ElevatedButton(
-                                        onPressed: () => context.go('/'),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFFA2A5AA),
-                                          foregroundColor: Colors.white,
-                                          elevation: 0,
-                                          shadowColor: Colors.transparent,
-                                          minimumSize: Size.zero,
-                                          tapTargetSize:
-                                              MaterialTapTargetSize.shrinkWrap,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(20.32),
-                                          ),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 20.32,
-                                            vertical: 0,
-                                          ),
-                                        ),
-                                          child: Text(
-                                            'BACK',
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 11.06,
-                                              fontWeight: FontWeight.w700,
-                                              letterSpacing: 0.11,
-                                              height: 1,
+                                            onPressed: () => context.go('/'),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  const Color(0xFFA2A5AA),
+                                              foregroundColor: Colors.white,
+                                              elevation: 0,
+                                              shadowColor: Colors.transparent,
+                                              minimumSize: Size.zero,
+                                              tapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                        20.32),
+                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 20.32,
+                                                vertical: 0,
+                                              ),
                                             ),
-                                          ),
+                                            child: Text(
+                                              'BACK',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 11.06,
+                                                fontWeight: FontWeight.w700,
+                                                letterSpacing: 0.11,
+                                                height: 1,
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -434,7 +453,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       Opacity(
                         opacity: 0.92,
                         child: Image.asset(
-                          isDark ? 'assets/images/discs.png' : 'assets/images/logo.png',
+                          isDark
+                              ? 'assets/images/discs.png'
+                              : 'assets/images/logo.png',
                           width: 120,
                           fit: BoxFit.contain,
                         ),
@@ -496,8 +517,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     ValueChanged<String>? onSubmitted,
   }) {
     const lightInk = Color(0xFF090812);
-    final labelColor =
-        isDark ? Colors.white.withValues(alpha: 0.78) : lightInk;
+    final labelColor = isDark ? Colors.white.withValues(alpha: 0.78) : lightInk;
     final textColor = isDark ? Colors.white : lightInk;
     final hintColor = isDark
         ? Colors.white.withValues(alpha: 0.6)

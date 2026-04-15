@@ -82,3 +82,4 @@ khono_recruite/android/gradlew.bat
 Thumbs.db
 server/scratch/
 server/inspect_tables.py
+test_hf_e2e_autofill.py

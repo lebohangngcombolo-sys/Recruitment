@@ -1196,65 +1196,90 @@ def list_candidates():
 @admin_bp.route("/candidates/all", methods=["GET"])
 @role_required(["admin", "hiring_manager", "hr"])
 def list_all_candidates():
-    """Get all candidates without pagination - for admin portal full list view."""
+    """Get candidates with pagination and search - for admin/HM global view."""
     try:
         current_user_id = get_jwt_identity()
         current_user = User.query.get(current_user_id) if current_user_id else None
+        
+        # Pagination params
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 20, type=int)
+        search_query = request.args.get('search', '').strip()
 
         # Build query
-        query = Candidate.query
+        query = db.session.query(Candidate).join(User, Candidate.user_id == User.id)
+        
         if current_user and current_user.role == "hiring_manager":
-            # Restrict to candidates who have at least one application (to any job)
-            from sqlalchemy import select
-            candidate_ids_subquery = select(Application.candidate_id).distinct()
-            query = Candidate.query.filter(Candidate.id.in_(candidate_ids_subquery))
+            # Optional: restrict HM to only see candidates who applied to their jobs?
+            # Requirement says "ADMINS and HIRING MANAGER should see ALL", so keep it global or role-scoped.
+            # If we want HM to only see candidates for their requisitions:
+            # from app.models import Requisition
+            # hm_job_ids = [r.id for r in Requisition.query.filter_by(created_by=current_user.id).all()]
+            # query = query.join(Application).filter(Application.requisition_id.in_(hm_job_ids))
+            pass # Currently allowing HM to see all as per requirement
+
+        if search_query:
+            search_pattern = f"%{search_query}%"
+            query = query.filter(or_(
+                Candidate.full_name.ilike(search_pattern),
+                User.email.ilike(search_pattern),
+                Candidate.phone.ilike(search_pattern),
+                Candidate.location.ilike(search_pattern)
+            ))
         
-        # Get all candidates (no pagination for the 'all' endpoint)
-        all_candidates = query.all()
+        # Paginate
+        pagination = query.order_by(Candidate.full_name.asc()).paginate(page=page, per_page=per_page, error_out=False)
+        all_candidates = pagination.items
         
-        # Get all candidate IDs for batch loading
         candidate_ids = [c.id for c in all_candidates]
         
-        # Batch load all related data
+        # Batch load related data
         users = {u.id: u for u in User.query.filter(User.id.in_([c.user_id for c in all_candidates if c.user_id])).all()}
         applications_by_candidate = {}
         
         if candidate_ids:
-            # Batch load applications
             applications = Application.query.filter(Application.candidate_id.in_(candidate_ids)).all()
             for app in applications:
                 if app.candidate_id not in applications_by_candidate:
                     applications_by_candidate[app.candidate_id] = []
                 applications_by_candidate[app.candidate_id].append(app)
         
-        # Enrich candidate data with batch-loaded data
         enriched_candidates = []
         for candidate in all_candidates:
-            # Get user information from batch-loaded data
             user = users.get(candidate.user_id)
+            apps_list = applications_by_candidate.get(candidate.id, [])
+            latest_application = max(apps_list, key=lambda x: x.created_at) if apps_list else None
             
-            # Get applications from batch-loaded data
-            applications = applications_by_candidate.get(candidate.id, [])
-            
-            # Get latest application status
-            latest_application = max(applications, key=lambda x: x.created_at) if applications else None
+            # Application summary for HM view
+            apps_summary = [
+                {
+                    "application_id": a.id,
+                    "job_id": a.requisition_id,
+                    "job_title": a.requisition.title if a.requisition else "Unknown Job",
+                    "company": getattr(a.requisition, "company", "") if a.requisition else "",
+                    "status": a.status
+                } for a in apps_list
+            ]
             
             enriched_candidates.append({
                 **candidate.to_dict(),
-                'user_email': user.email if user else None,
+                'email': user.email if user else "",
                 'user_role': user.role if user else None,
-                'user_created_at': user.created_at.isoformat() if user and user.created_at else None,
                 'latest_application_status': latest_application.status if latest_application else None,
-                'total_applications': len(applications),
+                'total_applications': len(apps_list),
+                'applications_summary': apps_summary
             })
         
         return jsonify({
-            'candidates': enriched_candidates,
-            'total': len(enriched_candidates)
+            "candidates": enriched_candidates,
+            "total": pagination.total,
+            "pages": pagination.pages,
+            "current_page": pagination.page,
+            "per_page": per_page
         }), 200
         
     except Exception as e:
-        current_app.logger.error(f"Error fetching all candidates: {e}", exc_info=True)
+        current_app.logger.error(f"Error listing all candidates: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
 
 @admin_bp.route("/applications/<int:application_id>", methods=["GET"])
@@ -1294,8 +1319,14 @@ def get_application(application_id):
         # }
         pass
 
+    cv_analysis = CVAnalysis.query.filter_by(application_id=application.id).order_by(CVAnalysis.created_at.desc()).first()
+    if cv_analysis and cv_analysis.status == "processing":
+        from app.services.analysis_service_client import AnalysisServiceClient
+        AnalysisServiceClient.refresh_if_needed(cv_analysis)
+
     return jsonify({
         "application": application.to_dict(),
+        "cv_analysis": cv_analysis.to_dict() if cv_analysis else None,
         "assessment": assessment.to_dict() if assessment else {},
         "job": {
             "id": job.id,
@@ -1649,9 +1680,7 @@ def list_cv_reviews():
         cv_analysis = None
         
         # Find the CV analysis for this application (prefer by application_id)
-        for analysis in app.cv_analyses:
-            cv_analysis = analysis
-            break
+        cv_analysis = CVAnalysis.query.filter_by(application_id=app.id).first()
         
         # Fallback to candidate-level analysis if no application-specific analysis
         if not cv_analysis and candidate:
@@ -4513,41 +4542,30 @@ def download_application_cv(application_id):
     }), 200
 
     
-@admin_bp.route("/candidates/all", methods=["GET"])
+
+
+
+@admin_bp.route("/candidates/<int:candidate_id>/cv/download", methods=["GET"])
 @role_required(["admin", "hiring_manager", "hr"])
-def get_all_candidates():
+def download_candidate_cv(candidate_id):
     """
-    Fetch all candidates with user email and applications summary (jobs they applied to).
+    Get CV download URL for a candidate.
+    Returns Cloudinary URL for the candidate's CV.
     """
     try:
-        candidates = Candidate.query.all()
-        enriched = []
-        for c in candidates:
-            c_dict = c.to_dict()
-            user = User.query.get(c.user_id) if c.user_id else None
-            c_dict["email"] = user.email if user else ""
-            # Applications summary: job title, company, employment_type, status per application
-            apps = Application.query.filter_by(candidate_id=c.id).all()
-            c_dict["applications_summary"] = [
-                {
-                    "application_id": a.id,
-                    "job_id": a.requisition_id,
-                    "job_title": a.requisition.title if a.requisition else "",
-                    "company": getattr(a.requisition, "company", None) or "" if a.requisition else "",
-                    "employment_type": getattr(a.requisition, "employment_type", None) or "Full Time" if a.requisition else "",
-                    "status": a.status or "",
-                }
-                for a in apps
-            ]
-            enriched.append(c_dict)
-
+        candidate = Candidate.query.get_or_404(candidate_id)
+        
+        if not candidate.cv_url:
+            return jsonify({"error": "No CV uploaded for this candidate"}), 404
+        
         return jsonify({
-            "total": len(enriched),
-            "candidates": enriched
-        }), 200
+            "candidate_id": candidate_id,
+            "cv_url": candidate.cv_url,
+            "full_name": candidate.full_name
+        })
     except Exception as e:
-        current_app.logger.error(f"Error fetching candidates: {e}", exc_info=True)
-        return jsonify({"error": "Internal server error"}), 500
+        current_app.logger.error(f"Error fetching CV for candidate {candidate_id}: {str(e)}")
+        return jsonify({"error": "Failed to fetch CV"}), 500
 
 
 @admin_bp.route("/candidates/<int:candidate_id>/applications", methods=["GET"])

@@ -198,6 +198,8 @@ class ApiEndpoints {
       "$adminBase/jobs/applications/for-my-jobs";
   static String getJobStats = "$adminBase/jobs/stats";
   static final viewCandidates = "$adminBase/candidates";
+  static String getCandidateCvDownload(int candidateId) =>
+      "$adminBase/candidates/$candidateId/cv/download";
   static String getApplicationById(int id) => "$adminBase/applications/$id";
   static String getApplicationTimeline(int applicationId) =>
       "$adminBase/applications/$applicationId/timeline";

@@ -92,4 +92,37 @@ class HiringManagerService {
     }
     throw Exception('Failed to fetch dashboard counts: ${res.body}');
   }
+
+  Future<Map<String, dynamic>> downloadCandidateCV(int candidateId) async {
+    final uri = Uri.parse(ApiEndpoints.getCandidateCvDownload(candidateId));
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.get(uri, headers: authHeaders);
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+    throw Exception('Failed to download CV: ${res.body}');
+  }
+
+  Future<Map<String, dynamic>> getCVReviews({
+    int page = 1,
+    int perPage = 200,
+    String? scope,
+  }) async {
+    final queryParams = {
+      'page': page.toString(),
+      'per_page': perPage.toString(),
+    };
+    if (scope != null) queryParams['scope'] = scope;
+
+    final uri =
+        Uri.parse(ApiEndpoints.cvReviews).replace(queryParameters: queryParams);
+    final authHeaders = await _getAuthHeaders();
+    final res = await http.get(uri, headers: authHeaders);
+
+    if (res.statusCode == 200) {
+      return json.decode(res.body);
+    }
+    throw Exception('Failed to fetch CV reviews: ${res.body}');
+  }
 }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -22,14 +23,37 @@ class CandidateListScreen extends StatefulWidget {
 class _CandidateListScreenState extends State<CandidateListScreen> {
   List<dynamic> candidates = [];
   bool loading = true;
-
-  // Track hovered card
   int? hoveredIndex;
+
+  TextEditingController searchController = TextEditingController();
+  int currentPage = 1;
+  int totalPages = 1;
+  int perPage = 12;
+  String searchQuery = "";
+  Timer? _searchDebounce;
 
   @override
   void initState() {
     super.initState();
     fetchCandidates();
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String query) {
+    if (_searchDebounce?.isActive ?? false) _searchDebounce!.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+      setState(() {
+        searchQuery = query;
+        currentPage = 1; // Reset to first page on new search
+      });
+      fetchCandidates(refresh: true);
+    });
   }
 
   Future<void> fetchCandidates({bool refresh = false}) async {
@@ -47,10 +71,10 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
     try {
       // Use AppStateManager for cached fetching
       final data = await appStateManager.fetchWithCache(
-        'candidates',
+        'candidates_p${currentPage}_q_$searchQuery',
         () async {
           final response = await AuthService.authorizedGet(
-            "${ApiEndpoints.adminBase}/candidates/all",
+            "${ApiEndpoints.adminBase}/candidates/all?page=$currentPage&per_page=$perPage&search=$searchQuery",
           );
 
           if (response.statusCode != 200) {
@@ -67,6 +91,8 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
       if (mounted) {
         setState(() {
           candidates = data['candidates'] ?? [];
+          totalPages = data['pages'] ?? 1;
+          currentPage = data['current_page'] ?? 1;
           loading = false;
         });
       }
@@ -119,7 +145,50 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            centerTitle: true,
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(60),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: TextField(
+                  controller: searchController,
+                  onChanged: _onSearchChanged,
+                  style: GoogleFonts.poppins(
+                    color: themeProvider.isDarkMode
+                        ? Colors.white
+                        : Colors.black87,
+                    fontSize: 14,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: "Search by name, email, location...",
+                    hintStyle: GoogleFonts.poppins(
+                      color: themeProvider.isDarkMode
+                          ? Colors.white54
+                          : Colors.black54,
+                    ),
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    suffixIcon: searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, size: 18),
+                            onPressed: () {
+                              searchController.clear();
+                              _onSearchChanged("");
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: (themeProvider.isDarkMode
+                        ? Colors.white10
+                        : Colors.black.withValues(alpha: 0.05)),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                  ),
+                ),
+              ),
+            ),
             backgroundColor: (themeProvider.isDarkMode
                     ? const Color(0xFF14131E)
                     : Colors.white)
@@ -622,8 +691,84 @@ class _CandidateListScreenState extends State<CandidateListScreen> {
                               },
                             ),
                           ),
+                          // Pagination Controls
+                          if (totalPages > 1)
+                            Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  _buildPageButton(
+                                    icon: Icons.chevron_left,
+                                    enabled: currentPage > 1,
+                                    onPressed: () {
+                                      setState(() => currentPage--);
+                                      fetchCandidates(refresh: true);
+                                    },
+                                    themeProvider: themeProvider,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Text(
+                                    "Page $currentPage of $totalPages",
+                                    style: GoogleFonts.poppins(
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white70
+                                          : Colors.black87,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  _buildPageButton(
+                                    icon: Icons.chevron_right,
+                                    enabled: currentPage < totalPages,
+                                    onPressed: () {
+                                      setState(() => currentPage++);
+                                      fetchCandidates(refresh: true);
+                                    },
+                                    themeProvider: themeProvider,
+                                  ),
+                                ],
+                              ),
+                            ),
                         ],
                       ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPageButton({
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback onPressed,
+    required ThemeProvider themeProvider,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: enabled ? onPressed : null,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: enabled
+                ? (themeProvider.isDarkMode
+                    ? Colors.white12
+                    : Colors.black.withValues(alpha: 0.05))
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: enabled
+                  ? (themeProvider.isDarkMode ? Colors.white24 : Colors.black12)
+                  : Colors.transparent,
+            ),
+          ),
+          child: Icon(
+            icon,
+            color: enabled
+                ? (themeProvider.isDarkMode ? Colors.white : Colors.black87)
+                : (themeProvider.isDarkMode ? Colors.white24 : Colors.black12),
           ),
         ),
       ),

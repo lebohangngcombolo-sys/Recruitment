@@ -1,11 +1,10 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:webview_flutter/webview_flutter.dart';
 import '../../services/auth_service.dart';
 import '../../services/candidate_service.dart';
 import '../../utils/api_endpoints.dart';
+import '../../widgets/cv_preview_dialog.dart';
 import 'assessment_page.dart';
 import 'cv_upload_page.dart';
 
@@ -248,9 +247,9 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
     showDialog<void>(
       context: context,
       barrierColor: Colors.black87,
-      builder: (ctx) => _CvPreviewDialog(
+      builder: (ctx) => CvPreviewDialog(
         url: proxyUrl,
-        jobTitle: app['job_title']?.toString() ?? 'CV',
+        title: 'CV Preview — ${app['job_title']?.toString() ?? 'CV'}',
         onClose: () => Navigator.of(ctx).pop(),
       ),
     );
@@ -892,6 +891,10 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
                                 ],
                               ),
                             ],
+                            if (app['cv_analysis'] != null) ...[
+                              const SizedBox(height: 24),
+                              _buildCVAnalysisSection(app['cv_analysis']),
+                            ],
                           ],
                         ],
                       ),
@@ -1118,97 +1121,138 @@ class _JobsAppliedPageState extends State<JobsAppliedPage> {
       ],
     );
   }
-}
 
-/// Full-screen in-app CV preview using backend proxy (avoids Cloudinary 401).
-class _CvPreviewDialog extends StatefulWidget {
-  final String url;
-  final String jobTitle;
-  final VoidCallback onClose;
+  Widget _buildCVAnalysisSection(Map<String, dynamic> analysis) {
+    final status = analysis['status']?.toString() ?? 'pending';
+    final result = analysis['result'] is Map
+        ? analysis['result'] as Map<String, dynamic>
+        : {};
+    final advice = result['advice'] ??
+        result['feedback'] ??
+        result['analysis_summary'] ??
+        '';
+    final score = analysis['overall_score'] ?? 0.0;
 
-  const _CvPreviewDialog({
-    required this.url,
-    required this.jobTitle,
-    required this.onClose,
-  });
-
-  @override
-  State<_CvPreviewDialog> createState() => _CvPreviewDialogState();
-}
-
-class _CvPreviewDialogState extends State<_CvPreviewDialog> {
-  late final WebViewController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = WebViewController()..loadRequest(Uri.parse(widget.url));
-    if (!kIsWeb) {
-      _controller.setJavaScriptMode(JavaScriptMode.unrestricted);
-      _controller.setNavigationDelegate(
-        NavigationDelegate(onPageFinished: (_) {}),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final height = MediaQuery.of(context).size.height * 0.85;
-    final width = MediaQuery.of(context).size.width * 0.9;
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      child: SizedBox(
-        width: width.clamp(320.0, 900.0),
-        height: height.clamp(400.0, 900.0),
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF1a1a1a),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF3A3A3A)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'CV Preview — ${widget.jobTitle}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close,
-                          color: Colors.white, size: 28),
-                      onPressed: widget.onClose,
-                      tooltip: 'Close',
-                    ),
-                  ],
+              Icon(Icons.auto_awesome, color: Colors.amber.shade300, size: 18),
+              const SizedBox(width: 8),
+              Text(
+                'AI CV Feedback & Advice',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.amber.shade300,
                 ),
               ),
-              const Divider(height: 1, color: Color(0xFF3A3A3A)),
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(12),
-                    bottomRight: Radius.circular(12),
+              const Spacer(),
+              if (status == 'completed')
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: WebViewWidget(controller: _controller),
+                  child: Text(
+                    '${(score * 10).toStringAsFixed(0)}/10',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green.shade300,
+                    ),
+                  ),
                 ),
-              ),
             ],
           ),
-        ),
+          const SizedBox(height: 12),
+          if (status == 'processing' || status == 'pending')
+            Row(
+              children: [
+                SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white70),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Analysis in progress...',
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontStyle: FontStyle.italic,
+                    color: Colors.white60,
+                  ),
+                ),
+              ],
+            )
+          else if (status == 'failed')
+            Text(
+              'Analysis failed or not available for this CV.',
+              style: GoogleFonts.poppins(fontSize: 13, color: Colors.white54),
+            )
+          else ...[
+            Text(
+              advice.isEmpty
+                  ? 'Your CV has been successfully processed against this job description.'
+                  : advice,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                height: 1.5,
+                color: Colors.white.withValues(alpha: 0.9),
+              ),
+            ),
+            if (result['strengths'] != null &&
+                (result['strengths'] as List).isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Key Strengths:',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white70,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: (result['strengths'] as List)
+                    .map((s) => Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(
+                                color: Colors.blue.withValues(alpha: 0.2)),
+                          ),
+                          child: Text(
+                            s.toString(),
+                            style: GoogleFonts.poppins(
+                                fontSize: 11, color: Colors.blue.shade200),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ],
+          ],
+        ],
       ),
     );
   }
 }
+
+/// Full-screen in-app CV preview using backend proxy (avoids Cloudinary 401).

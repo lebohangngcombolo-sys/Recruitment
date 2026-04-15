@@ -144,9 +144,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                             shadows: isDark
                                 ? [
                                     const Shadow(
-                                      color: Colors.black26,
-                                      blurRadius: 4,
-                                      offset: Offset(2, 2))
+                                        color: Colors.black26,
+                                        blurRadius: 4,
+                                        offset: Offset(2, 2))
                                   ]
                                 : null,
                           ),

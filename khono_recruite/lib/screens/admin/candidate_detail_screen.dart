@@ -6,16 +6,19 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
+import 'package:provider/provider.dart';
 import '../../services/admin_service.dart';
+import '../../services/auth_service.dart';
 import '../../services/cv_analyser_service.dart';
 import '../../screens/admin/analysis_screen.dart';
 import '../../widgets/custom_button.dart';
 import 'interview_schedule_page.dart';
 import 'package:http/http.dart' as http;
-import 'package:provider/provider.dart';
-import '../../providers/theme_provider.dart';
-import '../../utils/api_endpoints.dart';
 import 'package:file_picker/file_picker.dart';
+import '../../widgets/cv_preview_dialog.dart';
+import '../../models/cv_analyser_models.dart';
+import '../../utils/api_endpoints.dart';
+import '../../providers/theme_provider.dart';
 
 class CandidateDetailScreen extends StatefulWidget {
   final int candidateId;
@@ -79,6 +82,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
         // CV Data - from applications table
         "cv_score": application['cv_score']?.toDouble() ?? 0.0,
         "cv_file": application['resume_url'] ?? '',
+        "cv_analysis": data['cv_analysis'],
 
         // Assessment Results - from assessment_results table
         "assessment_score": assessment['percentage_score']?.toDouble() ?? 0.0,
@@ -164,6 +168,31 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
       return formatted.isNotEmpty ? formatted : 'No work experience';
     }
     return workExp.toString();
+  }
+
+  Future<void> _previewCv(BuildContext context) async {
+    final applicationId = widget.applicationId;
+    final token = await AuthService.getAccessToken();
+    if (token == null || token.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please log in again to preview CV')),
+        );
+      }
+      return;
+    }
+    final proxyUrl =
+        '${ApiEndpoints.adminBase}/applications/$applicationId/cv-preview?access_token=${Uri.encodeComponent(token)}';
+    if (!mounted) return;
+    showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (ctx) => CvPreviewDialog(
+        url: proxyUrl,
+        title: 'CV Preview — ${candidateData?['full_name'] ?? 'Candidate'}',
+        onClose: () => Navigator.of(ctx).pop(),
+      ),
+    );
   }
 
   Future<void> downloadCV(
@@ -562,6 +591,9 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
   }
 
   Widget _buildCVCard(bool isDark) {
+    final analysis = candidateData?['cv_analysis'];
+    final analysisStatus = analysis?['status']?.toString() ?? 'none';
+
     return _buildInfoCard(
       isDark: isDark,
       icon: Icons.description_outlined,
@@ -569,7 +601,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
       actionIcon: Icons.download_rounded,
       onAction: () {
         downloadCV(
-          candidateData!['candidate_id'],
+          widget.applicationId,
           context,
           candidateData!['full_name'] ?? "candidate",
         );
@@ -578,6 +610,10 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
         _buildScoreRow(
             "CV Score", candidateData!['cv_score'].toDouble(), isDark),
         const SizedBox(height: 12),
+        if (analysisStatus == 'completed') ...[
+          _buildCVAnalysisPreview(analysis, isDark),
+          const SizedBox(height: 16),
+        ],
         if (_analysisInProgress || _analysisStatusText != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
@@ -609,9 +645,21 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
           children: [
             Expanded(
               child: ElevatedButton.icon(
+                onPressed: () => _previewCv(context),
+                icon: const Icon(Icons.visibility, size: 16),
+                label: const Text('View CV'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue.withValues(alpha: 0.1),
+                  foregroundColor: Colors.blue,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ElevatedButton.icon(
                 onPressed: _analysisInProgress ? null : _runCvAnalysis,
                 icon: const Icon(Icons.auto_awesome, size: 16),
-                label: const Text('Analyse CV'),
+                label: const Text('Re-Analyse'),
               ),
             ),
           ],
@@ -626,6 +674,76 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildCVAnalysisPreview(Map<String, dynamic> analysis, bool isDark) {
+    final dynamicResult = analysis['result'];
+    final result = dynamicResult is Map
+        ? Map<String, dynamic>.from(dynamicResult)
+        : <String, dynamic>{};
+    final advice = result['advice'] ??
+        result['feedback'] ??
+        result['analysis_summary'] ??
+        '';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.amber.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.amber.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.auto_awesome, color: Colors.amber, size: 14),
+              const SizedBox(width: 6),
+              Text(
+                "AI Feedback",
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.amber,
+                ),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: () {
+                  final cvResult = CVAnalyserResult.fromJson(result);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => AnalysisScreen(result: cvResult)),
+                  );
+                },
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text(
+                  "View Full Board",
+                  style: TextStyle(fontSize: 11, color: Colors.blue),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            advice,
+            style: TextStyle(
+              fontSize: 11,
+              color: isDark ? Colors.grey.shade300 : Colors.grey.shade800,
+              height: 1.4,
+            ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 

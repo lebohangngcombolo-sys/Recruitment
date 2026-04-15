@@ -285,12 +285,16 @@ class _LoginScreenState extends State<LoginScreen>
     final panelColor = isDark
         ? const Color(0xFF1F1F26).withOpacity(0.92)
         : Colors.white.withOpacity(0.94);
-    final fieldFill = isDark ? const Color(0xFF3D3F40) : const Color(0xFFECECEF);
-    final fieldText = isDark ? const Color(0xFFA8ABB2) : const Color(0xFF2C2C2C);
+    final fieldFill =
+        isDark ? const Color(0xFF3D3F40) : const Color(0xFFECECEF);
+    final fieldText =
+        isDark ? const Color(0xFFA8ABB2) : const Color(0xFF2C2C2C);
     final hintColor =
         isDark ? const Color(0xFFA8ABB2) : const Color(0xFF6B6B6B);
-    final titleColor = isDark ? const Color(0xFFF2F4F8) : const Color(0xFF1A1A1A);
-    final subtitleColor = isDark ? const Color(0xFFD0D4DB) : const Color(0xFF5C5C5C);
+    final titleColor =
+        isDark ? const Color(0xFFF2F4F8) : const Color(0xFF1A1A1A);
+    final subtitleColor =
+        isDark ? const Color(0xFFD0D4DB) : const Color(0xFF5C5C5C);
     final panelBorder =
         isDark ? Colors.white10 : Colors.black.withOpacity(0.08);
     final panelShadowOpacity = isDark ? 0.45 : 0.12;
@@ -327,12 +331,12 @@ class _LoginScreenState extends State<LoginScreen>
                   : Colors.black.withOpacity(0.06),
             ),
           ),
-
           Center(
             child: ScrollConfiguration(
               behavior: _NoScrollbarScrollBehavior(),
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -425,7 +429,8 @@ class _LoginScreenState extends State<LoginScreen>
                                       size: 16,
                                     ),
                                     onPressed: () => setState(
-                                      () => _obscurePassword = !_obscurePassword,
+                                      () =>
+                                          _obscurePassword = !_obscurePassword,
                                     ),
                                   ),
                                 ),
@@ -439,7 +444,8 @@ class _LoginScreenState extends State<LoginScreen>
                                       backgroundColor: const Color(0xFFC10D00),
                                       foregroundColor: Colors.white,
                                       shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(20.54),
+                                        borderRadius:
+                                            BorderRadius.circular(20.54),
                                       ),
                                     ),
                                     child: loading
@@ -473,7 +479,8 @@ class _LoginScreenState extends State<LoginScreen>
                                         width: 16,
                                         height: 16,
                                         fit: BoxFit.contain,
-                                        errorBuilder: (_, __, ___) => const Icon(
+                                        errorBuilder: (_, __, ___) =>
+                                            const Icon(
                                           Icons.g_mobiledata_rounded,
                                           size: 18,
                                           color: Colors.black87,
@@ -490,7 +497,8 @@ class _LoginScreenState extends State<LoginScreen>
                                         width: 16,
                                         height: 16,
                                         fit: BoxFit.contain,
-                                        errorBuilder: (_, __, ___) => const Icon(
+                                        errorBuilder: (_, __, ___) =>
+                                            const Icon(
                                           Icons.window_rounded,
                                           size: 16,
                                           color: Colors.black87,
@@ -505,7 +513,8 @@ class _LoginScreenState extends State<LoginScreen>
                                         width: 16,
                                         height: 16,
                                         fit: BoxFit.contain,
-                                        errorBuilder: (_, __, ___) => const Icon(
+                                        errorBuilder: (_, __, ___) =>
+                                            const Icon(
                                           Icons.code_rounded,
                                           size: 15,
                                           color: Colors.black87,
@@ -709,7 +718,8 @@ class _LoginScreenState extends State<LoginScreen>
           suffixIcon: suffix,
           filled: true,
           fillColor: fillColor,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(18),
             borderSide: BorderSide.none,
