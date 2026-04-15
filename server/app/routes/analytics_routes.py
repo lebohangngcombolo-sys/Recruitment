@@ -189,6 +189,17 @@ def assessment_pass_rate():
         .all()
     )
 
+    # Return default data if no assessments found
+    if not results:
+        from datetime import datetime
+        return jsonify([{
+            "month": datetime.utcnow().strftime("%Y-%m"),
+            "taken": 0,
+            "passed": 0,
+            "pass_rate_percent": 0,
+            "message": "No assessment data available"
+        }])
+
     return jsonify([
         {
             "month": r.month.strftime("%Y-%m") if r.month else None,
@@ -348,5 +359,13 @@ def experience_distribution():
                 years = 0
             key = str(years)
             distribution[key] = distribution.get(key, 0) + 1
+
+    # Return structured default data if no experience data found
+    if not distribution:
+        return jsonify({
+            "labels": ["0-2 years", "3-5 years", "6-10 years", "10+ years"],
+            "values": [0, 0, 0, 0],
+            "message": "No experience data available"
+        })
 
     return jsonify(distribution)

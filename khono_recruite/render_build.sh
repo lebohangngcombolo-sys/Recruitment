@@ -49,6 +49,7 @@ echo "Building with APP_VERSION=${APP_VERSION}"
 
 echo "Building Flutter web with API_BASE=${API_BASE}"
 flutter build web --release \
+  --web-renderer html \
   --dart-define=API_BASE="$API_BASE" \
   --dart-define=PUBLIC_API_BASE="$PUBLIC_BASE" \
   --dart-define=APP_VERSION="$APP_VERSION"

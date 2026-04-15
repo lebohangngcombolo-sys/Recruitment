@@ -646,6 +646,79 @@ def register_websocket_handlers(app):
             current_app.logger.error(f"❌ WebSocket: Error in unsubscribe_dashboard: {e}")
             emit('error', {'message': f'Failed to unsubscribe from dashboard: {str(e)}'})
     
+    @socketio.on('join_notification')
+    @socket_auth_required
+    def handle_join_notification(data: Dict[str, Any]):
+        """
+        Handle client joining notification room for real-time notifications.
+        
+        Expected data format:
+        {
+            'user_id': 'user_id_string',
+            'role': 'admin'  # optional
+        }
+        """
+        try:
+            user_id = request.user_id
+            role = data.get('role', 'candidate') if isinstance(data, dict) else 'candidate'
+            
+            # Join user's personal notification room
+            user_room = f'user_{user_id}'
+            join_room(user_room)
+            current_app.logger.info(f"🔔 WebSocket: User {user_id} joined notification room")
+            
+            # Admin roles also join the admins room for system-wide notifications
+            if role in ['admin', 'hiring_manager', 'hr']:
+                admin_room = 'admins'
+                join_room(admin_room)
+                current_app.logger.info(f"🔔 WebSocket: User {user_id} joined admin notification room")
+            
+            emit('notification_joined', {
+                'status': 'success',
+                'message': 'Joined notification room',
+                'user_room': user_room,
+                'admin_room': admin_room if role in ['admin', 'hiring_manager', 'hr'] else None,
+                'user_id': user_id,
+                'role': role,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+            
+        except Exception as e:
+            current_app.logger.error(f"❌ WebSocket: Error in join_notification: {e}")
+            emit('error', {'message': f'Failed to join notification room: {str(e)}'})
+    
+    @socketio.on('leave_notification')
+    @socket_auth_required
+    def handle_leave_notification(data: Dict[str, Any]):
+        """
+        Handle client leaving notification room.
+        """
+        try:
+            user_id = request.user_id
+            role = data.get('role', 'candidate') if isinstance(data, dict) else 'candidate'
+            
+            # Leave user's personal notification room
+            user_room = f'user_{user_id}'
+            leave_room(user_room)
+            current_app.logger.info(f"🔔 WebSocket: User {user_id} left notification room")
+            
+            # Admin roles also leave the admins room
+            if role in ['admin', 'hiring_manager', 'hr']:
+                admin_room = 'admins'
+                leave_room(admin_room)
+                current_app.logger.info(f"🔔 WebSocket: User {user_id} left admin notification room")
+            
+            emit('notification_left', {
+                'status': 'success',
+                'message': 'Left notification room',
+                'user_id': user_id,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+            
+        except Exception as e:
+            current_app.logger.error(f"❌ WebSocket: Error in leave_notification: {e}")
+            emit('error', {'message': f'Failed to leave notification room: {str(e)}'})
+    
     app.logger.info("✅ WebSocket handlers registered successfully")
 
 

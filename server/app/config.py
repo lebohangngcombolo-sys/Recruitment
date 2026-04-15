@@ -45,16 +45,20 @@ class Config:
         'main': _database_uri(),
         'analyser': os.getenv('ANALYSER_DATABASE_URL', 'postgresql://recruiter:zhubXkTYjieGoYevXB7jtHj5EdhNYmV7@dpg-d6v72fchg0os73ddre00-a.oregon-postgres.render.com/analyser_w2n9?sslmode=require')
     }
+    # Detect Render environment for optimized pool settings
+    IS_RENDER = os.getenv('RENDER', 'false').lower() == 'true'
+
     # Enhanced connection pooling for production scalability
+    # Render free tier: 10 connections max, use smaller pool
     SQLALCHEMY_ENGINE_OPTIONS = {
         "pool_pre_ping": True,
-        "pool_size": int(os.getenv('DB_POOL_SIZE', '10')),
-        "max_overflow": int(os.getenv('DB_MAX_OVERFLOW', '20')),
+        "pool_size": int(os.getenv('DB_POOL_SIZE', '5' if IS_RENDER else '10')),
+        "max_overflow": int(os.getenv('DB_MAX_OVERFLOW', '3' if IS_RENDER else '20')),
         "pool_recycle": int(os.getenv('DB_POOL_RECYCLE', '300')),
         "pool_timeout": int(os.getenv('DB_POOL_TIMEOUT', '30')),
         "connect_args": {
             "connect_timeout": int(os.getenv('DB_CONNECT_TIMEOUT', '30')),
-            "application_name": "khono_recruite_admin",
+            "application_name": "khono_recruite",
         },
     }
     

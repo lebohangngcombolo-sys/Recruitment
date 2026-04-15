@@ -19,6 +19,7 @@ import '../../services/unified_api_service.dart';
 import 'assessments_results_screen.dart';
 import '../../screens/candidate/user_profile_page.dart';
 import '../../services/auth_service.dart';
+import '../../services/websocket_service.dart';
 
 class CandidateDashboard extends StatefulWidget {
   final String token;
@@ -60,7 +61,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   String _activeSidebarItem = 'dashboard';
 
   List<Map<String, dynamic>> notifications = [];
-  Timer? _notificationTimer;
+  Timer? _notificationTimer; // Deprecated: Using WebSocket instead
+  final WebSocketService _webSocketService = WebSocketService();
   String? _userName;
   List<Map<String, dynamic>> _jobs = [];
   bool _loadingJobs = true;
@@ -90,7 +92,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     _fetchNotifications();
     _fetchJobs();
     _loadPendingApplyJob();
-    _startNotificationTimer();
+    _initializeWebSocket();
   }
 
   /// If in-memory name is null, load from persisted storage (survives token expiry until re-login).
@@ -458,6 +460,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _notificationTimer?.cancel();
+    _webSocketService.disconnect();
     _mainScrollController.dispose();
     super.dispose();
   }
@@ -465,11 +468,44 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // WebSocket will handle real-time updates
       _fetchNotifications();
     }
   }
 
+  /// Initialize WebSocket for real-time notifications (replaces polling)
+  void _initializeWebSocket() async {
+    try {
+      // Set up notification handler before connecting
+      _webSocketService.onNotification = (data) {
+        print('🔔 WebSocket notification received: $data');
+        if (mounted) {
+          _fetchNotifications(); // Refresh notification list
+        }
+      };
+
+      // Initialize WebSocket connection
+      await _webSocketService.initialize();
+
+      // Get user info for room join
+      final userInfo = await AuthService.getUserInfo();
+      final userId = userInfo?['id']?.toString();
+      final role = userInfo?['role']?.toString() ?? 'candidate';
+
+      if (userId != null) {
+        _webSocketService.joinNotificationRoom(userId, role: role);
+        print('🔔 Joined notification room for user $userId');
+      }
+    } catch (e) {
+      print('❌ WebSocket initialization failed: $e');
+      // Fallback: start polling timer if WebSocket fails
+      _startNotificationTimer();
+    }
+  }
+
+  /// Fallback notification polling (deprecated - use WebSocket)
   void _startNotificationTimer() {
+    print('⚠️ Using fallback notification polling (WebSocket unavailable)');
     _notificationTimer = Timer.periodic(Duration(seconds: 30), (timer) {
       _fetchNotifications();
     });
@@ -1594,10 +1630,12 @@ class _CandidateDashboardState extends State<CandidateDashboard>
             const SizedBox(
               width: 14,
               height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Colors.white),
             ),
             const SizedBox(width: 8),
-            Text('Applying...', style: GoogleFonts.poppins(color: Colors.white)),
+            Text('Applying...',
+                style: GoogleFonts.poppins(color: Colors.white)),
           ],
         ),
       );
@@ -1884,13 +1922,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     if (appId == null) return;
     final score = value['assessment_score'];
     final updated = Map<String, dynamic>.from(value);
-    final submittedJobTitle = value['job_title']?.toString().trim().toLowerCase();
+    final submittedJobTitle =
+        value['job_title']?.toString().trim().toLowerCase();
 
     _safeSetState(() {
       var idx = _allApplications.indexWhere(
         (app) => _toIntId(app['application_id']) == appId,
       );
-      if (idx < 0 && submittedJobTitle != null && submittedJobTitle.isNotEmpty) {
+      if (idx < 0 &&
+          submittedJobTitle != null &&
+          submittedJobTitle.isNotEmpty) {
         idx = _allApplications.indexWhere((app) {
           final status = app['status']?.toString().toLowerCase();
           final title = app['job_title']?.toString().trim().toLowerCase();
@@ -1906,15 +1947,18 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         _allApplications[idx] = merged;
       }
 
-      _appliedOnlyApplications = _appliedOnlyApplications.where(
-        (app) => _toIntId(app['application_id']) != appId,
-      ).toList();
+      _appliedOnlyApplications = _appliedOnlyApplications
+          .where(
+            (app) => _toIntId(app['application_id']) != appId,
+          )
+          .toList();
 
       final completedIdx = _completedApplications.indexWhere(
         (app) => _toIntId(app['application_id']) == appId,
       );
       if (completedIdx >= 0) {
-        final merged = Map<String, dynamic>.from(_completedApplications[completedIdx]);
+        final merged =
+            Map<String, dynamic>.from(_completedApplications[completedIdx]);
         merged.addAll(updated);
         merged['status'] = 'assessment_submitted';
         merged['assessment_score'] = score;
@@ -1926,9 +1970,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
         ];
       }
 
-      _applicationsCount = _allApplications
-          .where(_isSubmittedOrCompletedApplication)
-          .length;
+      _applicationsCount =
+          _allApplications.where(_isSubmittedOrCompletedApplication).length;
     });
   }
 

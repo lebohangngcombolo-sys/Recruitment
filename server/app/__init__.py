@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+import logging
 from .extensions import db, jwt, mail, cloudinary_client, mongo_client, migrate, cors, bcrypt, oauth, limiter, socketio
 from .models import *
 from .routes import auth, admin_routes, candidate_routes, ai_routes, mfa_routes, sso_routes, analytics_routes, chat_routes, offer_routes, public_routes, test_pack_routes, cv_analyser_routes, recruitee_routes
@@ -17,6 +18,20 @@ def create_app():
             "CV analyser proxy is enabled but no signing secret found. "
             "Set CV_ANALYSER_SIGNING_SECRET (recommended) or SIGNING_SECRET."
         )
+
+    # ---------------- Health Check Log Filter ----------------
+    class HealthCheckFilter:
+        """Filter to suppress health check requests from logs"""
+        def filter(self, record):
+            msg = str(record.getMessage()) if hasattr(record, 'getMessage') else str(record)
+            return '/api/public/healthz' not in msg and '/healthz' not in msg
+
+    # Apply filter in production to reduce log noise
+    if os.getenv('FLASK_ENV') == 'production' or os.getenv('RENDER'):
+        werkzeug_logger = logging.getLogger('werkzeug')
+        werkzeug_logger.addFilter(HealthCheckFilter())
+        werkzeug_logger.setLevel(logging.WARNING)
+        app.logger.info("Health check log filter applied (production mode)")
 
     # ---------------- Initialize Extensions ----------------
     db.init_app(app)

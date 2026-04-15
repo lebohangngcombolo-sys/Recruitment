@@ -11,11 +11,11 @@ def create_notification(user_id, message):
         db.session.add(notification)
         db.session.commit()
 
-        # Emit real-time notification
+        # Emit real-time notification to specific user room
         socketio.emit(
             f"notification_{user_id}",
             notification.to_dict(),
-            broadcast=True
+            room=f'user_{user_id}'
         )
         return notification
     except Exception as e:
@@ -35,12 +35,12 @@ def notify_admins(message):
         
         db.session.commit()
         
-        # Emit real-time notification after commit
+        # Emit real-time notification after commit to individual admin rooms
         for notification in notifications:
             socketio.emit(
                 f"notification_{notification.user_id}",
                 notification.to_dict(),
-                broadcast=True
+                room=f'user_{notification.user_id}'
             )
         return notifications
     except Exception as e:

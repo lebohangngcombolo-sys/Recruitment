@@ -56,6 +56,9 @@ class WebSocketService {
   Function(Map<String, dynamic> data)? onCandidateApplied;
   Function(Map<String, dynamic> data)? onAuditCreated;
 
+  // Notification event callbacks
+  Function(Map<String, dynamic> data)? onNotification;
+
   /// Initialize WebSocket connection
   Future<void> initialize() async {
     try {
@@ -301,6 +304,19 @@ class WebSocketService {
       _handleEvent('audit_created', data, onAuditCreated);
     });
 
+    // Notification events (real-time notifications)
+    _socket!.on('notification', (data) {
+      _handleEvent('notification', data, onNotification);
+    });
+
+    // User-specific notification events
+    final userIdStr = _userId;
+    if (userIdStr != null) {
+      _socket!.on('notification_$userIdStr', (data) {
+        _handleEvent('notification_$userIdStr', data, onNotification);
+      });
+    }
+
     _socket!.on('error', (data) {
       if (data is Map<String, dynamic>) {
         final error = data['message'] ?? 'Unknown error';
@@ -534,6 +550,21 @@ class WebSocketService {
   void getPresence(List<int> userIds) {
     if (_isConnected && _socket != null) {
       _socket!.emit('get_presence', {'user_ids': userIds});
+    }
+  }
+
+  /// Join notification room for real-time notifications
+  void joinNotificationRoom(String userId, {String? role}) {
+    if (!_isConnected || _socket == null) {
+      debugPrint('⚠️ Cannot join notification room - socket not connected');
+      return;
+    }
+
+    try {
+      debugPrint('🔔 Joining notification room for user $userId');
+      _socket!.emit('join_notification', {'user_id': userId, 'role': role});
+    } catch (e) {
+      debugPrint('❌ Error joining notification room: $e');
     }
   }
 
