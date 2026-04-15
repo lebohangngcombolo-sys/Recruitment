@@ -41,7 +41,7 @@ class AnalysisServiceClient:
             payload["industry"] = industry
 
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            response = requests.post(url, headers=headers, json=payload, timeout=120)
             if response.status_code != 202:
                 logger.error(
                     "Unexpected analysis service response: status=%s body=%s",

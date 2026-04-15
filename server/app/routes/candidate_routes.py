@@ -183,48 +183,63 @@ def apply_job(job_id):
             "applied_at": datetime.utcnow().isoformat()
         }, user_id=str(job.created_by))
 
-        # --- Trigger CV Analysis Feedback Loop (Hugging Face) ---
+        # --- Trigger CV Analysis Feedback Loop (Hugging Face) - Fire and Forget ---
+        # This runs asynchronously and doesn't block the application submission
         if candidate.cv_text and candidate.cv_text.strip():
             try:
                 from app.services.analysis_service_client import AnalysisServiceClient
-                # Extract job description for context
-                job_desc = job.description or ""
-                if job.responsibilities:
-                    job_desc += "\nResponsibilities:\n" + "\n".join(job.responsibilities)
-                if job.qualifications:
-                    job_desc += "\nQualifications:\n" + "\n".join(job.qualifications)
+                import threading
                 
-                # Submit for analysis
-                analysis_result = AnalysisServiceClient.submit_cv_text(
-                    cv_text=candidate.cv_text,
-                    job_description=job_desc,
-                    industry=getattr(job, "category", None)
-                )
+                def trigger_cv_analysis_async():
+                    try:
+                        # Extract job description for context
+                        job_desc = job.description or ""
+                        if job.responsibilities:
+                            job_desc += "\nResponsibilities:\n" + "\n".join(job.responsibilities)
+                        if job.qualifications:
+                            job_desc += "\nQualifications:\n" + "\n".join(job.qualifications)
+                        
+                        # Submit for analysis
+                        analysis_result = AnalysisServiceClient.submit_cv_text(
+                            cv_text=candidate.cv_text,
+                            job_description=job_desc,
+                            industry=getattr(job, "category", None)
+                        )
+                        
+                        if analysis_result and analysis_result.get("analysis_id"):
+                            # Create local CVAnalysis record (analyser db binding)
+                            with current_app.app_context():
+                                new_analysis = CVAnalysis(
+                                    id=str(uuid.uuid4()),
+                                    candidate_id=candidate.id,
+                                    application_id=application.id,
+                                    requisition_id=job.id,
+                                    external_analysis_id=analysis_result["analysis_id"],
+                                    cv_text=candidate.cv_text,
+                                    job_description=job_desc,
+                                    status="processing"
+                                )
+                                db.session.add(new_analysis)
+                                db.session.commit()
+                                
+                                # Store link on candidate for status tracking
+                                candidate.analyser_id = analysis_result["analysis_id"]
+                                candidate.cv_analysis_status = "processing"
+                                candidate.last_cv_analysis_id = new_analysis.id
+                                db.session.commit()
+                                
+                                current_app.logger.info(f"CV analysis {analysis_result['analysis_id']} triggered for application {application.id}")
+                    except Exception as ae:
+                        current_app.logger.warning(f"Async CV analysis trigger failed: {ae}")
                 
-                if analysis_result and analysis_result.get("analysis_id"):
-                    # Create local CVAnalysis record (analyser db binding)
-                    new_analysis = CVAnalysis(
-                        id=str(uuid.uuid4()),
-                        candidate_id=candidate.id,
-                        application_id=application.id,
-                        requisition_id=job.id,
-                        external_analysis_id=analysis_result["analysis_id"],
-                        cv_text=candidate.cv_text,
-                        job_description=job_desc,
-                        status="processing"
-                    )
-                    db.session.add(new_analysis)
-                    db.session.commit()
-                    
-                    # Store link on candidate for status tracking
-                    candidate.analyser_id = analysis_result["analysis_id"]
-                    candidate.cv_analysis_status = "processing"
-                    candidate.last_cv_analysis_id = new_analysis.id
-                    db.session.commit()
-                    
-                    current_app.logger.info(f"Triggered CV analysis {analysis_result['analysis_id']} for application {application.id}")
+                # Start async analysis in background thread
+                thread = threading.Thread(target=trigger_cv_analysis_async)
+                thread.daemon = True
+                thread.start()
+                
+                current_app.logger.info(f"CV analysis trigger initiated for application {application.id}")
             except Exception as ae:
-                current_app.logger.warning(f"Failed to auto-trigger CV analysis feedback: {ae}")
+                current_app.logger.warning(f"Failed to initiate CV analysis trigger: {ae}")
                 # Don't fail the whole application if analysis trigger fails
 
         return jsonify({"message": "Applied successfully!", "application_id": application.id}), 201
