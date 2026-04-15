@@ -1,8 +1,4 @@
 import 'dart:convert';
-import 'dart:io' if (dart.library.html) 'package:khono_recruite/io_stub.dart'
-    show File;
-
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -446,7 +442,8 @@ class AuthService {
   static Future<Map<String, dynamic>> completeEnrollment(
     String token,
     Map<String, dynamic> data, {
-    File? cvFile,
+    List<int>? cvBytes,
+    String? cvFileName,
   }) async {
     try {
       final request = http.MultipartRequest(
@@ -472,24 +469,14 @@ class AuthService {
       // --------------------
       // Optional CV upload (works on both mobile and web)
       // --------------------
-      if (cvFile != null) {
-        if (kIsWeb) {
-          // On web: read file as bytes and use fromBytes
-          final bytes = await cvFile.readAsBytes();
-          final filename = cvFile.path.split('/').last;
-          request.files.add(
-            http.MultipartFile.fromBytes(
-              'cv',
-              bytes,
-              filename: filename,
-            ),
-          );
-        } else {
-          // On mobile: use fromPath
-          request.files.add(
-            await http.MultipartFile.fromPath('cv', cvFile.path),
-          );
-        }
+      if (cvBytes != null && cvBytes.isNotEmpty && cvFileName != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'cv',
+            cvBytes,
+            filename: cvFileName,
+          ),
+        );
       }
 
       final streamedResponse = await request.send();

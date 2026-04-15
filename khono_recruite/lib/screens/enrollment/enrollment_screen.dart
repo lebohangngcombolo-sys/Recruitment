@@ -309,7 +309,12 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
   Future<Map<String, dynamic>> _completeEnrollmentInBackground(
       Map<String, dynamic> data) async {
     try {
-      final response = await AuthService.completeEnrollment(widget.token, data);
+      final response = await AuthService.completeEnrollment(
+        widget.token,
+        data,
+        cvBytes: selectedCV?.bytes,
+        cvFileName: selectedCV?.name,
+      );
       if (response.containsKey('error')) {
         final message = response['error']?.toString() ?? 'Enrollment failed';
         debugPrint(
