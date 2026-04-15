@@ -45,10 +45,13 @@ class _RedirectToAssessmentPageState extends State<RedirectToAssessmentPage>
   bool _applyFailed = false;
   String? _applyError;
   Future<void>? _applyFuture;
+  late DateTime _startedAt;
+  bool _isNavigating = false;
 
   @override
   void initState() {
     super.initState();
+    _startedAt = DateTime.now();
     _progressController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: _redirectSeconds),
@@ -61,8 +64,15 @@ class _RedirectToAssessmentPageState extends State<RedirectToAssessmentPage>
     } else if (widget.job != null) {
       // Show redirect UI and progress bar immediately; run apply in background.
       _progressController.forward();
-      _timer = Timer(const Duration(seconds: _redirectSeconds), _goToAssessment);
       _applyFuture = _runApplyInBackground();
+    }
+  }
+
+  Future<void> _waitMinimumRedirectDuration() async {
+    final elapsed = DateTime.now().difference(_startedAt);
+    final remaining = Duration(seconds: _redirectSeconds) - elapsed;
+    if (remaining > Duration.zero) {
+      await Future<void>.delayed(remaining);
     }
   }
 
@@ -106,6 +116,10 @@ class _RedirectToAssessmentPageState extends State<RedirectToAssessmentPage>
         if (appId != null && appId > 0) {
           if (mounted) setState(() => _applicationId = appId);
           await AuthService.clearPendingApplyJob();
+          await _waitMinimumRedirectDuration();
+          if (mounted && !_isNavigating && !_applyFailed) {
+            await _goToAssessment();
+          }
         } else {
           setState(() {
             _applyFailed = true;
@@ -128,12 +142,14 @@ class _RedirectToAssessmentPageState extends State<RedirectToAssessmentPage>
   }
 
   Future<void> _goToAssessment() async {
+    if (_isNavigating) return;
+    _isNavigating = true;
     _timer?.cancel();
     if (!mounted) return;
     int? appId = _applicationId ?? widget.applicationId;
     if (appId == null || appId <= 0) {
       if (_applyFuture != null) {
-        await _applyFuture!.timeout(const Duration(seconds: 5), onTimeout: () {});
+        await _applyFuture!.timeout(const Duration(seconds: 20), onTimeout: () {});
         if (!mounted) return;
         appId = _applicationId;
       }
@@ -143,8 +159,14 @@ class _RedirectToAssessmentPageState extends State<RedirectToAssessmentPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(_applyError ?? 'Apply failed')),
         );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Still preparing your application. Please wait a moment...'),
+          ),
+        );
       }
-      if (mounted) Navigator.of(context).pop();
+      _isNavigating = false;
       return;
     }
     if (!mounted) return;
@@ -157,6 +179,7 @@ class _RedirectToAssessmentPageState extends State<RedirectToAssessmentPage>
         ),
       ),
     );
+    _isNavigating = false;
   }
 
   @override

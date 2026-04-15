@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_service.dart';
 import '../../utils/api_endpoints.dart';
+import '../../providers/theme_provider.dart';
 import 'package:go_router/go_router.dart';
 
 class AssessmentPage extends StatefulWidget {
@@ -33,14 +36,36 @@ class _AssessmentPageState extends State<AssessmentPage>
   Timer? _countdownTimer;
 
   String? token;
+  bool _isDarkMode = true;
 
   // Enrollment-style Theme Colors
-  final Color _primaryDark = Colors.transparent; // Background
-  final Color _cardDark =
-      Colors.black.withValues(alpha: 0.55); // Card background
   final Color _accentRed = const Color(0xFFC10D00); // Main red
-  final Color _textPrimary = Colors.white; // Main text
-  final Color _boxFillColor = const Color(0xFFF2F2F2).withValues(alpha: 0.2);
+  Color get _primaryBg => Colors.transparent;
+  Color get _cardBg => _isDarkMode
+      ? Colors.black.withValues(alpha: 0.55)
+      : Colors.white.withValues(alpha: 0.95);
+  Color get _textPrimary => _isDarkMode ? Colors.white : const Color(0xFF090812);
+  Color get _textSecondary => _isDarkMode
+      ? Colors.white.withValues(alpha: 0.88)
+      : const Color(0xFF3C3B46);
+  Color get _boxFillColor => _isDarkMode
+      ? const Color(0xFFF2F2F2).withValues(alpha: 0.2)
+      : const Color(0xFFF5F5F8);
+  Color get _overlayColor => _isDarkMode
+      ? Colors.black.withValues(alpha: 0.4)
+      : Colors.white.withValues(alpha: 0.72);
+  Color get _outlineEnabled =>
+      _isDarkMode ? Colors.white54 : const Color(0xFFAAA9B5);
+  Color get _outlineDisabled =>
+      _isDarkMode ? Colors.white24 : const Color(0xFFD9D9E0);
+  Color get _mutedIcon =>
+      _isDarkMode ? Colors.white54 : const Color(0xFF7E7D89);
+  Color get _pagerIdleBg => _isDarkMode
+      ? Colors.white.withValues(alpha: 0.15)
+      : const Color(0xFFE7E7EC);
+  Color get _cardShadow => _isDarkMode
+      ? Colors.black.withValues(alpha: 0.35)
+      : Colors.black.withValues(alpha: 0.08);
 
   @override
   void initState() {
@@ -119,6 +144,52 @@ class _AssessmentPageState extends State<AssessmentPage>
     }
   }
 
+  Future<void> _cacheAssessmentResult(Map<String, dynamic> submissionData) async {
+    try {
+      const cacheKey = 'candidate_assessment_results_cache';
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(cacheKey);
+      final decoded = raw == null || raw.isEmpty ? [] : json.decode(raw);
+      final List<dynamic> items = decoded is List ? List<dynamic>.from(decoded) : [];
+
+      final row = <String, dynamic>{
+        'application_id': widget.applicationId,
+        'job_title': _assessmentTitle,
+        'status': 'assessment_submitted',
+        'assessment_score': submissionData['assessment_score'],
+        'overall_score': submissionData['overall_score'],
+        'score_ready': submissionData['score_ready'] == true,
+        'cv_analysis_status': submissionData['cv_analysis_status'],
+        'scoring_breakdown': submissionData['score_ready'] == true
+            ? (submissionData['scoring_breakdown'] ?? const <String, dynamic>{})
+            : const <String, dynamic>{},
+        'created_at': DateTime.now().toIso8601String(),
+        'assessment_result': <String, dynamic>{
+          'percentage_score': submissionData['assessment_score'],
+          'recommendation': submissionData['recommendation'],
+          'assessed_at': DateTime.now().toIso8601String(),
+        },
+      };
+
+      final idx = items.indexWhere((e) {
+        if (e is! Map) return false;
+        final rawId = e['application_id'];
+        final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+        return id == widget.applicationId;
+      });
+      if (idx >= 0) {
+        final merged = Map<String, dynamic>.from(items[idx] as Map);
+        merged.addAll(row);
+        items[idx] = merged;
+      } else {
+        items.insert(0, row);
+      }
+      await prefs.setString(cacheKey, json.encode(items));
+    } catch (_) {
+      // Cache is best-effort only.
+    }
+  }
+
   Future<void> fetchAssessment() async {
     if (token == null) return;
 
@@ -186,6 +257,7 @@ class _AssessmentPageState extends State<AssessmentPage>
           throw Exception("Invalid submission response");
         }
         if (!mounted) return;
+        await _cacheAssessmentResult(Map<String, dynamic>.from(data));
 
         await showDialog<void>(
           context: context,
@@ -234,7 +306,7 @@ class _AssessmentPageState extends State<AssessmentPage>
                     style: GoogleFonts.poppins(
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
-                      color: Colors.white,
+                color: _textPrimary,
                     ),
                   ),
                 ),
@@ -244,17 +316,22 @@ class _AssessmentPageState extends State<AssessmentPage>
         );
         if (!mounted) return;
         _countdownTimer?.cancel();
+        // Assessment page is frequently opened via Navigator.push.
+        // Returning through Navigator ensures we always leave this page after submit.
+        final navigator = Navigator.of(context);
+        if (navigator.canPop()) {
+          navigator.pop({
+            'application_id': widget.applicationId,
+            'status': 'assessment_submitted',
+            'job_title': _assessmentTitle,
+            ...Map<String, dynamic>.from(data),
+          });
+          return;
+        }
         final safeToken = token ?? '';
-        final redirectNonce = DateTime.now().millisecondsSinceEpoch;
-        // IMPORTANT: Assessment is opened via Navigator.push on top of a GoRouter route.
-        // If underlying route is already /candidate-dashboard, a plain go('/candidate-dashboard')
-        // becomes a no-op. Add a nonce query to force router state change.
         final target = safeToken.isNotEmpty
-            ? '/candidate-dashboard?token=${Uri.encodeComponent(safeToken)}&_rt=$redirectNonce'
-            : '/candidate-dashboard?_rt=$redirectNonce';
-
-        await Future<void>.delayed(const Duration(milliseconds: 10));
-        if (!mounted) return;
+            ? '/candidate-dashboard?token=${Uri.encodeComponent(safeToken)}'
+            : '/candidate-dashboard';
         GoRouter.of(context).go(target);
         return;
       } else {
@@ -358,7 +435,7 @@ class _AssessmentPageState extends State<AssessmentPage>
             style: GoogleFonts.poppins(
               fontSize: 14,
               height: 1.4,
-              color: Colors.white.withValues(alpha: 0.9),
+              color: _textSecondary,
             ),
             textAlign: TextAlign.center,
           ),
@@ -368,7 +445,7 @@ class _AssessmentPageState extends State<AssessmentPage>
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
               decoration: BoxDecoration(
-                color: _cardDark,
+                color: _cardBg,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(color: _accentRed.withValues(alpha: 0.9), width: 2),
                 boxShadow: [
@@ -379,7 +456,7 @@ class _AssessmentPageState extends State<AssessmentPage>
                     offset: const Offset(0, 4),
                   ),
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.4),
+                    color: _cardShadow,
                     blurRadius: 16,
                     offset: const Offset(0, 6),
                   ),
@@ -405,7 +482,7 @@ class _AssessmentPageState extends State<AssessmentPage>
                         style: GoogleFonts.poppins(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: Colors.white.withValues(alpha: 0.95),
+                          color: _textPrimary,
                         ),
                       ),
                     ],
@@ -497,7 +574,7 @@ class _AssessmentPageState extends State<AssessmentPage>
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white,
+                  color: _textPrimary,
                 ),
               ),
               const SizedBox(height: 1),
@@ -505,7 +582,7 @@ class _AssessmentPageState extends State<AssessmentPage>
                 description,
                 style: GoogleFonts.poppins(
                   fontSize: 12,
-                  color: Colors.white.withValues(alpha: 0.8),
+                  color: _textSecondary,
                   height: 1.3,
                 ),
               ),
@@ -516,16 +593,16 @@ class _AssessmentPageState extends State<AssessmentPage>
     );
   }
 
-  Widget _buildBackground(BuildContext context, Widget child) {
+  Widget _buildBackground(BuildContext context, Widget child, String backgroundImage) {
     final topPadding = MediaQuery.of(context).padding.top + kToolbarHeight;
     return Stack(
       fit: StackFit.expand,
       children: [
         Positioned.fill(
           child: Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               image: DecorationImage(
-                image: AssetImage("assets/images/dark.png"),
+                image: AssetImage(backgroundImage),
                 fit: BoxFit.cover,
               ),
             ),
@@ -533,7 +610,7 @@ class _AssessmentPageState extends State<AssessmentPage>
         ),
         Positioned.fill(
           child: Container(
-            color: Colors.black.withValues(alpha: 0.4),
+            color: _overlayColor,
           ),
         ),
         Positioned.fill(
@@ -548,13 +625,17 @@ class _AssessmentPageState extends State<AssessmentPage>
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    _isDarkMode = themeProvider.isDarkMode;
+    final backgroundImage = themeProvider.backgroundImage;
+
     if (loading) {
       final jobText = _assessmentTitle.trim();
       final redirectMessage = (jobText.isNotEmpty && jobText != 'Assessment')
           ? 'You are now being redirected to your assessment for ${jobText.toLowerCase()}'
           : 'You are now being redirected to your assessment';
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: _isDarkMode ? const Color(0xFF121212) : Colors.white,
         body: SafeArea(
           child: Center(
             child: Padding(
@@ -587,7 +668,7 @@ class _AssessmentPageState extends State<AssessmentPage>
                     'Preparing your application',
                     style: GoogleFonts.poppins(
                       fontSize: 14,
-                      color: Colors.grey.shade600,
+                      color: _isDarkMode ? Colors.white70 : Colors.grey.shade600,
                     ),
                   ),
                   const SizedBox(height: 48),
@@ -596,7 +677,7 @@ class _AssessmentPageState extends State<AssessmentPage>
                     textAlign: TextAlign.center,
                     style: GoogleFonts.poppins(
                       fontSize: 16,
-                      color: Colors.black87,
+                      color: _textPrimary,
                       height: 1.4,
                     ),
                   ),
@@ -638,14 +719,14 @@ class _AssessmentPageState extends State<AssessmentPage>
     if (questions.isEmpty) {
       return Scaffold(
         extendBodyBehindAppBar: true,
-        backgroundColor: _primaryDark,
+        backgroundColor: _primaryBg,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
-          iconTheme: IconThemeData(color: Colors.white, size: 28),
+          iconTheme: IconThemeData(color: _textPrimary, size: 28),
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 26),
+            icon: Icon(Icons.arrow_back, color: _textPrimary, size: 26),
             onPressed: () => Navigator.pop(context),
             tooltip: 'Back',
           ),
@@ -682,6 +763,7 @@ class _AssessmentPageState extends State<AssessmentPage>
               ),
             ],
           ),
+          backgroundImage,
         ),
       );
     }
@@ -690,14 +772,14 @@ class _AssessmentPageState extends State<AssessmentPage>
     if (_showIntro) {
       return Scaffold(
         extendBodyBehindAppBar: true,
-        backgroundColor: _primaryDark,
+        backgroundColor: _primaryBg,
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
-          iconTheme: const IconThemeData(color: Colors.white, size: 28),
+          iconTheme: IconThemeData(color: _textPrimary, size: 28),
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 26),
+            icon: Icon(Icons.arrow_back, color: _textPrimary, size: 26),
             onPressed: () => Navigator.pop(context),
             tooltip: 'Back',
           ),
@@ -715,20 +797,20 @@ class _AssessmentPageState extends State<AssessmentPage>
             ),
           ],
         ),
-        body: _buildBackground(context, _buildAssessmentIntro()),
+        body: _buildBackground(context, _buildAssessmentIntro(), backgroundImage),
       );
     }
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: _primaryDark,
+      backgroundColor: _primaryBg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
-        iconTheme: IconThemeData(color: Colors.white, size: 28),
+        iconTheme: IconThemeData(color: _textPrimary, size: 28),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white, size: 26),
+          icon: Icon(Icons.arrow_back, color: _textPrimary, size: 26),
           onPressed: () => Navigator.pop(context),
           tooltip: 'Back',
         ),
@@ -762,7 +844,7 @@ class _AssessmentPageState extends State<AssessmentPage>
                       style: GoogleFonts.poppins(
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        color: _textPrimary,
                       ),
                       textAlign: TextAlign.left,
                     ),
@@ -787,6 +869,7 @@ class _AssessmentPageState extends State<AssessmentPage>
             ),
           ],
         ),
+        backgroundImage,
       ),
     );
   }
@@ -804,14 +887,14 @@ class _AssessmentPageState extends State<AssessmentPage>
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.timer_outlined, color: Colors.white.withValues(alpha: 0.9), size: 20),
+            Icon(Icons.timer_outlined, color: _textSecondary, size: 20),
             const SizedBox(width: 6),
             Text(
               'Question $current of $total',
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Colors.white.withValues(alpha: 0.95),
+                color: _textPrimary,
               ),
             ),
           ],
@@ -826,7 +909,9 @@ class _AssessmentPageState extends State<AssessmentPage>
             children: [
               CircularProgressIndicator(
                 value: progress.clamp(0.0, 1.0),
-                backgroundColor: Colors.white.withValues(alpha: 0.2),
+                backgroundColor: _isDarkMode
+                    ? Colors.white.withValues(alpha: 0.2)
+                    : const Color(0xFFE0DFE7),
                 color: _accentRed,
                 strokeWidth: 4,
               ),
@@ -839,7 +924,7 @@ class _AssessmentPageState extends State<AssessmentPage>
                     style: GoogleFonts.poppins(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: _textPrimary,
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -865,12 +950,12 @@ class _AssessmentPageState extends State<AssessmentPage>
         width: double.infinity,
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: _cardDark,
+          color: _cardBg,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: _accentRed.withValues(alpha: 0.6)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.3),
+              color: _cardShadow,
               blurRadius: 8,
               offset: const Offset(0, 4),
             ),
@@ -922,7 +1007,7 @@ class _AssessmentPageState extends State<AssessmentPage>
                       children: [
                         Icon(
                           isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                          color: isSelected ? _accentRed : Colors.white54,
+                          color: isSelected ? _accentRed : _mutedIcon,
                           size: 22,
                         ),
                         const SizedBox(width: 12),
@@ -961,8 +1046,8 @@ class _AssessmentPageState extends State<AssessmentPage>
               ? () => setState(() => _currentQuestionIndex = (_currentQuestionIndex - 1).clamp(0, total - 1))
               : null,
           style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white,
-            side: BorderSide(color: canPrev ? Colors.white54 : Colors.white24),
+            foregroundColor: _textPrimary,
+            side: BorderSide(color: canPrev ? _outlineEnabled : _outlineDisabled),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           ),
           child: Text('Prev', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
@@ -978,7 +1063,11 @@ class _AssessmentPageState extends State<AssessmentPage>
               return Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 3),
                 child: Material(
-                  color: isCurrent ? _accentRed : (hasAnswer ? _accentRed.withValues(alpha: 0.5) : Colors.white.withValues(alpha: 0.15)),
+                  color: isCurrent
+                      ? _accentRed
+                      : (hasAnswer
+                          ? _accentRed.withValues(alpha: 0.5)
+                          : _pagerIdleBg),
                   borderRadius: BorderRadius.circular(8),
                   child: InkWell(
                     onTap: () => setState(() => _currentQuestionIndex = i),
@@ -992,7 +1081,7 @@ class _AssessmentPageState extends State<AssessmentPage>
                           style: GoogleFonts.poppins(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                            color: isCurrent ? Colors.white : _textPrimary,
                           ),
                         ),
                       ),
@@ -1009,8 +1098,8 @@ class _AssessmentPageState extends State<AssessmentPage>
               ? () => setState(() => _currentQuestionIndex = (_currentQuestionIndex + 1).clamp(0, total - 1))
               : null,
           style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.white,
-            side: BorderSide(color: canNext ? Colors.white54 : Colors.white24),
+            foregroundColor: _textPrimary,
+            side: BorderSide(color: canNext ? _outlineEnabled : _outlineDisabled),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           ),
           child: Text('Next', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),

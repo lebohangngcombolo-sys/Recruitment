@@ -63,6 +63,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   List<Map<String, dynamic>> _jobs = [];
   bool _loadingJobs = true;
   bool _navigatingToAssessment = false;
+  final Set<int> _applyingJobIds = <int>{};
   int? _applicationsCount;
   int? _savedCount; // saved drafts count
   Map<String, dynamic>? _pendingApplyJob;
@@ -241,6 +242,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   static bool _isSubmittedOrCompletedApplication(dynamic app) {
     final status = app is Map ? app['status']?.toString() : null;
     return status == 'applied' ||
+        status == 'assessment' ||
         status == 'assessment_submitted' ||
         status == 'disqualified';
   }
@@ -248,7 +250,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   /// Completed assessment only (for backward compatibility if needed).
   static bool _isCompletedApplication(dynamic app) {
     final status = app is Map ? app['status']?.toString() : null;
-    return status == 'assessment_submitted' || status == 'disqualified';
+    return status == 'assessment' ||
+        status == 'assessment_submitted' ||
+        status == 'disqualified';
   }
 
   /// Only draft or in_progress: not yet in "My applications". Once form is submitted (applied) or completed, show only in My applications, not in Continue.
@@ -1372,6 +1376,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                         app['status']?.toString().toLowerCase().trim();
                     if (status == null || status.isEmpty) return false;
                     return status == 'applied' ||
+                        status == 'assessment' ||
                         status == 'assessment_submitted' ||
                         status == 'disqualified' ||
                         status.contains('offer');
@@ -1566,6 +1571,31 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   }
 
   Widget _buildApplyOrContinueButton(Map<String, dynamic> job) {
+    final jobId = _toIntId(job['id']);
+    final isApplying = jobId != null && _applyingJobIds.contains(jobId);
+    if (isApplying) {
+      return ElevatedButton(
+        onPressed: null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.grey.shade700,
+          disabledBackgroundColor: Colors.grey.shade700,
+          disabledForegroundColor: Colors.white70,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 14,
+              height: 14,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            ),
+            const SizedBox(width: 8),
+            Text('Applying...', style: GoogleFonts.poppins(color: Colors.white)),
+          ],
+        ),
+      );
+    }
     final inProgress = _inProgressForJob(job);
     if (inProgress != null) {
       final appId = inProgress['application_id'];
@@ -1584,7 +1614,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       draftData: draftData,
                     ),
                   ),
-                ).then((_) => _fetchDashboardCounts());
+                ).then((value) {
+                  _applyAssessmentCompletionResult(value);
+                  _fetchDashboardCounts();
+                });
               },
         style: ElevatedButton.styleFrom(
           backgroundColor: strokeColor,
@@ -1816,6 +1849,10 @@ class _CandidateDashboardState extends State<CandidateDashboard>
       ).showSnackBar(const SnackBar(content: Text('Invalid job.')));
       return;
     }
+    final jobId = _toIntId(job['id']);
+    if (jobId != null) {
+      _safeSetState(() => _applyingJobIds.add(jobId));
+    }
     // Navigate to redirect page immediately; it will call apply API then show countdown.
     if (!mounted) return;
     Navigator.push(
@@ -1826,7 +1863,67 @@ class _CandidateDashboardState extends State<CandidateDashboard>
           jobTitle: job['title']?.toString(),
         ),
       ),
-    );
+    ).then((value) {
+      if (jobId != null && mounted) {
+        _safeSetState(() => _applyingJobIds.remove(jobId));
+      }
+      _applyAssessmentCompletionResult(value);
+      _fetchDashboardCounts();
+    });
+  }
+
+  void _applyAssessmentCompletionResult(dynamic value) {
+    if (value is! Map) return;
+    final appId = _toIntId(value['application_id']);
+    if (appId == null) return;
+    final score = value['assessment_score'];
+    final updated = Map<String, dynamic>.from(value);
+    final submittedJobTitle = value['job_title']?.toString().trim().toLowerCase();
+
+    _safeSetState(() {
+      var idx = _allApplications.indexWhere(
+        (app) => _toIntId(app['application_id']) == appId,
+      );
+      if (idx < 0 && submittedJobTitle != null && submittedJobTitle.isNotEmpty) {
+        idx = _allApplications.indexWhere((app) {
+          final status = app['status']?.toString().toLowerCase();
+          final title = app['job_title']?.toString().trim().toLowerCase();
+          return status == 'applied' && title == submittedJobTitle;
+        });
+      }
+      if (idx >= 0) {
+        final merged = Map<String, dynamic>.from(_allApplications[idx]);
+        merged.addAll(updated);
+        merged['application_id'] = appId;
+        merged['status'] = 'assessment_submitted';
+        merged['assessment_score'] = score;
+        _allApplications[idx] = merged;
+      }
+
+      _appliedOnlyApplications = _appliedOnlyApplications.where(
+        (app) => _toIntId(app['application_id']) != appId,
+      ).toList();
+
+      final completedIdx = _completedApplications.indexWhere(
+        (app) => _toIntId(app['application_id']) == appId,
+      );
+      if (completedIdx >= 0) {
+        final merged = Map<String, dynamic>.from(_completedApplications[completedIdx]);
+        merged.addAll(updated);
+        merged['status'] = 'assessment_submitted';
+        merged['assessment_score'] = score;
+        _completedApplications[completedIdx] = merged;
+      } else if (idx >= 0) {
+        _completedApplications = [
+          ..._completedApplications,
+          _allApplications[idx],
+        ];
+      }
+
+      _applicationsCount = _allApplications
+          .where(_isSubmittedOrCompletedApplication)
+          .length;
+    });
   }
 
   void _showSignInToApplyDialog(Map<String, dynamic> job) {
@@ -1911,6 +2008,7 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       final status = app['status']?.toString().toLowerCase().trim();
                       if (status == null || status.isEmpty) return false;
                       return status == 'applied' ||
+                          status == 'assessment' ||
                           status == 'assessment_submitted' ||
                           status == 'disqualified' ||
                           status.contains('offer');
@@ -2262,7 +2360,21 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       ),
                       _buildStatusChip(status.$1, status.$2),
                       SizedBox(width: 8),
-                      _buildMiniViewButton(),
+                      _buildMiniViewButton(
+                        onPressed: item['job'] is Map
+                            ? () {
+                                final job = Map<String, dynamic>.from(
+                                  item['job'] as Map,
+                                );
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => JobDetailsPage(job: job),
+                                  ),
+                                );
+                              }
+                            : null,
+                      ),
                     ],
                   ),
                 );
@@ -2392,7 +2504,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       ),
                     ),
                     SizedBox(width: 10),
-                    _buildMiniViewButton(),
+                    _buildMiniViewButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => JobDetailsPage(job: job),
+                          ),
+                        );
+                      },
+                    ),
                     SizedBox(width: 8),
                     ElevatedButton(
                       onPressed: () => _handleApplyNow(job),
@@ -2519,9 +2640,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     );
   }
 
-  Widget _buildMiniViewButton() {
+  Widget _buildMiniViewButton({VoidCallback? onPressed}) {
     return ElevatedButton(
-      onPressed: () {},
+      onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF727576),
         foregroundColor: Colors.white,
@@ -2602,7 +2723,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                       draftData: draftData,
                     ),
                   ),
-                ).then((_) {
+                ).then((value) {
+                  _applyAssessmentCompletionResult(value);
                   if (mounted)
                     _safeSetState(() => _navigatingToAssessment = false);
                   _fetchDashboardCounts();

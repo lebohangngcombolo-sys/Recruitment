@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'dart:ui';
+import '../../providers/theme_provider.dart';
 import '../../services/auth_service.dart';
 import 'enrollment_drop_stub.dart'
     if (dart.library.html) 'enrollment_drop_web.dart' as enrollment_drop;
@@ -23,6 +25,25 @@ class EnrollmentScreen extends StatefulWidget {
 
 class _EnrollmentScreenState extends State<EnrollmentScreen>
     with SingleTickerProviderStateMixin {
+  bool _isDarkMode = true;
+
+  Color get _enrollText => _isDarkMode ? Colors.white : const Color(0xFF090812);
+  Color get _enrollMuted => _isDarkMode
+      ? Colors.white70
+      : const Color(0xFF090812).withValues(alpha: 0.72);
+  Color get _enrollSoft => _isDarkMode
+      ? Colors.white54
+      : const Color(0xFF090812).withValues(alpha: 0.58);
+  Color get _enrollCardBg => _isDarkMode
+      ? Colors.white.withValues(alpha: 0.06)
+      : Colors.white.withValues(alpha: 0.74);
+  Color get _enrollCardBorder => _isDarkMode
+      ? Colors.white.withValues(alpha: 0.10)
+      : const Color(0xFF090812).withValues(alpha: 0.20);
+  Color get _enrollOverlay => _isDarkMode
+      ? Colors.black.withValues(alpha: 0.4)
+      : Colors.black.withValues(alpha: 0.06);
+
   late TabController _tabController;
   int currentStep = 0;
   bool loading = false;
@@ -285,7 +306,30 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     }
   }
 
+  Future<void> _completeEnrollmentInBackground(
+      Map<String, dynamic> data) async {
+    try {
+      final response = await AuthService.completeEnrollment(widget.token, data);
+      if (response.containsKey('error')) {
+        final message = response['error']?.toString() ?? 'Enrollment failed';
+        debugPrint(
+            'Enrollment background error: $message; details: ${response['details']}');
+        return;
+      }
+      await AuthService.getCurrentUser(token: widget.token)
+          .catchError((_) => <String, dynamic>{});
+    } catch (e) {
+      debugPrint('Enrollment background request failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
+  }
+
   void submitEnrollment() async {
+    if (loading) return;
+    if (!mounted) return;
     setState(() => loading = true);
 
     final data = {
@@ -334,32 +378,12 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       data["dob"] = dobController.text.trim();
     }
 
-    final response = await AuthService.completeEnrollment(widget.token, data);
-
-    if (response.containsKey('error')) {
-      setState(() => loading = false);
-      final message = response['error']?.toString() ?? 'Enrollment failed';
-      debugPrint('Enrollment error: $message; details: ${response['details']}');
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message, style: const TextStyle(fontFamily: 'Poppins')),
-          backgroundColor: Colors.red.shade700,
-        ),
-      );
-    } else {
-      if (!context.mounted) return;
-      // Navigate immediately after successful enrollment.
-      // We refresh the user info in the background so the dashboard can load fast.
-      setState(() => _loggingIn = true);
-      unawaited(
-        AuthService.getCurrentUser(token: widget.token)
-            .catchError((_) => <String, dynamic>{}),
-      );
-      context.go(
-        '/candidate-dashboard?token=${Uri.encodeComponent(widget.token)}',
-      );
-    }
+    // Make "Finish" feel instant: navigate now, complete enrollment in background.
+    setState(() => _loggingIn = true);
+    unawaited(_completeEnrollmentInBackground(data));
+    context.go(
+      '/candidate-dashboard?token=${Uri.encodeComponent(widget.token)}',
+    );
   }
 
   // ------------------- Onboarding step builders -------------------
@@ -369,7 +393,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+            icon: Icon(Icons.arrow_back, color: _enrollText, size: 28),
             onPressed: () {
               context.go('/login');
             },
@@ -381,7 +405,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             style: GoogleFonts.poppins(
               fontSize: 14,
               fontWeight: FontWeight.w500,
-              color: Colors.white70,
+              color: _enrollMuted,
             ),
           ),
         ],
@@ -401,13 +425,12 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       margin: flexible ? _cardMarginInRow : _cardMargin,
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        // Glassmorphic card so the grey blends with the app background.
-        color: Colors.white.withValues(alpha: 0.06),
+        color: _enrollCardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+        border: Border.all(color: _enrollCardBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withOpacity(_isDarkMode ? 0.3 : 0.08),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -446,7 +469,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        backgroundColor: _kOnboardingCardBg,
+        backgroundColor: _isDarkMode
+            ? _kOnboardingCardBg
+            : Colors.white.withValues(alpha: 0.96),
         title: Row(
           children: [
             Icon(Icons.warning_amber_rounded, color: _kKhonologyRed, size: 28),
@@ -456,7 +481,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
               style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: _enrollText,
               ),
             ),
           ],
@@ -464,7 +489,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         content: Text(
           'Please upload a PDF or Word document (.pdf, .doc, .docx).',
           style: GoogleFonts.poppins(
-              fontSize: 14, color: Colors.white70, height: 1.4),
+              fontSize: 14, color: _enrollMuted, height: 1.4),
         ),
         actions: [
           TextButton(
@@ -497,10 +522,13 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     final hasFile = selectedCV != null;
     final Color borderColor = _cvUploadFailed
         ? _kKhonologyRed
-        : (hasFile ? _kSuccess : Colors.white24);
-    final Color iconColor = _cvUploadFailed
-        ? _kKhonologyRed
-        : (hasFile ? _kSuccess : Colors.white54);
+        : (hasFile
+            ? _kSuccess
+            : (_isDarkMode
+                ? Colors.white24
+                : const Color(0xFF090812).withValues(alpha: 0.24)));
+    final Color iconColor =
+        _cvUploadFailed ? _kKhonologyRed : (hasFile ? _kSuccess : _enrollSoft);
     return GestureDetector(
       onTap: () async {
         final result = await FilePicker.platform.pickFiles(
@@ -523,7 +551,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.06),
+          color: _enrollCardBg,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: borderColor,
@@ -545,7 +573,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                     selectedCV!.name,
                     style: GoogleFonts.poppins(
                       fontSize: 15,
-                      color: Colors.white,
+                      color: _enrollText,
                       fontWeight: FontWeight.w500,
                     ),
                     maxLines: 1,
@@ -558,7 +586,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                       'Preparing file…',
                       style: GoogleFonts.poppins(
                         fontSize: 12,
-                        color: Colors.white54,
+                        color: _enrollSoft,
                         fontWeight: FontWeight.w400,
                       ),
                     ),
@@ -620,7 +648,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                           style: GoogleFonts.poppins(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
-                            color: Colors.white70,
+                            color: _enrollMuted,
                           ),
                         ),
                         style: TextButton.styleFrom(
@@ -644,7 +672,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                     'Drag & drop your CV here or',
                     style: GoogleFonts.poppins(
                       fontSize: 16,
-                      color: Colors.white,
+                      color: _enrollText,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -724,7 +752,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                           Positioned.fill(
                             child: Container(
                               decoration: BoxDecoration(
-                                color: Colors.black54,
+                                color: _isDarkMode
+                                    ? Colors.black54
+                                    : Colors.white.withValues(alpha: 0.56),
                                 borderRadius: BorderRadius.circular(16),
                               ),
                               child: Center(
@@ -745,7 +775,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                                       style: GoogleFonts.poppins(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w500,
-                                        color: Colors.white,
+                                        color: _enrollText,
                                       ),
                                     ),
                                   ],
@@ -775,7 +805,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           style: GoogleFonts.poppins(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            color: Colors.white,
+            color: _enrollText,
           ),
         ),
         const SizedBox(height: 8),
@@ -783,7 +813,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           'Upload your CV to autofill your profile.',
           style: GoogleFonts.poppins(
             fontSize: 16,
-            color: Colors.white70,
+            color: _enrollMuted,
             height: 1.4,
           ),
         ),
@@ -795,7 +825,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
               style: GoogleFonts.poppins(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: _enrollText,
               ),
             ),
             Text(
@@ -816,7 +846,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             'PDF, DOCX, or DOC files',
             style: GoogleFonts.poppins(
               fontSize: 13,
-              color: Colors.white54,
+              color: _enrollSoft,
             ),
           ),
         ),
@@ -829,7 +859,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
               style: GoogleFonts.poppins(
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
-                color: Colors.white,
+                color: _enrollText,
               ),
             ),
           ),
@@ -898,7 +928,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
               style: GoogleFonts.poppins(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
-                color: Colors.white,
+                color: _enrollText,
               ),
             ),
           ],
@@ -909,7 +939,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             selectedCV!.name,
             style: GoogleFonts.poppins(
               fontSize: 14,
-              color: Colors.white70,
+              color: _enrollMuted,
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -922,7 +952,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             style: GoogleFonts.poppins(
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: Colors.white,
+              color: _enrollText,
             ),
           ),
         ),
@@ -940,7 +970,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           style: GoogleFonts.poppins(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            color: Colors.white,
+            color: _enrollText,
           ),
         ),
         const SizedBox(height: 8),
@@ -948,7 +978,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           'Upload your CV on the left and click Next to extract your details.',
           style: GoogleFonts.poppins(
             fontSize: 16,
-            color: Colors.white70,
+            color: _enrollMuted,
             height: 1.4,
           ),
         ),
@@ -972,7 +1002,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           style: GoogleFonts.poppins(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            color: Colors.white,
+            color: _enrollText,
           ),
         ),
         const SizedBox(height: 8),
@@ -980,7 +1010,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           'Extracting details from your CV…',
           style: GoogleFonts.poppins(
             fontSize: 16,
-            color: Colors.white70,
+            color: _enrollMuted,
             height: 1.4,
           ),
         ),
@@ -997,7 +1027,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                   size: 24,
                   color: done
                       ? _kSuccess
-                      : (current ? _kKhonologyRed : Colors.white38),
+                      : (current ? _kKhonologyRed : _enrollSoft),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1007,8 +1037,8 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                       fontSize: 15,
                       fontWeight: current ? FontWeight.w600 : FontWeight.w500,
                       color: done
-                          ? Colors.white
-                          : (current ? _kKhonologyRed : Colors.white70),
+                          ? _enrollText
+                          : (current ? _kKhonologyRed : _enrollMuted),
                     ),
                   ),
                 ),
@@ -1033,7 +1063,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                 ? 1.0
                 : (_processingStage + 1) / stages.length,
             minHeight: 6,
-            backgroundColor: Colors.white24,
+            backgroundColor: _isDarkMode
+                ? Colors.white24
+                : const Color(0xFF090812).withValues(alpha: 0.24),
             valueColor: const AlwaysStoppedAnimation<Color>(_kKhonologyRed),
           ),
         ),
@@ -1043,7 +1075,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             'Please wait a moment…',
             style: GoogleFonts.poppins(
               fontSize: 14,
-              color: Colors.white54,
+              color: _enrollSoft,
             ),
           ),
         if (_processingComplete || _processingError) ...[
@@ -1058,14 +1090,12 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                   style: GoogleFonts.poppins(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                    color: _enrollText,
                   ),
                 ),
               ),
               ElevatedButton(
-                onPressed: _processingError
-                    ? null
-                    : () => setState(() => _onboardingStep = 2),
+                onPressed: () => setState(() => _onboardingStep = 2),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: _kKhonologyRed,
                   foregroundColor: Colors.white,
@@ -1126,7 +1156,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                   style: GoogleFonts.poppins(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: _enrollText,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -1134,7 +1164,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                   'We\'ve filled in your details. Please review and complete any missing info.',
                   style: GoogleFonts.poppins(
                     fontSize: 16,
-                    color: Colors.white70,
+                    color: _enrollMuted,
                     height: 1.4,
                   ),
                 ),
@@ -1150,7 +1180,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                             sectionKey: 'personal',
                             title: 'Personal Details',
                             completed: nameOk,
-                            onEdit: null,
+                            onEdit: () => _showEditPersonal(context),
                             expandBody: false,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1172,7 +1202,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                                               style: GoogleFonts.poppins(
                                                 fontSize: 14,
                                                 fontWeight: FontWeight.w600,
-                                                color: Colors.white,
+                                                color: _enrollText,
                                               ),
                                             ),
                                             const SizedBox(height: 2),
@@ -1183,7 +1213,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                                                         _fullNameInlineFocusNode,
                                                     autofocus: true,
                                                     style: GoogleFonts.poppins(
-                                                      color: Colors.white,
+                                                      color: _enrollText,
                                                       height: 1.3,
                                                     ),
                                                     cursorColor: _kKhonologyRed,
@@ -1224,7 +1254,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                                                       style:
                                                           GoogleFonts.poppins(
                                                         fontSize: 14,
-                                                        color: Colors.white70,
+                                                        color: _enrollMuted,
                                                         height: 1.3,
                                                       ),
                                                       maxLines: 2,
@@ -1259,7 +1289,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                             sectionKey: 'skills',
                             title: 'Skills',
                             completed: skillsOk,
-                            onEdit: null,
+                            onEdit: () => _showEditSkills(context),
                             expandBody: false,
                             child: skillsOk
                                 ? _buildSkillsReviewContent()
@@ -1269,7 +1299,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                                       'No skills listed',
                                       style: GoogleFonts.poppins(
                                         fontSize: 14,
-                                        color: Colors.white54,
+                                        color: _enrollSoft,
                                       ),
                                     ),
                                   ),
@@ -1286,7 +1316,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                             sectionKey: 'education',
                             title: 'Education',
                             completed: educationOk,
-                            onEdit: null,
+                            onEdit: () => _showEditEducation(context),
                             expandBody: false,
                             child: educationOk
                                 ? Column(
@@ -1317,7 +1347,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                                       'No education details found',
                                       style: GoogleFonts.poppins(
                                         fontSize: 14,
-                                        color: Colors.white54,
+                                        color: _enrollSoft,
                                       ),
                                     ),
                                   ),
@@ -1327,7 +1357,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                             sectionKey: 'experience',
                             title: 'Work Experience',
                             completed: experienceOk,
-                            onEdit: null,
+                            onEdit: () => _showEditExperience(context),
                             expandBody: false,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1343,7 +1373,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                                         style: GoogleFonts.poppins(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w700,
-                                          color: Colors.white70,
+                                          color: _enrollMuted,
                                         ),
                                       ),
                                       const SizedBox(height: 8),
@@ -1409,7 +1439,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                                         'No work experience added',
                                         style: GoogleFonts.poppins(
                                           fontSize: 14,
-                                          color: Colors.white54,
+                                          color: _enrollSoft,
                                         ),
                                       ),
                                     ),
@@ -1427,18 +1457,19 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     TextButton(
-                      onPressed: () => setState(() => _onboardingStep = 1),
+                      onPressed:
+                          loading ? null : () => setState(() => _onboardingStep = 1),
                       child: Text(
                         'Previous',
                         style: GoogleFonts.poppins(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                          color: _enrollText,
                         ),
                       ),
                     ),
                     ElevatedButton(
-                      onPressed: submitEnrollment,
+                      onPressed: loading ? null : submitEnrollment,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _kKhonologyRed,
                         foregroundColor: Colors.white,
@@ -1449,13 +1480,22 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                         ),
                         elevation: 0,
                       ),
-                      child: Text(
-                        'Finish',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      child: loading
+                          ? SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white.withValues(alpha: 0.95),
+                              ),
+                            )
+                          : Text(
+                              'Finish',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                     ),
                   ],
                 ),
@@ -1487,9 +1527,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.07),
+            color: _enrollCardBg,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+            border: Border.all(color: _enrollCardBorder),
           ),
           child: Column(
             // Use content-driven sizing to avoid infinite-height errors inside
@@ -1509,7 +1549,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                       Icon(
                         isCollapsed ? Icons.expand_more : Icons.expand_less,
                         size: 24,
-                        color: Colors.white70,
+                        color: _enrollMuted,
                       ),
                       const SizedBox(width: 8),
                       Icon(
@@ -1517,7 +1557,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                             ? Icons.check_circle
                             : Icons.radio_button_unchecked,
                         size: 20,
-                        color: completed ? _kSuccess : Colors.white38,
+                        color: completed ? _kSuccess : _enrollSoft,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
@@ -1526,7 +1566,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                           style: GoogleFonts.poppins(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                            color: _enrollText,
                           ),
                         ),
                       ),
@@ -1577,7 +1617,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                    color: _enrollText,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -1585,7 +1625,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                   value.isEmpty ? '—' : value,
                   style: GoogleFonts.poppins(
                     fontSize: 14,
-                    color: Colors.white70,
+                    color: _enrollMuted,
                     height: 1.3,
                   ),
                   maxLines: 2,
@@ -1623,7 +1663,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
               message,
               style: GoogleFonts.poppins(
                 fontSize: 14,
-                color: Colors.white54,
+                color: _enrollSoft,
               ),
             ),
           ),
@@ -1706,14 +1746,17 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
+        color: _enrollCardBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: _enrollCardBorder),
       ),
       child: Text(
         entry,
         style: GoogleFonts.poppins(
-            fontSize: 14, color: Colors.white70, height: 1.35),
+          fontSize: 14,
+          color: _enrollMuted,
+          height: 1.35,
+        ),
       ),
     );
   }
@@ -1724,9 +1767,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.06),
+        color: _enrollCardBg,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white12),
+        border: Border.all(color: _enrollCardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1734,17 +1777,20 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           Text(
             company,
             style: GoogleFonts.poppins(
-                fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white),
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: _enrollText,
+            ),
           ),
           const SizedBox(height: 2),
           Text(
             role,
-            style: GoogleFonts.poppins(fontSize: 13, color: Colors.white70),
+            style: GoogleFonts.poppins(fontSize: 13, color: _enrollMuted),
           ),
           const SizedBox(height: 2),
           Text(
             year,
-            style: GoogleFonts.poppins(fontSize: 13, color: Colors.white54),
+            style: GoogleFonts.poppins(fontSize: 13, color: _enrollSoft),
           ),
         ],
       ),
@@ -1764,17 +1810,27 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         padding: const EdgeInsets.only(bottom: 8),
         child: Text(
           'No skills listed',
-          style: GoogleFonts.poppins(fontSize: 14, color: Colors.white54),
+          style: GoogleFonts.poppins(fontSize: 14, color: _enrollSoft),
         ),
       );
     }
     return _buildExpandableListReview(
-        'skills', 'Skills', skillsOnly.join(', '), null);
+      'skills',
+      'Skills',
+      skillsOnly.join(', '),
+      null,
+      showHeader: false,
+    );
   }
 
   /// Review section for comma-separated list (e.g. skills): show first N items, then "Show more (X more)".
-  Widget _buildExpandableListReview(String sectionKey, String listLabel,
-      String commaSeparatedValue, VoidCallback? onEdit) {
+  Widget _buildExpandableListReview(
+    String sectionKey,
+    String listLabel,
+    String commaSeparatedValue,
+    VoidCallback? onEdit, {
+    bool showHeader = true,
+  }) {
     final isExpanded = _reviewSectionExpanded[sectionKey] ?? false;
     final items = commaSeparatedValue
         .split(RegExp(r'[,;]'))
@@ -1791,43 +1847,48 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  listLabel,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              if (onEdit != null)
-                TextButton(
-                  onPressed: onEdit,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
+          if (showHeader) ...[
+            Row(
+              children: [
+                Expanded(
                   child: Text(
-                    'Edit',
+                    listLabel,
                     style: GoogleFonts.poppins(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: _kKhonologyRed,
+                      color: _enrollText,
                     ),
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 6),
+                if (onEdit != null)
+                  TextButton(
+                    onPressed: onEdit,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      'Edit',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: _kKhonologyRed,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+          ],
           if (visibleItems.isEmpty)
             Text(
               '—',
               style: GoogleFonts.poppins(
-                  fontSize: 14, color: Colors.white70, height: 1.3),
+                fontSize: 14,
+                color: _enrollMuted,
+                height: 1.3,
+              ),
             )
           else
             Wrap(
@@ -1839,14 +1900,20 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                     padding:
                         const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.1),
+                      color: _isDarkMode
+                          ? Colors.white.withValues(alpha: 0.1)
+                          : const Color(0xFF090812).withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.white24),
+                      border: Border.all(
+                        color: _isDarkMode
+                            ? Colors.white24
+                            : const Color(0xFF090812).withValues(alpha: 0.22),
+                      ),
                     ),
                     child: Text(
                       item,
                       style: GoogleFonts.poppins(
-                          fontSize: 13, color: Colors.white70),
+                          fontSize: 13, color: _enrollMuted),
                     ),
                   ),
                 ),
@@ -1880,15 +1947,12 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _EditPersonalSheet(
+        isDarkMode: _isDarkMode,
         nameController: nameController,
         phoneController: phoneController,
         addressController: addressController,
-        dobController: dobController,
         linkedinController: linkedinController,
-        selectedGender: selectedGender,
-        onGenderChanged: (v) => setState(() => selectedGender = v),
         onSave: () => setState(() {}),
-        onTapDateOfBirth: (ctx) => _selectDate(ctx),
       ),
     ).then((_) => setState(() {}));
   }
@@ -1900,6 +1964,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _EditEducationSheet(
+        isDarkMode: _isDarkMode,
         educationController: educationController,
         universityController: universityController,
         graduationYearController: graduationYearController,
@@ -1915,9 +1980,23 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _EditExperienceSheet(
+        isDarkMode: _isDarkMode,
         experienceController: experienceController,
         previousCompaniesController: previousCompaniesController,
         positionController: positionController,
+        onSave: () => setState(() {}),
+      ),
+    ).then((_) => setState(() {}));
+  }
+
+  void _showEditSkills(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _EditSkillsSheet(
+        isDarkMode: _isDarkMode,
+        skillsController: skillsController,
         onSave: () => setState(() {}),
       ),
     ).then((_) => setState(() {}));
@@ -1991,10 +2070,10 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         if (title != null) ...[
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: Colors.white,
+              color: _enrollText,
               fontFamily: 'Poppins',
             ),
           ),
@@ -2004,7 +2083,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
               subtitle,
               style: TextStyle(
                 fontSize: 13,
-                color: Colors.grey.shade300,
+                color: _enrollMuted,
                 fontWeight: FontWeight.w500,
                 fontFamily: 'Poppins',
               ),
@@ -2120,10 +2199,10 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           children: [
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: _enrollText,
                 fontFamily: 'Poppins',
               ),
             ),
@@ -2145,7 +2224,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             color: boxFillColor,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: Colors.white38,
+              color: _isDarkMode
+                  ? Colors.white38
+                  : const Color(0xFF090812).withValues(alpha: 0.24),
               width: 1.5,
             ),
             boxShadow: [
@@ -2161,9 +2242,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             keyboardType: keyboardType,
             maxLines: maxLines,
             readOnly: readOnly,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
-              color: Colors.white,
+              color: _enrollText,
               fontWeight: FontWeight.w500,
               fontFamily: 'Poppins',
             ),
@@ -2180,7 +2261,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                       margin: const EdgeInsets.only(left: 10, right: 6),
                       child: Icon(
                         prefixIcon,
-                        color: Colors.white38,
+                        color: _enrollSoft,
                         size: 20,
                       ),
                     )
@@ -2210,10 +2291,10 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           children: [
             Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: _enrollText,
                 fontFamily: 'Poppins',
               ),
             ),
@@ -2235,7 +2316,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             color: boxFillColor,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: Colors.white38,
+              color: _isDarkMode
+                  ? Colors.white38
+                  : const Color(0xFF090812).withValues(alpha: 0.24),
               width: 1.5,
             ),
             boxShadow: [
@@ -2248,10 +2331,10 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           ),
           child: DropdownButtonFormField<String>(
             value: value,
-            dropdownColor: Colors.grey[900],
-            style: const TextStyle(
+            dropdownColor: _isDarkMode ? Colors.grey[900] : Colors.white,
+            style: TextStyle(
               fontSize: 14,
-              color: Colors.white,
+              color: _enrollText,
               fontWeight: FontWeight.w500,
               fontFamily: 'Poppins',
             ),
@@ -2265,7 +2348,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                 padding: const EdgeInsets.only(right: 10),
                 child: Icon(
                   Icons.arrow_drop_down_rounded,
-                  color: Colors.grey.shade300,
+                  color: _enrollSoft,
                   size: 24,
                 ),
               ),
@@ -2273,7 +2356,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             hint: Text(
               'Select $label',
               style: TextStyle(
-                color: Colors.grey.shade300,
+                color: _enrollSoft,
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
                 fontFamily: 'Poppins',
@@ -2284,10 +2367,10 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                 value: value,
                 child: Text(
                   value,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: Colors.white,
+                    color: _enrollText,
                     fontFamily: 'Poppins',
                   ),
                 ),
@@ -2313,10 +2396,10 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           children: [
             Text(
               "Date of Birth",
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: _enrollText,
                 fontFamily: 'Poppins',
               ),
             ),
@@ -2341,7 +2424,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
               color: boxFillColor,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
-                color: Colors.white38,
+                color: _isDarkMode
+                    ? Colors.white38
+                    : const Color(0xFF090812).withValues(alpha: 0.24),
                 width: 1.5,
               ),
               boxShadow: [
@@ -2357,9 +2442,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
               child: TextField(
                 controller: dobController,
                 readOnly: true,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
-                  color: Colors.white,
+                  color: _enrollText,
                   fontWeight: FontWeight.w500,
                   fontFamily: 'Poppins',
                 ),
@@ -2373,7 +2458,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                     margin: const EdgeInsets.only(left: 10, right: 6),
                     child: Icon(
                       Icons.calendar_today_rounded,
-                      color: Colors.white38,
+                      color: _enrollSoft,
                       size: 20,
                     ),
                   ),
@@ -2381,13 +2466,13 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                     padding: const EdgeInsets.only(right: 10),
                     child: Icon(
                       Icons.arrow_drop_down_rounded,
-                      color: Colors.grey.shade300,
+                      color: _enrollSoft,
                       size: 24,
                     ),
                   ),
                   hintText: "Select your date of birth",
                   hintStyle: TextStyle(
-                    color: Colors.grey.shade300,
+                    color: _enrollSoft,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                     fontFamily: 'Poppins',
@@ -2442,12 +2527,12 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           "Gender",
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: Colors.white,
+            color: _enrollText,
             fontFamily: 'Poppins',
           ),
         ),
@@ -2457,7 +2542,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             color: boxFillColor,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: Colors.white38,
+              color: _isDarkMode
+                  ? Colors.white38
+                  : const Color(0xFF090812).withValues(alpha: 0.24),
               width: 1.5,
             ),
             boxShadow: [
@@ -2475,10 +2562,10 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                 selectedGender = newValue;
               });
             },
-            dropdownColor: Colors.grey[900],
-            style: const TextStyle(
+            dropdownColor: _isDarkMode ? Colors.grey[900] : Colors.white,
+            style: TextStyle(
               fontSize: 14,
-              color: Colors.white,
+              color: _enrollText,
               fontWeight: FontWeight.w500,
               fontFamily: 'Poppins',
             ),
@@ -2492,7 +2579,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                 margin: const EdgeInsets.only(left: 10, right: 6),
                 child: Icon(
                   Icons.person_outline_rounded,
-                  color: Colors.white38,
+                  color: _enrollSoft,
                   size: 20,
                 ),
               ),
@@ -2500,7 +2587,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                 padding: const EdgeInsets.only(right: 10),
                 child: Icon(
                   Icons.arrow_drop_down_rounded,
-                  color: Colors.grey.shade300,
+                  color: _enrollSoft,
                   size: 24,
                 ),
               ),
@@ -2508,7 +2595,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             hint: Text(
               "Select Gender",
               style: TextStyle(
-                color: Colors.grey.shade300,
+                color: _enrollSoft,
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 fontFamily: 'Poppins',
@@ -2522,10 +2609,10 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Text(
                     value,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
-                      color: Colors.white,
+                      color: _enrollText,
                       fontFamily: 'Poppins',
                     ),
                   ),
@@ -2542,6 +2629,10 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
   // ------------------- Build UI -------------------
   @override
   Widget build(BuildContext context) {
+    final themeProvider = context.watch<ThemeProvider>();
+    _isDarkMode = themeProvider.isDarkMode;
+    final pageBackground = themeProvider.backgroundImage;
+
     if (!_choseManual) {
       return Scaffold(
         backgroundColor: Colors.transparent,
@@ -2549,14 +2640,14 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           fit: StackFit.expand,
           children: [
             Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 image: DecorationImage(
-                  image: AssetImage('assets/images/dark.png'),
+                  image: AssetImage(pageBackground),
                   fit: BoxFit.cover,
                 ),
               ),
             ),
-            Container(color: Colors.black.withValues(alpha: 0.4)),
+            Container(color: _enrollOverlay),
             profileLoading
                 ? Center(
                     child: Column(
@@ -2569,7 +2660,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                           style: GoogleFonts.poppins(
                             fontSize: 16,
                             fontWeight: FontWeight.w500,
-                            color: Colors.white70,
+                            color: _enrollMuted,
                           ),
                         ),
                       ],
@@ -2588,15 +2679,15 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       body: Stack(
         children: [
           Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               image: DecorationImage(
-                image: AssetImage('assets/images/dark.png'),
+                image: AssetImage(pageBackground),
                 fit: BoxFit.cover,
               ),
             ),
           ),
           Container(
-            color: Colors.black.withValues(alpha: 0.4),
+            color: _enrollOverlay,
           ),
           loading || profileLoading
               ? Center(
@@ -2623,10 +2714,10 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                         _loggingIn
                             ? "Logging in..."
                             : "Loading Enrollment Form...",
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                          color: _enrollText,
                           fontFamily: 'Poppins',
                         ),
                       ),
@@ -2641,8 +2732,8 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                       child: Row(
                         children: [
                           IconButton(
-                            icon: const Icon(Icons.arrow_back,
-                                color: Colors.white, size: 26),
+                            icon: Icon(Icons.arrow_back,
+                                color: _enrollText, size: 26),
                             onPressed: () =>
                                 setState(() => _choseManual = false),
                             tooltip: 'Back',
@@ -2676,8 +2767,8 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                                           style: TextStyle(
                                             fontSize: 10,
                                             color: currentStep >= index
-                                                ? Colors.white
-                                                : Colors.grey.shade300,
+                                                ? _enrollText
+                                                : _enrollMuted,
                                             fontWeight: FontWeight.w500,
                                             fontFamily: 'Poppins',
                                           ),
@@ -2903,6 +2994,155 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     super.dispose();
   }
 
+  /// Backend HF mapper returns `work_experience` (list of maps); legacy parser uses
+  /// `experience` / `position` / `previous_companies`. Normalize so the review step
+  /// receives the same shape the UI already expects.
+  Map<String, dynamic> _normalizeCvParseResponse(Map<String, dynamic> raw) {
+    final out = Map<String, dynamic>.from(raw);
+
+    void pickName() {
+      final existing = out['full_name']?.toString().trim() ?? '';
+      if (existing.isNotEmpty) return;
+      for (final key in ['name', 'candidate_name']) {
+        final v = out[key]?.toString().trim();
+        if (v != null && v.isNotEmpty) {
+          out['full_name'] = v;
+          return;
+        }
+      }
+      final sd = out['structured_data'];
+      if (sd is Map) {
+        final pd = sd['personal_details'];
+        if (pd is Map) {
+          final fn = pd['full_name']?.toString().trim();
+          if (fn != null && fn.isNotEmpty) out['full_name'] = fn;
+        }
+      }
+    }
+
+    void mergeStructuredLists() {
+      final sd = out['structured_data'];
+      if (sd is! Map) return;
+      final eduDetails = sd['education_details'];
+      if (eduDetails is Map && out['education'] == null) {
+        final e = eduDetails['education'];
+        if (e is List && e.isNotEmpty) out['education'] = e;
+      }
+      final prof = sd['professional_details'];
+      if (prof is Map) {
+        if (out['skills'] == null && prof['skills'] != null) {
+          out['skills'] = prof['skills'];
+        }
+        if (out['experience'] == null && prof['experience'] != null) {
+          out['experience'] = prof['experience'];
+        }
+        if (out['position'] == null && prof['position'] != null) {
+          out['position'] = prof['position'];
+        }
+        if (out['previous_companies'] == null &&
+            prof['previous_companies'] != null) {
+          out['previous_companies'] = prof['previous_companies'];
+        }
+        if (out['work_experience'] == null && prof['work_experience'] != null) {
+          out['work_experience'] = prof['work_experience'];
+        }
+      }
+    }
+
+    void flattenWorkExperienceList() {
+      final wx = out['work_experience'];
+      if (wx is! List || wx.isEmpty) return;
+      final rows = <Map<String, dynamic>>[];
+      for (final e in wx) {
+        if (e is Map) rows.add(Map<String, dynamic>.from(e));
+      }
+      if (rows.isEmpty) return;
+
+      String s(dynamic v) => v?.toString().trim() ?? '';
+
+      final prevEmpty = out['previous_companies'] == null ||
+          out['previous_companies'].toString().trim().isEmpty;
+      final posEmpty =
+          out['position'] == null || out['position'].toString().trim().isEmpty;
+      final expEmpty = out['experience'] == null ||
+          out['experience'].toString().trim().isEmpty;
+
+      if (prevEmpty) {
+        final companies = <String>[];
+        for (final m in rows) {
+          final c = s(m['company']);
+          if (c.isNotEmpty) companies.add(c);
+        }
+        if (companies.isNotEmpty) {
+          out['previous_companies'] = companies.toSet().join(', ');
+        }
+      }
+      if (posEmpty) {
+        for (final m in rows) {
+          final p =
+              s(m['position']).isNotEmpty ? s(m['position']) : s(m['title']);
+          if (p.isNotEmpty) {
+            out['position'] = p;
+            break;
+          }
+        }
+      }
+      if (expEmpty) {
+        final descs = <String>[];
+        for (final m in rows) {
+          final d = s(m['description']);
+          if (d.isNotEmpty) descs.add(d);
+        }
+        if (descs.isNotEmpty) out['experience'] = descs.join('\n\n');
+      }
+    }
+
+    pickName();
+    mergeStructuredLists();
+    flattenWorkExperienceList();
+    return out;
+  }
+
+  bool _hasMeaningfulParsedData(Map<String, dynamic> data) {
+    bool nonEmptyText(dynamic v) => v is String && v.trim().isNotEmpty;
+    bool nonEmptyList(dynamic v) => v is List && v.isNotEmpty;
+
+    const textKeys = [
+      'full_name',
+      'email',
+      'phone',
+      'address',
+      'linkedin',
+      'experience',
+      'position',
+      'previous_companies',
+      'bio',
+      'gender',
+      'dob',
+    ];
+    for (final k in textKeys) {
+      if (nonEmptyText(data[k])) return true;
+    }
+
+    if (nonEmptyText(data['cv_text']) &&
+        (data['cv_text'] as String).trim().length >= 40) {
+      return true;
+    }
+
+    const listKeys = [
+      'education',
+      'skills',
+      'certifications',
+      'languages',
+      'work_experience',
+    ];
+    for (final k in listKeys) {
+      if (nonEmptyList(data[k])) return true;
+    }
+
+    return false;
+  }
+
   Future<void> _runProcessingAndGoToReview() async {
     if (selectedCV == null || selectedCV!.bytes == null) return;
     setState(() {
@@ -2927,12 +3167,23 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         token: widget.token,
         fileBytes: selectedCV!.bytes!,
         fileName: selectedCV!.name,
+      ).timeout(
+        const Duration(seconds: 120),
+        onTimeout: () => {
+          'error':
+              'CV analysis timed out. You can still continue and enter your details manually.',
+        },
       );
       if (!mounted) return;
+      final cvDbg = response['cv_parse_debug'];
+      if (cvDbg != null) {
+        debugPrint('cv_parse_debug: $cvDbg');
+      }
       if (response.containsKey('error')) {
         setState(() {
           _processingError = true;
           _cvUploadFailed = true;
+          _processingComplete = true;
           loading = false;
         });
         final message = response['error'].toString();
@@ -2952,23 +3203,64 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         );
         return;
       }
+      Map<String, dynamic> normalized;
+      try {
+        normalized = _normalizeCvParseResponse(
+            Map<String, dynamic>.from(response));
+      } catch (_) {
+        setState(() {
+          _processingError = true;
+          _cvUploadFailed = true;
+          _processingComplete = true;
+          loading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Unexpected response from CV service. Tap Next to continue manually.',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.orange.shade800,
+          ),
+        );
+        return;
+      }
+      if (!_hasMeaningfulParsedData(normalized)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'We could not extract much from this CV. Tap Next to review and fill in manually.',
+              style: GoogleFonts.poppins(),
+            ),
+            backgroundColor: Colors.orange.shade800,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+
+      String asText(dynamic v) => v?.toString().trim() ?? '';
       setState(() {
-        nameController.text = response['full_name']?.toString() ?? '';
-        phoneController.text = response['phone']?.toString() ?? '';
-        addressController.text = response['address']?.toString() ?? '';
-        dobController.text = response['dob']?.toString() ?? '';
-        linkedinController.text = response['linkedin']?.toString() ?? '';
+        final fullName = asText(normalized['full_name']);
+        if (fullName.isNotEmpty) nameController.text = fullName;
+        final phone = asText(normalized['phone']);
+        if (phone.isNotEmpty) phoneController.text = phone;
+        final address = asText(normalized['address']);
+        if (address.isNotEmpty) addressController.text = address;
+        final dob = asText(normalized['dob']);
+        if (dob.isNotEmpty) dobController.text = dob;
+        final linkedin = asText(normalized['linkedin']);
+        if (linkedin.isNotEmpty) linkedinController.text = linkedin;
 
         // Add gender auto-population
-        final genderFromCV = response['gender']?.toString();
-        if (genderFromCV != null && genderFromCV.isNotEmpty) {
+        final genderFromCV = asText(normalized['gender']);
+        if (genderFromCV.isNotEmpty) {
           selectedGender = genderFromCV;
         }
 
         // Handle education as list of objects with proper key mapping
-        if (response['education'] is List &&
-            (response['education'] as List).isNotEmpty) {
-          final eduList = response['education'] as List;
+        if (normalized['education'] is List &&
+            (normalized['education'] as List).isNotEmpty) {
+          final eduList = normalized['education'] as List;
           final firstEdu = eduList[0];
           if (firstEdu is Map) {
             educationController.text = firstEdu['level']?.toString() ??
@@ -2985,28 +3277,47 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           } else {
             educationController.text = eduList.join('\n');
           }
+        } else {
+          final edu = asText(normalized['education']);
+          if (edu.isNotEmpty) educationController.text = edu;
+          final uni = asText(normalized['university']);
+          if (uni.isNotEmpty) universityController.text = uni;
+          final grad = asText(normalized['graduation_year']);
+          if (grad.isNotEmpty) graduationYearController.text = grad;
         }
 
-        skillsController.text = (response['skills'] is List)
-            ? (response['skills'] as List).join(', ')
-            : (response['skills']?.toString() ?? '');
-        certificationsController.text = (response['certifications'] is List)
-            ? (response['certifications'] as List).join(', ')
-            : (response['certifications']?.toString() ?? '');
-        languagesController.text = (response['languages'] is List)
-            ? (response['languages'] as List).join(', ')
-            : (response['languages']?.toString() ?? '');
-        experienceController.text = response['experience']?.toString() ?? '';
-        positionController.text = response['position']?.toString() ?? '';
+        String listToCsv(dynamic v) {
+          if (v is List) {
+            return v
+                .map((e) => e.toString().trim())
+                .where((e) => e.isNotEmpty)
+                .join(', ');
+          }
+          return asText(v);
+        }
+
+        final skills = listToCsv(normalized['skills']);
+        if (skills.isNotEmpty) skillsController.text = skills;
+        final certs = listToCsv(normalized['certifications']);
+        if (certs.isNotEmpty) certificationsController.text = certs;
+        final langs = listToCsv(normalized['languages']);
+        if (langs.isNotEmpty) languagesController.text = langs;
+        final experience = asText(normalized['experience']);
+        if (experience.isNotEmpty) experienceController.text = experience;
+        final position = asText(normalized['position']);
+        if (position.isNotEmpty) positionController.text = position;
         // Populate previous companies from CV parser so Work Experience review is not empty.
-        final prev = response['previous_companies'];
+        final prev = normalized['previous_companies'];
         if (prev is List) {
           previousCompaniesController.text = prev
               .map((e) => e.toString().trim())
               .where((e) => e.isNotEmpty)
               .join(', ');
         } else if (prev != null) {
-          previousCompaniesController.text = prev.toString();
+          final prevText = asText(prev);
+          if (prevText.isNotEmpty) {
+            previousCompaniesController.text = prevText;
+          }
         }
         _processingStage = stages.length - 1;
         _processingComplete = true;
@@ -3017,12 +3328,17 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       setState(() {
         _processingError = true;
         _cvUploadFailed = true;
+        _processingComplete = true;
         loading = false;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-            content: Text('Failed to parse CV'),
-            backgroundColor: Colors.red.shade700),
+          content: Text(
+            'Could not parse CV. Tap Next to continue and fill in your details manually.',
+            style: GoogleFonts.poppins(),
+          ),
+          backgroundColor: Colors.red.shade700,
+        ),
       );
     }
   }
@@ -3066,26 +3382,30 @@ class _EnrollmentDropZoneScopeState extends State<_EnrollmentDropZoneScope> {
 
 class _EditPersonalSheet extends StatelessWidget {
   const _EditPersonalSheet({
+    required this.isDarkMode,
     required this.nameController,
     required this.phoneController,
     required this.addressController,
-    required this.dobController,
     required this.linkedinController,
-    required this.selectedGender,
-    required this.onGenderChanged,
     required this.onSave,
-    this.onTapDateOfBirth,
   });
 
+  final bool isDarkMode;
   final TextEditingController nameController;
   final TextEditingController phoneController;
   final TextEditingController addressController;
-  final TextEditingController dobController;
   final TextEditingController linkedinController;
-  final String? selectedGender;
-  final ValueChanged<String?> onGenderChanged;
   final VoidCallback onSave;
-  final void Function(BuildContext context)? onTapDateOfBirth;
+
+  Color get _bg => isDarkMode ? _kOnboardingCardBg : Colors.white;
+  Color get _fieldBg => isDarkMode
+      ? Colors.white.withValues(alpha: 0.08)
+      : const Color(0xFF090812).withValues(alpha: 0.04);
+  Color get _text => isDarkMode ? Colors.white : const Color(0xFF090812);
+  Color get _muted =>
+      isDarkMode ? Colors.white70 : const Color(0xFF090812).withValues(alpha: 0.72);
+  Color get _border =>
+      isDarkMode ? Colors.white24 : const Color(0xFF090812).withValues(alpha: 0.22);
 
   Widget _label(String text, {bool required = false}) {
     return Padding(
@@ -3097,7 +3417,7 @@ class _EditPersonalSheet extends StatelessWidget {
             style: GoogleFonts.poppins(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Colors.white70),
+                color: _muted),
           ),
           if (required)
             Text(
@@ -3117,7 +3437,6 @@ class _EditPersonalSheet extends StatelessWidget {
     if (nameController.text.trim().isEmpty) missing.add('Full Name');
     if (phoneController.text.trim().isEmpty) missing.add('Phone');
     if (addressController.text.trim().isEmpty) missing.add('Address');
-    if (dobController.text.trim().isEmpty) missing.add('Date of Birth');
     return missing;
   }
 
@@ -3149,8 +3468,8 @@ class _EditPersonalSheet extends StatelessWidget {
         top: 24,
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-      decoration: const BoxDecoration(
-        color: _kOnboardingCardBg,
+      decoration: BoxDecoration(
+        color: _bg,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: SingleChildScrollView(
@@ -3163,19 +3482,20 @@ class _EditPersonalSheet extends StatelessWidget {
               style: GoogleFonts.poppins(
                   fontSize: 18,
                   fontWeight: FontWeight.w700,
-                  color: Colors.white),
+                  color: _text),
             ),
             const SizedBox(height: 20),
             _label('Full Name', required: true),
             TextField(
               controller: nameController,
-              style: GoogleFonts.poppins(color: Colors.white),
+              style: GoogleFonts.poppins(color: _text),
               decoration: InputDecoration(
                 border: const OutlineInputBorder(),
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.08),
-                enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24)),
+                fillColor: _fieldBg,
+                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+                focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: _kKhonologyRed)),
               ),
             ),
             const SizedBox(height: 16),
@@ -3183,13 +3503,14 @@ class _EditPersonalSheet extends StatelessWidget {
             TextField(
               controller: phoneController,
               keyboardType: TextInputType.phone,
-              style: GoogleFonts.poppins(color: Colors.white),
+              style: GoogleFonts.poppins(color: _text),
               decoration: InputDecoration(
                 border: const OutlineInputBorder(),
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.08),
-                enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24)),
+                fillColor: _fieldBg,
+                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+                focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: _kKhonologyRed)),
               ),
             ),
             const SizedBox(height: 16),
@@ -3197,85 +3518,32 @@ class _EditPersonalSheet extends StatelessWidget {
             TextField(
               controller: addressController,
               maxLines: 2,
-              style: GoogleFonts.poppins(color: Colors.white),
+              style: GoogleFonts.poppins(color: _text),
               decoration: InputDecoration(
                 border: const OutlineInputBorder(),
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.08),
-                enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24)),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _label('Date of Birth', required: true),
-            GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                if (onTapDateOfBirth != null) {
-                  onTapDateOfBirth!(context);
-                }
-              },
-              child: AbsorbPointer(
-                absorbing: true,
-                child: TextField(
-                  controller: dobController,
-                  readOnly: true,
-                  style: GoogleFonts.poppins(color: Colors.white),
-                  decoration: InputDecoration(
-                    hintText: 'Tap to pick date',
-                    hintStyle: GoogleFonts.poppins(
-                        color: Colors.white54, fontSize: 14),
-                    border: const OutlineInputBorder(),
-                    filled: true,
-                    fillColor: Colors.white.withValues(alpha: 0.08),
-                    enabledBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: Colors.white24)),
-                    suffixIcon: Icon(Icons.calendar_today_rounded,
-                        color: Colors.white54, size: 22),
-                  ),
-                ),
+                fillColor: _fieldBg,
+                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+                focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: _kKhonologyRed)),
               ),
             ),
             const SizedBox(height: 16),
             _label('LinkedIn Profile'),
             TextField(
               controller: linkedinController,
-              style: GoogleFonts.poppins(color: Colors.white),
+              style: GoogleFonts.poppins(color: _text),
               decoration: InputDecoration(
                 hintText: 'e.g. https://linkedin.com/in/yourprofile',
                 hintStyle:
-                    GoogleFonts.poppins(color: Colors.white54, fontSize: 14),
+                    GoogleFonts.poppins(color: _muted, fontSize: 14),
                 border: const OutlineInputBorder(),
                 filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.08),
-                enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24)),
+                fillColor: _fieldBg,
+                enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+                focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: _kKhonologyRed)),
               ),
-            ),
-            const SizedBox(height: 16),
-            _label('Gender'),
-            DropdownButtonFormField<String>(
-              value: selectedGender?.isEmpty ?? true ? null : selectedGender,
-              onChanged: onGenderChanged,
-              dropdownColor: Colors.grey.shade900,
-              style: GoogleFonts.poppins(color: Colors.white),
-              decoration: InputDecoration(
-                border: const OutlineInputBorder(),
-                filled: true,
-                fillColor: Colors.white.withValues(alpha: 0.08),
-                enabledBorder: OutlineInputBorder(
-                    borderSide: BorderSide(color: Colors.white24)),
-              ),
-              hint: Text('Select Gender',
-                  style: GoogleFonts.poppins(color: Colors.white54)),
-              items: <String>['Male', 'Female', 'Other', 'Prefer not to say']
-                  .map<DropdownMenuItem<String>>((String value) {
-                return DropdownMenuItem<String>(
-                  value: value,
-                  child: Text(value,
-                      style: GoogleFonts.poppins(color: Colors.white)),
-                );
-              }).toList(),
             ),
             const SizedBox(height: 24),
             ElevatedButton(
@@ -3306,16 +3574,27 @@ class _EditPersonalSheet extends StatelessWidget {
 
 class _EditEducationSheet extends StatelessWidget {
   const _EditEducationSheet({
+    required this.isDarkMode,
     required this.educationController,
     required this.universityController,
     required this.graduationYearController,
     required this.onSave,
   });
 
+  final bool isDarkMode;
   final TextEditingController educationController;
   final TextEditingController universityController;
   final TextEditingController graduationYearController;
   final VoidCallback onSave;
+  Color get _bg => isDarkMode ? _kOnboardingCardBg : Colors.white;
+  Color get _fieldBg => isDarkMode
+      ? Colors.white.withValues(alpha: 0.08)
+      : const Color(0xFF090812).withValues(alpha: 0.04);
+  Color get _text => isDarkMode ? Colors.white : const Color(0xFF090812);
+  Color get _muted =>
+      isDarkMode ? Colors.white70 : const Color(0xFF090812).withValues(alpha: 0.72);
+  Color get _border =>
+      isDarkMode ? Colors.white24 : const Color(0xFF090812).withValues(alpha: 0.22);
 
   @override
   Widget build(BuildContext context) {
@@ -3326,8 +3605,8 @@ class _EditEducationSheet extends StatelessWidget {
         top: 24,
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-      decoration: const BoxDecoration(
-        color: _kOnboardingCardBg,
+      decoration: BoxDecoration(
+        color: _bg,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
@@ -3337,49 +3616,139 @@ class _EditEducationSheet extends StatelessWidget {
           Text(
             'Edit Education',
             style: GoogleFonts.poppins(
-                fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
+                fontSize: 18, fontWeight: FontWeight.w700, color: _text),
           ),
           const SizedBox(height: 20),
           TextField(
             controller: educationController,
-            style: GoogleFonts.poppins(color: Colors.white),
+            style: GoogleFonts.poppins(color: _text),
             decoration: InputDecoration(
               labelText: 'Level / Degree',
-              labelStyle: GoogleFonts.poppins(color: Colors.white70),
+              labelStyle: GoogleFonts.poppins(color: _muted),
               border: const OutlineInputBorder(),
               filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.08),
-              enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white24)),
+              fillColor: _fieldBg,
+              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+              focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: _kKhonologyRed)),
             ),
           ),
           const SizedBox(height: 16),
           TextField(
             controller: universityController,
-            style: GoogleFonts.poppins(color: Colors.white),
+            style: GoogleFonts.poppins(color: _text),
             decoration: InputDecoration(
               labelText: 'Institution',
-              labelStyle: GoogleFonts.poppins(color: Colors.white70),
+              labelStyle: GoogleFonts.poppins(color: _muted),
               border: const OutlineInputBorder(),
               filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.08),
-              enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white24)),
+              fillColor: _fieldBg,
+              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+              focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: _kKhonologyRed)),
             ),
           ),
           const SizedBox(height: 16),
           TextField(
             controller: graduationYearController,
             keyboardType: TextInputType.number,
-            style: GoogleFonts.poppins(color: Colors.white),
+            style: GoogleFonts.poppins(color: _text),
             decoration: InputDecoration(
               labelText: 'Graduation Year',
-              labelStyle: GoogleFonts.poppins(color: Colors.white70),
+              labelStyle: GoogleFonts.poppins(color: _muted),
               border: const OutlineInputBorder(),
               filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.08),
-              enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white24)),
+              fillColor: _fieldBg,
+              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+              focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: _kKhonologyRed)),
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () {
+              onSave();
+              Navigator.of(context).pop();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _kKhonologyRed,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EditSkillsSheet extends StatelessWidget {
+  const _EditSkillsSheet({
+    required this.isDarkMode,
+    required this.skillsController,
+    required this.onSave,
+  });
+
+  final bool isDarkMode;
+  final TextEditingController skillsController;
+  final VoidCallback onSave;
+  Color get _bg => isDarkMode ? _kOnboardingCardBg : Colors.white;
+  Color get _fieldBg => isDarkMode
+      ? Colors.white.withValues(alpha: 0.08)
+      : const Color(0xFF090812).withValues(alpha: 0.04);
+  Color get _text => isDarkMode ? Colors.white : const Color(0xFF090812);
+  Color get _muted =>
+      isDarkMode ? Colors.white70 : const Color(0xFF090812).withValues(alpha: 0.72);
+  Color get _border =>
+      isDarkMode ? Colors.white24 : const Color(0xFF090812).withValues(alpha: 0.22);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: EdgeInsets.only(
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      decoration: BoxDecoration(
+        color: _bg,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Edit Skills',
+            style: GoogleFonts.poppins(
+                fontSize: 18, fontWeight: FontWeight.w700, color: _text),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'Add skills separated by commas. Remove a skill by deleting it.',
+            style: GoogleFonts.poppins(fontSize: 13, color: _muted),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: skillsController,
+            maxLines: 5,
+            style: GoogleFonts.poppins(color: _text),
+            decoration: InputDecoration(
+              labelText: 'Skills',
+              hintText: 'e.g. Flutter, Dart, REST APIs, SQL',
+              labelStyle: GoogleFonts.poppins(color: _muted),
+              hintStyle: GoogleFonts.poppins(color: _muted),
+              border: const OutlineInputBorder(),
+              filled: true,
+              fillColor: _fieldBg,
+              enabledBorder:
+                  OutlineInputBorder(borderSide: BorderSide(color: _border)),
+              focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: _kKhonologyRed)),
             ),
           ),
           const SizedBox(height: 24),
@@ -3405,16 +3774,27 @@ class _EditEducationSheet extends StatelessWidget {
 
 class _EditExperienceSheet extends StatelessWidget {
   const _EditExperienceSheet({
+    required this.isDarkMode,
     required this.experienceController,
     required this.previousCompaniesController,
     required this.positionController,
     required this.onSave,
   });
 
+  final bool isDarkMode;
   final TextEditingController experienceController;
   final TextEditingController previousCompaniesController;
   final TextEditingController positionController;
   final VoidCallback onSave;
+  Color get _bg => isDarkMode ? _kOnboardingCardBg : Colors.white;
+  Color get _fieldBg => isDarkMode
+      ? Colors.white.withValues(alpha: 0.08)
+      : const Color(0xFF090812).withValues(alpha: 0.04);
+  Color get _text => isDarkMode ? Colors.white : const Color(0xFF090812);
+  Color get _muted =>
+      isDarkMode ? Colors.white70 : const Color(0xFF090812).withValues(alpha: 0.72);
+  Color get _border =>
+      isDarkMode ? Colors.white24 : const Color(0xFF090812).withValues(alpha: 0.22);
 
   @override
   Widget build(BuildContext context) {
@@ -3425,8 +3805,8 @@ class _EditExperienceSheet extends StatelessWidget {
         top: 24,
         bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
-      decoration: const BoxDecoration(
-        color: _kOnboardingCardBg,
+      decoration: BoxDecoration(
+        color: _bg,
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
@@ -3436,49 +3816,52 @@ class _EditExperienceSheet extends StatelessWidget {
           Text(
             'Edit Work Experience',
             style: GoogleFonts.poppins(
-                fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white),
+                fontSize: 18, fontWeight: FontWeight.w700, color: _text),
           ),
           const SizedBox(height: 20),
           TextField(
             controller: positionController,
-            style: GoogleFonts.poppins(color: Colors.white),
+            style: GoogleFonts.poppins(color: _text),
             decoration: InputDecoration(
               labelText: 'Position / Role',
-              labelStyle: GoogleFonts.poppins(color: Colors.white70),
+              labelStyle: GoogleFonts.poppins(color: _muted),
               border: const OutlineInputBorder(),
               filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.08),
-              enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white24)),
+              fillColor: _fieldBg,
+              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+              focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: _kKhonologyRed)),
             ),
           ),
           const SizedBox(height: 16),
           TextField(
             controller: previousCompaniesController,
-            style: GoogleFonts.poppins(color: Colors.white),
+            style: GoogleFonts.poppins(color: _text),
             decoration: InputDecoration(
               labelText: 'Company',
-              labelStyle: GoogleFonts.poppins(color: Colors.white70),
+              labelStyle: GoogleFonts.poppins(color: _muted),
               border: const OutlineInputBorder(),
               filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.08),
-              enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white24)),
+              fillColor: _fieldBg,
+              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+              focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: _kKhonologyRed)),
             ),
           ),
           const SizedBox(height: 16),
           TextField(
             controller: experienceController,
             maxLines: 3,
-            style: GoogleFonts.poppins(color: Colors.white),
+            style: GoogleFonts.poppins(color: _text),
             decoration: InputDecoration(
               labelText: 'Responsibilities / Description',
-              labelStyle: GoogleFonts.poppins(color: Colors.white70),
+              labelStyle: GoogleFonts.poppins(color: _muted),
               border: const OutlineInputBorder(),
               filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.08),
-              enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white24)),
+              fillColor: _fieldBg,
+              enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: _border)),
+              focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: _kKhonologyRed)),
             ),
           ),
           const SizedBox(height: 24),

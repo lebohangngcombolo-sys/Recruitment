@@ -20,6 +20,7 @@ import 'screens/hr/hr_dashboard.dart';
 import 'screens/hiring_manager/hiring_manager_dashboard.dart';
 import 'screens/candidate/job_details_page.dart';
 import 'screens/candidate/redirect_to_assessment_page.dart';
+import 'screens/enrollment/enrollment_screen.dart';
 
 // Import services
 import 'services/auth_service.dart';
@@ -182,6 +183,12 @@ GoRouter _createAppRouter({required String? initialToken, required String? initi
             builder: (context, state) => RedirectToAssessmentPage(
               applicationId: int.tryParse(state.uri.queryParameters['applicationId'] ?? '0') ?? 0,
               jobTitle: state.uri.queryParameters['jobTitle'],
+            ),
+          ),
+          GoRoute(
+            path: '/enrollment',
+            builder: (context, state) => EnrollmentScreen(
+              token: state.uri.queryParameters['token'] ?? '',
             ),
           ),
           
