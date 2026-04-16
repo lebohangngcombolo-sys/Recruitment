@@ -7,6 +7,7 @@ import 'screens/landing_page/splash_landing_page.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/auth/forgot_password_screen.dart';
+import 'screens/auth/verification_screen.dart';
 import 'screens/candidate/candidate_dashboard.dart';
 import 'screens/candidate/saved_application_screen.dart';
 import 'screens/candidate/jobs_applied_page.dart';
@@ -62,6 +63,7 @@ GoRouter _createAppRouter(
             path.startsWith('/login') ||
             path.startsWith('/register') ||
             path.startsWith('/forgot-password') ||
+            path.startsWith('/verify-email') ||
             path.startsWith('/oauth-callback');
         if (!allowedUnauth) {
           return '/';
@@ -107,6 +109,13 @@ GoRouter _createAppRouter(
           refreshToken: state.uri.queryParameters['refresh_token'],
           role: state.uri.queryParameters['role'],
           dashboard: state.uri.queryParameters['dashboard'],
+        ),
+      ),
+      GoRoute(
+        path: '/verify-email',
+        builder: (context, state) => VerificationScreen(
+          email: state.uri.queryParameters['email'] ?? '',
+          initialCode: state.uri.queryParameters['code'],
         ),
       ),
 
