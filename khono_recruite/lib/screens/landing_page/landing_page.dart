@@ -23,7 +23,8 @@ import '../../utils/app_version.dart';
 /// Teammate will refine the real "candidate dashboard" (applications, profile, etc.) in candidate_dashboard.dart.
 class LandingPage extends StatefulWidget {
   final String? token;
-  const LandingPage({super.key, this.token});
+  final bool openChatbot;
+  const LandingPage({super.key, this.token, this.openChatbot = false});
 
   @override
   _LandingPageState createState() => _LandingPageState();
@@ -36,10 +37,10 @@ class _LandingPageState extends State<LandingPage>
 
   int _currentTab = 0;
   int _selectedCategoryIndex = 0; // 0 = All, 1..8 = category tabs
-  
+
   // Saved jobs functionality
   List<Map<String, dynamic>> _savedJobs = [];
-  
+
   // Aligned with Khonology's typical vacancies (development, architecture, cloud, data/digital)
   static const List<String> _categoryNames = [
     'All',
@@ -105,6 +106,7 @@ class _LandingPageState extends State<LandingPage>
   void initState() {
     super.initState();
     _isDisposed = false;
+    chatbotOpen = widget.openChatbot;
     WidgetsBinding.instance.addObserver(this);
     _initializeData();
     _loadSavedJobs(); // Load saved jobs
@@ -745,7 +747,9 @@ class _LandingPageState extends State<LandingPage>
                   children: [
                     IconButton(
                       icon: Icon(
-                        _isJobSaved(job) ? Icons.favorite : Icons.favorite_border,
+                        _isJobSaved(job)
+                            ? Icons.favorite
+                            : Icons.favorite_border,
                         color: _isJobSaved(job) ? Colors.red : strokeColor,
                         size: 22,
                       ),

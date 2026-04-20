@@ -1,14 +1,10 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../services/admin_service.dart';
@@ -19,9 +15,6 @@ import '../../services/cache_service.dart';
 import '../../services/websocket_service.dart';
 import '../../utils/api_endpoints.dart';
 import '../../constants/brand_tokens.dart';
-import '../../widgets/admin_dashboard_components.dart';
-import '../../widgets/state_widgets.dart';
-import '../../widgets/themed_surface_card.dart';
 import 'candidate_management_screen.dart';
 import 'cv_reviews_screen.dart';
 import 'hm_team_collaboration_page.dart';
@@ -37,6 +30,62 @@ import 'offer_list_screen.dart';
 import 'pipeline_page.dart';
 import 'admin_settings_screen.dart';
 import 'profile_page.dart';
+import '../../features/dashboard/dashboard_overview.dart';
+
+// HM Color Palette
+class _AdminPalette {
+  static const Color primary = Color(0xFFCF2030);
+  static const Color charcoal = Color(0xFF3D3F40);
+  static const Color canvas = Color(0xFFF8F6F3);
+  static const Color sidebarBackground = Color(0xFF3D3F40);
+  static const Color scaffoldBackground = Color(0xFF0C0807);
+
+  /// Dark mode: #3D3F40 ([charcoal]) at 60% so the background image shows through.
+  static Color _darkWidgetSurface() => charcoal.withValues(alpha: 0.6);
+
+  /// Light mode: #F8F6F3 ([canvas]) at 95% for slight transparency.
+  static Color _lightWidgetSurface() => canvas.withValues(alpha: 0.95);
+}
+
+/// Normalizes shorthand paths (`images/…`, `icons/…`) to full pubspec keys.
+String _adminNormalizeAssetPath(String path) {
+  final p = path.trim();
+  if (p.startsWith('assets/')) return p;
+  if (p.startsWith('images/')) return 'assets/$p';
+  if (p.startsWith('icons/')) return 'assets/$p';
+  return p;
+}
+
+/// On Flutter web, [Image.asset] sometimes requests `assets/assets/…` and returns 404.
+/// We load via [Image.network] using the **host root**, not [Uri.base.path] (e.g. `/login`),
+/// otherwise the server returns HTML (`<!DOCTYPE…`) and decoding fails with [ImageCodecException].
+Widget _adminDashboardAssetImage(
+  String assetPath, {
+  double? width,
+  double? height,
+  BoxFit fit = BoxFit.contain,
+  ImageErrorWidgetBuilder? errorBuilder,
+}) {
+  final path = _adminNormalizeAssetPath(assetPath);
+  if (kIsWeb) {
+    final noLeading = path.startsWith('/') ? path.substring(1) : path;
+    final url = '${Uri.base.origin}/$noLeading';
+    return Image.network(
+      url,
+      width: width,
+      height: height,
+      fit: fit,
+      errorBuilder: errorBuilder,
+    );
+  }
+  return Image.asset(
+    path,
+    width: width,
+    height: height,
+    fit: fit,
+    errorBuilder: errorBuilder,
+  );
+}
 
 class AdminDashboard extends StatefulWidget {
   final String token;
@@ -75,13 +124,8 @@ class _AdminDashboardState extends State<AdminDashboard>
 
   List<String> recentActivities = [];
 
-  bool sidebarCollapsed = false;
-  late final AnimationController _sidebarAnimController;
-  late final Animation<double> _sidebarWidthAnimation;
+  int unreadNotificationCount = 0;
 
-  // Power BI status
-  bool powerBIConnected = false;
-  bool checkingPowerBI = true;
   Timer? _statusTimer;
 
   // --- Audits ---
@@ -112,58 +156,22 @@ class _AdminDashboardState extends State<AdminDashboard>
     "delete"
   ];
 
-  // ---------- Profile image state ----------
-  XFile? _profileImage;
-  Uint8List? _profileImageBytes;
-  String _profileImageUrl = "";
-  final String apiBase = ApiEndpoints.candidateBase;
-
   // Calendar appointments (interviews + meetings)
   List<Appointment> _calendarAppointments = [];
   bool _calendarLoading = false;
 
-  // Team collaboration data
-  List<Map<String, dynamic>> _teamCollaborationItems = [];
-  bool _loadingTeamCollaboration = true;
-
-  // Department distribution data
-  List<DepartmentData> _departmentDistribution = [];
-  bool _loadingDepartments = true;
-
-  String? _userName;
-
-  /// Use role-based name when stored name is null, empty, or a placeholder (e.g. "Deployed Admin").
-  String _effectiveWelcomeName(String? name) {
-    if (name == null || name.trim().isEmpty) return 'Admin';
-    if (name.toLowerCase().contains('deployed')) return 'Admin';
-    return name.trim();
-  }
-
   @override
   void initState() {
     super.initState();
-    _userName = AuthService.getCachedDisplayName();
     _bootstrapAuthFromToken();
     fetchStats();
-    fetchPowerBIStatus();
     fetchAudits(page: 1);
-    fetchProfileImage();
     fetchDashboardNotifications();
     _loadCalendarData();
-    _fetchTeamCollaboration();
-    _fetchDepartmentDistribution();
 
     _statusTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      fetchPowerBIStatus();
+      // Periodic tasks can be added here
     });
-
-    _sidebarAnimController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 250),
-    );
-    _sidebarWidthAnimation = Tween<double>(begin: 260, end: 72).animate(
-      CurvedAnimation(parent: _sidebarAnimController, curve: Curves.easeInOut),
-    );
 
     // Setup WebSocket listeners for real-time dashboard updates
     _setupWebSocketListeners();
@@ -234,7 +242,6 @@ class _AdminDashboardState extends State<AdminDashboard>
       debugPrint('📊 Real-time: Job status changed - $data');
       // Refresh stats to get updated counts
       fetchStats();
-      _fetchDepartmentDistribution();
     };
 
     // Handle CV review completed events
@@ -375,8 +382,6 @@ class _AdminDashboardState extends State<AdminDashboard>
       if (user is Map<String, dynamic>) {
         await AuthService.saveUserInfo(user);
       }
-      if (mounted)
-        setState(() => _userName = AuthService.getCachedDisplayName());
     } catch (_) {
       // Best-effort: avoid blocking dashboard load
     }
@@ -471,90 +476,6 @@ class _AdminDashboardState extends State<AdminDashboard>
     }
   }
 
-  Future<void> _fetchTeamCollaboration() async {
-    setState(() => _loadingTeamCollaboration = true);
-    try {
-      final data = await admin.getTeamCollaborationUsers();
-      if (!mounted) return;
-
-      // Extract collaboration items from response
-      final items = data['collaboration_items'] ??
-          data['users'] ??
-          data['activities'] ??
-          [];
-
-      setState(() {
-        _teamCollaborationItems = List<Map<String, dynamic>>.from(items);
-        _loadingTeamCollaboration = false;
-      });
-    } catch (e) {
-      debugPrint('Team collaboration load error: $e');
-      if (!mounted) return;
-      setState(() => _loadingTeamCollaboration = false);
-    }
-  }
-
-  Future<void> _fetchDepartmentDistribution() async {
-    setState(() => _loadingDepartments = true);
-    try {
-      // Fetch jobs with stats to get department information
-      final data = await admin.listJobsEnhanced(perPage: 100);
-      if (!mounted) return;
-
-      final jobs = data['jobs'] as List<dynamic>? ?? [];
-      final departments = _calculateDepartmentDistribution(jobs);
-
-      setState(() {
-        _departmentDistribution = departments;
-        _loadingDepartments = false;
-      });
-    } catch (e) {
-      debugPrint('Department distribution load error: $e');
-      if (!mounted) return;
-      setState(() => _loadingDepartments = false);
-    }
-  }
-
-  List<DepartmentData> _calculateDepartmentDistribution(List<dynamic> jobs) {
-    // Group jobs by department and count
-    final Map<String, int> counts = {};
-    for (final job in jobs) {
-      if (job is Map<String, dynamic>) {
-        final dept = job['department'] ?? job['category'] ?? 'Unknown';
-        counts[dept] = (counts[dept] ?? 0) + 1;
-      }
-    }
-
-    if (counts.isEmpty) {
-      return [];
-    }
-
-    final total = counts.values.reduce((a, b) => a + b);
-    final colors = [
-      const Color(0xFF81829B),
-      const Color(0xFF6095CC),
-      const Color(0xFFEA990C),
-      const Color(0xFFE7BF2D),
-      const Color(0xFF6CA510),
-      const Color(0xFFC10D00),
-      const Color(0xFF9C27B0),
-      const Color(0xFF00BCD4),
-    ];
-
-    // Sort by count descending and take top 5
-    final sorted = counts.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-
-    return sorted.take(5).map((e) {
-      final index = sorted.indexOf(e);
-      return DepartmentData(
-        e.key,
-        total > 0 ? e.value / total : 0.0,
-        colors[index % colors.length],
-      );
-    }).toList();
-  }
-
   Future<void> fetchDashboardNotifications() async {
     setState(() => loadingNotifications = true);
     try {
@@ -562,6 +483,9 @@ class _AdminDashboardState extends State<AdminDashboard>
       if (!mounted) return;
       setState(() {
         dashboardNotifications = response.notifications;
+        unreadNotificationCount = response.notifications
+            .where((n) => n['read'] == false || n['read'] == null)
+            .length;
         loadingNotifications = false;
       });
     } catch (e) {
@@ -572,7 +496,6 @@ class _AdminDashboardState extends State<AdminDashboard>
 
   @override
   void dispose() {
-    _sidebarAnimController.dispose();
     _statusTimer?.cancel();
     auditSearchController.dispose();
 
@@ -584,78 +507,7 @@ class _AdminDashboardState extends State<AdminDashboard>
     super.dispose();
   }
 
-  // ---------- Profile Image Methods ----------
-  Future<void> fetchProfileImage() async {
-    try {
-      final profileRes = await http.get(
-        Uri.parse("$apiBase/profile"),
-        headers: {
-          'Authorization': 'Bearer ${widget.token}',
-          'Content-Type': 'application/json'
-        },
-      );
-
-      if (profileRes.statusCode == 200) {
-        final data = json.decode(profileRes.body)['data'];
-        final candidate = data['candidate'] ?? {};
-        setState(() {
-          _profileImageUrl = candidate['profile_picture'] ?? "";
-        });
-      }
-    } catch (e) {
-      debugPrint("Error fetching profile image: $e");
-    }
-  }
-
-  Future<void> uploadProfileImage() async {
-    if (_profileImage == null) return;
-    try {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse("$apiBase/upload_profile_picture"),
-      );
-      request.headers['Authorization'] = 'Bearer ${widget.token}';
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'image',
-          kIsWeb
-              ? _profileImageBytes!
-              : File(_profileImage!.path).readAsBytesSync(),
-          filename: _profileImage!.name,
-        ),
-      );
-
-      var response = await request.send();
-      final respStr = await response.stream.bytesToString();
-      final respJson = json.decode(respStr);
-
-      if (response.statusCode == 200 && respJson['success'] == true) {
-        setState(() {
-          _profileImageUrl = respJson['data']['profile_picture'];
-          _profileImage = null;
-          _profileImageBytes = null;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Profile picture updated")));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Upload failed: ${response.statusCode}")));
-      }
-    } catch (e) {
-      debugPrint("Profile image upload error: $e");
-    }
-  }
-
-  ImageProvider<Object> _getProfileImageProvider() {
-    if (_profileImage != null) {
-      if (kIsWeb) return MemoryImage(_profileImageBytes!);
-      return FileImage(File(_profileImage!.path));
-    }
-    if (_profileImageUrl.isNotEmpty) return NetworkImage(_profileImageUrl);
-    return const AssetImage("assets/images/profile_placeholder.png");
-  }
-
-  // ---------- Dashboard Stats & PowerBI ----------
+  // ---------- Dashboard Stats ----------
   Future<void> fetchStats() async {
     // Try to load cached data first for instant UI
     final cachedStats =
@@ -729,31 +581,6 @@ class _AdminDashboardState extends State<AdminDashboard>
     recentActivities = activities;
   }
 
-  Future<void> fetchPowerBIStatus() async {
-    if (mounted) setState(() => checkingPowerBI = true);
-    try {
-      final res = await UnifiedApiService.makeAuthorizedRequest(
-        'GET',
-        ApiEndpoints.getPowerBIStatus,
-      );
-
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        if (mounted) {
-          setState(() {
-            powerBIConnected = data["connected"] ?? false;
-          });
-        }
-      } else {
-        if (mounted) setState(() => powerBIConnected = false);
-      }
-    } catch (e) {
-      if (mounted) setState(() => powerBIConnected = false);
-    } finally {
-      if (mounted) setState(() => checkingPowerBI = false);
-    }
-  }
-
   Future<void> fetchAudits({int page = 1}) async {
     if (mounted) setState(() => loadingAudits = true);
     try {
@@ -806,27 +633,38 @@ class _AdminDashboardState extends State<AdminDashboard>
   }
 
   void _showLogoutConfirmation(BuildContext context) {
-    final navigatorContext = context;
+    final themeProvider = Provider.of<ThemeProvider>(context);
     showDialog(
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: const Text("Logout", style: TextStyle(fontFamily: 'Poppins')),
-          content: const Text("Are you sure you want to logout?",
-              style: TextStyle(fontFamily: 'Poppins')),
+          backgroundColor:
+              themeProvider.isDarkMode ? _AdminPalette.charcoal : Colors.white,
+          title: Text("Logout",
+              style: GoogleFonts.poppins(
+                  color:
+                      themeProvider.isDarkMode ? Colors.white : Colors.black)),
+          content: Text("Are you sure you want to logout?",
+              style: GoogleFonts.poppins(
+                  color: themeProvider.isDarkMode
+                      ? Colors.grey.shade400
+                      : Colors.grey.shade700)),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child:
-                  const Text("Cancel", style: TextStyle(fontFamily: 'Poppins')),
+              child: Text("Cancel",
+                  style: GoogleFonts.poppins(
+                      color: themeProvider.isDarkMode
+                          ? Colors.grey.shade500
+                          : Colors.grey.shade600)),
             ),
             TextButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop();
-                _performLogout(navigatorContext);
+                _performLogout(context);
               },
-              child: const Text("Logout",
-                  style: TextStyle(color: Colors.red, fontFamily: 'Poppins')),
+              child: Text("Logout",
+                  style: GoogleFonts.poppins(color: _AdminPalette.primary)),
             ),
           ],
         );
@@ -847,680 +685,274 @@ class _AdminDashboardState extends State<AdminDashboard>
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
-      // 🌆 Dynamic background implementation
-      body: Container(
-        decoration: BoxDecoration(
-          image: DecorationImage(
-            image: AssetImage(themeProvider.backgroundImage),
-            fit: BoxFit.cover,
-          ),
-        ),
-        child: SafeArea(
-          child: Row(
-            children: [
-              // ---------- Collapsible Sidebar ----------
-              AnimatedBuilder(
-                animation: _sidebarAnimController,
-                builder: (context, child) {
-                  final width = _sidebarWidthAnimation.value;
-                  return Container(
-                    width: width,
-                    height: double.infinity,
-                    decoration: BoxDecoration(
-                      color: themeProvider.isDarkMode
-                          ? const Color(0xFF1E1E1E)
-                          : Colors.white,
-                      border: Border(
-                        right: BorderSide(
-                            color: themeProvider.isDarkMode
-                                ? Colors.white.withValues(alpha: 0.1)
-                                : const Color(0xFFE0E0E0),
-                            width: 1),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color.fromARGB(255, 20, 19, 30)
-                              .withValues(alpha: 0.02),
-                          blurRadius: 8,
-                          offset: const Offset(2, 0),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        // Sidebar header
-                        SizedBox(
-                          height: 72,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Flexible(
-                                  child: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: sidebarCollapsed
-                                        ? Container(
-                                            width: 44,
-                                            height: 44,
-                                            decoration: BoxDecoration(
-                                              color: themeProvider.isDarkMode
-                                                  ? const Color(0xFF2D2D2D)
-                                                  : Colors.white,
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black
-                                                      .withOpacity(0.08),
-                                                  blurRadius: 4,
-                                                  offset: const Offset(0, 2),
-                                                ),
-                                              ],
-                                            ),
-                                            child: Center(
-                                              child: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Text(
-                                                    'K',
-                                                    style: GoogleFonts.poppins(
-                                                      fontSize: 18,
-                                                      fontWeight:
-                                                          FontWeight.w800,
-                                                      color: themeProvider
-                                                              .isDarkMode
-                                                          ? Colors.white
-                                                          : const Color(
-                                                              0xFF1A1A1A),
-                                                    ),
-                                                  ),
-                                                  Container(
-                                                    width: 14,
-                                                    height: 3,
-                                                    decoration: BoxDecoration(
-                                                      color: const Color(
-                                                          0xFFC10D00),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              1),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          )
-                                        : Container(
-                                            padding: const EdgeInsets.fromLTRB(
-                                                16, 14, 16, 14),
-                                            decoration: BoxDecoration(
-                                              color: themeProvider.isDarkMode
-                                                  ? const Color(0xFF2D2D2D)
-                                                  : Colors.white,
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black
-                                                      .withOpacity(0.08),
-                                                  blurRadius: 4,
-                                                  offset: const Offset(0, 2),
-                                                ),
-                                              ],
-                                            ),
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Row(
-                                                  mainAxisSize:
-                                                      MainAxisSize.min,
-                                                  children: [
-                                                    Column(
-                                                      children: [
-                                                        Text(
-                                                          'K',
-                                                          style: GoogleFonts
-                                                              .poppins(
-                                                            fontSize: 16,
-                                                            fontWeight:
-                                                                FontWeight.w800,
-                                                            color: themeProvider
-                                                                    .isDarkMode
-                                                                ? Colors.white
-                                                                : const Color(
-                                                                    0xFF1A1A1A),
-                                                          ),
-                                                        ),
-                                                        Container(
-                                                          width: 12,
-                                                          height: 3,
-                                                          decoration:
-                                                              BoxDecoration(
-                                                            color: const Color(
-                                                                0xFFC10D00),
-                                                            borderRadius:
-                                                                BorderRadius
-                                                                    .circular(
-                                                                        1),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    Text(
-                                                      'HONOLOGY',
-                                                      style:
-                                                          GoogleFonts.poppins(
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight.w700,
-                                                        color: themeProvider
-                                                                .isDarkMode
-                                                            ? Colors.white
-                                                            : const Color(
-                                                                0xFF1A1A1A),
-                                                        letterSpacing: 2,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  'Automated Recruitment\nWorkflow',
-                                                  textAlign: TextAlign.center,
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 8,
-                                                    fontWeight: FontWeight.w500,
-                                                    color:
-                                                        themeProvider.isDarkMode
-                                                            ? Colors.white60
-                                                            : const Color(
-                                                                0xFF666666),
-                                                    height: 1.3,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                  ),
-                                ),
-                                IconButton(
-                                  constraints: const BoxConstraints(),
-                                  padding: EdgeInsets.zero,
-                                  icon: Icon(
-                                    sidebarCollapsed
-                                        ? Icons.arrow_forward_ios
-                                        : Icons.arrow_back_ios,
-                                    size: 16,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                  onPressed: toggleSidebar,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: ListView(
-                            padding: EdgeInsets.zero,
-                            children: [
-                              _sidebarEntry(
-                                  'assets/images/Home_Remote_Work_Red_Badge_White.png',
-                                  'Home',
-                                  'dashboard'),
-                              _sidebarEntry(
-                                  'assets/images/Approval_Red_Badge_White.png',
-                                  'Jobs',
-                                  'jobs'),
-                              _sidebarEntry('assets/images/candidates.png',
-                                  'Candidates', 'all_candidates'),
-                              _sidebarEntry(
-                                  'assets/images/red_Management_Red_Badge_White.png',
-                                  'Interviews',
-                                  'interviews'),
-                              _sidebarEntry(
-                                  'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
-                                  'CV Reviews',
-                                  'cv_reviews'),
-                              _sidebarEntry('assets/icons/data-analytics.png',
-                                  'Analytics', 'analytics'),
-                              _sidebarEntry('assets/icons/teamC.png',
-                                  'Team Collaboration', 'team_collaboration'),
-                              _sidebarEntry(
-                                  'assets/images/Notification_Red_White.png',
-                                  'Notifications',
-                                  'notifications'),
-                              _sidebarEntry(
-                                  'assets/images/innovation_brainstorm_red_badge_white.png',
-                                  'Settings',
-                                  'settings'),
-                              _sidebarEntry(
-                                  Icons.person_outline, 'Profile', 'profile'),
-                              _sidebarEntry('assets/images/deadline.png',
-                                  'Audits', 'audits'),
-                              _sidebarEntry(
-                                  'assets/images/Warning_Error_Red_Badge_White.png',
-                                  'Role Access',
-                                  'roles'),
-                            ],
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              vertical: 12.0, horizontal: 8),
-                          child: Column(
-                            children: [
-                              if (!sidebarCollapsed)
-                                Row(
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () {
-                                        setState(
-                                            () => currentScreen = 'profile');
-                                      },
-                                      child: CircleAvatar(
-                                        radius: 18,
-                                        backgroundColor: Colors.grey.shade200,
-                                        backgroundImage:
-                                            _getProfileImageProvider(),
-                                        child: null,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        "Admin User",
-                                        style: TextStyle(
-                                          fontFamily: 'Poppins',
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.grey.shade800,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              else
-                                Center(
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      setState(() => currentScreen = 'profile');
-                                    },
-                                    child: CircleAvatar(
-                                      radius: 18,
-                                      backgroundColor: Colors.grey.shade200,
-                                      backgroundImage:
-                                          _getProfileImageProvider(),
-                                      child: null,
-                                    ),
-                                  ),
-                                ),
-                              const SizedBox(height: 12),
-                              if (!sidebarCollapsed)
-                                ElevatedButton.icon(
-                                  onPressed: () =>
-                                      _showLogoutConfirmation(context),
-                                  icon: const Icon(Icons.logout, size: 16),
-                                  label: const Text("Logout",
-                                      style: TextStyle(fontFamily: 'Poppins')),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: themeProvider.isDarkMode
-                                        ? const Color(0xFF2D2D2D)
-                                        : Colors.white,
-                                    foregroundColor: BrandTokens.primary,
-                                    side:
-                                        BorderSide(color: Colors.grey.shade300),
-                                    minimumSize: const Size.fromHeight(40),
-                                  ),
-                                )
-                              else
-                                IconButton(
-                                  onPressed: () =>
-                                      _showLogoutConfirmation(context),
-                                  icon: const Icon(Icons.logout,
-                                      color: Colors.grey),
-                                ),
-                              const SizedBox(height: 16),
-                              // Version label
-                              if (!sidebarCollapsed)
-                                Center(
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color: themeProvider.isDarkMode
-                                            ? const Color(0xFF444444)
-                                            : const Color(0xFFE0E0E0),
-                                      ),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      'Ver 2026.03.AA1_SIT',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 10,
-                                        color: themeProvider.isDarkMode
-                                            ? Colors.white54
-                                            : Colors.grey.shade600,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
+      backgroundColor: _AdminPalette.scaffoldBackground,
+      body: Stack(
+        children: [
+          // Background image
+          Container(
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage(themeProvider.backgroundImage),
+                fit: BoxFit.cover,
               ),
-              // ---------- Main content ----------
-              Expanded(
-                child: Column(
-                  children: [
-                    Container(
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: Colors.transparent,
-                        border: Border(
-                          bottom: BorderSide(
-                            color: themeProvider.isDarkMode
-                                ? Colors.white.withValues(alpha: 0.05)
-                                : Colors.black.withValues(alpha: 0.05),
-                            width: 1,
+            ),
+          ),
+          // Particle overlay (subtle effect)
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.1),
+            ),
+          ),
+          // Main content
+          SafeArea(
+            child: Row(
+              children: [
+                // ---------- Fixed Sidebar ----------
+                Container(
+                  width: 220,
+                  height: double.infinity,
+                  decoration: BoxDecoration(
+                    color: themeProvider.isDarkMode
+                        ? _AdminPalette.sidebarBackground
+                        : Colors.white,
+                    border: Border(
+                      right: BorderSide(
+                        color: themeProvider.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.grey.shade200,
+                        width: 1,
+                      ),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color.fromARGB(255, 20, 19, 30)
+                            .withValues(alpha: 0.02),
+                        blurRadius: 8,
+                        offset: const Offset(2, 0),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      // Sidebar header
+                      SizedBox(
+                        height: 72,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: _adminDashboardAssetImage(
+                              'images/logo2.png',
+                              height: 40,
+                              fit: BoxFit.contain,
+                            ),
                           ),
                         ),
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      Expanded(
+                        child: ListView(
+                          padding: EdgeInsets.zero,
                           children: [
-                            // Greeting section
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "Admin Dashboard",
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w700,
-                                    color: themeProvider.isDarkMode
-                                        ? Colors.white
-                                        : const Color(0xFF1A1A1A),
-                                  ),
-                                ),
-                                Text(
-                                  "Hello, ${_effectiveWelcomeName(_userName)}",
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: themeProvider.isDarkMode
-                                        ? Colors.white.withValues(alpha: 0.7)
-                                        : const Color(0xFF666666),
-                                  ),
-                                ),
-                              ],
-                            ),
-
-                            // Action icons
-                            Row(
-                              children: [
-                                // Mail icon
-                                _buildTopBarIconButton(
-                                  icon: Icons.mail_outline,
-                                  onPressed: () {},
-                                  themeProvider: themeProvider,
-                                ),
-                                const SizedBox(width: 12),
-                                // Notification icon
-                                _buildTopBarIconButton(
-                                  icon: Icons.notifications_none_outlined,
-                                  onPressed: () => setState(
-                                      () => currentScreen = 'notifications'),
-                                  badgeCount: dashboardNotifications.length,
-                                  themeProvider: themeProvider,
-                                ),
-                                const SizedBox(width: 24),
-                                // Theme Toggle (relocated to right)
-                                Row(
-                                  children: [
-                                    Icon(
-                                      themeProvider.isDarkMode
-                                          ? Icons.dark_mode
-                                          : Icons.light_mode,
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.amber
-                                          : Colors.grey.shade700,
-                                      size: 18,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Switch(
-                                      value: themeProvider.isDarkMode,
-                                      onChanged: (value) {
-                                        themeProvider.toggleTheme();
-                                      },
-                                      activeThumbColor: Colors.redAccent,
-                                      inactiveTrackColor: Colors.grey.shade300,
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(width: 12),
-                                // Power BI Status
-                                _buildPowerBIStatus(themeProvider),
-                              ],
-                            ),
+                            _sidebarEntry(
+                                'images/Home_Remote_Work_Red_Badge_White.png',
+                                'Dashboard',
+                                'dashboard'),
+                            _sidebarEntry(
+                                'assets/images/Approval_Red_Badge_White.png',
+                                'Jobs',
+                                'jobs'),
+                            _sidebarEntry(Icons.people_outline, 'Candidates',
+                                'candidates'),
+                            _sidebarEntry(
+                                'assets/images/red_Management_Red_Badge_White.png',
+                                'Interviews',
+                                'interviews'),
+                            _sidebarEntry(
+                                'images/Goal_Target_White_Badge_Red_Badge_White.png',
+                                'CV Reviews',
+                                'cv_reviews'),
+                            _sidebarEntry('icons/data-analytics.png',
+                                'Analytics', 'analytics'),
+                            _sidebarEntry('images/Team.png',
+                                'Team Collaboration', 'team_collaboration'),
+                            _sidebarEntry('images/Notification_Red_White.png',
+                                'Notifications', 'notifications',
+                                badgeCount: unreadNotificationCount),
+                            _sidebarEntry(
+                                'images/innovation_brainstorm_red_badge_white.png',
+                                'Settings',
+                                'settings'),
+                            _sidebarEntry(Icons.verified_user_outlined,
+                                'Audits', 'audits'),
+                            _sidebarEntry(Icons.manage_accounts_outlined,
+                                'User Management', 'user_management'),
+                            _sidebarEntry(Icons.person_outline,
+                                'Account Profile', 'profile'),
                           ],
                         ),
                       ),
-                    ),
-                    Expanded(child: getCurrentScreen()),
-                  ],
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 12.0, horizontal: 8),
+                        child: ElevatedButton.icon(
+                          onPressed: () => _showLogoutConfirmation(context),
+                          icon: const Icon(Icons.logout, size: 16),
+                          label: const Text("Logout",
+                              style: TextStyle(fontFamily: 'Poppins')),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: themeProvider.isDarkMode
+                                ? Colors.white.withValues(alpha: 0.12)
+                                : Colors.white,
+                            foregroundColor: themeProvider.isDarkMode
+                                ? Colors.redAccent
+                                : Colors.black,
+                            side: BorderSide(
+                              color: themeProvider.isDarkMode
+                                  ? Colors.white.withValues(alpha: 0.2)
+                                  : Colors.grey.shade300,
+                            ),
+                            minimumSize: const Size.fromHeight(40),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                // ---------- Main content ----------
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                    child: getCurrentScreen(),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.redAccent,
-        onPressed: fetchStats,
-        tooltip: "Refresh stats",
-        child: const Icon(Icons.refresh),
+        onPressed: themeProvider.toggleTheme,
+        tooltip: themeProvider.isDarkMode
+            ? "Switch to light mode"
+            : "Switch to dark mode",
+        child: Icon(
+          themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+          color: Colors.white,
+        ),
       ),
     );
   }
 
-  Widget _buildTopBarIconButton({
-    required IconData icon,
-    required VoidCallback onPressed,
-    required ThemeProvider themeProvider,
-    int? badgeCount,
-  }) {
-    final isDark = themeProvider.isDarkMode;
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withValues(alpha: 0.05)
-                : const Color(0xFFF5F5F7),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: IconButton(
-            icon: Icon(icon,
-                color: isDark ? Colors.white70 : const Color(0xFF666666)),
-            onPressed: onPressed,
-            tooltip: icon == Icons.mail_outline ? "Messages" : "Notifications",
-          ),
-        ),
-        if (badgeCount != null && badgeCount > 0)
-          Positioned(
-            right: -4,
-            top: -4,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
-                color: Color(0xFFC10D00),
-                shape: BoxShape.circle,
-              ),
-              constraints: const BoxConstraints(
-                minWidth: 18,
-                minHeight: 18,
-              ),
-              child: Text(
-                badgeCount > 9 ? '9+' : badgeCount.toString(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
+  Widget _sidebarEntry(dynamic icon, String label, String screenKey,
+      {int? badgeCount}) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final selected = currentScreen == screenKey;
+    final iconColor = selected
+        ? _AdminPalette.primary
+        : themeProvider.isDarkMode
+            ? Colors.grey.shade400
+            : Colors.black;
 
-  Widget _buildPowerBIStatus(ThemeProvider themeProvider) {
     return InkWell(
-      onTap: fetchPowerBIStatus,
-      borderRadius: BorderRadius.circular(12),
+      onTap: () => setState(() => currentScreen = screenKey),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: (powerBIConnected ? Colors.green : Colors.red)
-              .withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: (powerBIConnected ? Colors.green : Colors.red)
-                .withValues(alpha: 0.2),
-          ),
-        ),
+        color: selected
+            ? _AdminPalette.primary.withValues(alpha: 0.12)
+            : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
           children: [
-            if (checkingPowerBI)
-              const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.blue),
-              )
-            else
-              Icon(
-                Icons.bar_chart,
-                color: powerBIConnected ? Colors.green : Colors.red,
-                size: 16,
-              ),
-            const SizedBox(width: 8),
-            Text(
-              "Power BI",
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: powerBIConnected ? Colors.green : Colors.red,
+            _buildSidebarIcon(icon, selected, iconColor, themeProvider),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: selected
+                      ? _AdminPalette.primary
+                      : themeProvider.isDarkMode
+                          ? Colors.grey.shade400
+                          : Colors.black,
+                  fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+                ),
               ),
             ),
+            if (badgeCount != null && badgeCount > 0)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _AdminPalette.primary,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  badgeCount > 99 ? '99+' : badgeCount.toString(),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 
-  void toggleSidebar() {
-    setState(() {
-      sidebarCollapsed = !sidebarCollapsed;
-      if (sidebarCollapsed) {
-        _sidebarAnimController.forward();
-      } else {
-        _sidebarAnimController.reverse();
-      }
-    });
-  }
-
-  Widget _sidebarEntry(dynamic icon, String label, String screenKey) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final selected = currentScreen == screenKey;
-    final isDark = themeProvider.isDarkMode;
-
+  Widget _buildSidebarIcon(
+    dynamic icon,
+    bool selected,
+    Color iconColor,
+    ThemeProvider themeProvider,
+  ) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      child: InkWell(
-        onTap: () => setState(() => currentScreen = screenKey),
-        borderRadius: BorderRadius.circular(12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
-            color: selected ? const Color(0xFFC10D00) : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFFC10D00).withValues(alpha: 0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    )
-                  ]
-                : null,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: Row(
-            children: [
-              icon is IconData
-                  ? Icon(
-                      icon,
-                      size: 20,
-                      color: selected
-                          ? Colors.white
-                          : (isDark
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade700),
-                    )
-                  : Image.asset(
-                      icon as String,
-                      width: 20,
-                      height: 20,
-                      color: selected
-                          ? Colors.white
-                          : (isDark
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade700),
-                      errorBuilder: (context, error, stackTrace) => Icon(
-                        Icons.insert_drive_file_outlined,
-                        size: 20,
-                        color: selected ? Colors.white : Colors.grey,
-                      ),
-                    ),
-              if (!sidebarCollapsed) ...[
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                      color: selected
-                          ? Colors.white
-                          : (isDark
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade700),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: selected
+            ? _AdminPalette.primary
+            : themeProvider.isDarkMode
+                ? Colors.grey.shade700
+                : Colors.grey.shade200,
       ),
+      child: icon is IconData
+          ? Icon(
+              icon,
+              size: 20,
+              color: selected
+                  ? Colors.white
+                  : themeProvider.isDarkMode
+                      ? Colors.white
+                      : Colors.black,
+            )
+          : _adminDashboardAssetImage(
+              icon as String,
+              width: 32,
+              height: 32,
+              fit: BoxFit.contain,
+            ),
     );
   }
 
   Widget getCurrentScreen() {
     switch (currentScreen) {
+      case "dashboard":
+        return DashboardOverview(
+          stats: {
+            "jobs": jobsCount,
+            "candidates": candidatesCount,
+            "interviews": interviewsCount,
+            "applications": cvReviewsCount,
+            "offers": acceptedOffers,
+          },
+          recentActivities: recentActivities,
+          upcomingInterviews: _calendarAppointments
+              .where((a) => a.subject.toLowerCase().contains('interview'))
+              .toList(),
+        );
       case "jobs":
         return JobManagement(
           onJobSelected: (jobId) {
@@ -1560,610 +992,56 @@ class _AdminDashboardState extends State<AdminDashboard>
       case "team_collaboration":
         return const HMTeamCollaborationPage();
       case "audits":
-        return auditsScreen();
+        return _placeholderScreen("Audit Logs");
       case "roles":
         return const UserManagementScreen();
       case "users":
         return const UserManagementScreen();
       default:
-        return dashboardOverview(context);
+        return DashboardOverview(
+          stats: {
+            "jobs": jobsCount,
+            "candidates": candidatesCount,
+            "interviews": interviewsCount,
+            "applications": cvReviewsCount,
+            "offers": acceptedOffers,
+          },
+          recentActivities: recentActivities,
+          upcomingInterviews: _calendarAppointments
+              .where((a) => a.subject.toLowerCase().contains('interview'))
+              .toList(),
+        );
     }
   }
 
-  /// ------------------- AUDITS SCREEN -------------------
-  Widget auditsScreen() {
+  Widget _placeholderScreen(String title) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-
-    final List<StackedLineData> stackedAuditData = [
-      StackedLineData('Jan', 12, 8, 5, 3, 2),
-      StackedLineData('Feb', 15, 10, 7, 4, 3),
-      StackedLineData('Mar', 18, 12, 9, 6, 4),
-      StackedLineData('Apr', 14, 9, 6, 5, 3),
-      StackedLineData('May', 20, 15, 11, 7, 5),
-      StackedLineData('Jun', 22, 16, 12, 8, 6),
-    ];
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+    return Center(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: const [
-                  Icon(Icons.analytics_outlined,
-                      color: BrandTokens.primary, size: 28),
-                  SizedBox(width: 8),
-                  Text(
-                    "Audit Analytics Dashboard",
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: BrandTokens.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.history, color: BrandTokens.primary, size: 18),
-                    const SizedBox(width: 6),
-                    Text(
-                      "${audits.length} Records",
-                      style: TextStyle(
-                          fontFamily: 'Poppins',
-                          color: BrandTokens.primary,
-                          fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          // Search and filters
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: auditSearchController,
-                  decoration: InputDecoration(
-                    hintText: "Search audit logs...",
-                    hintStyle: const TextStyle(fontFamily: 'Poppins'),
-                    prefixIcon: const Icon(Icons.search),
-                    filled: true,
-                    fillColor: (themeProvider.isDarkMode
-                            ? const Color(0xFF14131E)
-                            : Colors.white)
-                        .withValues(alpha: 0.9),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(30),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  onSubmitted: (val) {
-                    auditSearchQuery = val;
-                    fetchAudits(page: 1);
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  color: (themeProvider.isDarkMode
-                          ? const Color(0xFF14131E)
-                          : Colors.white)
-                      .withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: auditActionFilter,
-                    hint: const Text("Action Type",
-                        style: TextStyle(fontFamily: 'Poppins')),
-                    items: [null, ...auditActions]
-                        .map((e) => DropdownMenuItem<String>(
-                              value: e,
-                              child: Text(e ?? "All",
-                                  style:
-                                      const TextStyle(fontFamily: 'Poppins')),
-                            ))
-                        .toList(),
-                    onChanged: (val) {
-                      setState(() => auditActionFilter = val);
-                      fetchAudits(page: 1);
-                    },
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-
-          // Stacked Line Chart for Audits
-          ThemedSurfaceCard(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              height: 300,
-              child: loadingAudits
-                  ? const ThemedLoadingState(
-                      message: 'Loading audit analytics...',
-                    )
-                  : SfCartesianChart(
-                      title: ChartTitle(
-                          text: "Audit Activity Trend - Stacked Lines",
-                          textStyle: TextStyle(
-                              fontFamily: 'Poppins',
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: themeProvider.isDarkMode
-                                  ? Colors.white
-                                  : Colors.black87)),
-                      plotAreaBorderWidth: 0,
-                      primaryXAxis: CategoryAxis(
-                        axisLine: const AxisLine(width: 1, color: Colors.grey),
-                        majorGridLines: const MajorGridLines(width: 0),
-                        labelStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black54),
-                      ),
-                      primaryYAxis: NumericAxis(
-                        axisLine: const AxisLine(width: 1, color: Colors.grey),
-                        majorGridLines: MajorGridLines(
-                          color: Colors.grey.shade300,
-                          width: 1,
-                        ),
-                        labelStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black54),
-                      ),
-                      tooltipBehavior: TooltipBehavior(
-                        enable: true,
-                        color: BrandTokens.primary,
-                        borderColor: BrandTokens.primary,
-                        textStyle: const TextStyle(
-                            color: Colors.white, fontFamily: 'Poppins'),
-                      ),
-                      legend: Legend(
-                        isVisible: true,
-                        position: LegendPosition.bottom,
-                        overflowMode: LegendItemOverflowMode.wrap,
-                      ),
-                      series: <CartesianSeries<StackedLineData, String>>[
-                        StackedLineSeries<StackedLineData, String>(
-                          dataSource: stackedAuditData,
-                          xValueMapper: (data, _) => data.month,
-                          yValueMapper: (data, _) => data.login,
-                          name: 'Login',
-                          color: BrandTokens.primary,
-                          width: 3,
-                          markerSettings: const MarkerSettings(isVisible: true),
-                        ),
-                        StackedLineSeries<StackedLineData, String>(
-                          dataSource: stackedAuditData,
-                          xValueMapper: (data, _) => data.month,
-                          yValueMapper: (data, _) => data.logout,
-                          name: 'Logout',
-                          color: Colors.orangeAccent,
-                          width: 3,
-                          markerSettings: const MarkerSettings(isVisible: true),
-                        ),
-                        StackedLineSeries<StackedLineData, String>(
-                          dataSource: stackedAuditData,
-                          xValueMapper: (data, _) => data.month,
-                          yValueMapper: (data, _) => data.create,
-                          name: 'Create',
-                          color: Colors.green,
-                          width: 3,
-                          markerSettings: const MarkerSettings(isVisible: true),
-                        ),
-                        StackedLineSeries<StackedLineData, String>(
-                          dataSource: stackedAuditData,
-                          xValueMapper: (data, _) => data.month,
-                          yValueMapper: (data, _) => data.update,
-                          name: 'Update',
-                          color: BrandTokens.primary,
-                          width: 3,
-                          markerSettings: const MarkerSettings(isVisible: true),
-                        ),
-                        StackedLineSeries<StackedLineData, String>(
-                          dataSource: stackedAuditData,
-                          xValueMapper: (data, _) => data.month,
-                          yValueMapper: (data, _) => data.delete,
-                          name: 'Delete',
-                          color: Colors.purpleAccent,
-                          width: 3,
-                          markerSettings: const MarkerSettings(isVisible: true),
-                        ),
-                      ],
-                    ),
+          Icon(Icons.construction,
+              size: 64,
+              color: themeProvider.isDarkMode
+                  ? Colors.grey.shade600
+                  : Colors.grey.shade400),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: GoogleFonts.poppins(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+              color: themeProvider.isDarkMode ? Colors.white : Colors.black,
             ),
           ),
-          const SizedBox(height: 24),
-
-          // Audit Log List
-          ThemedSurfaceCard(
-            padding: const EdgeInsets.all(12),
-            child: loadingAudits
-                ? const ThemedLoadingState(
-                    message: 'Loading audit logs...',
-                  )
-                : audits.isEmpty
-                    ? const ThemedEmptyState(
-                        title: 'No audit logs found',
-                        subtitle: 'Try changing your search or filters',
-                        icon: Icons.history,
-                      )
-                    : ListView.separated(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        separatorBuilder: (_, __) =>
-                            Divider(color: Colors.grey.shade200, height: 1),
-                        itemCount: audits.length,
-                        itemBuilder: (context, index) {
-                          final audit = audits[index];
-                          final action = audit['action'] ?? 'Unknown';
-                          final timestamp = audit['timestamp'] ?? '';
-                          final user = audit['user'] ?? 'System';
-                          final icon = {
-                                "login": Icons.login,
-                                "logout": Icons.logout,
-                                "create": Icons.add_circle_outline,
-                                "update": Icons.edit_outlined,
-                                "delete": Icons.delete_outline
-                              }[action] ??
-                              Icons.info_outline;
-
-                          final color = {
-                                "login": Colors.green,
-                                "logout": Colors.orange,
-                                "create": Colors.blueAccent,
-                                "update": Colors.purpleAccent,
-                                "delete": Colors.redAccent
-                              }[action] ??
-                              Colors.grey;
-
-                          return ListTile(
-                            leading: CircleAvatar(
-                              backgroundColor: color.withValues(alpha: 0.15),
-                              child: Icon(icon, color: color),
-                            ),
-                            title: Text(
-                              "${action.toUpperCase()} • $user",
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontFamily: 'Poppins'),
-                            ),
-                            subtitle: Text(
-                              timestamp,
-                              style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontFamily: 'Poppins'),
-                            ),
-                            trailing: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: color.withValues(alpha: 0.1),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                action,
-                                style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    color: color,
-                                    fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget dashboardOverview(BuildContext context) {
-    if (loadingStats) {
-      return const ThemedLoadingState(
-        message: "Loading dashboard statistics...",
-      );
-    }
-
-    // Filter appointments for interviews specifically
-    final interviewsList = _calendarAppointments
-        .where((a) => a.subject.toLowerCase().contains('interview'))
-        .map((a) => {
-              'job_title': a.subject.replaceFirst('Interview: ', ''),
-              'candidate_name': '',
-              'scheduled_time':
-                  DateFormat('MMMM dd yyyy (HH:mm a)').format(a.startTime),
-              'is_new': a.startTime.difference(DateTime.now()).inDays <= 1,
-            })
-        .toList();
-
-    // Convert notifications to string list
-    final updatesList = dashboardNotifications
-        .map((n) => n['message'] as String? ?? 'New update')
-        .toList();
-
-    // Create CV trend data from real stats
-    final cvTrendList = [
-      CVData('Week 1', newApplicationsWeek),
-      CVData('Week 2', cvReviewsCount),
-      CVData('Week 3', interviewsCount),
-      CVData('Week 4', offeredApplications),
-      CVData('Week 5', acceptedOffers),
-    ];
-
-    // Create interview status data
-    final interviewStatusDataList = [
-      StatusData('Scheduled', upcomingInterviews, const Color(0xFF81829B)),
-      StatusData('Pending', interviewsCount - upcomingInterviews,
-          const Color(0xFF6095CC)),
-      StatusData('Completed', 0, const Color(0xFF6CA510)),
-    ];
-
-    return Container(
-      color: Colors.transparent,
-      child: RefreshIndicator(
-        onRefresh: () async {
-          // Refresh all dashboard data
-          await fetchStats();
-          await _loadCalendarData();
-          await _fetchTeamCollaboration();
-          await _fetchDepartmentDistribution();
-          await fetchDashboardNotifications();
-        },
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Redundant header removed as it's now in the global TopBar
-              const SizedBox(height: 8),
-              // Row 1: Total Jobs, Candidates, Interviews
-              Row(
-                children: [
-                  Expanded(
-                    child: MetricCard(
-                      title: 'Total Jobs',
-                      value: jobsCount.toString(),
-                      subtitle:
-                          'Additional description information can be included.',
-                      icon: Icons.work_outline,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: MetricCard(
-                      title: 'Candidates',
-                      value: candidatesCount.toString(),
-                      subtitle:
-                          'Additional description information can be included.',
-                      icon: Icons.people_outline,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: MetricCard(
-                      title: 'Interviews',
-                      value: interviewsCount.toString(),
-                      subtitle:
-                          'Additional description information can be included.',
-                      icon: Icons.calendar_today_outlined,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // Row 2: Applications, Offers
-              Row(
-                children: [
-                  Expanded(
-                    flex: 1,
-                    child: MetricCard(
-                      title: 'Applications',
-                      value: cvReviewsCount.toString(),
-                      subtitle:
-                          'Additional description information can be included.',
-                      icon: Icons.send_outlined,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    flex: 1,
-                    child: MetricCard(
-                      title: 'Offers',
-                      value: offeredApplications.toString(),
-                      subtitle:
-                          'Additional description information can be included.',
-                      icon: Icons.trending_up,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  // Empty third slot to maintain 3-column alignment
-                  const Expanded(flex: 1, child: SizedBox.shrink()),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      children: [
-                        UpcomingInterviewsCard(
-                          interviews: interviewsList,
-                          onViewAll: () =>
-                              setState(() => currentScreen = 'interviews'),
-                        ),
-                        const SizedBox(height: 20),
-                        JobsByDepartmentCard(
-                          departments: _departmentDistribution,
-                          isLoading: _loadingDepartments,
-                        ),
-                        const SizedBox(height: 20),
-                        InterviewStatusCard(statuses: interviewStatusDataList),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 20),
-                  Expanded(
-                    child: Column(
-                      children: [
-                        RecentUpdatesCard(
-                          updates: updatesList,
-                          onViewAll: () =>
-                              setState(() => currentScreen = 'notifications'),
-                        ),
-                        const SizedBox(height: 20),
-                        CVReviewTrendCard(weeklyData: cvTrendList),
-                        const SizedBox(height: 20),
-                        TeamCollaborationCard(
-                          items: _teamCollaborationItems,
-                          isLoading: _loadingTeamCollaboration,
-                          onViewAll: () => setState(
-                              () => currentScreen = 'team_collaboration'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              DashboardCalendarCard(
-                focusedDay: focusedDay,
-                appointments: _calendarAppointments,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget departmentRadialChart(List<_DepartmentData> data) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color:
-            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                "Jobs by Department",
-                style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color:
-                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: BrandTokens.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  "Distribution",
-                  style: TextStyle(
-                    fontFamily: 'Poppins',
-                    color: BrandTokens.primary,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                SfCircularChart(
-                  tooltipBehavior: TooltipBehavior(
-                    enable: true,
-                    color: BrandTokens.primary,
-                  ),
-                  series: <CircularSeries>[
-                    RadialBarSeries<_DepartmentData, String>(
-                      dataSource: data,
-                      xValueMapper: (d, _) => d.department,
-                      yValueMapper: (d, _) => d.count,
-                      maximumValue: 50,
-                      trackOpacity: 0.3,
-                      trackColor: Colors.grey.shade200,
-                      trackBorderWidth: 0,
-                      cornerStyle: CornerStyle.bothCurve,
-                      gap: '8%',
-                      innerRadius: '60%',
-                      radius: '90%',
-                      pointColorMapper: (d, _) => d.color,
-                      dataLabelSettings: const DataLabelSettings(
-                        isVisible: true,
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: BrandTokens.primary.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: BrandTokens.primary, width: 2),
-                  ),
-                  child: const Icon(
-                    Icons.work_outline,
-                    color: BrandTokens.primary,
-                    size: 30,
-                  ),
-                ),
-              ],
+          const SizedBox(height: 8),
+          Text(
+            "Coming Soon",
+            style: GoogleFonts.poppins(
+              fontSize: 16,
+              color: themeProvider.isDarkMode
+                  ? Colors.grey.shade400
+                  : Colors.grey.shade700,
             ),
           ),
         ],
@@ -2171,15 +1049,16 @@ class _AdminDashboardState extends State<AdminDashboard>
     );
   }
 
+  // Legacy chart widgets - using modern replacements in DashboardOverview
   Widget candidateHistogram(List<_HistogramData> data) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color:
-            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withValues(alpha: 0.9),
+        color: themeProvider.isDarkMode
+            ? _AdminPalette._darkWidgetSurface()
+            : _AdminPalette._lightWidgetSurface(),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -2276,9 +1155,9 @@ class _AdminDashboardState extends State<AdminDashboard>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color:
-            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withValues(alpha: 0.9),
+        color: themeProvider.isDarkMode
+            ? _AdminPalette._darkWidgetSurface()
+            : _AdminPalette._lightWidgetSurface(),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -2371,9 +1250,9 @@ class _AdminDashboardState extends State<AdminDashboard>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color:
-            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withValues(alpha: 0.9),
+        color: themeProvider.isDarkMode
+            ? _AdminPalette._darkWidgetSurface()
+            : _AdminPalette._lightWidgetSurface(),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -2479,9 +1358,9 @@ class _AdminDashboardState extends State<AdminDashboard>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color:
-            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withValues(alpha: 0.9),
+        color: themeProvider.isDarkMode
+            ? _AdminPalette._darkWidgetSurface()
+            : _AdminPalette._lightWidgetSurface(),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -2499,14 +1378,7 @@ class _AdminDashboardState extends State<AdminDashboard>
                   Colors.purple.shade900.withValues(alpha: 0.3),
                 ],
               )
-            : LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.blue.shade50,
-                  Colors.purple.shade50,
-                ],
-              ),
+            : null,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2566,10 +1438,9 @@ class _AdminDashboardState extends State<AdminDashboard>
           Container(
             height: 140,
             decoration: BoxDecoration(
-              color: (themeProvider.isDarkMode
-                      ? const Color(0xFF14131E)
-                      : Colors.white)
-                  .withValues(alpha: 0.9),
+              color: themeProvider.isDarkMode
+                  ? _AdminPalette._darkWidgetSurface()
+                  : _AdminPalette._lightWidgetSurface(),
               borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
@@ -2640,9 +1511,9 @@ class _AdminDashboardState extends State<AdminDashboard>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color:
-            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withValues(alpha: 0.9),
+        color: themeProvider.isDarkMode
+            ? _AdminPalette._darkWidgetSurface()
+            : _AdminPalette._lightWidgetSurface(),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
@@ -2690,10 +1561,9 @@ class _AdminDashboardState extends State<AdminDashboard>
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: (themeProvider.isDarkMode
-                            ? const Color(0xFF14131E)
-                            : Colors.grey.shade50)
-                        .withValues(alpha: 0.9),
+                    color: themeProvider.isDarkMode
+                        ? _AdminPalette._darkWidgetSurface()
+                        : _AdminPalette._lightWidgetSurface(),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: Colors.grey.shade200),
                   ),
@@ -2842,13 +1712,6 @@ class _AdminDashboardState extends State<AdminDashboard>
 }
 
 // Data classes for charts
-class _DepartmentData {
-  final String department;
-  final int count;
-  final Color color;
-  _DepartmentData(this.department, this.count, this.color);
-}
-
 class _HistogramData {
   final String jobRole;
   final int candidateCount;

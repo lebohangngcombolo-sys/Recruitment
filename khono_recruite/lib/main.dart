@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 // Import screens
 import 'screens/landing_page/splash_landing_page.dart';
+import 'screens/landing_page/landing_page.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/auth/forgot_password_screen.dart';
@@ -26,6 +27,7 @@ import 'screens/enrollment/enrollment_screen.dart';
 // Import services
 import 'services/auth_service.dart';
 import 'providers/theme_provider.dart';
+import 'providers/admin_state_provider.dart';
 
 String _dashboardRouteForRole(String? role) {
   switch (role) {
@@ -84,10 +86,13 @@ GoRouter _createAppRouter(
         },
         builder: (context, state) => const SplashLandingPage(),
       ),
-      // Legacy / direct link compatibility
+      // Landing page with optional chatbot (accessible for all roles)
       GoRoute(
         path: '/landing',
-        redirect: (context, state) => '/',
+        builder: (context, state) => LandingPage(
+          token: state.uri.queryParameters['token'],
+          openChatbot: state.uri.queryParameters['chatbot'] == 'true',
+        ),
       ),
       // Authentication routes
       GoRoute(
@@ -270,8 +275,15 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => ThemeProvider(initialIsDark: initialThemeDark),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (_) => ThemeProvider(initialIsDark: initialThemeDark),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => AdminStateProvider(),
+        ),
+      ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, _) {
           return MaterialApp.router(

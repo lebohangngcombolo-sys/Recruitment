@@ -68,10 +68,12 @@ def create_app():
         app.logger.error(f"Failed to initialize Firebase Admin SDK: {e}")
         # Depending on your application's needs, you might want to exit or handle this more gracefully.
         # For now, we'll just log the error.
+    # Use synchronous mode for local dev (WSL compatibility), threading for production
+    is_local_dev = not os.environ.get('FLASK_ENV') == 'production'
     socketio.init_app(
         app,
         cors_allowed_origins="*",
-        async_mode='threading',  # use threading to avoid eventlet/gevent compatibility problems
+        async_mode=None if is_local_dev else 'threading',
         manage_session=False,
         ping_timeout=60,
         ping_interval=25

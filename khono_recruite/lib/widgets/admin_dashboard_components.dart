@@ -483,85 +483,81 @@ class MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-    final isDark = themeProvider.isDarkMode;
-    final brandColor = color ?? const Color(0xFFE53935);
+    final brandColor = color ?? const Color(0xFFC10D00);
 
     return Container(
-      width: 200,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF252525) : const Color(0xFFE8E4E0),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? const Color(0xFF333333) : const Color(0xFFE8E8E8),
-          width: 1,
-        ),
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 3.5,
+            offset: const Offset(0, 3.5),
           ),
         ],
       ),
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                title.toUpperCase(),
+                title,
                 style: GoogleFonts.poppins(
                   fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white70 : const Color(0xFF888888),
-                  letterSpacing: 0.8,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                value,
-                style: GoogleFonts.poppins(
-                  fontSize: 32,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                  color: Colors.white,
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Text(
                 subtitle ??
                     'Additional description information can be included.',
                 style: GoogleFonts.poppins(
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: FontWeight.w400,
-                  color: isDark ? Colors.white60 : const Color(0xFFAAAAAA),
+                  color: Colors.white,
                   height: 1.3,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                value,
+                style: GoogleFonts.poppins(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
                 ),
               ),
             ],
           ),
           Positioned(
-            right: -4,
-            top: -4,
+            right: 4,
+            top: 4,
             child: Container(
-              width: 52,
-              height: 52,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    brandColor.withValues(alpha: 0.2),
-                    brandColor.withValues(alpha: 0.05),
-                  ],
-                ),
+                color: Colors.white,
                 shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.12),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
-              child: Icon(
-                icon,
-                size: 26,
-                color: brandColor,
+              child: Center(
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: brandColor,
+                ),
               ),
             ),
           ),
@@ -587,19 +583,15 @@ class UpcomingInterviewsCard extends StatelessWidget {
     final isDark = themeProvider.isDarkMode;
 
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF252525) : const Color(0xFFE8E4E0),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: isDark ? const Color(0xFF333333) : const Color(0xFFE8E8E8),
-          width: 1,
-        ),
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 3.5,
+            offset: const Offset(0, 3.5),
           ),
         ],
       ),
@@ -609,27 +601,62 @@ class UpcomingInterviewsCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Upcoming Interviews',
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(4),
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFC10D00),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.people,
+                          size: 20, color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Upcoming Interviews',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Text(
+                        'Keep track of scheduled candidates.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 9,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
               if (interviews.isNotEmpty)
                 _buildNotificationBadge(interviews.length.toString()),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Keep track of scheduled candidates.',
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              color: isDark ? Colors.white60 : const Color(0xFF888888),
-            ),
-          ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          const Divider(color: Colors.white10),
+          const SizedBox(height: 16),
           if (interviews.isEmpty)
             _buildEmptyState('No upcoming interviews', isDark)
           else
@@ -660,82 +687,14 @@ class UpcomingInterviewsCard extends StatelessWidget {
 
   Widget _buildInterviewItem(Map<String, dynamic> interview, bool isDark) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE53935).withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.person, size: 20, color: Color(0xFFE53935)),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Scheduled Interview:',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFFE53935),
-                  ),
-                ),
-                Text(
-                  interview['job_title'] ?? 'Role',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${interview['candidate_name'] ?? 'Name Surname'} - ${interview['scheduled_time'] ?? 'TBD'}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    color: isDark ? Colors.white60 : const Color(0xFF666666),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          interview['is_new'] == true
-              ? _buildNewBadge()
-              : _buildPillButton('VIEW', () {}),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildNewBadge() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFC10D00),
-        borderRadius: BorderRadius.circular(40),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFFC10D00).withValues(alpha: 0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Text(
-        'NEW',
+        'Scheduled Interview: ${interview['job_title'] ?? 'Role'}\n${interview['candidate_name'] ?? 'Name Surname'} - ${interview['scheduled_time'] ?? 'TBD'}',
         style: GoogleFonts.poppins(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-          letterSpacing: 1.0,
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          color: const Color(0xFFCF2030),
+          height: 1.2,
         ),
       ),
     );
@@ -758,19 +717,15 @@ class RecentUpdatesCard extends StatelessWidget {
     final isDark = themeProvider.isDarkMode;
 
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF252525) : const Color(0xFFE8E4E0),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: isDark ? const Color(0xFF333333) : const Color(0xFFE8E8E8),
-          width: 1,
-        ),
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 3.5,
+            offset: const Offset(0, 3.5),
           ),
         ],
       ),
@@ -780,27 +735,62 @@ class RecentUpdatesCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Recent Updates',
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                ),
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(4),
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFC10D00),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.notifications,
+                          size: 20, color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Recent Updates',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Text(
+                        'Additional description can be included if required.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 9,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
               if (updates.isNotEmpty)
                 _buildNotificationBadge(updates.length.toString()),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Latest platform activities.',
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              color: isDark ? Colors.white60 : const Color(0xFF888888),
-            ),
-          ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          const Divider(color: Colors.white10),
+          const SizedBox(height: 16),
           if (updates.isEmpty)
             _buildEmptyState('No recent updates', isDark)
           else
@@ -838,7 +828,7 @@ class RecentUpdatesCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: const Color(0xFFE53935).withValues(alpha: 0.15),
+              color: const Color(0xFFE53935).withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child:
@@ -849,30 +839,35 @@ class RecentUpdatesCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'New Application:',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFFE53935),
+                RichText(
+                  text: TextSpan(
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFFE53935),
+                    ),
+                    children: [
+                      const TextSpan(text: 'New Application: '),
+                      TextSpan(
+                        text: update,
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color:
+                              isDark ? Colors.white : const Color(0xFF1A1A1A),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                Text(
-                  update,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
                 Text(
                   'Received from a candidate - Source Platform',
                   style: GoogleFonts.poppins(
                     fontSize: 11,
-                    color: isDark ? Colors.white60 : const Color(0xFF888888),
+                    color: isDark
+                        ? Colors.white.withOpacity(0.6)
+                        : const Color(0xFF888888),
                   ),
                 ),
               ],
@@ -975,52 +970,74 @@ class JobsByDepartmentCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF252525) : const Color(0xFFE8E4E0),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? const Color(0xFF333333) : const Color(0xFFE8E8E8),
-          width: 1,
-        ),
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 3.5,
+            offset: const Offset(0, 3.5),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header with circular icon and title
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Jobs by Department',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white : const Color(0xFF090812),
-                  letterSpacing: 0.5,
+              // Circular white icon background
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.1)
+                      : Colors.white.withOpacity(0.8),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.pie_chart_outline,
+                  color: const Color(0xFFC10D00),
+                  size: 20,
                 ),
               ),
+              const SizedBox(width: 12),
+              // Title
+              Expanded(
+                child: Text(
+                  'Jobs by Department',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              // Distribution badge
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: const Color(0xFFC10D00),
-                  borderRadius: BorderRadius.circular(26),
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
-                  'DISTRIBUTION',
+                  '${isLoading ? '...' : departments.length}',
                   style: GoogleFonts.poppins(
-                    fontSize: 8,
+                    fontSize: 10,
                     fontWeight: FontWeight.w600,
                     color: Colors.white,
                   ),
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          // Divider
+          Divider(
+            color: isDark ? Colors.white12 : Colors.black12,
+            height: 1,
           ),
           const SizedBox(height: 16),
           if (isLoading)
@@ -1093,9 +1110,7 @@ class JobsByDepartmentCard extends StatelessWidget {
                         style: GoogleFonts.poppins(
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
-                          color:
-                              isDark ? Colors.white : const Color(0xFF090812),
-                          letterSpacing: 0.5,
+                          color: Colors.white,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -1117,10 +1132,7 @@ class JobsByDepartmentCard extends StatelessWidget {
                                     '${(dept.percentage * 100).toInt()}% ${dept.name}',
                                     style: GoogleFonts.poppins(
                                       fontSize: 9,
-                                      color: isDark
-                                          ? Colors.white70
-                                          : const Color(0xFF090812)
-                                              .withOpacity(0.7),
+                                      color: Colors.white,
                                     ),
                                   ),
                                 ),
@@ -1152,15 +1164,19 @@ class DonutChartPainter extends CustomPainter {
     double startAngle = -math.pi / 2;
     final total = departments.fold<double>(0.0, (sum, d) => sum + d.percentage);
 
+    // Small gap between slices for visual separation
+    final gap = 0.02; // radians (~1.1 degrees)
+
     for (final dept in departments) {
-      final sweepAngle =
+      final rawSweep =
           total > 0 ? (dept.percentage / total) * 2 * math.pi : 0.0;
+      final sweepAngle = math.max(0.0, rawSweep - gap);
 
       final paint = Paint()
         ..color = dept.color
         ..style = PaintingStyle.stroke
         ..strokeWidth = outerRadius - innerRadius
-        ..strokeCap = StrokeCap.butt;
+        ..strokeCap = StrokeCap.round;
 
       canvas.drawArc(
         Rect.fromCircle(
@@ -1171,7 +1187,8 @@ class DonutChartPainter extends CustomPainter {
         paint,
       );
 
-      startAngle += sweepAngle;
+      // Advance start by sweep + gap so slices are separated
+      startAngle += sweepAngle + gap;
     }
   }
 
@@ -1199,35 +1216,83 @@ class CVReviewTrendCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF252525) : const Color(0xFFE8E4E0),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? const Color(0xFF333333) : const Color(0xFFE8E8E8),
-          width: 1,
-        ),
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 3.5,
+            offset: const Offset(0, 3.5),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'CV Review Trend',
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: isDark ? Colors.white : const Color(0xFF090812),
-              letterSpacing: 0.5,
-            ),
+          // Header with circular icon, title/subtitle, and legend
+          Row(
+            children: [
+              // Circular white icon background
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.1)
+                      : Colors.white.withOpacity(0.8),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.trending_up,
+                  color: const Color(0xFFC10D00),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Title and subtitle
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'CV Review Trend',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      'Additional description can be included if required.',
+                      style: GoogleFonts.poppins(
+                        fontSize: 9,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Legend
+              Row(
+                children: [
+                  _buildLegendItem(
+                      'Completed', const Color(0xFFC10D00), isDark),
+                  const SizedBox(width: 12),
+                  _buildLegendItem('Pending', const Color(0xFFFFD700), isDark),
+                ],
+              ),
+            ],
           ),
           const SizedBox(height: 16),
+          // Divider
+          Divider(
+            color: isDark ? Colors.white12 : Colors.black12,
+            height: 1,
+          ),
+          const SizedBox(height: 16),
+          // Chart
           SizedBox(
-            height: 150,
+            height: 180,
             child: _buildTrendChart(weeklyData, isDark),
           ),
         ],
@@ -1236,125 +1301,97 @@ class CVReviewTrendCard extends StatelessWidget {
   }
 
   Widget _buildTrendChart(List<CVData> data, bool isDark) {
-    final maxValue = data.map((d) => d.value).fold(0, (a, b) => a > b ? a : b);
-    final maxValueDouble = maxValue > 0 ? maxValue.toDouble() : 1.0;
-    final textColor =
-        isDark ? Colors.white70 : const Color(0xFF090812).withOpacity(0.7);
-    final gridColor =
-        isDark ? Colors.white12 : const Color(0xFF090812).withOpacity(0.1);
-
-    return Column(
-      children: [
-        // Legend
-        Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            _buildLegendItem('Completed', const Color(0xFFC10D00), textColor),
-            const SizedBox(width: 12),
-            _buildLegendItem('Pending', const Color(0xFFFFD700), textColor),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              // Y-axis labels
-              Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text('${maxValue}',
-                      style: TextStyle(fontSize: 9, color: textColor)),
-                  Text('${(maxValue * 0.8).toInt()}',
-                      style: TextStyle(fontSize: 9, color: textColor)),
-                  Text('${(maxValue * 0.6).toInt()}',
-                      style: TextStyle(fontSize: 9, color: textColor)),
-                  Text('${(maxValue * 0.4).toInt()}',
-                      style: TextStyle(fontSize: 9, color: textColor)),
-                  Text('${(maxValue * 0.2).toInt()}',
-                      style: TextStyle(fontSize: 9, color: textColor)),
-                  Text('0', style: TextStyle(fontSize: 9, color: textColor)),
-                ],
-              ),
-              const SizedBox(width: 8),
-              // Chart area with bars and line
-              Expanded(
-                child: Stack(
-                  children: [
-                    // Grid lines
-                    Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: List.generate(6, (index) {
-                        return Container(
-                          height: 1,
-                          color: gridColor,
-                        );
-                      }),
-                    ),
-                    // Bars
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: data.map((item) {
-                        final barHeight = maxValueDouble > 0
-                            ? (item.value / maxValueDouble)
-                            : 0.0;
-                        return Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Container(
-                              width: 30,
-                              height: 100 * barHeight,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFC10D00),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                          ],
-                        );
-                      }).toList(),
-                    ),
-                    // Line overlay
-                    CustomPaint(
-                      size: const Size(double.infinity, 100),
-                      painter: TrendLinePainter(data, maxValueDouble),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-        // X-axis labels
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: data.map((item) {
-            return Text(
-              item.week,
-              style: GoogleFonts.poppins(
-                fontSize: 8,
-                color: textColor,
-              ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Additional description can be included if required.',
+    if (data.isEmpty) {
+      return Center(
+        child: Text(
+          'No data available',
           style: GoogleFonts.poppins(
-            fontSize: 8,
-            color: isDark
-                ? Colors.white54
-                : const Color(0xFF090812).withOpacity(0.5),
+            fontSize: 12,
+            color: isDark ? Colors.white54 : Colors.black54,
           ),
+        ),
+      );
+    }
+
+    final maxValue = data.map((d) => d.value).fold(0, (a, b) => a > b ? a : b);
+    final yMax = math.max(maxValue * 1.2, 10.0);
+
+    return SfCartesianChart(
+      margin: EdgeInsets.zero,
+      plotAreaBorderWidth: 0,
+      primaryXAxis: CategoryAxis(
+        majorGridLines: const MajorGridLines(width: 0),
+        axisLine: const AxisLine(width: 0),
+        labelStyle: GoogleFonts.poppins(
+          fontSize: 10,
+          color: isDark
+              ? Colors.white70
+              : const Color(0xFF090812).withOpacity(0.7),
+        ),
+      ),
+      primaryYAxis: NumericAxis(
+        minimum: 0,
+        maximum: yMax,
+        interval: yMax / 4,
+        majorGridLines: MajorGridLines(
+          color: isDark ? Colors.white12 : Colors.black12,
+          width: 1,
+        ),
+        axisLine: const AxisLine(width: 0),
+        labelStyle: GoogleFonts.poppins(
+          fontSize: 9,
+          color: isDark ? Colors.white54 : Colors.black54,
+        ),
+      ),
+      tooltipBehavior: TooltipBehavior(
+        enable: true,
+        format: 'point.x: point.y',
+        textStyle: GoogleFonts.poppins(fontSize: 10),
+      ),
+      series: [
+        // Bar series for completed
+        ColumnSeries<CVData, String>(
+          dataSource: data,
+          xValueMapper: (d, _) => d.week,
+          yValueMapper: (d, _) => d.value,
+          pointColorMapper: (_, __) => const Color(0xFFC10D00),
+          width: 0.5,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+          dataLabelSettings: DataLabelSettings(
+            isVisible: true,
+            labelAlignment: ChartDataLabelAlignment.top,
+            textStyle: GoogleFonts.poppins(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+            margin: const EdgeInsets.only(top: 4),
+          ),
+          name: 'Completed',
+        ),
+        // Line series for pending (using a secondary value or calculated)
+        LineSeries<CVData, String>(
+          dataSource: data,
+          xValueMapper: (d, _) => d.week,
+          yValueMapper: (d, _) => (d.value * 0.6).toInt(), // Simulated pending
+          color: const Color(0xFFFFD700),
+          width: 2.5,
+          markerSettings: const MarkerSettings(
+            isVisible: true,
+            shape: DataMarkerType.circle,
+            color: Color(0xFFFFD700),
+            width: 10,
+            height: 10,
+            borderColor: Color(0xFFFFD700),
+            borderWidth: 2,
+          ),
+          name: 'Pending',
         ),
       ],
     );
   }
 
-  Widget _buildLegendItem(String label, Color color, Color textColor) {
+  Widget _buildLegendItem(String label, Color color, bool isDark) {
     return Row(
       children: [
         Container(
@@ -1369,62 +1406,15 @@ class CVReviewTrendCard extends StatelessWidget {
         Text(
           label,
           style: GoogleFonts.poppins(
-            fontSize: 8,
-            color: textColor,
+            fontSize: 10,
+            color: isDark
+                ? Colors.white70
+                : const Color(0xFF090812).withOpacity(0.7),
           ),
         ),
       ],
     );
   }
-}
-
-class TrendLinePainter extends CustomPainter {
-  final List<CVData> data;
-  final double maxValue;
-
-  TrendLinePainter(this.data, this.maxValue);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (data.length < 2) return;
-
-    final paint = Paint()
-      ..color = const Color(0xFFFFD700)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    final points = <Offset>[];
-    final barWidth = size.width / data.length;
-
-    for (int i = 0; i < data.length; i++) {
-      final x = (i + 0.5) * barWidth;
-      final y = maxValue > 0
-          ? size.height - (data[i].value / maxValue * size.height)
-          : size.height;
-      points.add(Offset(x, y));
-    }
-
-    final path = Path();
-    path.moveTo(points.first.dx, points.first.dy);
-
-    for (int i = 1; i < points.length; i++) {
-      path.lineTo(points[i].dx, points[i].dy);
-    }
-
-    canvas.drawPath(path, paint);
-
-    // Draw points
-    final pointPaint = Paint()
-      ..color = const Color(0xFFFFD700)
-      ..style = PaintingStyle.fill;
-
-    for (final point in points) {
-      canvas.drawCircle(point, 3, pointPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class StatusData {
@@ -1446,14 +1436,89 @@ class InterviewStatusCard extends StatelessWidget {
       const Color(0xFFB0BEC5), // Scheduled - lighter grey
       const Color(0xFF64B5F6), // Pending - lighter blue
       const Color(0xFF81C784), // Completed - lighter green
+      const Color(0xFFFFB74D), // Extra color - orange
+      const Color(0xFFF06292), // Extra color - pink
     ];
     final lightColors = [
       const Color(0xFF81829B), // Scheduled - grey
       const Color(0xFF6095CC), // Pending - blue
       const Color(0xFF6CA510), // Completed - green
+      const Color(0xFFFF8A65), // Extra color - orange
+      const Color(0xFFEC407A), // Extra color - pink
     ];
     final colors = isDark ? darkColors : lightColors;
     return colors[index % colors.length];
+  }
+
+  Widget _buildStatusChart(
+      List<StatusData> statuses, int maxValue, bool isDark) {
+    if (statuses.isEmpty) {
+      return Center(
+        child: Text(
+          'No interview data',
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            color: isDark ? Colors.white54 : Colors.black54,
+          ),
+        ),
+      );
+    }
+
+    final yMax = math.max(maxValue * 1.2, 10.0);
+
+    return SfCartesianChart(
+      margin: EdgeInsets.zero,
+      plotAreaBorderWidth: 0,
+      primaryXAxis: CategoryAxis(
+        majorGridLines: const MajorGridLines(width: 0),
+        axisLine: const AxisLine(width: 0),
+        labelStyle: GoogleFonts.poppins(
+          fontSize: 10,
+          color: isDark
+              ? Colors.white70
+              : const Color(0xFF090812).withOpacity(0.7),
+        ),
+      ),
+      primaryYAxis: NumericAxis(
+        minimum: 0,
+        maximum: yMax,
+        interval: yMax / 4,
+        majorGridLines: MajorGridLines(
+          color: isDark ? Colors.white12 : Colors.black12,
+          width: 1,
+        ),
+        axisLine: const AxisLine(width: 0),
+        labelStyle: GoogleFonts.poppins(
+          fontSize: 9,
+          color: isDark ? Colors.white54 : Colors.black54,
+        ),
+      ),
+      tooltipBehavior: TooltipBehavior(
+        enable: true,
+        format: 'point.x: point.y',
+        textStyle: GoogleFonts.poppins(fontSize: 10),
+      ),
+      series: [
+        ColumnSeries<StatusData, String>(
+          dataSource: statuses,
+          xValueMapper: (s, _) => s.name,
+          yValueMapper: (s, _) => s.value,
+          pointColorMapper: (s, index) => _getStatusColor(index, isDark),
+          width: 0.45,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+          dataLabelSettings: DataLabelSettings(
+            isVisible: true,
+            labelAlignment: ChartDataLabelAlignment.top,
+            textStyle: GoogleFonts.poppins(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+            margin: const EdgeInsets.only(top: 4),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -1467,118 +1532,75 @@ class InterviewStatusCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF252525) : const Color(0xFFE8E4E0),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? const Color(0xFF333333) : const Color(0xFFE8E8E8),
-          width: 1,
-        ),
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 3.5,
+            offset: const Offset(0, 3.5),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header with circular icon, title, and subtitle
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Interview Status',
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white : const Color(0xFF090812),
-                  letterSpacing: 0.5,
+              // Circular white icon background
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.1)
+                      : Colors.white.withOpacity(0.8),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.event_note,
+                  color: const Color(0xFFC10D00),
+                  size: 20,
                 ),
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFC10D00),
-                  borderRadius: BorderRadius.circular(26),
-                ),
-                child: Text(
-                  'STATUS',
-                  style: GoogleFonts.poppins(
-                    fontSize: 8,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
+              const SizedBox(width: 12),
+              // Title and subtitle
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Interview Status',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      'Additional description can be included if required.',
+                      style: GoogleFonts.poppins(
+                        fontSize: 9,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          ...statuses.asMap().entries.map((entry) {
-            final index = entry.key;
-            final status = entry.value;
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        status.name,
-                        style: GoogleFonts.poppins(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w500,
-                          color:
-                              isDark ? Colors.white : const Color(0xFF090812),
-                        ),
-                      ),
-                      Text(
-                        '${status.value}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
-                          color:
-                              isDark ? Colors.white : const Color(0xFF090812),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white24
-                          : const Color(0xFF090812).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: FractionallySizedBox(
-                      widthFactor: maxValue > 0 ? status.value / maxValue : 0,
-                      alignment: Alignment.centerLeft,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: _getStatusColor(index, isDark),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-          const SizedBox(height: 8),
-          Text(
-            'Additional description can be included if required.',
-            style: GoogleFonts.poppins(
-              fontSize: 8,
-              color: isDark
-                  ? Colors.white54
-                  : const Color(0xFF090812).withOpacity(0.5),
-            ),
+          // Divider
+          Divider(
+            color: isDark ? Colors.white12 : Colors.black12,
+            height: 1,
+          ),
+          const SizedBox(height: 16),
+          // Bar Chart
+          SizedBox(
+            height: 220,
+            child: _buildStatusChart(statuses, maxValue, isDark),
           ),
         ],
       ),
@@ -1606,68 +1628,88 @@ class TeamCollaborationCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF252525) : const Color(0xFFE8E4E0),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? const Color(0xFF333333) : const Color(0xFFE8E8E8),
-          width: 1,
-        ),
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 3.5,
+            offset: const Offset(0, 3.5),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header with circular icon, title/subtitle, and count badge
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Team Collaboration',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? Colors.white : const Color(0xFF090812),
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Additional description can be included if required.',
-                    style: GoogleFonts.poppins(
-                      fontSize: 8,
-                      color: isDark
-                          ? Colors.white54
-                          : const Color(0xFF090812).withOpacity(0.5),
-                    ),
-                  ),
-                ],
-              ),
+              // Circular white icon background
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.1)
+                      : Colors.white.withOpacity(0.8),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.people_outline,
+                  color: const Color(0xFFC10D00),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Title and subtitle
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Team Collaboration',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      'Additional description can be included if required.',
+                      style: GoogleFonts.poppins(
+                        fontSize: 9,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Count badge
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: const Color(0xFFC10D00),
-                  borderRadius: BorderRadius.circular(26),
+                  borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
                   '${isLoading ? '...' : items.length}',
                   style: GoogleFonts.poppins(
                     fontSize: 10,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                     color: Colors.white,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
+          // Divider
+          Divider(
+            color: isDark ? Colors.white12 : Colors.black12,
+            height: 1,
+          ),
+          const SizedBox(height: 16),
           if (isLoading)
             const Center(
               child: Padding(
@@ -1789,46 +1831,65 @@ class DashboardCalendarCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF252525) : const Color(0xFFE8E4E0),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? const Color(0xFF333333) : const Color(0xFFE8E8E8),
-          width: 1,
-        ),
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 3.5,
+            offset: const Offset(0, 3.5),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header with circular icon, title, and month
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              // Circular white icon background
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.1)
+                      : Colors.white.withOpacity(0.8),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.calendar_today_outlined,
+                  color: const Color(0xFFC10D00),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Title
               Text(
                 'Calendar',
                 style: GoogleFonts.poppins(
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white : const Color(0xFF090812),
-                  letterSpacing: 0.5,
+                  color: Colors.white,
                 ),
               ),
+              const Spacer(),
+              // Month/Year
               Text(
                 DateFormat('MMMM yyyy').format(focusedDay),
                 style: GoogleFonts.poppins(
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: FontWeight.w500,
-                  color: isDark
-                      ? Colors.white70
-                      : const Color(0xFF090812).withOpacity(0.7),
+                  color: Colors.white,
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          // Divider
+          Divider(
+            color: isDark ? Colors.white12 : Colors.black12,
+            height: 1,
           ),
           const SizedBox(height: 16),
           Row(
@@ -1839,9 +1900,10 @@ class DashboardCalendarCard extends StatelessWidget {
                   day,
                   textAlign: TextAlign.center,
                   style: GoogleFonts.poppins(
-                    fontSize: 9,
+                    fontSize: 10,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : const Color(0xFF090812),
+                    color: Colors.white,
+                    letterSpacing: 0.5,
                   ),
                 ),
               );
@@ -1872,7 +1934,7 @@ class DashboardCalendarCard extends StatelessWidget {
                   margin: const EdgeInsets.all(2),
                   decoration: BoxDecoration(
                     color: hasAppointment
-                        ? const Color(0xFFC10D00).withValues(alpha: 0.3)
+                        ? const Color(0xFFC10D00).withValues(alpha: 0.4)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -1880,9 +1942,10 @@ class DashboardCalendarCard extends StatelessWidget {
                     child: Text(
                       '$dayNumber',
                       style: GoogleFonts.poppins(
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : const Color(0xFF090812),
+                        color: Colors.white,
+                        letterSpacing: 0.2,
                       ),
                     ),
                   ),

@@ -30,4 +30,5 @@ with app.app_context():
         print("Continuing without DB initialized (STRICT_DB_STARTUP=false).")
 
 if __name__ == "__main__":
-    socketio.run(app, host="0.0.0.0", port=5000)
+    # Use standard Flask server for local dev (WebSocket disabled on WSL)
+    app.run(host="0.0.0.0", port=5000, debug=False)
