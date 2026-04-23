@@ -101,8 +101,8 @@ class DashboardStatsSection extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       crossAxisCount: crossAxisCount,
-      crossAxisSpacing: 16,
-      mainAxisSpacing: 16,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
       childAspectRatio: 1.2,
       children: [
         DashboardStatCard(

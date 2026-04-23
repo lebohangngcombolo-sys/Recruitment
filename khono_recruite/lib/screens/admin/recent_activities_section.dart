@@ -22,7 +22,7 @@ class RecentActivitiesSection extends StatelessWidget {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return ThemedSurfaceCard(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

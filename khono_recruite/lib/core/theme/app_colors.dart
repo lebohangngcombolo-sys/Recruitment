@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 class AppColors {
   static const bg = Color(0xFF0C0807);
   static const sidebar = Color(0xFF2A2A2A);
-  static const card = Color(0xFF202020);
+  // Card surface: #FFFFFF (white) at 14% opacity for glassmorphism effect
+  static const card = Color(0x24FFFFFF);
 
   static const primary = Color(0xFFC1110A);
   static const white = Color(0xFFF4F4F4);

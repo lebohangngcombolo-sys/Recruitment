@@ -22,7 +22,7 @@ class AuditLogsSection extends StatelessWidget {
     final adminProvider = Provider.of<AdminStateProvider>(context);
 
     return ThemedSurfaceCard(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

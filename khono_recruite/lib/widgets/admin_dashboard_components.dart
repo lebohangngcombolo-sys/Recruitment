@@ -51,7 +51,7 @@ class DashboardStatCard extends StatelessWidget {
                   ),
                   child: Icon(
                     icon,
-                    size: 18,
+                    size: 22,
                     color: iconColor ?? const Color(0xFFC10D00),
                   ),
                 ),

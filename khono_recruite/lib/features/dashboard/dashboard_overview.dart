@@ -8,31 +8,31 @@ import 'widgets/calendar_widget.dart';
 import 'widgets/chart_cards/bar_chart_widget.dart';
 import 'widgets/chart_cards/donut_chart_widget.dart';
 import 'widgets/chart_cards/line_chart_widget.dart';
-import '../../core/widgets/circle_icon.dart';
 import '../../core/widgets/primary_button.dart';
 
 class DashboardOverview extends StatelessWidget {
   final Map<String, dynamic> stats;
   final List<dynamic> recentActivities;
   final List<dynamic> upcomingInterviews;
+  final bool isDarkMode;
 
   const DashboardOverview({
     super.key,
     required this.stats,
     this.recentActivities = const [],
     this.upcomingInterviews = const [],
+    required this.isDarkMode,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Determine screen width to handle rudimentary responsiveness if needed, but keeping fixed layout as requested
     return Container(
       color: Colors.transparent, // Background texture goes under this
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          _buildHeader(),
-          const SizedBox(height: 16),
+          _buildHeader(isDarkMode),
+          const SizedBox(height: 0),
           Expanded(
             child: SingleChildScrollView(
               child: Column(
@@ -41,59 +41,66 @@ class DashboardOverview extends StatelessWidget {
                   // ROW 1 (3 cards)
                   Row(
                     children: [
-                      Flexible(
-                        flex: 1,
+                      Expanded(
                         child: MetricCard(
                           title: "Total Jobs",
+                          subtitle: "Active job postings currently live",
                           value: (stats["jobs"] ?? 6).toString(),
-                          icon: Icons.work_outline,
+                          imageAsset: 'assets/icons/Dashboard/total_jobs.png',
+                          isDarkMode: isDarkMode,
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Flexible(
-                        flex: 1,
+                      const SizedBox(width: 8),
+                      Expanded(
                         child: MetricCard(
                           title: "Candidates",
+                          subtitle: "Candidates registered in system",
                           value: (stats["candidates"] ?? 15).toString(),
-                          icon: Icons.people_outline,
+                          imageAsset:
+                              'assets/icons/Dashboard/dash-candidates.png',
+                          isDarkMode: isDarkMode,
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Flexible(
-                        flex: 1,
+                      const SizedBox(width: 8),
+                      Expanded(
                         child: MetricCard(
                           title: "Interviews",
+                          subtitle: "Scheduled interviews this week",
                           value: (stats["interviews"] ?? 4).toString(),
-                          icon: Icons.people_alt_outlined,
+                          imageAsset:
+                              'assets/icons/Dashboard/dash_interviews.png',
+                          isDarkMode: isDarkMode,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
 
                   // ROW 2 (2 cards)
                   Row(
                     children: [
-                      Flexible(
-                        flex: 1,
+                      Expanded(
                         child: MetricCard(
                           title: "Applications",
+                          subtitle: "Pending applications to review",
                           value: (stats["applications"] ?? 7).toString(),
-                          icon: Icons.description_outlined,
+                          imageAsset: 'assets/icons/Dashboard/applications.png',
+                          isDarkMode: isDarkMode,
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Flexible(
-                        flex: 1,
+                      const SizedBox(width: 8),
+                      Expanded(
                         child: MetricCard(
                           title: "Offers",
+                          subtitle: "Pending offer letters to send",
                           value: (stats["offers"] ?? 0).toString(),
-                          icon: Icons.check_circle_outline,
+                          imageAsset: 'assets/icons/Dashboard/offers.png',
+                          isDarkMode: isDarkMode,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
 
                   // ROW 3
                   Row(
@@ -102,52 +109,59 @@ class DashboardOverview extends StatelessWidget {
                         child: ListCard(
                           height: 266,
                           title: "Upcoming Interviews",
-                          headerIcon: Icons.date_range,
+                          headerImageAsset:
+                              'assets/icons/Dashboard/calender.png',
                           items: upcomingInterviews.isEmpty
                               ? _getDummyInterviews()
                               : upcomingInterviews,
-                          itemBuilder: _buildInterviewRow,
+                          itemBuilder: (item) => _buildInterviewRow(item),
+                          isDarkMode: isDarkMode,
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: ListCard(
                           height: 266,
                           title: "Recent Updates",
-                          headerIcon: Icons.update,
+                          headerImageAsset:
+                              'assets/icons/Dashboard/updates.png',
                           items: recentActivities.isEmpty
                               ? _getDummyUpdates()
                               : recentActivities,
-                          itemBuilder: _buildUpdateRow,
+                          itemBuilder: (item) => _buildUpdateRow(item),
+                          isDarkMode: isDarkMode,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
 
                   // ROW 4
                   Row(
-                    children: const [
+                    children: [
                       Expanded(
                         child: ChartCard(
                           height: 289,
                           title: "Jobs by Department",
-                          icon: Icons.pie_chart_outline,
+                          imageAsset: 'assets/icons/Dashboard/total_jobs.png',
                           chart: JobsDonutChart(),
+                          isDarkMode: isDarkMode,
                         ),
                       ),
-                      SizedBox(width: 16),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: ChartCard(
                           height: 289,
                           title: "Candidates by Job Role",
-                          icon: Icons.bar_chart,
+                          imageAsset:
+                              'assets/icons/Dashboard/candidates_byjobrole.png',
                           chart: CandidatesBarChart(),
+                          isDarkMode: isDarkMode,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
 
                   // ROW 5
                   Row(
@@ -156,40 +170,48 @@ class DashboardOverview extends StatelessWidget {
                       Expanded(
                         child: Column(
                           children: [
-                            const ChartCard(
+                            ChartCard(
                               height: 289,
                               title: "Interview Status",
-                              icon: Icons.insert_chart_outlined,
+                              imageAsset:
+                                  'assets/icons/Dashboard/interviews.png',
                               // In a real scenario, use another chart widget. Using bar chart as placeholder.
                               chart: CandidatesBarChart(),
+                              isDarkMode: isDarkMode,
                             ),
-                            const SizedBox(height: 16),
-                            const ChartCard(
+                            const SizedBox(height: 8),
+                            ChartCard(
                               height: 289,
                               title: "CV Review Trend",
-                              icon: Icons.show_chart,
+                              imageAsset:
+                                  'assets/icons/Dashboard/reviews_trend.png',
                               chart: ReviewTrendChart(),
+                              isDarkMode: isDarkMode,
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 8),
                             ListCard(
                               height: 248,
                               title: "Team Collaboration",
-                              headerIcon: Icons.group_work_outlined,
+                              headerImageAsset:
+                                  'assets/icons/Dashboard/dash_teamcollaborations.png',
                               items: _getDummyTeamTasks(),
                               itemBuilder: _buildTaskRow,
+                              isDarkMode: isDarkMode,
                             ),
-                            const SizedBox(height: 16),
+                            const SizedBox(height: 8),
                             ListCard(
                               height: 248,
                               title: "Recent Activities",
-                              headerIcon: Icons.history,
+                              headerImageAsset:
+                                  'assets/icons/Dashboard/recent_activities.png',
                               items: _getDummyTeamTasks(),
                               itemBuilder: _buildTaskRow,
+                              isDarkMode: isDarkMode,
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 8),
                       const Expanded(child: CalendarCard()),
                     ],
                   ),
@@ -202,7 +224,7 @@ class DashboardOverview extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(bool isDarkMode) {
     return Row(
       children: [
         Flexible(
@@ -211,12 +233,17 @@ class DashboardOverview extends StatelessWidget {
               children: [
                 TextSpan(
                   text: "Admin Dashboard ",
-                  style: AppTextStyles.title,
+                  style: AppTextStyles.title.copyWith(
+                    color: isDarkMode ? Colors.white : Colors.black,
+                  ),
                 ),
                 TextSpan(
                   text: "Hello, Admin User", // Can be dynamic
-                  style: AppTextStyles.cardTitle
-                      .copyWith(color: AppColors.textSecondary),
+                  style: AppTextStyles.cardTitle.copyWith(
+                    color: isDarkMode
+                        ? Colors.white70
+                        : Colors.black.withOpacity(0.6),
+                  ),
                 ),
               ],
             ),
@@ -227,10 +254,11 @@ class DashboardOverview extends StatelessWidget {
         const Spacer(),
         Row(
           children: [
-            const CircleIcon(icon: Icons.mail_outline, size: 36, iconSize: 20),
+            Image.asset('assets/icons/messeges.png',
+                width: 64, height: 64, fit: BoxFit.contain),
             const SizedBox(width: 12),
-            const CircleIcon(
-                icon: Icons.notifications_none, size: 36, iconSize: 20),
+            Image.asset('assets/icons/Notifications.png',
+                width: 64, height: 64, fit: BoxFit.contain),
           ],
         )
       ],
@@ -238,16 +266,19 @@ class DashboardOverview extends StatelessWidget {
   }
 
   Widget _buildInterviewRow(dynamic item) {
+    final isDarkMode =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+            Brightness.dark;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          const CircleIcon(
-              icon: Icons.person,
-              size: 32,
-              iconSize: 18,
-              backgroundColor: AppColors.card,
-              iconColor: AppColors.white),
+          Image.asset(
+            'assets/icons/Dashboard/candidate.png',
+            width: 18,
+            height: 18,
+            fit: BoxFit.contain,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -262,7 +293,7 @@ class DashboardOverview extends StatelessWidget {
                       TextSpan(
                           text: "Quality Assurance Analyst",
                           style: AppTextStyles.small.copyWith(
-                              color: AppColors.white,
+                              color: isDarkMode ? Colors.white : Colors.black,
                               fontWeight: FontWeight.normal)),
                     ],
                   ),
@@ -270,8 +301,10 @@ class DashboardOverview extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text("Jane Doe - March 30 2026 (10:30 AM)",
-                    style: AppTextStyles.small
-                        .copyWith(color: AppColors.textMuted),
+                    style: AppTextStyles.small.copyWith(
+                        color: isDarkMode
+                            ? Colors.white70
+                            : Colors.black.withValues(alpha: 0.6)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
               ],
@@ -285,16 +318,20 @@ class DashboardOverview extends StatelessWidget {
   }
 
   Widget _buildUpdateRow(dynamic item) {
+    final isDarkMode =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+            Brightness.dark;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          const CircleIcon(
-              icon: Icons.warning_amber_rounded,
-              size: 32,
-              iconSize: 18,
-              backgroundColor: AppColors.card,
-              iconColor: AppColors.orange),
+          Image.asset(
+            'assets/icons/Dashboard/new_application.png',
+            width: 18,
+            height: 18,
+            fit: BoxFit.contain,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -309,7 +346,7 @@ class DashboardOverview extends StatelessWidget {
                       TextSpan(
                           text: "Software Engineer",
                           style: AppTextStyles.small.copyWith(
-                              color: AppColors.white,
+                              color: isDarkMode ? Colors.white : Colors.black,
                               fontWeight: FontWeight.normal)),
                     ],
                   ),
@@ -317,8 +354,10 @@ class DashboardOverview extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text("Received from John Smith - Platform",
-                    style: AppTextStyles.small
-                        .copyWith(color: AppColors.textMuted),
+                    style: AppTextStyles.small.copyWith(
+                        color: isDarkMode
+                            ? Colors.white70
+                            : Colors.black.withValues(alpha: 0.6)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
               ],
@@ -332,11 +371,20 @@ class DashboardOverview extends StatelessWidget {
   }
 
   Widget _buildTaskRow(dynamic item) {
+    final isDarkMode =
+        WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+            Brightness.dark;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
-          const Icon(Icons.check_circle, color: AppColors.primary, size: 16),
+          Image.asset(
+            'assets/icons/Dashboard/name_surname.png',
+            width: 18,
+            height: 18,
+            fit: BoxFit.contain,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
@@ -344,12 +392,15 @@ class DashboardOverview extends StatelessWidget {
               children: [
                 Text(item['title'] ?? 'Completed Candidate Screening',
                     style: AppTextStyles.small.copyWith(
-                        color: AppColors.white, fontWeight: FontWeight.bold),
+                        color: isDarkMode ? Colors.white : Colors.black,
+                        fontWeight: FontWeight.bold),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
                 Text(item['subtitle'] ?? 'System / Team Member',
-                    style: AppTextStyles.small
-                        .copyWith(color: AppColors.textMuted),
+                    style: AppTextStyles.small.copyWith(
+                        color: isDarkMode
+                            ? Colors.white70
+                            : Colors.black.withValues(alpha: 0.6)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
               ],

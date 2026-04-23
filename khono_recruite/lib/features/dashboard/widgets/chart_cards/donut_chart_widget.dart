@@ -28,17 +28,8 @@ class JobsDonutChart extends StatelessWidget {
                   ],
                 ),
               ),
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.card,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.border, width: 2),
-                ),
-                child: const Icon(Icons.work_outline,
-                    color: AppColors.white, size: 20),
-              )
+              Image.asset('assets/icons/Dashboard/total_jobs.png',
+                  width: 56, height: 56, color: AppColors.white)
             ],
           ),
         ),

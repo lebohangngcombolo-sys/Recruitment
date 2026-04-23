@@ -3,8 +3,9 @@ import '../theme/app_colors.dart';
 
 class HoverCard extends StatefulWidget {
   final Widget child;
+  final Color? color;
 
-  const HoverCard({super.key, required this.child});
+  const HoverCard({super.key, required this.child, this.color});
 
   @override
   State<HoverCard> createState() => _HoverCardState();
@@ -30,8 +31,12 @@ class _HoverCardState extends State<HoverCard> {
           return AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             decoration: BoxDecoration(
-              color: AppColors.card,
-              borderRadius: BorderRadius.circular(6),
+              color: widget.color ?? AppColors.card,
+              borderRadius: BorderRadius.circular(5.32),
+              border: Border.all(
+                color: const Color(0xFF979797),
+                width: 1,
+              ),
               boxShadow: isHovering
                   ? [
                       BoxShadow(
@@ -42,9 +47,9 @@ class _HoverCardState extends State<HoverCard> {
                     ]
                   : [
                       BoxShadow(
-                        color: Colors.white.withOpacity(0.02),
-                        blurRadius: 1,
-                        offset: const Offset(0, 1),
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
                       )
                     ],
             ),

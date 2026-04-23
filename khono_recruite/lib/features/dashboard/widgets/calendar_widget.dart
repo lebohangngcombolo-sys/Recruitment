@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/hover_card.dart';
-import '../../../core/widgets/circle_icon.dart';
 
 class CalendarCard extends StatelessWidget {
   final double? width;
@@ -17,14 +16,14 @@ class CalendarCard extends StatelessWidget {
       // Tall card spanning the right column
       child: HoverCard(
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const CircleIcon(
-                      icon: Icons.calendar_today, size: 34, iconSize: 18),
+                  Image.asset('assets/icons/Dashboard/calender.png',
+                      width: 48, height: 48),
                   const SizedBox(width: 10),
                   Flexible(
                     child: Text("Calendar",

@@ -94,14 +94,14 @@ class ReviewTrendChart extends StatelessWidget {
 
   Widget _legendItem(Color color, String label) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(width: 8, height: 8, color: color),
         const SizedBox(width: 6),
-        Flexible(
-            child: Text(label,
-                style: AppTextStyles.small,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis)),
+        Text(label,
+            style: AppTextStyles.small,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis),
       ],
     );
   }
