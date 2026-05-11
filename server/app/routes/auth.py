@@ -146,6 +146,145 @@ def _cv_parse_debug_enabled():
         return False
 
 
+def _build_career_summary_from_cv(data):
+    """Build deterministic career summary from parsed CV payload."""
+    if not isinstance(data, dict):
+        return {
+            "primary_role": "Software Professional",
+            "experience_level": "Entry-level",
+            "profile_readiness": 0,
+            "recommended_roles": ["Software Professional"],
+            "summary_text": "Limited CV data available to generate a detailed profile summary.",
+        }
+
+    def _as_text(v):
+        return v.strip() if isinstance(v, str) else ""
+
+    def _as_list(v):
+        if isinstance(v, list):
+            return [str(x).strip() for x in v if str(x).strip()]
+        if isinstance(v, str):
+            return [s.strip() for s in re.split(r"[,\n;]+", v) if s.strip()]
+        return []
+
+    skills = _as_list(data.get("skills"))
+    position = _as_text(data.get("position"))
+    experience_text = _as_text(data.get("experience"))
+    education = data.get("education")
+    edu_list = education if isinstance(education, list) else _as_list(education)
+    work_experience = data.get("work_experience")
+    wx_list = work_experience if isinstance(work_experience, list) else []
+
+    # Role inference: prefer explicit extracted position, then work_experience title, then skills.
+    role = position
+    if not role:
+        for row in wx_list:
+            if isinstance(row, dict):
+                role = _as_text(row.get("position") or row.get("title"))
+                if role:
+                    break
+    skills_join = " ".join(s.lower() for s in skills)
+    if not role:
+        if any(k in skills_join for k in ["react", "frontend", "javascript", "typescript"]):
+            role = "Frontend Developer"
+        elif any(k in skills_join for k in ["flutter", "android", "ios", "dart"]):
+            role = "Mobile Developer"
+        elif any(k in skills_join for k in ["python", "node", "api", "sql", "java"]):
+            role = "Software Engineer"
+        else:
+            role = "Software Professional"
+
+    # Experience years estimation from free text and date ranges.
+    years_best = 0.0
+    source_text = " ".join([
+        experience_text,
+        " ".join(_as_text(r.get("duration")) for r in wx_list if isinstance(r, dict)),
+        " ".join(_as_text(r.get("description")) for r in wx_list if isinstance(r, dict)),
+    ]).strip()
+
+    for m in re.finditer(r"(\d{1,2}(?:\.\d+)?)\s*\+?\s*(?:years?|yrs?)", source_text, flags=re.I):
+        try:
+            years_best = max(years_best, float(m.group(1)))
+        except Exception:
+            pass
+
+    now_year = datetime.utcnow().year
+    for m in re.finditer(r"((?:19|20)\d{2})\s*[-/]\s*((?:19|20)\d{2}|present|current)", source_text, flags=re.I):
+        try:
+            start = int(m.group(1))
+            end_raw = m.group(2).lower()
+            end = now_year if end_raw in ("present", "current") else int(end_raw)
+            if end >= start:
+                years_best = max(years_best, float(end - start + 1))
+        except Exception:
+            pass
+
+    if years_best <= 0:
+        level = "Entry-level"
+    elif years_best < 2:
+        level = "Junior"
+    elif years_best < 6:
+        level = "Mid-level"
+    else:
+        level = "Senior"
+
+    checks = [
+        bool(_as_text(data.get("full_name"))),
+        bool(_as_text(data.get("email"))),
+        bool(skills),
+        bool(experience_text or position or wx_list),
+        bool(edu_list or _as_text(data.get("university"))),
+    ]
+    readiness = int(round((sum(1 for c in checks if c) / len(checks)) * 100))
+
+    rec = [role]
+    if any(k in skills_join for k in ["react", "frontend", "ui", "ux"]):
+        rec.extend(["Frontend Developer", "UI Engineer"])
+    if any(k in skills_join for k in ["flutter", "dart"]):
+        rec.extend(["Flutter Developer", "Mobile Developer"])
+    if any(k in skills_join for k in ["python", "node", "api", "sql", "java"]):
+        rec.extend(["Software Engineer", "Backend Developer"])
+    dedup = []
+    for r in rec:
+        if r and r not in dedup:
+            dedup.append(r)
+    recommended = dedup[:3] if dedup else ["Software Professional"]
+
+    has_backend = any(k in skills_join for k in ["node", "python", "java", "api", "sql"])
+    has_frontend = any(k in skills_join for k in ["react", "frontend", "ui", "ux", "javascript"])
+    if has_frontend and not has_backend:
+        summary = (
+            f"You show a strong {level.lower()} profile for {role} roles, "
+            "with your CV weighted more toward frontend delivery than backend systems."
+        )
+    elif has_backend and not has_frontend:
+        summary = (
+            f"You show a strong {level.lower()} profile for {role} roles, "
+            "with practical backend depth and room to broaden frontend-facing delivery."
+        )
+    else:
+        summary = (
+            f"You show a balanced {level.lower()} profile for {role} roles, "
+            "with experience that supports matching to relevant opportunities."
+        )
+
+    return {
+        "primary_role": role,
+        "experience_level": level,
+        "profile_readiness": readiness,
+        "recommended_roles": recommended,
+        "summary_text": summary,
+    }
+
+
+def _attach_career_summary(payload):
+    if not isinstance(payload, dict):
+        return payload
+    out = dict(payload)
+    out["career_summary"] = _build_career_summary_from_cv(out)
+    return out
+
+
 def init_auth_routes(app):
 
     enrollment_schema = EnrollmentSchema()
@@ -1261,6 +1400,7 @@ def init_auth_routes(app):
                         "summary_merged": _summarize_cv_fields(mapped_data),
                     }
 
+                mapped_data = _attach_career_summary(mapped_data)
                 return jsonify(mapped_data), 200
                 
             except Exception as e:
@@ -1282,6 +1422,7 @@ def init_auth_routes(app):
                         },
                         "summary_local_only": _summarize_cv_fields(local_payload),
                     }
+                local_payload = _attach_career_summary(local_payload)
                 return jsonify(local_payload), 200
 
             # If enhanced parsing succeeded, still try to get AI analysis for additional insights
@@ -1385,6 +1526,7 @@ def init_auth_routes(app):
                                         "cv_text": cv_text,
                                     }
 
+                                    extracted_data = _attach_career_summary(extracted_data)
                                     return jsonify(extracted_data), 200
 
                                 break
@@ -1398,6 +1540,7 @@ def init_auth_routes(app):
 
             # Return enhanced parsing results if successful
             if extracted_data and not extracted_data.get("error"):
+                extracted_data = _attach_career_summary(extracted_data)
                 return jsonify(extracted_data), 200
 
             # Fallback: Use local hybrid parser (LLM + offline regex) for autofill.
@@ -1409,6 +1552,7 @@ def init_auth_routes(app):
             except Exception:
                 pass
 
+            extracted_data = _attach_career_summary(extracted_data)
             return jsonify(extracted_data), 200
 
         except Exception as e:

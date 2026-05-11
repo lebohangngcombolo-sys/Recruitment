@@ -98,6 +98,11 @@ class AIService:
                     logger.error(
                         "Gemini API error [%s]: %s", resp.status_code, resp.text
                     )
+                    # Do not loop on auth/quota/client errors; fail fast so next provider can be tried.
+                    if resp.status_code in (400, 401, 403, 404, 429):
+                        raise RuntimeError(
+                            f"Gemini non-retryable error: {resp.status_code} {resp.text}"
+                        )
                     raise RuntimeError(
                         f"Gemini API error: {resp.status_code} {resp.text}"
                     )
@@ -120,6 +125,9 @@ class AIService:
                 logger.exception(
                     "Gemini unexpected error on attempt %d/%d: %s", attempt, self.retries, e
                 )
+                msg = str(e).lower()
+                if "non-retryable error" in msg:
+                    raise
                 time.sleep(self.backoff)
 
         raise RuntimeError("Failed to call Gemini API after multiple retries")
@@ -156,6 +164,11 @@ class AIService:
                     logger.error(
                         "OpenRouter API error [%s]: %s", resp.status_code, resp.text
                     )
+                    # Invalid key/user/quota/credit errors should not be retried in a loop.
+                    if resp.status_code in (400, 401, 402, 403, 404, 429):
+                        raise RuntimeError(
+                            f"OpenRouter non-retryable error: {resp.status_code} {resp.text}"
+                        )
                     raise RuntimeError(
                         f"OpenRouter API error: {resp.status_code} {resp.text}"
                     )
@@ -176,6 +189,9 @@ class AIService:
                 logger.exception(
                     "OpenRouter unexpected error on attempt %d/%d: %s", attempt, self.retries, e
                 )
+                msg = str(e).lower()
+                if "non-retryable error" in msg:
+                    raise
                 time.sleep(self.backoff)
 
         raise RuntimeError("Failed to call OpenRouter API after multiple retries")
@@ -212,6 +228,10 @@ class AIService:
                     logger.error(
                         "DeepSeek API error [%s]: %s", resp.status_code, resp.text
                     )
+                    if resp.status_code in (400, 401, 402, 403, 404, 429):
+                        raise RuntimeError(
+                            f"DeepSeek non-retryable error: {resp.status_code} {resp.text}"
+                        )
                     raise RuntimeError(
                         f"DeepSeek API error: {resp.status_code} {resp.text}"
                     )
@@ -232,6 +252,9 @@ class AIService:
                 logger.exception(
                     "DeepSeek unexpected error on attempt %d/%d: %s", attempt, self.retries, e
                 )
+                msg = str(e).lower()
+                if "non-retryable error" in msg:
+                    raise
                 time.sleep(self.backoff)
 
         raise RuntimeError("Failed to call DeepSeek API after multiple retries")
@@ -239,24 +262,24 @@ class AIService:
     def _call_generation(
         self, prompt: str, temperature: float = 0.7, max_output_tokens: int = 512
     ) -> str:
-        """Try AI services in priority order: Gemini -> OpenRouter -> DeepSeek"""
-        
-        # Try Gemini first
-        if self.gemini_available:
-            try:
-                logger.info("Attempting to use Gemini AI")
-                return self._call_gemini(prompt, temperature, max_output_tokens)
-            except Exception as e:
-                logger.warning(f"Gemini AI failed: {e}")
-        
-        # Fallback to OpenRouter
+        """Try AI services in priority order: OpenRouter -> Gemini -> DeepSeek"""
+
+        # Try OpenRouter first
         if self.openrouter_available:
             try:
-                logger.info("Falling back to OpenRouter")
+                logger.info("Attempting to use OpenRouter AI")
                 return self._call_openrouter(prompt, temperature, max_output_tokens)
             except Exception as e:
                 logger.warning(f"OpenRouter failed: {e}")
-        
+
+        # Fallback to Gemini
+        if self.gemini_available:
+            try:
+                logger.info("Falling back to Gemini")
+                return self._call_gemini(prompt, temperature, max_output_tokens)
+            except Exception as e:
+                logger.warning(f"Gemini AI failed: {e}")
+
         # Fallback to DeepSeek
         if self.deepseek_available:
             try:

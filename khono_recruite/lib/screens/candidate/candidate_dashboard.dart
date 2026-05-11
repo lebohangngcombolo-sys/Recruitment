@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:ui';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'dart:async';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
@@ -19,6 +20,7 @@ import '../../services/unified_api_service.dart';
 import 'assessments_results_screen.dart';
 import '../../screens/candidate/user_profile_page.dart';
 import '../../services/auth_service.dart';
+import '../../utils/api_endpoints.dart';
 
 class CandidateDashboard extends StatefulWidget {
   final String token;
@@ -69,6 +71,16 @@ class _CandidateDashboardState extends State<CandidateDashboard>
   Map<String, dynamic>? _pendingApplyJob;
   // ignore: unused_field
   bool _continuingApplication = false;
+  bool _chatbotOpen = false;
+  bool _cvParserMode = false;
+  final TextEditingController _chatMessageController = TextEditingController();
+  final TextEditingController _chatJobDescController = TextEditingController();
+  final TextEditingController _chatCvController = TextEditingController();
+  final List<Map<String, String>> _chatMessages = [];
+  bool _isChatLoading = false;
+  bool _isCvParsing = false;
+  PlatformFile? _uploadedResume;
+  Map<String, dynamic>? _cvAnalysisResult;
 
   @override
   void initState() {
@@ -455,6 +467,9 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     WidgetsBinding.instance.removeObserver(this);
     _notificationTimer?.cancel();
     _mainScrollController.dispose();
+    _chatMessageController.dispose();
+    _chatJobDescController.dispose();
+    _chatCvController.dispose();
     super.dispose();
   }
 
@@ -990,6 +1005,515 @@ class _CandidateDashboardState extends State<CandidateDashboard>
     } catch (e) {
       _showErrorDialog('Error analyzing CV: $e');
     }
+  }
+
+  Future<void> _sendChatMessage() async {
+    final text = _chatMessageController.text.trim();
+    if (text.isEmpty) return;
+
+    _safeSetState(() {
+      _chatMessages.add({"type": "chat", "text": "You: $text"});
+      _chatMessageController.clear();
+      _isChatLoading = true;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse("${ApiEndpoints.aiBase}/chat"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer ${widget.token}",
+        },
+        body: jsonEncode({"message": text}),
+      );
+
+      if (!mounted) return;
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final reply = data["reply"]?.toString() ?? "No reply from AI";
+        _safeSetState(() {
+          _chatMessages.add({"type": "chat", "text": "AI: $reply"});
+        });
+      } else {
+        _safeSetState(() {
+          _chatMessages.add({
+            "type": "chat",
+            "text": "AI: Failed to get response (status ${response.statusCode})",
+          });
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _safeSetState(() {
+        _chatMessages.add({"type": "chat", "text": "AI: Error - $e"});
+      });
+    } finally {
+      if (mounted) {
+        _safeSetState(() => _isChatLoading = false);
+      }
+    }
+  }
+
+  Future<void> _pickResumeForChatbot() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'doc', 'docx', 'txt'],
+      withData: true,
+    );
+    if (result != null && result.files.isNotEmpty && mounted) {
+      _safeSetState(() => _uploadedResume = result.files.first);
+    }
+  }
+
+  Future<void> _analyzeChatbotCv() async {
+    final jobDesc = _chatJobDescController.text.trim();
+    final cvText = _chatCvController.text.trim();
+    if (jobDesc.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Job description is required')),
+      );
+      return;
+    }
+    if (_uploadedResume == null && cvText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Upload a CV file or paste CV text')),
+      );
+      return;
+    }
+
+    _safeSetState(() {
+      _isCvParsing = true;
+      _cvAnalysisResult = null;
+    });
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse("${ApiEndpoints.aiBase}/parse_cv"),
+      );
+      request.headers['Authorization'] = 'Bearer ${widget.token}';
+      request.fields['job_description'] = jobDesc;
+      if (cvText.isNotEmpty) {
+        request.fields['cv_text'] = cvText;
+      }
+
+      final resume = _uploadedResume;
+      if (resume != null) {
+        if (resume.bytes != null) {
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'resume',
+              resume.bytes!,
+              filename: resume.name,
+            ),
+          );
+        } else if (resume.path != null) {
+          request.files.add(
+            await http.MultipartFile.fromPath('resume', resume.path!),
+          );
+        }
+      }
+
+      final response = await request.send();
+      final body = await response.stream.bytesToString();
+
+      if (!mounted) return;
+      if (response.statusCode == 200) {
+        final data = jsonDecode(body) as Map<String, dynamic>;
+        _safeSetState(() => _cvAnalysisResult = data);
+      } else {
+        final parsed = jsonDecode(body);
+        final message = parsed is Map<String, dynamic>
+            ? (parsed['error']?.toString() ?? 'Failed to analyze CV')
+            : 'Failed to analyze CV';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error analyzing CV: $e')),
+      );
+    } finally {
+      if (mounted) {
+        _safeSetState(() => _isCvParsing = false);
+      }
+    }
+  }
+
+  Widget _buildCandidateChatbotPanel() {
+    return Container(
+      width: 380,
+      height: 500,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.black.withAlpha(230),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withAlpha(76)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.8),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.smart_toy, color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                "Career AI Assistant",
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontSize: 14,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                onPressed: () => _safeSetState(() => _chatbotOpen = false),
+                icon: const Icon(Icons.close, color: Colors.white, size: 16),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.white.withOpacity(0.2)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => _safeSetState(() => _cvParserMode = false),
+                    style: TextButton.styleFrom(
+                      backgroundColor: !_cvParserMode
+                          ? Colors.white.withOpacity(0.2)
+                          : Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      "Career Chat",
+                      style: GoogleFonts.poppins(
+                        color: !_cvParserMode ? Colors.white : Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => _safeSetState(() => _cvParserMode = true),
+                    style: TextButton.styleFrom(
+                      backgroundColor: _cvParserMode
+                          ? Colors.white.withOpacity(0.2)
+                          : Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      "CV Analysis",
+                      style: GoogleFonts.poppins(
+                        color: _cvParserMode ? Colors.white : Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(
+            child: _cvParserMode ? _buildCvParserTab() : _buildChatMessagesTab(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatMessagesTab() {
+    return Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            itemCount: _chatMessages.length,
+            itemBuilder: (context, index) {
+              final msg = _chatMessages[index];
+              return Container(
+                margin: const EdgeInsets.symmetric(vertical: 3),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: msg['text']?.startsWith('You:') == true
+                      ? Colors.white.withOpacity(0.2)
+                      : Colors.black.withOpacity(0.5),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                ),
+                child: Text(
+                  msg['text'] ?? '',
+                  style: GoogleFonts.poppins(color: Colors.white, fontSize: 12),
+                ),
+              );
+            },
+          ),
+        ),
+        if (_isChatLoading)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: LinearProgressIndicator(),
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _chatMessageController,
+                style: GoogleFonts.poppins(color: Colors.white, fontSize: 12),
+                decoration: InputDecoration(
+                  hintText: "Ask about career advice...",
+                  hintStyle:
+                      GoogleFonts.poppins(color: Colors.white54, fontSize: 12),
+                  filled: true,
+                  fillColor: Colors.black.withOpacity(0.3),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: Colors.white.withOpacity(0.2),
+                    ),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: Colors.white.withOpacity(0.2),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: _sendChatMessage,
+              icon: const Icon(Icons.send, color: Colors.white, size: 18),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCvParserTab() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Job Description",
+            style: GoogleFonts.poppins(color: Colors.white, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _chatJobDescController,
+            maxLines: 3,
+            style: GoogleFonts.poppins(color: Colors.white, fontSize: 12),
+            decoration: InputDecoration(
+              hintText: "Paste position requirements here...",
+              hintStyle: GoogleFonts.poppins(color: Colors.white54, fontSize: 12),
+              filled: true,
+              fillColor: Colors.black.withOpacity(0.3),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            "Professional CV (optional text)",
+            style: GoogleFonts.poppins(color: Colors.white, fontSize: 12),
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: _chatCvController,
+            maxLines: 4,
+            style: GoogleFonts.poppins(color: Colors.white, fontSize: 12),
+            decoration: InputDecoration(
+              hintText: "Paste CV text here, or upload a file below...",
+              hintStyle: GoogleFonts.poppins(color: Colors.white54, fontSize: 12),
+              filled: true,
+              fillColor: Colors.black.withOpacity(0.3),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              TextButton.icon(
+                onPressed: _pickResumeForChatbot,
+                icon: const Icon(Icons.upload_file, size: 14, color: Colors.white),
+                label: Text(
+                  "Upload Resume",
+                  style: GoogleFonts.poppins(color: Colors.white, fontSize: 11),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _uploadedResume?.name ?? "No file selected",
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(color: Colors.white54, fontSize: 10),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _isCvParsing ? null : _analyzeChatbotCv,
+              child: _isCvParsing
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(
+                      "Analyze CV Compatibility",
+                      style: GoogleFonts.poppins(fontSize: 12),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_cvAnalysisResult != null)
+            Builder(
+              builder: (context) {
+                final result = _cvAnalysisResult!;
+                final parser = result['parser_result'] is Map<String, dynamic>
+                    ? result['parser_result'] as Map<String, dynamic>
+                    : <String, dynamic>{};
+                final cvUrl = result['cv_url']?.toString();
+                final hasUpload = cvUrl != null && cvUrl.trim().isNotEmpty;
+                final matchScore = parser['match_score'];
+                final aiError = parser['error']?.toString();
+                final aiFailed = (aiError ?? '').toLowerCase().contains(
+                  'all ai services failed',
+                );
+                final suggestions = parser['suggestions'] is List
+                    ? (parser['suggestions'] as List)
+                        .map((e) => e.toString())
+                        .where((e) => e.trim().isNotEmpty)
+                        .toList()
+                    : <String>[];
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.18),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.green.withOpacity(0.5)),
+                      ),
+                      child: Text(
+                        hasUpload
+                            ? 'CV uploaded successfully to Cloudinary.'
+                            : 'Analysis request completed.',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (aiFailed)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFC10D00).withOpacity(0.22),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFFC10D00).withOpacity(0.7),
+                          ),
+                        ),
+                        child: Text(
+                          'AI analysis is currently unavailable (provider quota/credits). Your CV upload is saved.',
+                          style: GoogleFonts.poppins(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      )
+                    else
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.45),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'AI Match Score: ${matchScore ?? 'N/A'}%',
+                              style: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            if (suggestions.isNotEmpty) ...[
+                              const SizedBox(height: 6),
+                              Text(
+                                'Top suggestion: ${suggestions.first}',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white70,
+                                  fontSize: 10.5,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+        ],
+      ),
+    );
   }
 
   void _showAnalysisResult(String analysis) {
@@ -3131,7 +3655,8 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                           elevation: 0,
                           child: InkWell(
                             customBorder: const CircleBorder(),
-                            onTap: () {},
+                            onTap: () =>
+                                _safeSetState(() => _chatbotOpen = !_chatbotOpen),
                             splashColor: Colors.white24,
                             child: SizedBox(
                               width: _cornerActionSize,
@@ -3178,6 +3703,12 @@ class _CandidateDashboardState extends State<CandidateDashboard>
                 ),
               ),
             ),
+            if (_chatbotOpen)
+              Positioned(
+                right: 12,
+                bottom: _cornerActionSize + _cornerActionGap + 24,
+                child: SafeArea(child: _buildCandidateChatbotPanel()),
+              ),
           ],
         ),
       ),

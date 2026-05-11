@@ -5,6 +5,9 @@ from app.utils.decorators import role_required
 from app.services.ai_service import AIService
 from app.services.job_service import JobService
 from app.services.cv_analysis_utils import truncate_for_cv_prompt, apply_cv_score_baseline
+from app.services.ai_parser_service import analyse_resume_gemini
+from app.models import db, User, Candidate, CVAnalysis, Conversation
+import cloudinary.uploader
 import json
 import logging
 import datetime
@@ -106,9 +109,11 @@ def parse_cv():
         db.session.commit()
 
     # Accept cv_text, job_description, or job_id (to build full job spec server-side)
-    cv_text = request.form.get("cv_text") or (request.json and request.json.get("cv_text"))
-    job_description = request.form.get("job_description") or (request.json and request.json.get("job_description"))
-    job_id_raw = request.form.get("job_id") or (request.json and request.json.get("job_id"))
+    # Use silent JSON parsing so multipart/form-data requests don't trigger 415.
+    payload = request.get_json(silent=True) or {}
+    cv_text = request.form.get("cv_text") or payload.get("cv_text")
+    job_description = request.form.get("job_description") or payload.get("job_description")
+    job_id_raw = request.form.get("job_id") or payload.get("job_id")
 
     if job_id_raw is not None:
         try:

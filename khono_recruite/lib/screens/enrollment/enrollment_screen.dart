@@ -53,11 +53,6 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
   String? userEmail;
   PlatformFile? selectedCV;
 
-  // Step 3 inline editing (no edit buttons/modals).
-  bool _editingFullNameInline = false;
-  bool _editingWorkExperienceInline = false;
-  final FocusNode _fullNameInlineFocusNode = FocusNode();
-
   // --- 3-step onboarding flow ---
   /// 0 = CV Upload, 1 = Processing, 2 = Review. When true, user chose "Fill out manually" and we show the 4-step form.
   bool _choseManual = false;
@@ -69,16 +64,16 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
   bool _processingStarted = false;
 
   final ScrollController _scrollController = ScrollController();
+  final ScrollController _step3SectionScrollController = ScrollController();
   bool _isProgressCollapsed = false;
-
-  /// Which review sections are expanded (Show more). Key: 'education' | 'skills' | 'experience'.
-  final Map<String, bool> _reviewSectionExpanded = {};
-
-  /// Which main review headings are collapsed. Key: 'personal' | 'education' | 'skills' | 'experience'. false = expanded.
-  final Map<String, bool> _reviewSectionCollapsed = {};
 
   /// True when CV parse/upload failed; drop zone border shows red. Cleared when user selects a new file.
   bool _cvUploadFailed = false;
+  String _step3ActiveSection = 'personal';
+  List<String> _parsedSkills = [];
+  List<Map<String, String>> _parsedEducation = [];
+  List<Map<String, String>> _parsedExperience = [];
+  Map<String, dynamic>? _backendCareerSummary;
 
   // Define the custom red color
   final Color customRed = const Color(0xFFC10D00);
@@ -388,22 +383,81 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
 
   // ------------------- Onboarding step builders -------------------
   Widget _buildProgressIndicator() {
+    const labels = ['Upload CV', 'Processing', 'Profile Summary'];
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
       child: Row(
         children: [
           IconButton(
-            icon: Icon(Icons.arrow_back, color: _enrollText, size: 28),
-            onPressed: () {
-              context.go('/login');
-            },
+            icon: Icon(Icons.arrow_back, color: _enrollText, size: 24),
+            onPressed: () => context.go('/login'),
             tooltip: 'Back to login',
           ),
           const SizedBox(width: 8),
+          Expanded(
+            child: Row(
+              children: List.generate(labels.length, (index) {
+                final isDone = index < _onboardingStep;
+                final isCurrent = index == _onboardingStep;
+                final tone = (isDone || isCurrent) ? _kKhonologyRed : _enrollSoft;
+                return Expanded(
+                  child: InkWell(
+                    onTap: index <= _onboardingStep
+                        ? () => setState(() => _onboardingStep = index)
+                        : null,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 20,
+                            height: 20,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: isCurrent ? tone : tone.withValues(alpha: 0.18),
+                              border: Border.all(color: tone, width: 1.2),
+                            ),
+                            alignment: Alignment.center,
+                            child: isDone
+                                ? const Icon(Icons.check, size: 12, color: Colors.white)
+                                : Text(
+                                    '${index + 1}',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: isCurrent ? Colors.white : tone,
+                                    ),
+                                  ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              labels[index],
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                color:
+                                    (isDone || isCurrent) ? _enrollText : _enrollMuted,
+                                fontWeight:
+                                    isCurrent ? FontWeight.w600 : FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+          const SizedBox(width: 8),
           Text(
-            'Step ${_onboardingStep + 1} of 3',
+            'Your data is secure',
             style: GoogleFonts.poppins(
-              fontSize: 14,
+              fontSize: 11,
               fontWeight: FontWeight.w500,
               color: _enrollMuted,
             ),
@@ -454,7 +508,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     );
   }
 
-  static const _supportedCVExtensions = ['pdf', 'doc', 'docx'];
+  static const _supportedCVExtensions = ['pdf', 'doc', 'docx', 'txt'];
 
   bool _isSupportedCVFile(String fileName) {
     final ext = fileName.split('.').last.toLowerCase();
@@ -487,7 +541,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           ],
         ),
         content: Text(
-          'Please upload a PDF or Word document (.pdf, .doc, .docx).',
+          'Please upload a supported document (.pdf, .doc, .docx, .txt).',
           style: GoogleFonts.poppins(
               fontSize: 14, color: _enrollMuted, height: 1.4),
         ),
@@ -505,6 +559,22 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         ],
       ),
     );
+  }
+
+  Future<void> _pickCVFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: _supportedCVExtensions,
+      withData: true,
+    );
+    if (result != null && result.files.isNotEmpty) {
+      final file = result.files.first;
+      if (!_isSupportedCVFile(file.name)) {
+        _showUnsupportedFileMessage();
+        return;
+      }
+      _onCVFileReceived(file);
+    }
   }
 
   void _onCVFileReceived(PlatformFile file) {
@@ -530,32 +600,16 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     final Color iconColor =
         _cvUploadFailed ? _kKhonologyRed : (hasFile ? _kSuccess : _enrollSoft);
     return GestureDetector(
-      onTap: () async {
-        final result = await FilePicker.platform.pickFiles(
-          type: FileType.custom,
-          allowedExtensions: ['pdf', 'doc', 'docx'],
-        );
-        if (result != null && result.files.isNotEmpty && mounted) {
-          final file = result.files.first;
-          if (!_isSupportedCVFile(file.name)) {
-            _showUnsupportedFileMessage();
-            return;
-          }
-          setState(() {
-            selectedCV = file;
-            _cvUploadFailed = false;
-          });
-        }
-      },
+      onTap: _pickCVFile,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+        padding: const EdgeInsets.symmetric(vertical: 34, horizontal: 24),
         decoration: BoxDecoration(
           color: _enrollCardBg,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: borderColor,
-            width: 2,
+            width: 1.6,
             strokeAlign: BorderSide.strokeAlignInside,
           ),
         ),
@@ -563,151 +617,86 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             ? Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.check_circle_rounded,
-                    size: 40,
-                    color: _kSuccess,
-                  ),
-                  const SizedBox(height: 12),
+                  Icon(Icons.check_circle_rounded, size: 40, color: _kSuccess),
+                  const SizedBox(height: 10),
                   Text(
                     selectedCV!.name,
                     style: GoogleFonts.poppins(
                       fontSize: 15,
                       color: _enrollText,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
                   ),
-                  if (selectedCV!.bytes == null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      'Preparing file…',
+                  const SizedBox(height: 8),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        selectedCV = null;
+                        _cvUploadFailed = false;
+                      });
+                    },
+                    child: Text(
+                      'Clear',
                       style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: _enrollSoft,
-                        fontWeight: FontWeight.w400,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: _enrollMuted,
                       ),
                     ),
-                  ],
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: () async {
-                          final result = await FilePicker.platform.pickFiles(
-                            type: FileType.custom,
-                            allowedExtensions: ['pdf', 'doc', 'docx'],
-                          );
-                          if (result != null &&
-                              result.files.isNotEmpty &&
-                              mounted) {
-                            final file = result.files.first;
-                            if (!_isSupportedCVFile(file.name)) {
-                              _showUnsupportedFileMessage();
-                              return;
-                            }
-                            setState(() {
-                              selectedCV = file;
-                              _cvUploadFailed = false;
-                            });
-                          }
-                        },
-                        icon: Icon(Icons.check_circle,
-                            size: 18, color: _kSuccess),
-                        label: Text(
-                          'Uploaded',
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w600,
-                            color: _kSuccess,
-                            fontSize: 14,
-                          ),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: _kSuccess,
-                          side: BorderSide(color: _kSuccess, width: 1.5),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 10),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      TextButton(
-                        onPressed: () {
-                          setState(() {
-                            selectedCV = null;
-                            _cvUploadFailed = false;
-                          });
-                        },
-                        child: Text(
-                          'Clear',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: _enrollMuted,
-                          ),
-                        ),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 10),
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               )
             : Column(
                 children: [
-                  Icon(
-                    Icons.description_outlined,
-                    size: 48,
-                    color: iconColor,
-                  ),
-                  const SizedBox(height: 16),
+                  Icon(Icons.upload_file_outlined, size: 44, color: iconColor),
+                  const SizedBox(height: 12),
                   Text(
-                    'Drag & drop your CV here or',
+                    'Drag & drop your CV here',
                     style: GoogleFonts.poppins(
-                      fontSize: 16,
+                      fontSize: 15,
                       color: _enrollText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    'or',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      color: _enrollMuted,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  ElevatedButton.icon(
-                    onPressed: () async {
-                      final result = await FilePicker.platform.pickFiles(
-                        type: FileType.custom,
-                        allowedExtensions: ['pdf', 'doc', 'docx'],
-                      );
-                      if (result != null &&
-                          result.files.isNotEmpty &&
-                          mounted) {
-                        final file = result.files.first;
-                        if (!_isSupportedCVFile(file.name)) {
-                          _showUnsupportedFileMessage();
-                          return;
-                        }
-                        setState(() {
-                          selectedCV = file;
-                          _cvUploadFailed = false;
-                        });
-                      }
-                    },
-                    icon: const Icon(Icons.upload_file, size: 20),
-                    label: const Text('Upload CV'),
+                  const SizedBox(height: 10),
+                  ElevatedButton(
+                    onPressed: _pickCVFile,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _kKhonologyRed,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 12),
+                          horizontal: 20, vertical: 11),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(9),
                       ),
                       elevation: 0,
+                    ),
+                    child: Text(
+                      'Choose File',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'PDF, DOCX or TXT (Max 10MB)',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: _enrollSoft,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
@@ -716,7 +705,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     );
   }
 
-  /// Step 1 and Step 2 share one space side by side; Step 3 is on its own.
+  /// Focused one-step-at-a-time onboarding.
   Widget _buildSteps1And2SideBySide() {
     return _EnrollmentDropZoneScope(
       onFileDropped: (file) => _onCVFileReceived(file),
@@ -725,69 +714,11 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         child: Column(
           children: [
             _buildProgressIndicator(),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _buildOnboardingCard(
-                      flexible: true,
-                      child: _onboardingStep == 0
-                          ? _buildStep1CardContent()
-                          : _buildStep1CompleteContent(),
-                    ),
-                  ),
-                  const SizedBox(width: 24),
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        _buildOnboardingCard(
-                          flexible: true,
-                          child: _onboardingStep == 0
-                              ? _buildStep2PlaceholderContent()
-                              : _buildStep2CardContent(),
-                        ),
-                        if (loading && !_processingComplete)
-                          Positioned.fill(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: _isDarkMode
-                                    ? Colors.black54
-                                    : Colors.white.withValues(alpha: 0.56),
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              child: Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const SizedBox(
-                                      width: 56,
-                                      height: 56,
-                                      child: CircularProgressIndicator(
-                                        color: _kKhonologyRed,
-                                        strokeWidth: 3,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      'Processing…',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                        color: _enrollText,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+            _buildOnboardingCard(
+              maxWidth: 980,
+              child: _onboardingStep == 0
+                  ? _buildStep1CardContent()
+                  : _buildStep2CardContent(),
             ),
           ],
         ),
@@ -801,70 +732,72 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          'Welcome! Let\'s get started',
+          'Set up your profile',
           style: GoogleFonts.poppins(
-            fontSize: 24,
+            fontSize: 30,
             fontWeight: FontWeight.w700,
             color: _enrollText,
           ),
         ),
         const SizedBox(height: 8),
         Text(
-          'Upload your CV to autofill your profile.',
+          'Upload your CV to automatically create your profile and match you with relevant opportunities.',
           style: GoogleFonts.poppins(
-            fontSize: 16,
+            fontSize: 14,
             color: _enrollMuted,
             height: 1.4,
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Upload your CV',
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: _enrollText,
-              ),
+            Expanded(flex: 7, child: _buildDropZone()),
+            const SizedBox(width: 16),
+            Container(
+              width: 1,
+              height: 180,
+              color: _enrollCardBorder,
             ),
-            Text(
-              ' *',
-              style: GoogleFonts.poppins(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: _kKhonologyRed,
+            const SizedBox(width: 16),
+            Expanded(
+              flex: 6,
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: _isDarkMode ? 0.16 : 0.04),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _enrollCardBorder),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _helperBullet('Your profile will be auto-filled'),
+                    const SizedBox(height: 10),
+                    _helperBullet('You will only see relevant job opportunities'),
+                    const SizedBox(height: 10),
+                    _helperBullet('You can edit everything later'),
+                  ],
+                ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        _buildDropZone(),
-        const SizedBox(height: 12),
-        Center(
-          child: Text(
-            'PDF, DOCX, or DOC files',
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              color: _enrollSoft,
-            ),
-          ),
-        ),
-        const SizedBox(height: 24),
         Center(
           child: TextButton(
             onPressed: () => setState(() => _choseManual = true),
             child: Text(
-              'I don\'t have a CV – Fill out manually',
+              'I prefer to enter details manually',
               style: GoogleFonts.poppins(
-                fontSize: 15,
+                fontSize: 12.5,
                 fontWeight: FontWeight.w500,
                 color: _enrollText,
               ),
             ),
           ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
@@ -901,9 +834,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                 elevation: 0,
               ),
               child: Text(
-                'Next',
+                'Continue',
                 style: GoogleFonts.poppins(
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -914,186 +847,117 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     );
   }
 
-  Widget _buildStep1CompleteContent() {
+
+  Widget _buildStep2CardContent() {
+    const stages = [
+      'Reading your CV',
+      'Identifying your skills',
+      'Understanding your work experience',
+      'Determining your role and level',
+      'Preparing your job matches',
+    ];
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Row(
-          children: [
-            Icon(Icons.check_circle, color: _kSuccess, size: 28),
-            const SizedBox(width: 12),
-            Text(
-              'Step 1 complete',
-              style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: _enrollText,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (selectedCV != null)
-          Text(
-            selectedCV!.name,
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: _enrollMuted,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        const SizedBox(height: 24),
-        TextButton(
-          onPressed: () => setState(() => _onboardingStep = 0),
+        Center(
           child: Text(
-            'Previous',
+            'Analyzing your experience...',
             style: GoogleFonts.poppins(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
+              fontSize: 30,
+              fontWeight: FontWeight.w700,
               color: _enrollText,
             ),
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildStep2PlaceholderContent() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Step 2: Processing',
-          style: GoogleFonts.poppins(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: _enrollText,
-          ),
-        ),
         const SizedBox(height: 8),
-        Text(
-          'Upload your CV on the left and click Next to extract your details.',
-          style: GoogleFonts.poppins(
-            fontSize: 16,
-            color: _enrollMuted,
-            height: 1.4,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStep2CardContent() {
-    const stages = [
-      'Reading Your CV',
-      'Extracting Education…',
-      'Extracting Work Experience…',
-      'Finalizing…',
-    ];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          'Processing Your Information',
-          style: GoogleFonts.poppins(
-            fontSize: 24,
-            fontWeight: FontWeight.w700,
-            color: _enrollText,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Extracting details from your CV…',
-          style: GoogleFonts.poppins(
-            fontSize: 16,
-            color: _enrollMuted,
-            height: 1.4,
-          ),
-        ),
-        const SizedBox(height: 32),
-        ...List.generate(stages.length, (i) {
-          final done = _processingComplete ? true : i < _processingStage;
-          final current = !_processingComplete && i == _processingStage;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Row(
-              children: [
-                Icon(
-                  done ? Icons.check_circle : Icons.radio_button_unchecked,
-                  size: 24,
-                  color: done
-                      ? _kSuccess
-                      : (current ? _kKhonologyRed : _enrollSoft),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    stages[i],
-                    style: GoogleFonts.poppins(
-                      fontSize: 15,
-                      fontWeight: current ? FontWeight.w600 : FontWeight.w500,
-                      color: done
-                          ? _enrollText
-                          : (current ? _kKhonologyRed : _enrollMuted),
-                    ),
-                  ),
-                ),
-                if (current && loading)
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: _kKhonologyRed,
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }),
-        const SizedBox(height: 24),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: _processingComplete
-                ? 1.0
-                : (_processingStage + 1) / stages.length,
-            minHeight: 6,
-            backgroundColor: _isDarkMode
-                ? Colors.white24
-                : const Color(0xFF090812).withValues(alpha: 0.24),
-            valueColor: const AlwaysStoppedAnimation<Color>(_kKhonologyRed),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (loading && !_processingComplete)
-          Text(
-            'Please wait a moment…',
+        Center(
+          child: Text(
+            'This may take a few moments.',
             style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: _enrollSoft,
+              fontSize: 12.5,
+              color: _enrollMuted,
             ),
           ),
-        if (_processingComplete || _processingError) ...[
-          const SizedBox(height: 28),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: () => setState(() => _onboardingStep = 0),
-                child: Text(
-                  'Previous',
-                  style: GoogleFonts.poppins(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: _enrollText,
+        ),
+        const SizedBox(height: 28),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 880),
+          child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: _isDarkMode ? 0.16 : 0.04),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _enrollCardBorder),
+            ),
+            child: Column(
+              children: List.generate(stages.length, (i) {
+                final done = _processingComplete ? true : i < _processingStage;
+                final current = !_processingComplete && i == _processingStage;
+                return Padding(
+                  padding: EdgeInsets.only(bottom: i == stages.length - 1 ? 0 : 12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        done ? Icons.check_circle : Icons.radio_button_unchecked,
+                        size: 22,
+                        color: done
+                            ? _kSuccess
+                            : (current ? const Color(0xFF3B82F6) : _enrollSoft),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          stages[i],
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: current ? FontWeight.w600 : FontWeight.w500,
+                            color: done
+                                ? _enrollText
+                                : (current ? _enrollText : _enrollMuted),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ),
+                );
+              }),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'This helps us match you with the right opportunities from the start.',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.poppins(
+            fontSize: 11.5,
+            color: _enrollMuted,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          width: double.infinity,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: _processingComplete
+                  ? 1.0
+                  : (_processingStage + 1) / stages.length,
+              minHeight: 6,
+              backgroundColor: _isDarkMode
+                  ? Colors.white24
+                  : const Color(0xFF090812).withValues(alpha: 0.24),
+              valueColor: const AlwaysStoppedAnimation<Color>(_kKhonologyRed),
+            ),
+          ),
+        ),
+        if (_processingComplete || _processingError) ...[
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
               ElevatedButton(
                 onPressed: () => setState(() => _onboardingStep = 2),
                 style: ElevatedButton.styleFrom(
@@ -1107,9 +971,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                   elevation: 0,
                 ),
                 child: Text(
-                  'Next',
+                  'Review Profile',
                   style: GoogleFonts.poppins(
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1121,515 +985,249 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     );
   }
 
-  Widget _buildStep3Review() {
-    final nameOk = nameController.text.trim().isNotEmpty;
-    final educationOk = educationController.text.trim().isNotEmpty ||
-        universityController.text.trim().isNotEmpty;
-    final skillsOk = skillsController.text.trim().isNotEmpty;
-    final experienceOk = experienceController.text.trim().isNotEmpty ||
-        positionController.text.trim().isNotEmpty;
-
-    // Enterprise-style preview: keep Step 3 compact by limiting long lists.
-    final List<String> _eduAll = [
-      ..._getEducationEntries(educationController.text),
-    ];
-    final String _uni = universityController.text.trim();
-    if (_uni.isNotEmpty && _eduAll.isEmpty) {
-      _eduAll.add(_uni);
-    }
-    const int _eduPreviewMax = 3;
-    final List<String> _eduVisible = _eduAll.take(_eduPreviewMax).toList();
-    final int _eduHidden = _eduAll.length - _eduVisible.length;
-
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _buildProgressIndicator(),
-          _buildOnboardingCard(
-            maxWidth: 1100,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Review Your Profile',
-                  style: GoogleFonts.poppins(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: _enrollText,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'We\'ve filled in your details. Please review and complete any missing info.',
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    color: _enrollMuted,
-                    height: 1.4,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildCollapsibleReviewSection(
-                            sectionKey: 'personal',
-                            title: 'Personal Details',
-                            completed: nameOk,
-                            onEdit: () => _showEditPersonal(context),
-                            expandBody: false,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'Full Name',
-                                              style: GoogleFonts.poppins(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                                color: _enrollText,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            _editingFullNameInline
-                                                ? TextField(
-                                                    controller: nameController,
-                                                    focusNode:
-                                                        _fullNameInlineFocusNode,
-                                                    autofocus: true,
-                                                    style: GoogleFonts.poppins(
-                                                      color: _enrollText,
-                                                      height: 1.3,
-                                                    ),
-                                                    cursorColor: _kKhonologyRed,
-                                                    decoration:
-                                                        const InputDecoration(
-                                                      isDense: true,
-                                                      border: InputBorder.none,
-                                                      contentPadding:
-                                                          EdgeInsets.zero,
-                                                    ),
-                                                    maxLines: 1,
-                                                    onSubmitted: (_) {
-                                                      setState(() {
-                                                        _editingFullNameInline =
-                                                            false;
-                                                      });
-                                                    },
-                                                  )
-                                                : InkWell(
-                                                    onTap: () {
-                                                      setState(() {
-                                                        _editingFullNameInline =
-                                                            true;
-                                                      });
-                                                      Future.microtask(() {
-                                                        if (!mounted) return;
-                                                        _fullNameInlineFocusNode
-                                                            .requestFocus();
-                                                      });
-                                                    },
-                                                    child: Text(
-                                                      (nameController.text
-                                                              .trim()
-                                                              .isEmpty
-                                                          ? '—'
-                                                          : nameController.text
-                                                              .trim()),
-                                                      style:
-                                                          GoogleFonts.poppins(
-                                                        fontSize: 14,
-                                                        color: _enrollMuted,
-                                                        height: 1.3,
-                                                      ),
-                                                      maxLines: 2,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                  ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                _buildReviewRow(
-                                  'Email',
-                                  (userEmail != null &&
-                                          userEmail!.contains('@'))
-                                      ? userEmail!
-                                      : (userName != null &&
-                                              userName!.contains('@'))
-                                          ? userName!
-                                          : '—',
-                                  null,
-                                ),
-                                _buildReviewRow(
-                                    'Phone', phoneController.text, null),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          _buildCollapsibleReviewSection(
-                            sectionKey: 'skills',
-                            title: 'Skills',
-                            completed: skillsOk,
-                            onEdit: () => _showEditSkills(context),
-                            expandBody: false,
-                            child: skillsOk
-                                ? _buildSkillsReviewContent()
-                                : Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: Text(
-                                      'No skills listed',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 14,
-                                        color: _enrollSoft,
-                                      ),
-                                    ),
-                                  ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 24),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildCollapsibleReviewSection(
-                            sectionKey: 'education',
-                            title: 'Education',
-                            completed: educationOk,
-                            onEdit: () => _showEditEducation(context),
-                            expandBody: false,
-                            child: educationOk
-                                ? Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      ..._eduVisible.map((entry) =>
-                                          _buildEducationEntryBlock(entry)),
-                                      if (_eduHidden > 0)
-                                        Padding(
-                                          padding:
-                                              const EdgeInsets.only(top: 2),
-                                          child: Text(
-                                            'and $_eduHidden more',
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                              color: _kKhonologyRed,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  )
-                                : Padding(
-                                    padding: const EdgeInsets.only(bottom: 8),
-                                    child: Text(
-                                      'No education details found',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 14,
-                                        color: _enrollSoft,
-                                      ),
-                                    ),
-                                  ),
-                          ),
-                          const SizedBox(height: 16),
-                          _buildCollapsibleReviewSection(
-                            sectionKey: 'experience',
-                            title: 'Work Experience',
-                            completed: experienceOk,
-                            onEdit: () => _showEditExperience(context),
-                            expandBody: false,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (_editingWorkExperienceInline)
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Work Experience',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w700,
-                                          color: _enrollMuted,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      _buildTextField(
-                                        previousCompaniesController,
-                                        'Previous Companies',
-                                      ),
-                                      _buildTextField(
-                                        positionController,
-                                        'Position',
-                                      ),
-                                      _buildTextField(
-                                        experienceController,
-                                        'Work Experience',
-                                        maxLines: 3,
-                                      ),
-                                      TextButton(
-                                        onPressed: () {
-                                          setState(() {
-                                            _editingWorkExperienceInline =
-                                                false;
-                                          });
-                                        },
-                                        child: Text(
-                                          'Done',
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w700,
-                                            color: _kKhonologyRed,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                else if (experienceOk ||
-                                    positionController.text
-                                        .trim()
-                                        .isNotEmpty) ...[
-                                  ..._getWorkExperienceSummaries().map(
-                                    (m) => InkWell(
-                                      onTap: () {
-                                        setState(() {
-                                          _editingWorkExperienceInline = true;
-                                        });
-                                      },
-                                      child: _buildWorkExperienceSummaryCard(
-                                        m['company']!,
-                                        m['role']!,
-                                        m['year']!,
-                                      ),
-                                    ),
-                                  ),
-                                ] else
-                                  InkWell(
-                                    onTap: () {
-                                      setState(() {
-                                        _editingWorkExperienceInline = true;
-                                      });
-                                    },
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(bottom: 8),
-                                      child: Text(
-                                        'No work experience added',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 14,
-                                          color: _enrollSoft,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 28),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    TextButton(
-                      onPressed:
-                          loading ? null : () => setState(() => _onboardingStep = 1),
-                      child: Text(
-                        'Previous',
-                        style: GoogleFonts.poppins(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: _enrollText,
-                        ),
-                      ),
-                    ),
-                    ElevatedButton(
-                      onPressed: loading ? null : submitEnrollment,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _kKhonologyRed,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: loading
-                          ? SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white.withValues(alpha: 0.95),
-                              ),
-                            )
-                          : Text(
-                              'Finish',
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                    ),
-                  ],
-                ),
-              ],
+  Widget _helperBullet(String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 18,
+          height: 18,
+          decoration: BoxDecoration(
+            color: _kKhonologyRed.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          alignment: Alignment.center,
+          child: const Icon(Icons.check, size: 12, color: _kKhonologyRed),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: GoogleFonts.poppins(
+              fontSize: 12.5,
+              color: _enrollMuted,
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  /// Collapsible block: tap header to expand/collapse. When [expandBody] is true, body is in [Expanded] + scrollable for equal-height layout.
-  Widget _buildCollapsibleReviewSection({
-    required String sectionKey,
-    required String title,
-    required bool completed,
-    required Widget child,
-    VoidCallback? onEdit,
-    bool expandBody = false,
-  }) {
-    final isCollapsed = _reviewSectionCollapsed[sectionKey] ?? false;
-    final body = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: child,
-    );
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: Container(
-          decoration: BoxDecoration(
-            color: _enrollCardBg,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: _enrollCardBorder),
-          ),
-          child: Column(
-            // Use content-driven sizing to avoid infinite-height errors inside
-            // unbounded parents like SingleChildScrollView.
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              InkWell(
-                onTap: () => setState(
-                    () => _reviewSectionCollapsed[sectionKey] = !isCollapsed),
-                borderRadius: BorderRadius.circular(12),
-                child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  child: Row(
-                    children: [
-                      Icon(
-                        isCollapsed ? Icons.expand_more : Icons.expand_less,
-                        size: 24,
-                        color: _enrollMuted,
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        completed
-                            ? Icons.check_circle
-                            : Icons.radio_button_unchecked,
-                        size: 20,
-                        color: completed ? _kSuccess : _enrollSoft,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: _enrollText,
-                          ),
-                        ),
-                      ),
-                      if (onEdit != null)
-                        TextButton(
-                          onPressed: onEdit,
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: Text(
-                            'Edit',
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: _kKhonologyRed,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              if (expandBody)
-                isCollapsed ? const SizedBox.shrink() : body
-              else if (!isCollapsed)
-                body,
-            ],
-          ),
         ),
-      ),
+      ],
     );
   }
 
-  Widget _buildReviewRow(String label, String value, VoidCallback? onEdit) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+  List<String> _allSkills() {
+    final fromParsed = _parsedSkills;
+    final fromText = skillsController.text
+        .split(RegExp(r'[,;\n]'))
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty);
+    return {...fromParsed, ...fromText}.toList();
+  }
+
+  double _estimatedExperienceYears() {
+    final buffer = StringBuffer(experienceController.text);
+    for (final e in _parsedExperience) {
+      buffer
+        ..write(' ')
+        ..write(e['duration'] ?? '')
+        ..write(' ')
+        ..write(e['description'] ?? '');
+    }
+    final text = buffer.toString();
+
+    double best = 0;
+    final directYears = RegExp(
+      r'(\d{1,2}(?:\.\d+)?)\s*\+?\s*(years?|yrs?)',
+      caseSensitive: false,
+    ).allMatches(text);
+    for (final m in directYears) {
+      final v = double.tryParse(m.group(1) ?? '');
+      if (v != null && v > best) best = v;
+    }
+
+    final yearRanges = RegExp(
+      r'((?:19|20)\d{2})\s*[-/]\s*((?:19|20)\d{2}|present|current)',
+      caseSensitive: false,
+    ).allMatches(text);
+    final nowYear = DateTime.now().year;
+    for (final m in yearRanges) {
+      final start = int.tryParse(m.group(1) ?? '');
+      final endRaw = (m.group(2) ?? '').toLowerCase();
+      final end = (endRaw == 'present' || endRaw == 'current')
+          ? nowYear
+          : int.tryParse(endRaw);
+      if (start != null && end != null && end >= start) {
+        final years = (end - start + 1).toDouble();
+        if (years > best) best = years;
+      }
+    }
+    return best;
+  }
+
+  String _derivePrimaryRole() {
+    final backendRole = _backendCareerSummary?['primary_role']?.toString().trim() ?? '';
+    if (backendRole.isNotEmpty) return backendRole;
+    final parsedRole = _parsedExperience
+        .map((e) => (e['position'] ?? '').trim())
+        .firstWhere((v) => v.isNotEmpty, orElse: () => '');
+    if (parsedRole.isNotEmpty) return parsedRole;
+
+    final position = positionController.text.trim();
+    if (position.isNotEmpty) return position;
+
+    final skills = _allSkills().map((s) => s.toLowerCase()).join(' ');
+    if (skills.contains('react') || skills.contains('frontend')) {
+      return 'Frontend Developer';
+    }
+    if (skills.contains('flutter') || skills.contains('dart')) {
+      return 'Mobile Developer';
+    }
+    if (skills.contains('python') ||
+        skills.contains('node') ||
+        skills.contains('api')) {
+      return 'Software Engineer';
+    }
+    if (skills.contains('ui') || skills.contains('ux')) return 'UI Engineer';
+    return 'Software Professional';
+  }
+
+  String _deriveExperienceLevel() {
+    final backendLevel =
+        _backendCareerSummary?['experience_level']?.toString().trim() ?? '';
+    if (backendLevel.isNotEmpty) return backendLevel;
+    final years = _estimatedExperienceYears();
+    if (years <= 0) return 'Entry-level';
+    if (years < 2) return 'Junior';
+    if (years < 6) return 'Mid-level';
+    return 'Senior';
+  }
+
+  int _profileReadiness() {
+    final backendReadiness = _backendCareerSummary?['profile_readiness'];
+    if (backendReadiness != null) {
+      final parsed = int.tryParse(backendReadiness.toString());
+      if (parsed != null) {
+        return parsed.clamp(0, 100);
+      }
+    }
+    final checks = [
+      nameController.text.trim().isNotEmpty,
+      (userEmail?.trim().isNotEmpty ?? false),
+      skillsController.text.trim().isNotEmpty,
+      experienceController.text.trim().isNotEmpty ||
+          positionController.text.trim().isNotEmpty,
+      educationController.text.trim().isNotEmpty ||
+          universityController.text.trim().isNotEmpty,
+    ];
+    final filled = checks.where((c) => c).length;
+    return ((filled / checks.length) * 100).round();
+  }
+
+  List<String> _recommendedRoles(String role) {
+    final backendRolesRaw = _backendCareerSummary?['recommended_roles'];
+    if (backendRolesRaw is List) {
+      final backendRoles = backendRolesRaw
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+      if (backendRoles.isNotEmpty) return backendRoles;
+    }
+    final r = role.toLowerCase();
+    final skills = _allSkills().map((s) => s.toLowerCase()).toList();
+    final roles = <String>{role};
+
+    if (r.contains('frontend') ||
+        skills.any((s) => s.contains('react') || s.contains('javascript'))) {
+      roles.addAll(['Frontend Developer', 'React Developer', 'UI Engineer']);
+    }
+    if (skills.any((s) =>
+        s.contains('flutter') ||
+        s.contains('android') ||
+        s.contains('ios') ||
+        s.contains('dart'))) {
+      roles.addAll(['Mobile Developer', 'Flutter Developer']);
+    }
+    if (skills.any((s) =>
+        s.contains('python') ||
+        s.contains('sql') ||
+        s.contains('api') ||
+        s.contains('node'))) {
+      roles.addAll(['Software Engineer', 'Backend Developer']);
+    }
+    if (roles.length < 3) {
+      roles.addAll(['Software Engineer', 'Product Support Engineer']);
+    }
+    return roles.take(3).toList();
+  }
+
+  String _buildCareerSummaryNarrative(String role, String level) {
+    final backendSummary = _backendCareerSummary?['summary_text']?.toString().trim() ?? '';
+    if (backendSummary.isNotEmpty) return backendSummary;
+    final skills = _allSkills().map((s) => s.toLowerCase()).toList();
+    final hasEducation = _parsedEducation.isNotEmpty ||
+        educationController.text.trim().isNotEmpty ||
+        universityController.text.trim().isNotEmpty;
+    final hasBackend = skills.any((s) =>
+        s.contains('node') ||
+        s.contains('python') ||
+        s.contains('java') ||
+        s.contains('api'));
+    final hasFrontend = skills.any((s) =>
+        s.contains('react') ||
+        s.contains('ui') ||
+        s.contains('ux') ||
+        s.contains('frontend'));
+
+    if (hasFrontend && !hasBackend) {
+      return hasEducation
+          ? 'You show a strong $level profile for $role roles, with your education and experience weighted more toward frontend delivery than backend systems.'
+          : 'You show a strong $level profile for $role roles, with your experience weighted more toward frontend delivery than backend systems.';
+    }
+    if (hasBackend && !hasFrontend) {
+      return hasEducation
+          ? 'You show a strong $level profile for $role roles, with practical backend depth supported by your education and room to broaden frontend-facing delivery.'
+          : 'You show a strong $level profile for $role roles, with practical backend depth and room to broaden frontend-facing delivery.';
+    }
+    return 'You show a balanced $level profile for $role roles, with experience that supports matching to relevant opportunities.';
+  }
+
+  Widget _buildProfileRowCard({
+    required String title,
+    required String value,
+    VoidCallback? onEdit,
+    int? maxLines = 2,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        color: Colors.black.withValues(alpha: _isDarkMode ? 0.2 : 0.04),
+        border: Border.all(color: _enrollCardBorder),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  label,
+                  title,
                   style: GoogleFonts.poppins(
-                    fontSize: 14,
+                    fontSize: 11,
+                    color: _enrollSoft,
                     fontWeight: FontWeight.w600,
-                    color: _enrollText,
                   ),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
-                  value.isEmpty ? '—' : value,
+                  value,
+                  maxLines: maxLines,
+                  overflow:
+                      maxLines == null ? TextOverflow.visible : TextOverflow.ellipsis,
                   style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: _enrollMuted,
-                    height: 1.3,
+                    fontSize: 12.5,
+                    color: _enrollText,
+                    fontWeight: FontWeight.w500,
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -1640,9 +1238,9 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
               child: Text(
                 'Edit',
                 style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 11.5,
                   color: _kKhonologyRed,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
@@ -1650,6 +1248,528 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       ),
     );
   }
+
+  Widget _buildStep3NavItem(
+    String keyValue,
+    String label,
+    IconData icon,
+  ) {
+    final active = _step3ActiveSection == keyValue;
+    return InkWell(
+      onTap: () {
+        setState(() => _step3ActiveSection = keyValue);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || !_step3SectionScrollController.hasClients) return;
+          _step3SectionScrollController.jumpTo(0);
+        });
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: active
+              ? _kKhonologyRed.withValues(alpha: 0.14)
+              : Colors.transparent,
+          border: Border.all(
+            color: active
+                ? _kKhonologyRed.withValues(alpha: 0.35)
+                : Colors.transparent,
+          ),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              active ? icon : Icons.chevron_right,
+              size: 14,
+              color: active ? _kKhonologyRed : _enrollMuted,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 12.5,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                  color: active ? _enrollText : _enrollMuted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStep3SectionBody() {
+    final textStyle = GoogleFonts.poppins(fontSize: 12.5, color: _enrollMuted);
+    if (_step3ActiveSection == 'skills') {
+      final skills = _parsedSkills.isNotEmpty
+          ? _parsedSkills
+          : skillsController.text
+              .split(RegExp(r'[,;\n]'))
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
+      if (skills.isEmpty) return Text('No skills extracted yet.', style: textStyle);
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: skills
+            .map(
+              (s) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: _isDarkMode ? 0.2 : 0.04),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _enrollCardBorder),
+                ),
+                child: Text(s,
+                    style: GoogleFonts.poppins(
+                        fontSize: 12, color: _enrollText, fontWeight: FontWeight.w500)),
+              ),
+            )
+            .toList(),
+      );
+    }
+
+    if (_step3ActiveSection == 'experience') {
+      if (_parsedExperience.isEmpty) {
+        return Text(
+          experienceController.text.trim().isEmpty
+              ? 'No work experience extracted yet.'
+              : experienceController.text.trim(),
+          style: textStyle,
+        );
+      }
+      return Column(
+        children: _parsedExperience
+            .map(
+              (item) => _buildProfileRowCard(
+                title:
+                    '${item['position'] ?? 'Role'}${(item['company'] ?? '').isNotEmpty ? ' - ${item['company']}' : ''}',
+                value: (item['description'] ?? '').isNotEmpty
+                    ? item['description']!
+                    : (item['duration'] ?? 'No description provided'),
+                maxLines: 3,
+              ),
+            )
+            .toList(),
+      );
+    }
+
+    if (_step3ActiveSection == 'education') {
+      if (_parsedEducation.isEmpty) {
+        return Text(
+          educationController.text.trim().isEmpty &&
+                  universityController.text.trim().isEmpty
+              ? 'No education extracted yet.'
+              : '${educationController.text.trim()} ${universityController.text.trim()}',
+          style: textStyle,
+        );
+      }
+      return Column(
+        children: _parsedEducation
+            .map(
+              (item) => _buildProfileRowCard(
+                title: item['level'] ?? 'Education',
+                value:
+                    '${item['institution'] ?? 'Institution not provided'}${(item['graduation_year'] ?? '').isNotEmpty ? ' • ${item['graduation_year']}' : ''}',
+                maxLines: 4,
+              ),
+            )
+            .toList(),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildProfileRowCard(
+          title: 'Full Name',
+          value: nameController.text.trim().isEmpty
+              ? 'Not provided'
+              : nameController.text.trim(),
+        ),
+        _buildProfileRowCard(
+          title: 'Email Address',
+          value: (userEmail ?? '').trim().isEmpty
+              ? 'Not provided'
+              : userEmail!.trim(),
+        ),
+        _buildProfileRowCard(
+          title: 'Phone Number',
+          value: phoneController.text.trim().isEmpty
+              ? 'Not provided'
+              : phoneController.text.trim(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStep3CareerSummary() {
+    final primaryRole = _derivePrimaryRole();
+    final level = _deriveExperienceLevel();
+    final readiness = _profileReadiness();
+    final recommended = _recommendedRoles(primaryRole);
+    final careerNarrative = _buildCareerSummaryNarrative(primaryRole, level);
+
+    return SafeArea(
+      child: Column(
+        children: [
+          _buildProgressIndicator(),
+          Expanded(
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 1120),
+                child: Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: _enrollCardBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: _enrollCardBorder),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(_isDarkMode ? 0.25 : 0.08),
+                        blurRadius: 16,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                Text(
+                  'Review your profile',
+                  style: GoogleFonts.poppins(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: _enrollText,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'We\'ve extracted information from your CV. Please review and edit if needed.',
+                  style: GoogleFonts.poppins(fontSize: 12, color: _enrollMuted),
+                ),
+                const SizedBox(height: 10),
+                Expanded(
+                  child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 190,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: _enrollCardBg,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: _enrollCardBorder),
+                      ),
+                      child: Column(
+                        children: [
+                          _buildStep3NavItem(
+                              'personal', 'Personal Info', Icons.person_outline),
+                          _buildStep3NavItem('skills', 'Skills', Icons.build_outlined),
+                          _buildStep3NavItem('experience', 'Experience',
+                              Icons.work_outline_rounded),
+                          _buildStep3NavItem(
+                              'education', 'Education', Icons.school_outlined),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _enrollCardBg,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: _enrollCardBorder),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    _step3ActiveSection == 'personal'
+                                        ? 'Personal Information'
+                                        : (_step3ActiveSection == 'skills'
+                                            ? 'Skills'
+                                            : (_step3ActiveSection == 'experience'
+                                                ? 'Work Experience'
+                                                : 'Education')),
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: _enrollText,
+                                    ),
+                                  ),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: () => _showStep3EditMenu(context),
+                                  style: OutlinedButton.styleFrom(
+                                    side: BorderSide(color: _enrollCardBorder),
+                                    foregroundColor: _kKhonologyRed,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 10, vertical: 8),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.edit, size: 14),
+                                  label: Text(
+                                    'Edit',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Expanded(
+                              child: Scrollbar(
+                                controller: _step3SectionScrollController,
+                                thumbVisibility: true,
+                                child: SingleChildScrollView(
+                                  controller: _step3SectionScrollController,
+                                  child: _buildStep3SectionBody(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              width: double.infinity,
+                              margin: const EdgeInsets.only(top: 2),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1B8B43).withValues(
+                                    alpha: _isDarkMode ? 0.18 : 0.10),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: const Color(0xFF1B8B43)
+                                      .withValues(alpha: 0.35),
+                                ),
+                              ),
+                              child: Text(
+                                'Profile looks good. You can edit any section if needed.',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11.5,
+                                  color: _isDarkMode
+                                      ? Colors.green.shade100
+                                      : const Color(0xFF166534),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: _enrollCardBg,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: _enrollCardBorder),
+                        ),
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Your Career Summary',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: _enrollText,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: Colors.black.withValues(
+                                      alpha: _isDarkMode ? 0.15 : 0.03),
+                                  border: Border.all(color: _enrollCardBorder),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        'Primary Role\n$primaryRole',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          color: _enrollText,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'Experience Level\n$level',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          color: _enrollMuted,
+                                          fontWeight: FontWeight.w600,
+                                          height: 1.35,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: Colors.black.withValues(
+                                      alpha: _isDarkMode ? 0.15 : 0.03),
+                                  border: Border.all(color: _enrollCardBorder),
+                                ),
+                                child: Text(
+                                  'Profile Readiness: $readiness%',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    color: _enrollText,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                careerNarrative,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11.5,
+                                  color: _enrollMuted,
+                                  height: 1.4,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Recommended Roles For You',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: _enrollText,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: recommended
+                                    .map(
+                                      (r) => Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 5),
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(14),
+                                          color: const Color(0xFF1B8B43)
+                                              .withValues(alpha: 0.10),
+                                          border: Border.all(
+                                            color: const Color(0xFF1B8B43)
+                                                .withValues(alpha: 0.28),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          r,
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 10.5,
+                                            color: _enrollText,
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: Colors.black.withValues(alpha: _isDarkMode ? 0.2 : 0.04),
+                    border: Border.all(color: _enrollCardBorder),
+                  ),
+                  child: Text(
+                    'You will now be taken to your dashboard where you can explore opportunities matched to your profile. We prioritise roles that match your experience to help you focus on the best opportunities.',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11.5,
+                      color: _enrollMuted,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton(
+                    onPressed: loading ? null : submitEnrollment,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _kKhonologyRed,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 22, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: loading
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            'Continue to Dashboard',
+                            style: GoogleFonts.poppins(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                  ),
+                ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+
 
   // ignore: unused_element
   Widget _buildEmptySection(
@@ -1683,262 +1803,6 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     );
   }
 
-  static const int _kReviewCollapsedListItems = 3;
-
-  /// Splits education text into separate entries (by newline, or by comma if no newlines).
-  List<String> _getEducationEntries(String text) {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) return [];
-    if (trimmed.contains('\n')) {
-      return trimmed
-          .split('\n')
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toList();
-    }
-    return trimmed
-        .split(RegExp(r',\s*'))
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-  }
-
-  /// Excludes reference-like items (emails, phones, "Reference" header, "Name - Company" lines).
-  List<String> _filterSkillsOnly(List<String> items) {
-    final phoneLike = RegExp(r'^\+?[\d\s\-]{10,}$');
-    return items.where((s) {
-      final t = s.trim();
-      if (t.isEmpty) return false;
-      if (t.contains('@')) return false;
-      if (t.toLowerCase().contains('reference')) return false;
-      if (phoneLike.hasMatch(t)) return false;
-      return true;
-    }).toList();
-  }
-
-  /// One card per job: company, role, year only (no long description).
-  List<Map<String, String>> _getWorkExperienceSummaries() {
-    final company = previousCompaniesController.text.trim();
-    final role = positionController.text.trim();
-    final desc = experienceController.text.trim();
-    final year = _extractYearFromText(desc);
-    if (company.isEmpty && role.isEmpty && desc.isEmpty) return [];
-    return [
-      {
-        'company': company.isNotEmpty ? company : '—',
-        'role': role.isNotEmpty ? role : '—',
-        'year': year
-      },
-    ];
-  }
-
-  String _extractYearFromText(String text) {
-    final m = RegExp(r'(?:20|19)\d{2}').firstMatch(text);
-    if (m != null) return m.group(0)!;
-    final m2 = RegExp(r'\d{1,2}/\s*(?:20|19)?\d{2}').firstMatch(text);
-    if (m2 != null) return m2.group(0)!;
-    if (text.toLowerCase().contains('current')) return 'Current';
-    return '—';
-  }
-
-  Widget _buildEducationEntryBlock(String entry) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: _enrollCardBg,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _enrollCardBorder),
-      ),
-      child: Text(
-        entry,
-        style: GoogleFonts.poppins(
-          fontSize: 14,
-          color: _enrollMuted,
-          height: 1.35,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWorkExperienceSummaryCard(
-      String company, String role, String year) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: _enrollCardBg,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _enrollCardBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            company,
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: _enrollText,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            role,
-            style: GoogleFonts.poppins(fontSize: 13, color: _enrollMuted),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            year,
-            style: GoogleFonts.poppins(fontSize: 13, color: _enrollSoft),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Skills section: show only skill items (filter out references, emails, phones).
-  Widget _buildSkillsReviewContent() {
-    final rawItems = skillsController.text
-        .split(RegExp(r'[,;]'))
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-    final skillsOnly = _filterSkillsOnly(rawItems);
-    if (skillsOnly.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(
-          'No skills listed',
-          style: GoogleFonts.poppins(fontSize: 14, color: _enrollSoft),
-        ),
-      );
-    }
-    return _buildExpandableListReview(
-      'skills',
-      'Skills',
-      skillsOnly.join(', '),
-      null,
-      showHeader: false,
-    );
-  }
-
-  /// Review section for comma-separated list (e.g. skills): show first N items, then "Show more (X more)".
-  Widget _buildExpandableListReview(
-    String sectionKey,
-    String listLabel,
-    String commaSeparatedValue,
-    VoidCallback? onEdit, {
-    bool showHeader = true,
-  }) {
-    final isExpanded = _reviewSectionExpanded[sectionKey] ?? false;
-    final items = commaSeparatedValue
-        .split(RegExp(r'[,;]'))
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-    final hasMore = items.length > _kReviewCollapsedListItems;
-    final visibleItems =
-        isExpanded ? items : items.take(_kReviewCollapsedListItems).toList();
-    final hiddenCount = items.length - visibleItems.length;
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (showHeader) ...[
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    listLabel,
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: _enrollText,
-                    ),
-                  ),
-                ),
-                if (onEdit != null)
-                  TextButton(
-                    onPressed: onEdit,
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                    child: Text(
-                      'Edit',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: _kKhonologyRed,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 6),
-          ],
-          if (visibleItems.isEmpty)
-            Text(
-              '—',
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: _enrollMuted,
-                height: 1.3,
-              ),
-            )
-          else
-            Wrap(
-              spacing: 6,
-              runSpacing: 4,
-              children: [
-                ...visibleItems.map(
-                  (item) => Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _isDarkMode
-                          ? Colors.white.withValues(alpha: 0.1)
-                          : const Color(0xFF090812).withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: _isDarkMode
-                            ? Colors.white24
-                            : const Color(0xFF090812).withValues(alpha: 0.22),
-                      ),
-                    ),
-                    child: Text(
-                      item,
-                      style: GoogleFonts.poppins(
-                          fontSize: 13, color: _enrollMuted),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          if (hasMore)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: GestureDetector(
-                onTap: () => setState(
-                    () => _reviewSectionExpanded[sectionKey] = !isExpanded),
-                child: Text(
-                  isExpanded ? 'Show less' : 'Show more (${hiddenCount} more)',
-                  style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: _kKhonologyRed,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 
   // ignore: unused_element
   void _showEditPersonal(BuildContext context) {
@@ -2000,6 +1864,73 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         onSave: () => setState(() {}),
       ),
     ).then((_) => setState(() {}));
+  }
+
+  void _showStep3EditMenu(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _isDarkMode ? const Color(0xFF11131A) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        TextStyle titleStyle = GoogleFonts.poppins(
+          fontSize: 16,
+          fontWeight: FontWeight.w700,
+          color: _enrollText,
+        );
+        TextStyle itemStyle = GoogleFonts.poppins(
+          fontSize: 13.5,
+          fontWeight: FontWeight.w500,
+          color: _enrollText,
+        );
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Edit profile section', style: titleStyle),
+                const SizedBox(height: 10),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Personal information', style: itemStyle),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _showEditPersonal(context);
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Skills', style: itemStyle),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _showEditSkills(context);
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Work experience', style: itemStyle),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _showEditExperience(context);
+                  },
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Education', style: itemStyle),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _showEditEducation(context);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   // ------------------- UI Builders -------------------
@@ -2631,49 +2562,35 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
   Widget build(BuildContext context) {
     final themeProvider = context.watch<ThemeProvider>();
     _isDarkMode = themeProvider.isDarkMode;
-    final pageBackground = themeProvider.backgroundImage;
 
     if (!_choseManual) {
       return Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                image: DecorationImage(
-                  image: AssetImage(pageBackground),
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-            Container(color: _enrollOverlay),
-            profileLoading
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const CircularProgressIndicator(color: _kKhonologyRed),
-                        const SizedBox(height: 20),
-                        Text(
-                          'Loading…',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: _enrollMuted,
-                          ),
-                        ),
-                      ],
+        backgroundColor: _isDarkMode ? const Color(0xFF0F1218) : const Color(0xFFF3F5F8),
+        body: profileLoading
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(color: _kKhonologyRed),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Loading…',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                        color: _enrollMuted,
+                      ),
                     ),
-                  )
-                : _onboardingStep < 2
-                    ? _buildSteps1And2SideBySide()
-                    : _buildStep3Review(),
-          ],
-        ),
+                  ],
+                ),
+              )
+            : _onboardingStep < 2
+                ? _buildSteps1And2SideBySide()
+                : _buildStep3CareerSummary(),
       );
     }
 
+    final pageBackground = themeProvider.backgroundImage;
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: Stack(
@@ -2990,7 +2907,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
   void dispose() {
     _tabController.dispose();
     _scrollController.dispose();
-    _fullNameInlineFocusNode.dispose();
+    _step3SectionScrollController.dispose();
     super.dispose();
   }
 
@@ -3014,8 +2931,13 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       if (sd is Map) {
         final pd = sd['personal_details'];
         if (pd is Map) {
-          final fn = pd['full_name']?.toString().trim();
-          if (fn != null && fn.isNotEmpty) out['full_name'] = fn;
+          for (final key in ['full_name', 'name', 'candidate_name']) {
+            final fn = pd[key]?.toString().trim();
+            if (fn != null && fn.isNotEmpty) {
+              out['full_name'] = fn;
+              break;
+            }
+          }
         }
       }
     }
@@ -3240,8 +3162,62 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
 
       String asText(dynamic v) => v?.toString().trim() ?? '';
       setState(() {
+        List<String> toStringList(dynamic v) {
+          if (v is List) {
+            return v
+                .map((e) => e.toString().trim())
+                .where((e) => e.isNotEmpty)
+                .toList();
+          }
+          final text = asText(v);
+          if (text.isEmpty) return [];
+          return text
+              .split(RegExp(r'[,;\n]'))
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
+        }
+
+        List<Map<String, String>> toEducationRows(dynamic v) {
+          if (v is! List) return [];
+          return v
+              .whereType<Map>()
+              .map((m) => {
+                    'level': asText(m['level']).isNotEmpty
+                        ? asText(m['level'])
+                        : asText(m['degree']),
+                    'institution': asText(m['institution']).isNotEmpty
+                        ? asText(m['institution'])
+                        : (asText(m['university']).isNotEmpty
+                            ? asText(m['university'])
+                            : asText(m['school'])),
+                    'graduation_year': asText(m['graduation_year']).isNotEmpty
+                        ? asText(m['graduation_year'])
+                        : asText(m['year']),
+                  })
+              .toList();
+        }
+
+        List<Map<String, String>> toExperienceRows(dynamic v) {
+          if (v is! List) return [];
+          return v
+              .whereType<Map>()
+              .map((m) => {
+                    'company': asText(m['company']),
+                    'position': asText(m['position']).isNotEmpty
+                        ? asText(m['position'])
+                        : asText(m['title']),
+                    'duration': asText(m['duration']),
+                    'description': asText(m['description']),
+                  })
+              .toList();
+        }
+
         final fullName = asText(normalized['full_name']);
-        if (fullName.isNotEmpty) nameController.text = fullName;
+        if (fullName.isNotEmpty) {
+          nameController.text = fullName;
+          userName = fullName;
+        }
         final phone = asText(normalized['phone']);
         if (phone.isNotEmpty) phoneController.text = phone;
         final address = asText(normalized['address']);
@@ -3286,15 +3262,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
           if (grad.isNotEmpty) graduationYearController.text = grad;
         }
 
-        String listToCsv(dynamic v) {
-          if (v is List) {
-            return v
-                .map((e) => e.toString().trim())
-                .where((e) => e.isNotEmpty)
-                .join(', ');
-          }
-          return asText(v);
-        }
+        String listToCsv(dynamic v) => toStringList(v).join(', ');
 
         final skills = listToCsv(normalized['skills']);
         if (skills.isNotEmpty) skillsController.text = skills;
@@ -3319,6 +3287,14 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             previousCompaniesController.text = prevText;
           }
         }
+
+        _parsedSkills = toStringList(normalized['skills']);
+        _parsedEducation = toEducationRows(normalized['education']);
+        _parsedExperience = toExperienceRows(normalized['work_experience']);
+        _backendCareerSummary = normalized['career_summary'] is Map
+            ? Map<String, dynamic>.from(normalized['career_summary'] as Map)
+            : null;
+        _step3ActiveSection = 'personal';
         _processingStage = stages.length - 1;
         _processingComplete = true;
         loading = false;
