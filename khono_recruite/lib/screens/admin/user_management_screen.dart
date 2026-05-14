@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../services/auth_service.dart';
+import '../../services/admin_service.dart';
 import '../../providers/theme_provider.dart';
+import '../../utils/api_endpoints.dart';
+import '../../constants/brand_tokens.dart';
+import '../../widgets/themed_dialog.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({Key? key}) : super(key: key);
@@ -13,31 +17,90 @@ class UserManagementScreen extends StatefulWidget {
   State<UserManagementScreen> createState() => _UserManagementScreenState();
 }
 
-class _UserManagementScreenState extends State<UserManagementScreen> {
+class _UserManagementScreenState extends State<UserManagementScreen>
+    with AutomaticKeepAliveClientMixin {
   List<Map<String, dynamic>> users = [];
   List<String> roles = ["Admin", "HR", "Recruiter", "Viewer"];
+  bool loading = false;
+  bool hasMore = true;
+  int currentPage = 1;
+  int totalPages = 1;
+  final int pageSize = 20;
+  final ScrollController _scrollController = ScrollController();
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounce;
+  final AdminService _adminService = AdminService();
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
+    _searchController.addListener(_onSearchChanged);
     _fetchRolesFromBackend();
-    _fetchUsersFromBackend();
+    _fetchUsersFromBackend(refresh: true);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _searchController.dispose();
+    _searchDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      if (!loading && hasMore) {
+        _fetchUsersFromBackend();
+      }
+    }
+  }
+
+  void _onSearchChanged() {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 500), () {
+      _fetchUsersFromBackend(refresh: true);
+    });
   }
 
   Future<void> _fetchRolesFromBackend() async {
     await Future.delayed(const Duration(seconds: 1));
+    if (!mounted) return;
     setState(() {
       roles = ["Admin", "HR", "Recruiter", "Viewer", "Manager"];
     });
   }
 
-  Future<void> _fetchUsersFromBackend() async {
+  Future<void> _fetchUsersFromBackend({bool refresh = false}) async {
+    if (refresh) {
+      currentPage = 1;
+      hasMore = true;
+    }
+
+    if (!hasMore) return;
+
+    if (!mounted) return;
+    setState(() => loading = true);
+
     try {
       final token = await AuthService.getAccessToken();
       if (token == null) return;
 
+      final queryParams = {
+        'page': currentPage.toString(),
+        'per_page': pageSize.toString(),
+        'search': _searchController.text.trim(),
+      };
+
+      final uri = Uri.parse(ApiEndpoints.getUsers)
+          .replace(queryParameters: queryParams);
+
       final response = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/users"),
+        uri,
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token",
@@ -45,13 +108,48 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final decoded = jsonDecode(response.body);
+        final dynamic rawUsers = (decoded is Map<String, dynamic>)
+            ? (decoded['users'] ?? decoded['data'] ?? decoded['results'])
+            : decoded;
+
+        final List<Map<String, dynamic>> newUsers;
+        if (rawUsers is List) {
+          newUsers = rawUsers
+              .whereType<dynamic>()
+              .map((e) => e is Map<String, dynamic> ? e : <String, dynamic>{})
+              .toList();
+        } else {
+          newUsers = <Map<String, dynamic>>[];
+        }
+
+        if (!mounted) return;
         setState(() {
-          users = List<Map<String, dynamic>>.from(data);
+          if (refresh) {
+            users = newUsers;
+          } else {
+            users.addAll(newUsers);
+          }
+
+          if (decoded is Map<String, dynamic>) {
+            totalPages = decoded['total_pages'] ?? 1;
+          } else {
+            totalPages = 1;
+          }
+          hasMore = currentPage < totalPages;
+          currentPage++;
         });
       }
     } catch (e) {
       debugPrint("Error fetching users: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error loading users: $e")),
+        );
+      }
+    } finally {
+      if (!mounted) return;
+      setState(() => loading = false);
     }
   }
 
@@ -62,29 +160,19 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
     showDialog(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: (themeProvider.isDarkMode
-                  ? const Color(0xFF14131E)
-                  : Colors.white)
-              .withOpacity(0.95),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text(
-            "Add New Role",
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.w600,
-              color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
-            ),
-          ),
+        return ThemedDialog(
+          title: "Add New Role",
+          icon: Icon(Icons.add_circle_outline, color: BrandTokens.primary),
+          iconColor: BrandTokens.primary,
           content: TextField(
             decoration: InputDecoration(
               hintText: "Enter role name",
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(BrandTokens.buttonRadius),
                 borderSide: BorderSide(color: Colors.grey.shade300),
               ),
               focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(BrandTokens.buttonRadius),
                 borderSide: const BorderSide(color: Colors.redAccent, width: 2),
               ),
               contentPadding:
@@ -92,7 +180,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
               fillColor: (themeProvider.isDarkMode
                       ? const Color(0xFF14131E)
                       : Colors.white)
-                  .withOpacity(0.9),
+                  .withValues(alpha: 0.9),
               filled: true,
               hintStyle: TextStyle(
                 color: themeProvider.isDarkMode
@@ -117,37 +205,25 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ),
               ),
             ),
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.blue.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+            ElevatedButton(
+              onPressed: () {
+                if (role.isNotEmpty) {
+                  setState(() => roles.add(role));
+                  Navigator.pop(ctx);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: BrandTokens.primary,
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(BrandTokens.buttonRadius),
+                ),
               ),
-              child: ElevatedButton(
-                onPressed: () {
-                  if (role.isNotEmpty) {
-                    setState(() => roles.add(role));
-                    Navigator.pop(ctx);
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  "Add Role",
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w600),
-                ),
+              child: Text(
+                "Add Role",
+                style: GoogleFonts.inter(fontWeight: FontWeight.w600),
               ),
             ),
           ],
@@ -170,21 +246,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return AlertDialog(
-              backgroundColor: (themeProvider.isDarkMode
-                      ? const Color(0xFF14131E)
-                      : Colors.white)
-                  .withOpacity(0.95),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-              title: Text(
-                "Add Team Member",
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w600,
-                  color:
-                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
-                ),
-              ),
+            return ThemedDialog(
+              title: "Add Team Member",
+              subtitle: "Add a new team member to the system",
+              icon: Icon(Icons.person_add_outlined, color: BrandTokens.primary),
+              iconColor: BrandTokens.primary,
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -196,7 +262,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
                           color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius:
+                              BorderRadius.circular(BrandTokens.buttonRadius),
                           border: Border.all(color: Colors.red.shade200),
                         ),
                         child: Row(
@@ -220,11 +287,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       decoration: InputDecoration(
                         labelText: "Full Name",
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius:
+                              BorderRadius.circular(BrandTokens.buttonRadius),
                           borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius:
+                              BorderRadius.circular(BrandTokens.buttonRadius),
                           borderSide: const BorderSide(
                               color: Colors.redAccent, width: 2),
                         ),
@@ -233,7 +302,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         fillColor: (themeProvider.isDarkMode
                                 ? const Color(0xFF14131E)
                                 : Colors.white)
-                            .withOpacity(0.9),
+                            .withValues(alpha: 0.9),
                         filled: true,
                         labelStyle: TextStyle(
                           color: themeProvider.isDarkMode
@@ -253,11 +322,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       decoration: InputDecoration(
                         labelText: "Email Address",
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius:
+                              BorderRadius.circular(BrandTokens.buttonRadius),
                           borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius:
+                              BorderRadius.circular(BrandTokens.buttonRadius),
                           borderSide: const BorderSide(
                               color: Colors.redAccent, width: 2),
                         ),
@@ -266,7 +337,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         fillColor: (themeProvider.isDarkMode
                                 ? const Color(0xFF14131E)
                                 : Colors.white)
-                            .withOpacity(0.9),
+                            .withValues(alpha: 0.9),
                         filled: true,
                         labelStyle: TextStyle(
                           color: themeProvider.isDarkMode
@@ -303,11 +374,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       decoration: InputDecoration(
                         labelText: "Select Role",
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius:
+                              BorderRadius.circular(BrandTokens.buttonRadius),
                           borderSide: BorderSide(color: Colors.grey.shade300),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius:
+                              BorderRadius.circular(BrandTokens.buttonRadius),
                           borderSide: const BorderSide(
                               color: Colors.redAccent, width: 2),
                         ),
@@ -316,7 +389,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         fillColor: (themeProvider.isDarkMode
                                 ? const Color(0xFF14131E)
                                 : Colors.white)
-                            .withOpacity(0.9),
+                            .withValues(alpha: 0.9),
                         filled: true,
                         labelStyle: TextStyle(
                           color: themeProvider.isDarkMode
@@ -327,7 +400,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       dropdownColor: (themeProvider.isDarkMode
                               ? const Color(0xFF1E1E1E)
                               : Colors.white)
-                          .withOpacity(0.95),
+                          .withValues(alpha: 0.95),
                       style: GoogleFonts.inter(
                         color: themeProvider.isDarkMode
                             ? Colors.white
@@ -349,104 +422,91 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     ),
                   ),
                 ),
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.blue.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: ElevatedButton(
-                    onPressed: isLoading
-                        ? null
-                        : () async {
-                            if (name.isEmpty || email.isEmpty || role.isEmpty)
-                              return;
-                            setState(() {
-                              isLoading = true;
-                              errorMessage = null;
-                            });
+                ElevatedButton(
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                          if (name.isEmpty || email.isEmpty || role.isEmpty)
+                            return;
+                          setState(() {
+                            isLoading = true;
+                            errorMessage = null;
+                          });
 
-                            try {
-                              final token = await AuthService.getAccessToken();
-                              if (token == null)
-                                throw Exception("Token not found");
+                          try {
+                            final token = await AuthService.getAccessToken();
+                            if (token == null)
+                              throw Exception("Token not found");
 
-                              final response = await http.post(
-                                Uri.parse(
-                                    "http://127.0.0.1:5000/api/auth/admin-enroll"),
-                                headers: {
-                                  "Content-Type": "application/json",
-                                  "Authorization": "Bearer $token",
-                                },
-                                body: jsonEncode({
-                                  "email": email.trim(),
-                                  "first_name": name.split(" ").first,
-                                  "last_name": name.split(" ").length > 1
-                                      ? name.split(" ").sublist(1).join(" ")
-                                      : "",
-                                  "role": role.toLowerCase()
-                                }),
-                              );
+                            final response = await http.post(
+                              Uri.parse(ApiEndpoints.adminEnroll),
+                              headers: {
+                                "Content-Type": "application/json",
+                                "Authorization": "Bearer $token",
+                              },
+                              body: jsonEncode({
+                                "email": email.trim(),
+                                "first_name": name.split(" ").first,
+                                "last_name": name.split(" ").length > 1
+                                    ? name.split(" ").sublist(1).join(" ")
+                                    : "",
+                                "role": role.toLowerCase()
+                              }),
+                            );
 
-                              if (response.statusCode == 200 ||
-                                  response.statusCode == 201) {
-                                final data = jsonDecode(response.body);
-                                setState(() {
-                                  users.add({
-                                    "user_id": data["user_id"],
-                                    "name": name,
-                                    "email": email,
-                                    "role": role,
-                                  });
-                                });
-                                Navigator.pop(ctx);
-                              } else {
-                                final data = jsonDecode(response.body);
-                                setState(() {
-                                  errorMessage =
-                                      data["error"] ?? "Failed to add member";
-                                });
-                              }
-                            } catch (e) {
+                            if (response.statusCode == 200 ||
+                                response.statusCode == 201) {
+                              final data = jsonDecode(response.body);
                               setState(() {
-                                errorMessage = "Error: $e";
+                                users.add({
+                                  "user_id": data["user_id"],
+                                  "name": name,
+                                  "email": email,
+                                  "role": role,
+                                });
                               });
-                            } finally {
+                              Navigator.pop(ctx);
+                            } else {
+                              final data = jsonDecode(response.body);
                               setState(() {
-                                isLoading = false;
+                                errorMessage =
+                                    data["error"] ?? "Failed to add member";
                               });
                             }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                          } catch (e) {
+                            setState(() {
+                              errorMessage = "Error: $e";
+                            });
+                          } finally {
+                            setState(() {
+                              isLoading = false;
+                            });
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: BrandTokens.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(BrandTokens.buttonRadius),
                     ),
-                    child: isLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : Text(
-                            "Add Member",
-                            style:
-                                GoogleFonts.inter(fontWeight: FontWeight.w600),
-                          ),
                   ),
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : Text(
+                          "Add Member",
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                        ),
                 ),
               ],
             );
@@ -468,21 +528,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return AlertDialog(
-              backgroundColor: (themeProvider.isDarkMode
-                      ? const Color(0xFF14131E)
-                      : Colors.white)
-                  .withOpacity(0.95),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-              title: Text(
-                "Edit User Role",
-                style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w600,
-                  color:
-                      themeProvider.isDarkMode ? Colors.white : Colors.black87,
-                ),
-              ),
+            return ThemedDialog(
+              title: "Edit User Role",
+              subtitle: "Change the role for this team member",
+              icon: Icon(Icons.edit_outlined, color: BrandTokens.primary),
+              iconColor: BrandTokens.primary,
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -493,7 +543,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
                         color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius:
+                            BorderRadius.circular(BrandTokens.buttonRadius),
                         border: Border.all(color: Colors.red.shade200),
                       ),
                       child: Row(
@@ -544,11 +595,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     decoration: InputDecoration(
                       labelText: "Select Role",
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius:
+                            BorderRadius.circular(BrandTokens.buttonRadius),
                         borderSide: BorderSide(color: Colors.grey.shade300),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius:
+                            BorderRadius.circular(BrandTokens.buttonRadius),
                         borderSide:
                             const BorderSide(color: Colors.redAccent, width: 2),
                       ),
@@ -557,7 +610,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       fillColor: (themeProvider.isDarkMode
                               ? const Color(0xFF14131E)
                               : Colors.white)
-                          .withOpacity(0.9),
+                          .withValues(alpha: 0.9),
                       filled: true,
                       labelStyle: TextStyle(
                         color: themeProvider.isDarkMode
@@ -568,7 +621,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     dropdownColor: (themeProvider.isDarkMode
                             ? const Color(0xFF14131E)
                             : Colors.white)
-                        .withOpacity(0.95),
+                        .withValues(alpha: 0.95),
                     style: GoogleFonts.inter(
                       color: themeProvider.isDarkMode
                           ? Colors.white
@@ -589,92 +642,66 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     ),
                   ),
                 ),
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.blue.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: ElevatedButton(
-                    onPressed: isLoading
-                        ? null
-                        : () async {
+                ElevatedButton(
+                  onPressed: isLoading
+                      ? null
+                      : () async {
+                          setState(() {
+                            isLoading = true;
+                            errorMessage = null;
+                          });
+
+                          try {
+                            final userId =
+                                users[index]["user_id"] ?? users[index]["id"];
+                            if (userId == null)
+                              throw Exception("User ID not found");
+
+                            await _adminService.updateUserRole(userId, role);
+
+                            if (!mounted) return;
                             setState(() {
-                              isLoading = true;
-                              errorMessage = null;
+                              users[index]["role"] = role;
+                              isLoading = false;
                             });
-
-                            try {
-                              final token = await AuthService.getAccessToken();
-                              if (token == null)
-                                throw Exception("Token not found");
-
-                              final userId = users[index]["user_id"];
-                              if (userId == null)
-                                throw Exception("User ID not found");
-
-                              final response = await http.put(
-                                Uri.parse(
-                                    "http://127.0.0.1:5000/api/admin/users/$userId"),
-                                headers: {
-                                  "Content-Type": "application/json",
-                                  "Authorization": "Bearer $token",
-                                },
-                                body: jsonEncode({"role": role.toLowerCase()}),
-                              );
-
-                              if (response.statusCode == 200) {
-                                setState(() {
-                                  users[index]["role"] = role;
-                                });
-                                Navigator.pop(ctx);
-                              } else {
-                                final data = jsonDecode(response.body);
-                                setState(() {
-                                  errorMessage =
-                                      data["error"] ?? "Failed to update role";
-                                });
-                              }
-                            } catch (e) {
-                              setState(() {
-                                errorMessage = "Error: $e";
-                              });
-                            } finally {
-                              setState(() {
-                                isLoading = false;
-                              });
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 24, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text("Role updated successfully"),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          } catch (e) {
+                            setState(() {
+                              isLoading = false;
+                              errorMessage = e.toString();
+                            });
+                          }
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: BrandTokens.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius:
+                          BorderRadius.circular(BrandTokens.buttonRadius),
                     ),
-                    child: isLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : Text(
-                            "Save Changes",
-                            style:
-                                GoogleFonts.inter(fontWeight: FontWeight.w600),
-                          ),
                   ),
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : Text(
+                          "Save Changes",
+                          style: GoogleFonts.inter(fontWeight: FontWeight.w600),
+                        ),
                 ),
               ],
             );
@@ -682,6 +709,94 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
         );
       },
     );
+  }
+
+  void _toggleUserStatus(int index) async {
+    final user = users[index];
+    final userId = user["user_id"] ?? user["id"];
+    final isCurrentlyActive = user["is_active"] ?? true;
+
+    if (userId == null) return;
+
+    try {
+      if (isCurrentlyActive) {
+        await _adminService.deactivateUser(userId);
+      } else {
+        await _adminService.activateUser(userId);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        users[index]["is_active"] = !isCurrentlyActive;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text(isCurrentlyActive ? "User deactivated" : "User activated"),
+          backgroundColor: isCurrentlyActive ? Colors.orange : Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error: $e"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _deleteUser(int index) async {
+    final user = users[index];
+    final userId = user["user_id"] ?? user["id"];
+
+    if (userId == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Delete User"),
+        content: Text(
+            "Are you sure you want to delete ${user["name"] ?? "this user"}? This action cannot be undone."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text("Delete"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await _adminService.deleteUser(userId);
+
+        if (!mounted) return;
+        setState(() {
+          users.removeAt(index);
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("User deleted successfully"),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Error deleting user: $e"),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   // ------------------ UI ------------------
@@ -711,11 +826,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
       decoration: BoxDecoration(
         color:
             (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 15,
             offset: const Offset(0, 6),
           ),
@@ -739,7 +854,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           return Container(
                             width: 48,
                             height: 48,
-                            color: getRoleColor(role).withOpacity(0.1),
+                            color: getRoleColor(role).withValues(alpha: 0.1),
                             child: Icon(Icons.person,
                                 color: getRoleColor(role), size: 24),
                           );
@@ -749,7 +864,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         width: 48,
                         height: 48,
                         decoration: BoxDecoration(
-                          color: getRoleColor(role).withOpacity(0.1),
+                          color: getRoleColor(role).withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(Icons.person,
@@ -785,7 +900,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: getRoleColor(role).withOpacity(0.1),
+                      color: getRoleColor(role).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
@@ -793,6 +908,35 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       style: GoogleFonts.inter(
                         color: getRoleColor(role),
                         fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: (user["is_active"] == false
+                              ? Colors.red
+                              : Colors.green)
+                          .withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: (user["is_active"] == false
+                                ? Colors.red
+                                : Colors.green)
+                            .withValues(alpha: 0.3),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      user["is_active"] == false ? "Inactive" : "Active",
+                      style: GoogleFonts.inter(
+                        color: user["is_active"] == false
+                            ? Colors.red
+                            : Colors.green,
+                        fontSize: 9,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -808,7 +952,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   borderRadius: BorderRadius.circular(8),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.blue.withOpacity(0.2),
+                      color: BrandTokens.primary.withValues(alpha: 0.2),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -816,12 +960,12 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ),
                 child: IconButton(
                   onPressed: () => _editRoleDialog(index),
-                  icon: Icon(Icons.edit, color: Colors.blue, size: 20),
+                  icon: Icon(Icons.edit, color: BrandTokens.primary, size: 20),
                   style: IconButton.styleFrom(
                     backgroundColor: (themeProvider.isDarkMode
                             ? const Color(0xFF14131E)
                             : Colors.white)
-                        .withOpacity(0.9),
+                        .withValues(alpha: 0.9),
                     padding: const EdgeInsets.all(8),
                   ),
                 ),
@@ -832,24 +976,55 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   borderRadius: BorderRadius.circular(8),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.red.withOpacity(0.2),
+                      color: (user["is_active"] == false
+                              ? Colors.green
+                              : Colors.orange)
+                          .withValues(alpha: 0.2),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
                   ],
                 ),
                 child: IconButton(
-                  onPressed: () {
-                    setState(() {
-                      users.removeAt(index);
-                    });
-                  },
+                  onPressed: () => _toggleUserStatus(index),
+                  icon: Icon(
+                    user["is_active"] == false
+                        ? Icons.check_circle
+                        : Icons.block,
+                    color: user["is_active"] == false
+                        ? Colors.green
+                        : Colors.orange,
+                    size: 20,
+                  ),
+                  style: IconButton.styleFrom(
+                    backgroundColor: (themeProvider.isDarkMode
+                            ? const Color(0xFF14131E)
+                            : Colors.white)
+                        .withValues(alpha: 0.9),
+                    padding: const EdgeInsets.all(8),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.red.withValues(alpha: 0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  onPressed: () => _deleteUser(index),
                   icon: Icon(Icons.delete, color: Colors.red, size: 20),
                   style: IconButton.styleFrom(
                     backgroundColor: (themeProvider.isDarkMode
                             ? const Color(0xFF2D2D2D)
                             : Colors.white)
-                        .withOpacity(0.9),
+                        .withValues(alpha: 0.9),
                     padding: const EdgeInsets.all(8),
                   ),
                 ),
@@ -863,6 +1038,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
@@ -887,18 +1063,55 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
             backgroundColor: (themeProvider.isDarkMode
                     ? const Color(0xFF14131E)
                     : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
             elevation: 0,
             iconTheme: IconThemeData(
               color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
             ),
             actions: [
+              // Search Bar
+              Container(
+                width: 200,
+                margin: const EdgeInsets.only(right: 8),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: InputDecoration(
+                    hintText: 'Search users...',
+                    prefixIcon: const Icon(Icons.search, size: 20),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(25),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: (themeProvider.isDarkMode
+                            ? const Color(0xFF14131E)
+                            : Colors.white)
+                        .withValues(alpha: 0.9),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    hintStyle: TextStyle(
+                      fontSize: 14,
+                      color: themeProvider.isDarkMode
+                          ? Colors.grey.shade400
+                          : Colors.grey.shade600,
+                    ),
+                  ),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: themeProvider.isDarkMode
+                        ? Colors.white
+                        : Colors.black87,
+                  ),
+                ),
+              ),
               Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.blue.withOpacity(0.2),
+                      color: BrandTokens.primary.withValues(alpha: 0.2),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -906,12 +1119,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ),
                 child: IconButton(
                   onPressed: _addRoleDialog,
-                  icon: const Icon(Icons.add_moderator, color: Colors.blue),
+                  icon: const Icon(Icons.add_moderator,
+                      color: BrandTokens.primary),
                   style: IconButton.styleFrom(
                     backgroundColor: (themeProvider.isDarkMode
                             ? const Color(0xFF14131E)
                             : Colors.white)
-                        .withOpacity(0.9),
+                        .withValues(alpha: 0.9),
                     padding: const EdgeInsets.all(8),
                   ),
                 ),
@@ -922,7 +1136,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   borderRadius: BorderRadius.circular(10),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.blue.withOpacity(0.2),
+                      color: BrandTokens.primary.withValues(alpha: 0.2),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -930,12 +1144,13 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                 ),
                 child: IconButton(
                   onPressed: _addMemberDialog,
-                  icon: const Icon(Icons.person_add, color: Colors.blue),
+                  icon:
+                      const Icon(Icons.person_add, color: BrandTokens.primary),
                   style: IconButton.styleFrom(
                     backgroundColor: (themeProvider.isDarkMode
                             ? const Color(0xFF14131E)
                             : Colors.white)
-                        .withOpacity(0.9),
+                        .withValues(alpha: 0.9),
                     padding: const EdgeInsets.all(8),
                   ),
                 ),
@@ -955,11 +1170,11 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                     color: (themeProvider.isDarkMode
                             ? const Color(0xFF14131E)
                             : Colors.white)
-                        .withOpacity(0.9),
+                        .withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 15,
                         offset: const Offset(0, 6),
                       ),
@@ -970,8 +1185,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.redAccent.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.redAccent.withValues(alpha: 0.1),
+                          borderRadius:
+                              BorderRadius.circular(BrandTokens.buttonRadius),
                         ),
                         child: Icon(
                           Icons.people_alt,
@@ -1009,8 +1225,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: Colors.redAccent.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.redAccent.withValues(alpha: 0.1),
+                          borderRadius:
+                              BorderRadius.circular(BrandTokens.buttonRadius),
                         ),
                         child: Text(
                           "${roles.length} roles",
@@ -1065,8 +1282,20 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           ),
                         )
                       : ListView.builder(
-                          itemCount: users.length,
-                          itemBuilder: (ctx, index) => buildUserCard(index),
+                          controller: _scrollController,
+                          itemCount: users.length +
+                              (loading && users.isNotEmpty ? 1 : 0),
+                          itemBuilder: (ctx, index) {
+                            if (index == users.length && loading) {
+                              return const Padding(
+                                padding: EdgeInsets.all(16),
+                                child: Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              );
+                            }
+                            return buildUserCard(index);
+                          },
                         ),
                 ),
               ],

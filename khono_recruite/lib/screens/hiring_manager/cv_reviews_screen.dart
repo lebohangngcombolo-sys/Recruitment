@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:percent_indicator/percent_indicator.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import '../../services/admin_service.dart';
+import '../../services/auth_service.dart';
 import '../../providers/theme_provider.dart';
+import '../../utils/api_endpoints.dart';
+import '../../constants/brand_tokens.dart';
 
 class CVReviewsScreen extends StatefulWidget {
   const CVReviewsScreen({super.key});
@@ -16,6 +19,11 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   final AdminService admin = AdminService();
   List<Map<String, dynamic>> cvReviews = [];
   bool loading = true;
+  String searchQuery = '';
+  String selectedGender = 'All';
+  String selectedScoreFilter = 'All';
+  String selectedAnalysisFilter = 'All';
+  final Set<int> _expandedIds = {};
 
   @override
   void initState() {
@@ -24,23 +32,413 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
   }
 
   Future<void> fetchCVReviews() async {
+    if (!mounted) return;
     setState(() => loading = true);
     try {
-      final data = await admin.listCVReviews();
+      final List<Map<String, dynamic>> all = [];
+      var page = 1;
+      while (true) {
+        final batch = await admin.listCVReviews(
+          page: page,
+          perPage: 200,
+          search: searchQuery.isNotEmpty ? searchQuery : null,
+          scope: 'all',
+        );
+        all.addAll(batch);
+        if (batch.length < 200) break;
+        page++;
+      }
+      if (!mounted) return;
       setState(() {
-        cvReviews = List<Map<String, dynamic>>.from(data);
+        cvReviews = List<Map<String, dynamic>>.from(all);
       });
     } catch (e) {
-      debugPrint("Error fetching CV reviews: $e");
+      debugPrint("Error fetching CV data: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
     } finally {
+      if (!mounted) return;
       setState(() => loading = false);
     }
+  }
+
+  void _showCVAnalysis(Map<String, dynamic> review) {
+    final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final cvAnalysis = review['cv_analysis'];
+    if (cvAnalysis == null || cvAnalysis is! Map) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'No CV analysis available yet',
+            style: GoogleFonts.inter(),
+          ),
+        ),
+      );
+      return;
+    }
+
+    List<String> asStringList(dynamic value) {
+      if (value == null) return <String>[];
+      if (value is List) {
+        return value
+            .where((e) => e != null)
+            .map((e) => e.toString().trim())
+            .where((s) => s.isNotEmpty)
+            .toList();
+      }
+      final s = value.toString().trim();
+      if (s.isEmpty) return <String>[];
+      return <String>[s];
+    }
+
+    Widget sectionTitle(String text) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 12, bottom: 6),
+        child: Text(
+          text,
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: themeProvider.isDarkMode ? Colors.white : Colors.black,
+          ),
+        ),
+      );
+    }
+
+    Widget chips(List<String> values) {
+      if (values.isEmpty) {
+        return Text(
+          '—',
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            color: themeProvider.isDarkMode ? Colors.white70 : Colors.black54,
+          ),
+        );
+      }
+      return Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: values
+            .map(
+              (v) => Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: BrandTokens.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(BrandTokens.badgeRadius),
+                  border: Border.all(
+                    color: BrandTokens.primary.withValues(alpha: 0.35),
+                    width: 1,
+                  ),
+                ),
+                child: Text(
+                  v,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: themeProvider.isDarkMode
+                        ? Colors.white
+                        : Colors.black87,
+                  ),
+                ),
+              ),
+            )
+            .toList(),
+      );
+    }
+
+    final status = (cvAnalysis['status'] as String?) ?? 'unknown';
+    final matchScore = cvAnalysis['match_score'];
+    final rawScore = cvAnalysis['raw_score'];
+    final summary = (cvAnalysis['summary'] as String?)?.trim() ?? '';
+    final strengths = asStringList(cvAnalysis['strengths']);
+    final weaknesses = asStringList(cvAnalysis['weaknesses']);
+    final skills = asStringList(cvAnalysis['extracted_skills']);
+    final recommendation =
+        (cvAnalysis['recommendation'] as String?)?.trim() ?? '';
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.92,
+            height: MediaQuery.of(context).size.height * 0.82,
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: themeProvider.isDarkMode
+                        ? BrandTokens.darkSurface
+                        : Colors.white,
+                    border: Border(
+                      bottom: BorderSide(color: Colors.grey.shade300),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'CV Analysis - ${review['full_name'] ?? 'Unknown'}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: themeProvider.isDarkMode
+                                    ? Colors.white
+                                    : Colors.black,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: BrandTokens.primary.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    borderRadius: BorderRadius.circular(
+                                      BrandTokens.badgeRadius,
+                                    ),
+                                    border: Border.all(
+                                      color: BrandTokens.primary.withValues(
+                                        alpha: 0.35,
+                                      ),
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'Status: $status',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: themeProvider.isDarkMode
+                                          ? Colors.white
+                                          : Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                if (matchScore != null)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: BrandTokens.primary.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                      borderRadius: BorderRadius.circular(
+                                        BrandTokens.badgeRadius,
+                                      ),
+                                      border: Border.all(
+                                        color: BrandTokens.primary.withValues(
+                                          alpha: 0.35,
+                                        ),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Match: $matchScore%',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: themeProvider.isDarkMode
+                                            ? Colors.white
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                                const SizedBox(width: 10),
+                                if (rawScore != null)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: BrandTokens.primary.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                      borderRadius: BorderRadius.circular(
+                                        BrandTokens.badgeRadius,
+                                      ),
+                                      border: Border.all(
+                                        color: BrandTokens.primary.withValues(
+                                          alpha: 0.35,
+                                        ),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Raw: $rawScore%',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: themeProvider.isDarkMode
+                                            ? Colors.white
+                                            : Colors.black87,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        sectionTitle('Summary'),
+                        Text(
+                          summary.isNotEmpty ? summary : '—',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: themeProvider.isDarkMode
+                                ? Colors.white70
+                                : Colors.black87,
+                          ),
+                        ),
+                        sectionTitle('Strengths'),
+                        chips(strengths),
+                        sectionTitle('Weaknesses'),
+                        chips(weaknesses),
+                        sectionTitle('Extracted skills'),
+                        chips(skills),
+                        sectionTitle('Recommendation'),
+                        Text(
+                          recommendation.isNotEmpty ? recommendation : '—',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: themeProvider.isDarkMode
+                                ? Colors.white70
+                                : Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  List<Map<String, dynamic>> get displayedCVs {
+    var base = cvReviews;
+
+    // Only show users that have a full name
+    base = base.where((cv) {
+      final name = cv['full_name'];
+      return name is String && name.trim().isNotEmpty;
+    }).toList();
+
+    // Only show CVs with a valid uploaded URL
+    // Prefer application-level resume_url, fall back to candidate-level cv_url.
+    base = base.where((cv) {
+      final resumeUrl = cv['resume_url'];
+      final candidateUrl = cv['cv_url'];
+      final url = (resumeUrl is String && resumeUrl.trim().isNotEmpty)
+          ? resumeUrl
+          : (candidateUrl is String ? candidateUrl : null);
+      if (url == null) return false;
+      return url.trim().isNotEmpty;
+    }).toList();
+
+    // Filter by search query
+    if (searchQuery.isNotEmpty) {
+      base = base
+          .where(
+            (cv) =>
+                (cv['full_name'] as String?)?.toLowerCase().contains(
+                      searchQuery.toLowerCase(),
+                    ) ??
+                false,
+          )
+          .toList();
+    }
+
+    // Filter by gender
+    if (selectedGender != 'All') {
+      base = base.where((cv) => cv['gender'] == selectedGender).toList();
+    }
+
+    // Filter by score
+    if (selectedScoreFilter != 'All') {
+      switch (selectedScoreFilter) {
+        case 'Above 70%':
+          base = base.where((cv) {
+            double score = (cv['cv_score'] as num?)?.toDouble() ?? 0.0;
+            return score >= 70;
+          }).toList();
+          break;
+        case 'Above 50%':
+          base = base.where((cv) {
+            double score = (cv['cv_score'] as num?)?.toDouble() ?? 0.0;
+            return score >= 50;
+          }).toList();
+          break;
+        case 'Below 50%':
+          base = base.where((cv) {
+            double score = (cv['cv_score'] as num?)?.toDouble() ?? 0.0;
+            return score < 50;
+          }).toList();
+          break;
+      }
+    }
+
+    // Filter by analysis status
+    if (selectedAnalysisFilter != 'All') {
+      base = base.where((cv) {
+        final cvAnalysis = cv['cv_analysis'];
+        final status =
+            (cvAnalysis is Map ? (cvAnalysis['status'] as String?) : null) ??
+                'not_analyzed';
+        if (selectedAnalysisFilter == 'Analyzed') {
+          return status.toLowerCase() == 'completed';
+        }
+        if (selectedAnalysisFilter == 'Not analyzed') {
+          return status.toLowerCase() != 'completed';
+        }
+        return true;
+      }).toList();
+    }
+
+    return base;
   }
 
   Color getScoreColor(double score) {
     if (score >= 70) return Colors.green;
     if (score >= 50) return Colors.orange;
-    return Colors.redAccent;
+    return BrandTokens.primary;
   }
 
   String getScoreLabel(double score) {
@@ -49,15 +447,252 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
     return 'Needs Review';
   }
 
+  Widget _buildMatchBreakdown(
+    Map<String, dynamic> review,
+    ThemeProvider themeProvider,
+  ) {
+    final parser = review['cv_parser_result'] is Map
+        ? Map<String, dynamic>.from(review['cv_parser_result'] as Map)
+        : <String, dynamic>{};
+    final missingSkills = List<String>.from(parser['missing_skills'] ?? []);
+    final suggestions = List<String>.from(parser['suggestions'] ?? []);
+    final matchScore = parser['recommendation'];
+    final matchScoreNum = parser['match_score'];
+    final knockoutViolations = List<dynamic>.from(
+      review['knockout_rule_violations'] ?? [],
+    );
+
+    final isDark = themeProvider.isDarkMode;
+    final textColor = isDark ? Colors.white70 : Colors.black87;
+    final subColor = isDark ? Colors.white54 : Colors.black54;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(_kMainPadding),
+      margin: const EdgeInsets.symmetric(horizontal: _kMainPadding),
+      decoration: BoxDecoration(
+        color: isDark
+            ? BrandTokens.darkSurface.withValues(alpha: 0.8)
+            : Colors.grey.shade50,
+        border: Border(
+          left: BorderSide(
+              color: BrandTokens.primary.withValues(alpha: 0.6), width: 3),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'CV match breakdown',
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+              color: textColor,
+            ),
+          ),
+          const SizedBox(height: _kSmallGap),
+          if (matchScoreNum != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: _kSmallGap),
+              child: Row(
+                children: [
+                  Text(
+                    'Match vs role: ',
+                    style: GoogleFonts.poppins(fontSize: 12, color: subColor),
+                  ),
+                  Text(
+                    '${matchScoreNum != null ? matchScoreNum : '—'}%',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: textColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (missingSkills.isNotEmpty) ...[
+            Text(
+              'Missing skills',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: subColor,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              children: missingSkills
+                  .take(15)
+                  .map(
+                    (s) => Chip(
+                      label: Text(s, style: GoogleFonts.poppins(fontSize: 11)),
+                      backgroundColor: Colors.orange.withValues(alpha: 0.2),
+                      padding: EdgeInsets.zero,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  )
+                  .toList(),
+            ),
+            const SizedBox(height: _kSmallGap),
+          ],
+          if (suggestions.isNotEmpty) ...[
+            Text(
+              'Suggestions',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: subColor,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ...suggestions.take(5).map(
+                  (s) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      s.toString(),
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: textColor,
+                      ),
+                    ),
+                  ),
+                ),
+            const SizedBox(height: _kSmallGap),
+          ],
+          if (matchScore != null && matchScore.toString().trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Gaps / recommendation: ${matchScore}',
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  fontStyle: FontStyle.italic,
+                  color: subColor,
+                ),
+              ),
+            ),
+          if (knockoutViolations.isNotEmpty) ...[
+            const SizedBox(height: _kSmallGap),
+            Text(
+              'Knockout (hold)',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.orange,
+              ),
+            ),
+            const SizedBox(height: 4),
+            ...knockoutViolations.take(5).map(
+                  (v) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      v is String ? v : v.toString(),
+                      style: GoogleFonts.poppins(fontSize: 11, color: subColor),
+                    ),
+                  ),
+                ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static const double _kTranslucentOpacity = 0.9;
+  static const double _kCardAndHeaderOpacity = 0.7; // dark mode
+  static const double _kCardOpacityLight =
+      0.98; // light mode: thick, minimal see-through (match analytics)
+
+  // Design system - now using shared BrandTokens
+  // static const Color _kPrimary = Color(0xFFC10D00); // Use BrandTokens.primary
+  // static const Color _kDarkSurface = Color(0xFF2C3E50); // Use BrandTokens.darkSurface
+  static const double _kCardRadius = 16; // Use _kCardRadius
+  static const double _kSearchRadius = 25;
+  static const double _kInputRadius = 4;
+  static const double _kMainPadding = 16;
+  static const double _kSmallGap = 8;
+
+  Future<void> _previewCV(Map<String, dynamic> review) async {
+    try {
+      final applicationId = review['application_id'] as int?;
+      if (applicationId == null) {
+        throw Exception('Missing application ID');
+      }
+
+      // Use admin proxy endpoint for in-app preview
+      final token = await AuthService.getAccessToken();
+      final cvUrl =
+          '${ApiEndpoints.adminBase}/applications/$applicationId/cv-preview';
+
+      // Show modal dialog with WebView
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return Dialog(
+            child: Container(
+              width: MediaQuery.of(context).size.width * 0.9,
+              height: MediaQuery.of(context).size.height * 0.8,
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: Colors.grey.shade300),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'CV Preview - ${review['full_name'] ?? 'Unknown'}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: WebViewWidget(
+                      controller: WebViewController()
+                        ..loadRequest(
+                          Uri.parse(cvUrl),
+                          headers: {'Authorization': 'Bearer $token'},
+                        ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error previewing CV: $e',
+              style: GoogleFonts.inter(),
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final screenWidth = MediaQuery.of(context).size.width;
-    final crossAxisCount = screenWidth > 1000
-        ? 3
-        : screenWidth > 600
-            ? 2
-            : 1;
 
     return Scaffold(
       // 🌆 Dynamic background implementation
@@ -70,37 +705,20 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
         ),
         child: Scaffold(
           backgroundColor: Colors.transparent,
-          appBar: AppBar(
-            title: Text(
-              "CV Reviews Dashboard",
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            backgroundColor: (themeProvider.isDarkMode
-                    ? const Color(0xFF14131E)
-                    : Colors.white)
-                .withOpacity(0.9),
-            elevation: 0,
-            foregroundColor:
-                themeProvider.isDarkMode ? Colors.white : Colors.black87,
-            iconTheme: IconThemeData(
-                color:
-                    themeProvider.isDarkMode ? Colors.white : Colors.black87),
-          ),
           body: loading
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const CircularProgressIndicator(
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.redAccent),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          BrandTokens.primary,
+                        ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: _kMainPadding),
                       Text(
                         "Loading CV Reviews...",
-                        style: GoogleFonts.inter(
+                        style: GoogleFonts.poppins(
                           color: themeProvider.isDarkMode
                               ? Colors.grey.shade400
                               : Colors.grey.shade600,
@@ -111,8 +729,8 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                   ),
                 )
               : Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: cvReviews.isEmpty
+                  padding: const EdgeInsets.all(_kMainPadding),
+                  child: displayedCVs.isEmpty
                       ? Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -124,10 +742,10 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                     ? Colors.grey.shade600
                                     : Colors.grey.shade300,
                               ),
-                              const SizedBox(height: 16),
+                              const SizedBox(height: _kMainPadding),
                               Text(
                                 "No CV Reviews Found",
-                                style: GoogleFonts.inter(
+                                style: GoogleFonts.poppins(
                                   color: themeProvider.isDarkMode
                                       ? Colors.grey.shade400
                                       : Colors.grey.shade600,
@@ -135,10 +753,10 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: _kSmallGap),
                               Text(
                                 "CV reviews will appear here once available",
-                                style: GoogleFonts.inter(
+                                style: GoogleFonts.poppins(
                                   color: themeProvider.isDarkMode
                                       ? Colors.grey.shade500
                                       : Colors.grey.shade500,
@@ -148,490 +766,1008 @@ class _CVReviewsScreenState extends State<CVReviewsScreen> {
                             ],
                           ),
                         )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Header with stats
-                            Container(
-                              padding: const EdgeInsets.all(20),
-                              decoration: BoxDecoration(
-                                color: (themeProvider.isDarkMode
-                                        ? const Color(0xFF14131E)
-                                        : Colors.white)
-                                    .withOpacity(0.9),
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 15,
-                                    offset: const Offset(0, 6),
+                      : CustomScrollView(
+                          slivers: [
+                            // Header with stats and filter toggle (scrolls with content)
+                            SliverToBoxAdapter(
+                              child: Container(
+                                padding: const EdgeInsets.all(_kMainPadding),
+                                decoration: BoxDecoration(
+                                  color: themeProvider.isDarkMode
+                                      ? BrandTokens.darkSurface.withValues(
+                                          alpha: _kCardAndHeaderOpacity,
+                                        )
+                                      : Colors.white.withValues(
+                                          alpha: _kCardAndHeaderOpacity,
+                                        ),
+                                  borderRadius: BorderRadius.circular(
+                                    _kCardRadius,
                                   ),
-                                ],
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      blurRadius: 15,
+                                      offset: const Offset(0, 6),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              "Candidate Reviews",
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 20,
+                                                fontWeight: FontWeight.w600,
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.white
+                                                    : Colors.black,
+                                              ),
+                                            ),
+                                            Text(
+                                              "${displayedCVs.length} candidates reviewed",
+                                              style: GoogleFonts.poppins(
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.grey.shade400
+                                                    : Colors.grey.shade600,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const Spacer(),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: _kMainPadding,
+                                            vertical: _kSmallGap,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color:
+                                                BrandTokens.primary.withValues(
+                                              alpha: _kTranslucentOpacity,
+                                            ),
+                                            borderRadius: BorderRadius.circular(
+                                              BrandTokens.badgeRadius,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            "Reviewed CVs",
+                                            style: GoogleFonts.poppins(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: _kMainPadding),
+                                    // Analysis status filter
+                                    Row(
+                                      children: [
+                                        Text(
+                                          'Analysis Status: ',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.white70
+                                                : Colors.black54,
+                                          ),
+                                        ),
+                                        Expanded(
+                                          child: DropdownButton<String>(
+                                            value: selectedAnalysisFilter,
+                                            isDense: true,
+                                            underline: const SizedBox(),
+                                            dropdownColor:
+                                                themeProvider.isDarkMode
+                                                    ? BrandTokens.darkSurface
+                                                    : Colors.white,
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : BrandTokens.primary,
+                                            ),
+                                            items: const [
+                                              DropdownMenuItem(
+                                                value: 'All',
+                                                child: Text('All'),
+                                              ),
+                                              DropdownMenuItem(
+                                                value: 'Analyzed',
+                                                child: Text('Analyzed'),
+                                              ),
+                                              DropdownMenuItem(
+                                                value: 'Not analyzed',
+                                                child: Text('Not analyzed'),
+                                              ),
+                                            ],
+                                            onChanged: (value) => setState(
+                                              () => selectedAnalysisFilter =
+                                                  value!,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: _kMainPadding),
+                                    // Search and filters row
+                                    Row(
+                                      children: [
+                                        // Search bar
+                                        Expanded(
+                                          flex: 3,
+                                          child: TextField(
+                                            onChanged: (value) => setState(
+                                              () => searchQuery = value,
+                                            ),
+                                            decoration: InputDecoration(
+                                              hintText: 'Search by name...',
+                                              hintStyle: GoogleFonts.poppins(
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.white54
+                                                    : Colors.black54,
+                                              ),
+                                              prefixIcon: Icon(
+                                                Icons.search,
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.white70
+                                                    : Colors.black54,
+                                              ),
+                                              border: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                  _kSearchRadius,
+                                                ),
+                                              ),
+                                              filled: true,
+                                              fillColor:
+                                                  themeProvider.isDarkMode
+                                                      ? BrandTokens.darkSurface
+                                                          .withValues(
+                                                          alpha:
+                                                              _kTranslucentOpacity,
+                                                        )
+                                                      : Colors.white.withValues(
+                                                          alpha:
+                                                              _kTranslucentOpacity,
+                                                        ),
+                                            ),
+                                            style: GoogleFonts.poppins(
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: _kMainPadding),
+                                        // Gender filter
+                                        Expanded(
+                                          flex: 2,
+                                          child:
+                                              DropdownButtonFormField<String>(
+                                            value: selectedGender,
+                                            onChanged: (value) => setState(
+                                              () => selectedGender = value!,
+                                            ),
+                                            items: ['All', 'Male', 'Female']
+                                                .map(
+                                                  (gender) => DropdownMenuItem(
+                                                    value: gender,
+                                                    child: Text(
+                                                      gender,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        color: themeProvider
+                                                                .isDarkMode
+                                                            ? Colors.white
+                                                            : Colors.black,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                )
+                                                .toList(),
+                                            decoration: InputDecoration(
+                                              labelText: 'Gender',
+                                              labelStyle: GoogleFonts.poppins(
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.white70
+                                                    : Colors.black54,
+                                              ),
+                                              border: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                  _kInputRadius,
+                                                ),
+                                              ),
+                                              filled: true,
+                                              fillColor:
+                                                  themeProvider.isDarkMode
+                                                      ? BrandTokens.darkSurface
+                                                          .withValues(
+                                                          alpha:
+                                                              _kTranslucentOpacity,
+                                                        )
+                                                      : Colors.white.withValues(
+                                                          alpha:
+                                                              _kTranslucentOpacity,
+                                                        ),
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 8,
+                                              ),
+                                            ),
+                                            dropdownColor: themeProvider
+                                                    .isDarkMode
+                                                ? BrandTokens.darkSurface
+                                                    .withValues(
+                                                    alpha: _kTranslucentOpacity,
+                                                  )
+                                                : Colors.white.withValues(
+                                                    alpha: _kTranslucentOpacity,
+                                                  ),
+                                            style: GoogleFonts.poppins(
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black,
+                                            ),
+                                            isExpanded: true,
+                                          ),
+                                        ),
+                                        const SizedBox(width: _kMainPadding),
+                                        // Score filter
+                                        Expanded(
+                                          flex: 2,
+                                          child:
+                                              DropdownButtonFormField<String>(
+                                            value: selectedScoreFilter,
+                                            onChanged: (value) => setState(
+                                              () =>
+                                                  selectedScoreFilter = value!,
+                                            ),
+                                            items: [
+                                              'All',
+                                              'Above 70%',
+                                              'Above 50%',
+                                              'Below 50%',
+                                            ]
+                                                .map(
+                                                  (
+                                                    filter,
+                                                  ) =>
+                                                      DropdownMenuItem(
+                                                    value: filter,
+                                                    child: Text(
+                                                      filter,
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        color: themeProvider
+                                                                .isDarkMode
+                                                            ? Colors.white
+                                                            : Colors.black,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                )
+                                                .toList(),
+                                            decoration: InputDecoration(
+                                              labelText: 'Score',
+                                              labelStyle: GoogleFonts.poppins(
+                                                color: themeProvider.isDarkMode
+                                                    ? Colors.white70
+                                                    : Colors.black54,
+                                              ),
+                                              border: OutlineInputBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(
+                                                  _kInputRadius,
+                                                ),
+                                              ),
+                                              filled: true,
+                                              fillColor:
+                                                  themeProvider.isDarkMode
+                                                      ? BrandTokens.darkSurface
+                                                          .withValues(
+                                                          alpha:
+                                                              _kTranslucentOpacity,
+                                                        )
+                                                      : Colors.white.withValues(
+                                                          alpha:
+                                                              _kTranslucentOpacity,
+                                                        ),
+                                              contentPadding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 8,
+                                              ),
+                                            ),
+                                            dropdownColor: themeProvider
+                                                    .isDarkMode
+                                                ? BrandTokens.darkSurface
+                                                    .withValues(
+                                                    alpha: _kTranslucentOpacity,
+                                                  )
+                                                : Colors.white.withValues(
+                                                    alpha: _kTranslucentOpacity,
+                                                  ),
+                                            style: GoogleFonts.poppins(
+                                              color: themeProvider.isDarkMode
+                                                  ? Colors.white
+                                                  : Colors.black,
+                                            ),
+                                            isExpanded: true,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: Colors.redAccent.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
+                            ),
+                            const SliverToBoxAdapter(
+                              child: SizedBox(height: _kMainPadding),
+                            ),
+
+                            // Candidates table (same design & opacity, faster browse for 200–1000 rows)
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: _kMainPadding,
+                                ),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: themeProvider.isDarkMode
+                                        ? BrandTokens.darkSurface.withValues(
+                                            alpha: _kCardAndHeaderOpacity,
+                                          )
+                                        : Colors.white.withValues(
+                                            alpha: _kCardOpacityLight,
+                                          ),
+                                    borderRadius: BorderRadius.circular(
+                                      _kCardRadius,
                                     ),
-                                    child: Icon(
-                                      Icons.assignment_outlined,
-                                      color: Colors.redAccent,
-                                      size: 28,
-                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.1,
+                                        ),
+                                        blurRadius: 15,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 16),
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Text(
-                                        "CV Reviews",
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.w600,
+                                      // Table header row
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: _kMainPadding,
+                                          vertical: 12,
+                                        ),
+                                        decoration: BoxDecoration(
                                           color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.black87,
+                                              ? BrandTokens.darkSurface
+                                                  .withValues(
+                                                  alpha: _kCardAndHeaderOpacity,
+                                                )
+                                              : Colors.white.withValues(
+                                                  alpha: _kCardOpacityLight,
+                                                ),
+                                          borderRadius:
+                                              const BorderRadius.vertical(
+                                            top: Radius.circular(
+                                              _kCardRadius,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              flex: 3,
+                                              child: Text(
+                                                'Candidate',
+                                                style: GoogleFonts.poppins(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 14,
+                                                  color:
+                                                      themeProvider.isDarkMode
+                                                          ? Colors.white70
+                                                          : Colors.black87,
+                                                ),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              flex: 1,
+                                              child: Center(
+                                                child: Text(
+                                                  'Gender',
+                                                  style: GoogleFonts.poppins(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 14,
+                                                    color:
+                                                        themeProvider.isDarkMode
+                                                            ? Colors.white70
+                                                            : Colors.black87,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              flex: 1,
+                                              child: Center(
+                                                child: Text(
+                                                  'CV Score',
+                                                  style: GoogleFonts.poppins(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 14,
+                                                    color:
+                                                        themeProvider.isDarkMode
+                                                            ? Colors.white70
+                                                            : Colors.black87,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              flex: 2,
+                                              child: Text(
+                                                'Role',
+                                                style: GoogleFonts.poppins(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 14,
+                                                  color:
+                                                      themeProvider.isDarkMode
+                                                          ? Colors.white70
+                                                          : Colors.black87,
+                                                ),
+                                              ),
+                                            ),
+                                            Expanded(
+                                              flex: 1,
+                                              child: Center(
+                                                child: Text(
+                                                  'Screening',
+                                                  style: GoogleFonts.poppins(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 14,
+                                                    color:
+                                                        themeProvider.isDarkMode
+                                                            ? Colors.white70
+                                                            : Colors.black87,
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 160),
+                                          ],
                                         ),
                                       ),
-                                      Text(
-                                        "${cvReviews.length} candidates reviewed",
-                                        style: GoogleFonts.inter(
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.grey.shade400
-                                              : Colors.grey.shade600,
-                                          fontSize: 14,
+                                      Divider(
+                                        height: 1,
+                                        color: themeProvider.isDarkMode
+                                            ? Colors.white.withValues(
+                                                alpha: 0.1,
+                                              )
+                                            : Colors.black.withValues(
+                                                alpha: 0.1,
+                                              ),
+                                      ),
+                                      SizedBox(
+                                        height: 420,
+                                        child: ListView.builder(
+                                          itemCount: displayedCVs.length,
+                                          itemBuilder: (context, index) {
+                                            final review = displayedCVs[index];
+                                            final appId =
+                                                review['application_id']
+                                                        as int? ??
+                                                    review['application_id'];
+                                            final id =
+                                                appId is int ? appId : index;
+                                            final isExpanded =
+                                                _expandedIds.contains(id);
+                                            final hasScore = review.containsKey(
+                                                  'cv_score',
+                                                ) &&
+                                                review['cv_score'] != null;
+                                            final score = hasScore
+                                                ? (review['cv_score'] ?? 0)
+                                                    .toDouble()
+                                                : 0.0;
+                                            final cvUrl =
+                                                review['cv_url'] as String?;
+                                            final isLast = index ==
+                                                displayedCVs.length - 1;
+                                            final screeningOutcome =
+                                                review['screening_outcome']
+                                                        as String? ??
+                                                    'Screened';
+                                            final requisitionTitle =
+                                                review['requisition_title']
+                                                        as String? ??
+                                                    '—';
+                                            return Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: _kMainPadding,
+                                                    vertical: _kSmallGap,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        themeProvider.isDarkMode
+                                                            ? BrandTokens
+                                                                .darkSurface
+                                                                .withValues(
+                                                                alpha:
+                                                                    _kCardAndHeaderOpacity,
+                                                              )
+                                                            : Colors.white
+                                                                .withValues(
+                                                                alpha:
+                                                                    _kCardOpacityLight,
+                                                              ),
+                                                    borderRadius: isLast &&
+                                                            !isExpanded
+                                                        ? const BorderRadius
+                                                            .vertical(
+                                                            bottom:
+                                                                Radius.circular(
+                                                              BrandTokens
+                                                                  .cardRadius,
+                                                            ),
+                                                          )
+                                                        : null,
+                                                    border: isLast &&
+                                                            !isExpanded
+                                                        ? null
+                                                        : Border(
+                                                            bottom: BorderSide(
+                                                              color: themeProvider
+                                                                      .isDarkMode
+                                                                  ? Colors.white
+                                                                      .withValues(
+                                                                      alpha:
+                                                                          0.15,
+                                                                    )
+                                                                  : Colors.black
+                                                                      .withValues(
+                                                                      alpha:
+                                                                          0.12,
+                                                                    ),
+                                                              width: 1,
+                                                            ),
+                                                          ),
+                                                  ),
+                                                  child: Row(
+                                                    children: [
+                                                      IconButton(
+                                                        icon: Icon(
+                                                          isExpanded
+                                                              ? Icons
+                                                                  .expand_less
+                                                              : Icons
+                                                                  .expand_more,
+                                                          color: themeProvider
+                                                                  .isDarkMode
+                                                              ? Colors.white70
+                                                              : Colors.black54,
+                                                          size: 20,
+                                                        ),
+                                                        onPressed: () =>
+                                                            setState(() {
+                                                          if (isExpanded) {
+                                                            _expandedIds
+                                                                .remove(id);
+                                                          } else {
+                                                            _expandedIds
+                                                                .add(id);
+                                                          }
+                                                        }),
+                                                        padding:
+                                                            EdgeInsets.zero,
+                                                        constraints:
+                                                            const BoxConstraints(
+                                                          minWidth: 32,
+                                                          minHeight: 32,
+                                                        ),
+                                                      ),
+                                                      Expanded(
+                                                        flex: 2,
+                                                        child: Row(
+                                                          children: [
+                                                            Container(
+                                                              width: 36,
+                                                              height: 36,
+                                                              decoration:
+                                                                  const BoxDecoration(
+                                                                shape: BoxShape
+                                                                    .circle,
+                                                                color:
+                                                                    BrandTokens
+                                                                        .primary,
+                                                              ),
+                                                              child: const Icon(
+                                                                Icons.person,
+                                                                color: Colors
+                                                                    .white,
+                                                                size: 18,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(
+                                                              width: _kSmallGap,
+                                                            ),
+                                                            Expanded(
+                                                              child: Text(
+                                                                review['full_name'] ??
+                                                                    'Unknown',
+                                                                style:
+                                                                    GoogleFonts
+                                                                        .poppins(
+                                                                  fontSize: 13,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w500,
+                                                                  color: themeProvider
+                                                                          .isDarkMode
+                                                                      ? Colors
+                                                                          .white
+                                                                      : Colors
+                                                                          .black,
+                                                                ),
+                                                                maxLines: 1,
+                                                                overflow:
+                                                                    TextOverflow
+                                                                        .ellipsis,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      Expanded(
+                                                        flex: 1,
+                                                        child: Center(
+                                                          child: Container(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                              horizontal: 10,
+                                                              vertical: 6,
+                                                            ),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: BrandTokens
+                                                                  .primary
+                                                                  .withValues(
+                                                                alpha: (review['gender'] == null ||
+                                                                        review['gender'] ==
+                                                                            '' ||
+                                                                        review['gender'] ==
+                                                                            'N/A')
+                                                                    ? _kCardAndHeaderOpacity
+                                                                    : _kTranslucentOpacity,
+                                                              ),
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                BrandTokens
+                                                                    .cardRadius,
+                                                              ),
+                                                            ),
+                                                            child: Text(
+                                                              review['gender'] ??
+                                                                  'N/A',
+                                                              style: GoogleFonts
+                                                                  .poppins(
+                                                                fontSize: 10,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                color: Colors
+                                                                    .white,
+                                                              ),
+                                                              textAlign:
+                                                                  TextAlign
+                                                                      .center,
+                                                              maxLines: 1,
+                                                              overflow:
+                                                                  TextOverflow
+                                                                      .ellipsis,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      Expanded(
+                                                        flex: 1,
+                                                        child: Center(
+                                                          child: Row(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: [
+                                                              Icon(
+                                                                hasScore
+                                                                    ? Icons.star
+                                                                    : Icons
+                                                                        .star_border,
+                                                                color: themeProvider
+                                                                        .isDarkMode
+                                                                    ? (hasScore
+                                                                        ? Colors
+                                                                            .white
+                                                                        : Colors
+                                                                            .white70)
+                                                                    : Colors
+                                                                        .black,
+                                                                size: 16,
+                                                              ),
+                                                              const SizedBox(
+                                                                width: 4,
+                                                              ),
+                                                              Text(
+                                                                hasScore
+                                                                    ? '${score.toStringAsFixed(1)}%'
+                                                                    : '—',
+                                                                style:
+                                                                    GoogleFonts
+                                                                        .poppins(
+                                                                  fontSize: 12,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                  color: themeProvider
+                                                                          .isDarkMode
+                                                                      ? (hasScore
+                                                                          ? Colors
+                                                                              .white
+                                                                          : Colors
+                                                                              .white70)
+                                                                      : Colors
+                                                                          .black,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      Expanded(
+                                                        flex: 2,
+                                                        child: Tooltip(
+                                                          message:
+                                                              requisitionTitle,
+                                                          child: Text(
+                                                            requisitionTitle,
+                                                            style: GoogleFonts
+                                                                .poppins(
+                                                              fontSize: 12,
+                                                              color: themeProvider
+                                                                      .isDarkMode
+                                                                  ? Colors
+                                                                      .white70
+                                                                  : Colors
+                                                                      .black87,
+                                                            ),
+                                                            maxLines: 1,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      Expanded(
+                                                        flex: 1,
+                                                        child: Center(
+                                                          child: Container(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                              horizontal: 8,
+                                                              vertical: 4,
+                                                            ),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color: screeningOutcome
+                                                                      .toLowerCase()
+                                                                      .contains(
+                                                                        'hold',
+                                                                      )
+                                                                  ? Colors
+                                                                      .orange
+                                                                      .withValues(
+                                                                      alpha:
+                                                                          0.9,
+                                                                    )
+                                                                  : Colors.green
+                                                                      .withValues(
+                                                                      alpha:
+                                                                          0.9,
+                                                                    ),
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                BrandTokens
+                                                                    .cardRadius,
+                                                              ),
+                                                            ),
+                                                            child: Text(
+                                                              screeningOutcome,
+                                                              style: GoogleFonts
+                                                                  .poppins(
+                                                                fontSize: 10,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                                color: Colors
+                                                                    .white,
+                                                              ),
+                                                              textAlign:
+                                                                  TextAlign
+                                                                      .center,
+                                                              maxLines: 1,
+                                                              overflow:
+                                                                  TextOverflow
+                                                                      .ellipsis,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      SizedBox(
+                                                        width: 48,
+                                                        child: ElevatedButton(
+                                                          onPressed: () =>
+                                                              _showCVAnalysis(
+                                                                  review),
+                                                          style: ElevatedButton
+                                                              .styleFrom(
+                                                            backgroundColor:
+                                                                BrandTokens
+                                                                    .primary,
+                                                            foregroundColor:
+                                                                Colors.white,
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                              horizontal: 8,
+                                                              vertical: 8,
+                                                            ),
+                                                            minimumSize:
+                                                                Size.zero,
+                                                            shape:
+                                                                RoundedRectangleBorder(
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                BrandTokens
+                                                                    .cardRadius,
+                                                              ),
+                                                            ),
+                                                            elevation: 2,
+                                                          ),
+                                                          child: Icon(
+                                                            Icons.analytics,
+                                                            size: 14,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                      SizedBox(
+                                                        width: 100,
+                                                        child: ElevatedButton(
+                                                          onPressed: cvUrl !=
+                                                                      null &&
+                                                                  cvUrl
+                                                                      .isNotEmpty
+                                                              ? () =>
+                                                                  _previewCV(
+                                                                      review)
+                                                              : null,
+                                                          style: ElevatedButton
+                                                              .styleFrom(
+                                                            backgroundColor: cvUrl !=
+                                                                        null &&
+                                                                    cvUrl
+                                                                        .isNotEmpty
+                                                                ? BrandTokens
+                                                                    .primary
+                                                                : (themeProvider
+                                                                        .isDarkMode
+                                                                    ? BrandTokens
+                                                                        .darkSurface
+                                                                        .withValues(
+                                                                        alpha:
+                                                                            _kCardAndHeaderOpacity,
+                                                                      )
+                                                                    : Colors
+                                                                        .grey
+                                                                        .shade300
+                                                                        .withValues(
+                                                                        alpha:
+                                                                            _kCardOpacityLight,
+                                                                      )),
+                                                            foregroundColor:
+                                                                Colors.white,
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                              horizontal: 8,
+                                                              vertical: 8,
+                                                            ),
+                                                            minimumSize:
+                                                                Size.zero,
+                                                            shape:
+                                                                RoundedRectangleBorder(
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                BrandTokens
+                                                                    .cardRadius,
+                                                              ),
+                                                            ),
+                                                            elevation: cvUrl !=
+                                                                        null &&
+                                                                    cvUrl
+                                                                        .isNotEmpty
+                                                                ? 2
+                                                                : 0,
+                                                          ),
+                                                          child: Row(
+                                                            mainAxisSize:
+                                                                MainAxisSize
+                                                                    .min,
+                                                            children: [
+                                                              Icon(
+                                                                Icons
+                                                                    .remove_red_eye,
+                                                                size: 14,
+                                                              ),
+                                                              const SizedBox(
+                                                                width: 4,
+                                                              ),
+                                                              Text(
+                                                                'Preview',
+                                                                style:
+                                                                    GoogleFonts
+                                                                        .poppins(
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w600,
+                                                                  fontSize: 11,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                if (isExpanded)
+                                                  _buildMatchBreakdown(
+                                                    review,
+                                                    themeProvider,
+                                                  ),
+                                              ],
+                                            );
+                                          },
                                         ),
                                       ),
                                     ],
                                   ),
-                                  const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: Colors.redAccent.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      "Active Reviews",
-                                      style: GoogleFonts.inter(
-                                        color: Colors.redAccent,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-
-                            // Grid of CV reviews
-                            Expanded(
-                              child: GridView.builder(
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: crossAxisCount,
-                                  mainAxisSpacing: 20,
-                                  crossAxisSpacing: 20,
-                                  childAspectRatio: 0.75,
                                 ),
-                                itemCount: cvReviews.length,
-                                itemBuilder: (_, index) {
-                                  final review = cvReviews[index];
-                                  final score =
-                                      (review['cv_score'] ?? 0).toDouble();
-                                  final scoreColor = getScoreColor(score);
-                                  final scoreLabel = getScoreLabel(score);
-
-                                  final cvParser =
-                                      review['cv_parser_result'] ?? {};
-                                  final skills = cvParser['skills'] ?? [];
-                                  final education = cvParser['education'] ?? [];
-                                  final workExp =
-                                      cvParser['work_experience'] ?? [];
-
-                                  return Container(
-                                    decoration: BoxDecoration(
-                                      color: (themeProvider.isDarkMode
-                                              ? const Color(0xFF14131E)
-                                              : Colors.white)
-                                          .withOpacity(0.9),
-                                      borderRadius: BorderRadius.circular(20),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.1),
-                                          blurRadius: 15,
-                                          offset: const Offset(0, 6),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Column(
-                                      children: [
-                                        // Header with score
-                                        Container(
-                                          padding: const EdgeInsets.all(20),
-                                          decoration: BoxDecoration(
-                                            color: scoreColor.withOpacity(0.1),
-                                            borderRadius:
-                                                const BorderRadius.only(
-                                              topLeft: Radius.circular(20),
-                                              topRight: Radius.circular(20),
-                                            ),
-                                          ),
-                                          child: Row(
-                                            children: [
-                                              Stack(
-                                                alignment: Alignment.center,
-                                                children: [
-                                                  CircularPercentIndicator(
-                                                    radius: 30,
-                                                    lineWidth: 6,
-                                                    percent: (score / 100)
-                                                        .clamp(0.0, 1.0),
-                                                    center: Text(
-                                                      "${score.toStringAsFixed(0)}%",
-                                                      style: GoogleFonts.inter(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 14,
-                                                        color: scoreColor,
-                                                      ),
-                                                    ),
-                                                    progressColor: scoreColor,
-                                                    backgroundColor:
-                                                        themeProvider.isDarkMode
-                                                            ? Colors
-                                                                .grey.shade800
-                                                            : Colors
-                                                                .grey.shade200,
-                                                    circularStrokeCap:
-                                                        CircularStrokeCap.round,
-                                                  ),
-                                                ],
-                                              ),
-                                              const SizedBox(width: 16),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      review['full_name'] ??
-                                                          "Unknown Candidate",
-                                                      style: GoogleFonts.inter(
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        color: themeProvider
-                                                                .isDarkMode
-                                                            ? Colors.white
-                                                            : Colors.black87,
-                                                      ),
-                                                      maxLines: 1,
-                                                      overflow:
-                                                          TextOverflow.ellipsis,
-                                                    ),
-                                                    const SizedBox(height: 4),
-                                                    Container(
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          horizontal: 8,
-                                                          vertical: 4),
-                                                      decoration: BoxDecoration(
-                                                        color: scoreColor
-                                                            .withOpacity(0.2),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(6),
-                                                      ),
-                                                      child: Text(
-                                                        scoreLabel,
-                                                        style:
-                                                            GoogleFonts.inter(
-                                                          color: scoreColor,
-                                                          fontSize: 10,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-
-                                        Expanded(
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(20),
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                // CV Fit Score
-                                                Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Row(
-                                                      mainAxisAlignment:
-                                                          MainAxisAlignment
-                                                              .spaceBetween,
-                                                      children: [
-                                                        Text(
-                                                          "CV Fit Score",
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            fontSize: 12,
-                                                            color: themeProvider
-                                                                    .isDarkMode
-                                                                ? Colors.grey
-                                                                    .shade400
-                                                                : Colors.grey
-                                                                    .shade700,
-                                                          ),
-                                                        ),
-                                                        Text(
-                                                          "${score.toStringAsFixed(1)}%",
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            fontSize: 12,
-                                                            color: scoreColor,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                    const SizedBox(height: 8),
-                                                    LinearPercentIndicator(
-                                                      lineHeight: 6,
-                                                      percent: (score / 100)
-                                                          .clamp(0.0, 1.0),
-                                                      backgroundColor:
-                                                          themeProvider
-                                                                  .isDarkMode
-                                                              ? Colors
-                                                                  .grey.shade800
-                                                              : Colors.grey
-                                                                  .shade200,
-                                                      progressColor: scoreColor,
-                                                      barRadius:
-                                                          const Radius.circular(
-                                                              3),
-                                                    ),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 16),
-
-                                                // Skills
-                                                if (skills.isNotEmpty)
-                                                  Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        "Skills",
-                                                        style:
-                                                            GoogleFonts.inter(
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          fontSize: 12,
-                                                          color: themeProvider
-                                                                  .isDarkMode
-                                                              ? Colors
-                                                                  .grey.shade400
-                                                              : Colors.grey
-                                                                  .shade700,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 8),
-                                                      Wrap(
-                                                        spacing: 6,
-                                                        runSpacing: 6,
-                                                        children: skills
-                                                            .take(4)
-                                                            .map<Widget>(
-                                                                (s) =>
-                                                                    Container(
-                                                                      padding: const EdgeInsets
-                                                                          .symmetric(
-                                                                          horizontal:
-                                                                              8,
-                                                                          vertical:
-                                                                              4),
-                                                                      decoration:
-                                                                          BoxDecoration(
-                                                                        color: Colors
-                                                                            .redAccent
-                                                                            .withOpacity(0.1),
-                                                                        borderRadius:
-                                                                            BorderRadius.circular(12),
-                                                                      ),
-                                                                      child:
-                                                                          Text(
-                                                                        s.toString(),
-                                                                        style: GoogleFonts
-                                                                            .inter(
-                                                                          fontSize:
-                                                                              10,
-                                                                          color:
-                                                                              Colors.redAccent,
-                                                                          fontWeight:
-                                                                              FontWeight.w500,
-                                                                        ),
-                                                                      ),
-                                                                    ))
-                                                            .toList(),
-                                                      ),
-                                                      if (skills.length > 4)
-                                                        Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .only(top: 4),
-                                                          child: Text(
-                                                            "+${skills.length - 4} more",
-                                                            style: GoogleFonts
-                                                                .inter(
-                                                              fontSize: 10,
-                                                              color: themeProvider
-                                                                      .isDarkMode
-                                                                  ? Colors.grey
-                                                                      .shade500
-                                                                  : Colors.grey
-                                                                      .shade500,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      const SizedBox(
-                                                          height: 12),
-                                                    ],
-                                                  ),
-
-                                                // Education
-                                                if (education.isNotEmpty)
-                                                  Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        "Education",
-                                                        style:
-                                                            GoogleFonts.inter(
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                          fontSize: 12,
-                                                          color: themeProvider
-                                                                  .isDarkMode
-                                                              ? Colors
-                                                                  .grey.shade400
-                                                              : Colors.grey
-                                                                  .shade700,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 6),
-                                                      ...education
-                                                          .take(2)
-                                                          .map<Widget>(
-                                                              (edu) => Padding(
-                                                                    padding: const EdgeInsets
-                                                                        .only(
-                                                                        bottom:
-                                                                            4),
-                                                                    child: Text(
-                                                                      "• ${edu['degree'] ?? ''} - ${edu['institution'] ?? ''}",
-                                                                      style: GoogleFonts
-                                                                          .inter(
-                                                                        fontSize:
-                                                                            10,
-                                                                        color: themeProvider.isDarkMode
-                                                                            ? Colors.grey.shade500
-                                                                            : Colors.grey.shade600,
-                                                                      ),
-                                                                      maxLines:
-                                                                          1,
-                                                                      overflow:
-                                                                          TextOverflow
-                                                                              .ellipsis,
-                                                                    ),
-                                                                  )),
-                                                      const SizedBox(
-                                                          height: 12),
-                                                    ],
-                                                  ),
-
-                                                // Work Experience
-                                                if (workExp.isNotEmpty)
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Text(
-                                                          "Experience",
-                                                          style:
-                                                              GoogleFonts.inter(
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            fontSize: 12,
-                                                            color: themeProvider
-                                                                    .isDarkMode
-                                                                ? Colors.grey
-                                                                    .shade400
-                                                                : Colors.grey
-                                                                    .shade700,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(
-                                                            height: 6),
-                                                        ...workExp
-                                                            .take(2)
-                                                            .map<Widget>(
-                                                                (exp) =>
-                                                                    Padding(
-                                                                      padding: const EdgeInsets
-                                                                          .only(
-                                                                          bottom:
-                                                                              4),
-                                                                      child:
-                                                                          Text(
-                                                                        "• ${exp['role'] ?? ''} at ${exp['company'] ?? ''}",
-                                                                        style: GoogleFonts
-                                                                            .inter(
-                                                                          fontSize:
-                                                                              10,
-                                                                          color: themeProvider.isDarkMode
-                                                                              ? Colors.grey.shade500
-                                                                              : Colors.grey.shade600,
-                                                                        ),
-                                                                        maxLines:
-                                                                            1,
-                                                                        overflow:
-                                                                            TextOverflow.ellipsis,
-                                                                      ),
-                                                                    )),
-                                                      ],
-                                                    ),
-                                                  ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
                               ),
                             ),
                           ],

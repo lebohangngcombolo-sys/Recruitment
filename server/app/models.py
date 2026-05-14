@@ -1,9 +1,9 @@
 from app.extensions import db
 from datetime import datetime
-from sqlalchemy.dialects.postgresql import JSON
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSON, JSONB
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 import enum
+import uuid
 
 # ------------------- USER -------------------
 class User(db.Model):
@@ -11,6 +11,7 @@ class User(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(150), unique=True, nullable=False)
+    username = db.Column(db.String(50), unique=True, nullable=True)  # For @mentions
     password = db.Column(db.String(200), nullable=False)
     role = db.Column(db.String(50), default='candidate')
 
@@ -23,6 +24,7 @@ class User(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     first_login = db.Column(db.Boolean, default=True)
+    last_login_at = db.Column(db.DateTime, nullable=True)
 
     # MFA Fields
     mfa_secret = db.Column(db.String(32), nullable=True)
@@ -86,15 +88,16 @@ class User(db.Model):
             "id": self.id,
             "email": self.email,
             "role": self.role,
-            "profile": self.profile,
-            "settings": self.settings,
+            "profile": self.profile if self.profile is not None else {},
+            "settings": self.settings if self.settings is not None else {},
             "is_verified": self.is_verified,
-            "enrollment_completed": self.enrollment_completed,
-            "dark_mode": self.dark_mode,
-            "is_active": self.is_active,
-            "created_at": self.created_at.isoformat(),
-            "first_login": self.first_login,
-            "mfa_enabled": self.mfa_enabled
+            "enrollment_completed": getattr(self, "enrollment_completed", False),
+            "dark_mode": getattr(self, "dark_mode", False),
+            "is_active": getattr(self, "is_active", True),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "first_login": getattr(self, "first_login", True),
+            "last_login_at": self.last_login_at.isoformat() if getattr(self, "last_login_at", None) else None,
+            "mfa_enabled": getattr(self, "mfa_enabled", False),
         }
 
     def to_dict_with_presence(self):
@@ -169,13 +172,56 @@ class JobActivityLog(db.Model):
         }
 
 
+# ------------------- TEST PACK -------------------
+class TestPack(db.Model):
+    """
+    Reusable assessment pack (technical or role-specific) for requisitions.
+    questions: list of {"question_text", "options", "correct_option", "weight"?}
+    """
+    __tablename__ = 'test_packs'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    category = db.Column(db.String(50), nullable=False)  # 'technical' | 'role-specific'
+    description = db.Column(db.Text, default="")
+    questions = db.Column(MutableList.as_mutable(JSON), default=list)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+
+    requisitions = db.relationship(
+        'Requisition',
+        backref=db.backref('test_pack', lazy=True),
+        foreign_keys='Requisition.test_pack_id'
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "category": self.category,
+            "description": self.description or "",
+            "questions": self.questions or [],
+            "question_count": len(self.questions or []),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+        }
+
+
 # ------------------- REQUISITION -------------------
 class Requisition(db.Model):
     __tablename__ = 'requisitions'
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     description = db.Column(db.Text)
+    company = db.Column(db.String(150), default="")
+    location = db.Column(db.String(150), default="")
+    salary_min = db.Column(db.Float, nullable=True)
+    salary_max = db.Column(db.Float, nullable=True)
+    salary_currency = db.Column(db.String(10), default="ZAR")
+    salary_period = db.Column(db.String(20), default="monthly")
     job_summary = db.Column(db.Text, default="")
+    employment_type = db.Column(db.String(50), nullable=False, default="full_time")
     responsibilities = db.Column(JSON, default=[])
     company_details = db.Column(db.Text, default="")
     qualifications = db.Column(JSON, default=[])
@@ -183,8 +229,14 @@ class Requisition(db.Model):
     required_skills = db.Column(JSON, default=[])
     min_experience = db.Column(db.Float, default=0)
     knockout_rules = db.Column(JSON, default=[])
-    weightings = db.Column(JSON, default={'cv': 60, 'assessment': 40})
+    weightings = db.Column(JSON, default={
+        "cv": 60,
+        "assessment": 40,
+        "interview": 0,
+        "references": 0
+    })
     assessment_pack = db.Column(JSON, default={"questions": []})
+    test_pack_id = db.Column(db.Integer, db.ForeignKey('test_packs.id'), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     published_on = db.Column(db.DateTime, default=datetime.utcnow)
@@ -195,14 +247,48 @@ class Requisition(db.Model):
     deleted_at = db.Column(db.DateTime, nullable=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Additional display fields for job listing (non-duplicating)
+    salary_range = db.Column(db.String(100), default="", nullable=True)  # e.g. R850k - R1.2m
+    application_deadline = db.Column(db.DateTime, nullable=True)
+    banner = db.Column(db.String(500), nullable=True)  # company logo / image URL
+    # Preferred start window for the role
+    start_date_from = db.Column(db.Date, nullable=True)
+    start_date_to = db.Column(db.Date, nullable=True)
+    # Minimum years of experience per skill (e.g. {"Python": 3, "SQL": 2})
+    min_years_per_skill = db.Column(JSON, default=dict)
+    # Must-have certifications (e.g. ["AWS Certified", "PMP"])
+    required_certifications = db.Column(JSON, default=list)
+
+    # Job approval workflow: pending | approved | rejected
+    approval_status = db.Column(db.String(20), default='pending', nullable=False)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    rejection_reason = db.Column(db.Text, nullable=True)
+
+    # Recruitee ATS Integration fields
+    recruitee_id = db.Column(db.String(100), nullable=True, index=True)
+    sync_to_recruitee = db.Column(db.Boolean, default=False, nullable=False)
+    last_synced_at = db.Column(db.DateTime, nullable=True)
+    last_synced_source = db.Column(db.String(20), nullable=True)  # 'local' or 'recruitee'
+
     applications = db.relationship('Application', back_populates='requisition', lazy=True)
+    creator = db.relationship('User', foreign_keys=[created_by], lazy=True)
+    approver = db.relationship('User', foreign_keys=[approved_by], lazy=True)
 
     def to_dict(self):
+        creator = self.creator
         return {
             "id": self.id,
             "title": self.title,
             "description": self.description,
+            "company": self.company,
+            "location": self.location,
+            "salary_min": self.salary_min,
+            "salary_max": self.salary_max,
+            "salary_currency": self.salary_currency,
+            "salary_period": self.salary_period,
             "job_summary": self.job_summary,
+            "employment_type": self.employment_type,
             "responsibilities": self.responsibilities,
             "company_details": self.company_details,
             "qualifications": self.qualifications,
@@ -212,13 +298,46 @@ class Requisition(db.Model):
             "knockout_rules": self.knockout_rules,
             "weightings": self.weightings,
             "assessment_pack": self.assessment_pack,
+            "test_pack_id": self.test_pack_id,
+            "test_pack": self.test_pack.to_dict() if self.test_pack and not self.test_pack.deleted_at else None,
             "created_by": self.created_by,
+            "created_by_user": {
+                "id": creator.id,
+                "name": creator.full_name,
+                "email": creator.email,
+                "role": creator.role,
+            } if creator else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "published_on": self.published_on.isoformat(),
             "vacancy": self.vacancy,
             "is_active": self.is_active,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+            "location": self.location or "",
+            "employment_type": self.employment_type or "Full Time",
+            "salary_range": self.salary_range or "",
+            "application_deadline": self.application_deadline.isoformat() if self.application_deadline else None,
+            "company": self.company or "",
+            "banner": self.banner,
+            "start_date_from": self.start_date_from.isoformat() if self.start_date_from else None,
+            "start_date_to": self.start_date_to.isoformat() if self.start_date_to else None,
+            "min_years_per_skill": self.min_years_per_skill if isinstance(self.min_years_per_skill, dict) else ({}),
+            "required_certifications": self.required_certifications if isinstance(self.required_certifications, list) else [],
+            "approval_status": getattr(self, "approval_status", "pending"),
+            "approved_at": self.approved_at.isoformat() if getattr(self, "approved_at", None) else None,
+            "approved_by": getattr(self, "approved_by", None),
+            "rejection_reason": getattr(self, "rejection_reason", None),
+            "approved_by_user": {
+                "id": self.approver.id,
+                "name": self.approver.full_name,
+                "email": self.approver.email,
+            } if getattr(self, "approver", None) else None,
+            # Recruitee ATS Integration
+            "recruitee_id": self.recruitee_id,
+            "sync_to_recruitee": self.sync_to_recruitee,
+            "last_synced_at": self.last_synced_at.isoformat() if self.last_synced_at else None,
+            "last_synced_source": self.last_synced_source,
+            "recruitee_url": self.get_recruitee_url(),
         }
     
     def to_dict_with_stats(self):
@@ -247,6 +366,13 @@ class Requisition(db.Model):
         })
         
         return base_dict
+    
+    def get_recruitee_url(self):
+        """Get the public Recruitee job URL if synced"""
+        if not self.recruitee_id:
+            return None
+        # Using subdomain from company_id (khonology1.recruitee.com)
+        return f"https://khonology1.recruitee.com/o/{self.recruitee_id}"
 
 # ------------------- CANDIDATE -------------------
 class Candidate(db.Model):
@@ -259,6 +385,7 @@ class Candidate(db.Model):
     dob = db.Column(db.Date)
     address = db.Column(db.String(250))
     gender = db.Column(db.String(50), nullable=True)
+    ethnicity = db.Column(db.String(50), nullable=True)
     bio = db.Column(db.Text, nullable=True)
     title = db.Column(db.String(100), nullable=True)
     location = db.Column(db.String(150), nullable=True)
@@ -287,12 +414,23 @@ class Candidate(db.Model):
     notifications_email = db.Column(db.Boolean, default=True)
     notifications_push = db.Column(db.Boolean, default=False)
 
-    # 🔗 Relationships
+    # 🔗 Cross-Database Synchronization Fields (CV Analyser Integration)
+    analyser_id = db.Column(db.String(255), nullable=True, index=True)  # External analysis ID
+    cv_analysis_status = db.Column(db.String(20), nullable=True)  # pending/processing/completed/failed
+    cv_analysis_promoted_at = db.Column(db.DateTime, nullable=True)  # When data was promoted
+    last_cv_analysis_id = db.Column(db.String(255), nullable=True)  # Link to local CVAnalysis (cross-database aware)
+
+    # Recruitee ATS Integration fields
+    recruitee_id = db.Column(db.String(100), nullable=True, index=True)
+    sync_to_recruitee = db.Column(db.Boolean, default=False, nullable=False)
+    last_synced_at = db.Column(db.DateTime, nullable=True)
+    last_synced_source = db.Column(db.String(20), nullable=True)  # 'local' or 'recruitee'
+
+    # Relationships
     user = db.relationship('User', back_populates='candidates')
     applications = db.relationship('Application', back_populates='candidate', lazy=True)
     interviews = db.relationship('Interview', back_populates='candidate', lazy=True)
     assessments = db.relationship('AssessmentResult', back_populates='candidate', lazy=True)
-    analyses = db.relationship('CVAnalysis', back_populates='candidate', lazy=True)
 
     def to_dict(self):
         """Return candidate data for API responses."""
@@ -327,7 +465,17 @@ class Candidate(db.Model):
             "dark_mode": self.dark_mode,
             "notifications_email": self.notifications_email,
             "notifications_push": self.notifications_push,
-            "overall_interview_score": self.overall_interview_score,  # Add this
+            "overall_interview_score": self.overall_interview_score,
+            # 🔗 Cross-Database Sync Fields
+            "analyser_id": self.analyser_id,
+            "cv_analysis_status": self.cv_analysis_status,
+            "cv_analysis_promoted_at": self.cv_analysis_promoted_at.isoformat() if self.cv_analysis_promoted_at else None,
+            "last_cv_analysis_id": self.last_cv_analysis_id,
+            # Recruitee ATS Integration
+            "recruitee_id": self.recruitee_id,
+            "sync_to_recruitee": self.sync_to_recruitee,
+            "last_synced_at": self.last_synced_at.isoformat() if self.last_synced_at else None,
+            "last_synced_source": self.last_synced_source,
         }
 
 # ------------------- APPLICATION -------------------
@@ -344,9 +492,12 @@ class Application(db.Model):
     cv_parser_result = db.Column(JSON, default={})
     assessment_score = db.Column(db.Float, default=0)
     overall_score = db.Column(db.Float, default=0)
-    recommendation = db.Column(db.String(50))
+    scoring_breakdown = db.Column(JSON, default={})
+    knockout_rule_violations = db.Column(JSON, default=[])
+    recommendation = db.Column(db.String(500))
     assessed_date = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     last_saved_screen = db.Column(db.String(50))
     saved_at = db.Column(db.DateTime)
     last_interview_date = db.Column(db.DateTime, nullable=True)
@@ -371,9 +522,12 @@ class Application(db.Model):
             "cv_parser_result": self.cv_parser_result,
             "assessment_score": self.assessment_score,
             "overall_score": self.overall_score,
+            "scoring_breakdown": self.scoring_breakdown,
+            "knockout_rule_violations": self.knockout_rule_violations,
             "recommendation": self.recommendation,
             "assessed_date": self.assessed_date.isoformat() if self.assessed_date else None,
             "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "assessment_results": [ar.to_dict() for ar in self.assessment_results],
             "last_saved_screen": self.last_saved_screen,
             "saved_at": self.saved_at.isoformat() if self.saved_at else None,
@@ -425,6 +579,12 @@ class Interview(db.Model):
     interview_type = db.Column(db.String(50), nullable=True)
     meeting_link = db.Column(db.String(255), nullable=True)
     status = db.Column(db.String(50), default='scheduled')  # Add this line if not present
+    # Admin approval workflow: pending | approved | rejected
+    # Default to approved for backward compatibility with existing rows/clients.
+    approval_status = db.Column(db.String(20), default='approved', nullable=False)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    approved_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    rejection_reason = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)  # Add this
     
@@ -446,6 +606,7 @@ class Interview(db.Model):
     hiring_manager = db.relationship('User', foreign_keys=[hiring_manager_id], back_populates='managed_interviews')
 
     cancelled_by_user = db.relationship('User', foreign_keys=[cancelled_by], back_populates='cancelled_interviews')
+    approver = db.relationship('User', foreign_keys=[approved_by], lazy=True)
 
 
     def to_dict(self):
@@ -458,6 +619,17 @@ class Interview(db.Model):
             "interview_type": self.interview_type,
             "meeting_link": self.meeting_link,
             "status": self.status,
+            "approval_status": self.approval_status,
+            "approved_at": self.approved_at.isoformat() if getattr(self, "approved_at", None) else None,
+            "approved_by": getattr(self, "approved_by", None),
+            "rejection_reason": getattr(self, "rejection_reason", None),
+            "approved_by_user": {
+                "id": self.approver.id,
+                "name": getattr(self.approver, "full_name", None)
+                or f"{(self.approver.profile or {}).get('first_name', '')} {(self.approver.profile or {}).get('last_name', '')}".strip()
+                or self.approver.email,
+                "email": self.approver.email,
+            } if getattr(self, "approver", None) else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "google_calendar_event_id": self.google_calendar_event_id,
@@ -526,17 +698,96 @@ class Interview(db.Model):
         
         return feedback_stats
 
+
+# ------------------- INTERVIEW SLOT (HM availability for smart scheduling) -------------------
+class InterviewSlot(db.Model):
+    """Available time slots defined by hiring manager for interview scheduling."""
+    __tablename__ = 'interview_slots'
+    id = db.Column(db.Integer, primary_key=True)
+    hiring_manager_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    requisition_id = db.Column(db.Integer, db.ForeignKey('requisitions.id'), nullable=True)  # null = any job
+    start_time = db.Column(db.DateTime, nullable=False)
+    end_time = db.Column(db.DateTime, nullable=False)
+    meeting_link = db.Column(db.String(500), nullable=True)
+    interview_type = db.Column(db.String(50), default='Online')
+    interview_id = db.Column(db.Integer, db.ForeignKey('interviews.id'), nullable=True)  # set when booked
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    hiring_manager = db.relationship('User', backref='interview_slots')
+    requisition = db.relationship('Requisition', backref='interview_slots')
+    interview = db.relationship('Interview', backref=db.backref('interview_slot', uselist=False))
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "hiring_manager_id": self.hiring_manager_id,
+            "requisition_id": self.requisition_id,
+            "start_time": self.start_time.isoformat() if self.start_time else None,
+            "end_time": self.end_time.isoformat() if self.end_time else None,
+            "meeting_link": self.meeting_link,
+            "interview_type": self.interview_type,
+            "interview_id": self.interview_id,
+            "is_available": self.interview_id is None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+# ------------------- CV RECORD -------------------
+# Updated CVRecord model to match actual database schema
+class CVRecord(db.Model):
+    __tablename__ = "cv_records"
+    __bind_key__ = 'analyser'  # Use analyser database binding
+    __table_args__ = {'schema': 'cv_analyser'}
+    
+    # Use UUID primary key to match the new schema
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    
+    # CV content (based on actual schema)
+    cv_text = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(20), nullable=False, default="pending")
+    
+    # Timestamps (based on actual schema)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 # ------------------- CV ANALYSIS -------------------
 class CVAnalysis(db.Model):
     __tablename__ = "cv_analyses"
-    id = db.Column(db.Integer, primary_key=True)
-    candidate_id = db.Column(db.Integer, db.ForeignKey('candidates.id'), nullable=False)
+    __bind_key__ = 'analyser'  # Use analyser database binding
+    __table_args__ = {'schema': 'cv_analyser'}
+    
+    # Use UUID primary key to match the HF backend schema
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    
+    # Reference to CV record (UUID) - can be null for legacy records
+    record_id = db.Column(db.String(36), db.ForeignKey('cv_analyser.cv_records.id'), nullable=True)
+    
+    # Recruitment system references
+    candidate_id = db.Column(db.Integer, nullable=True)
+    application_id = db.Column(db.Integer, nullable=True)
+    requisition_id = db.Column(db.Integer, nullable=True)
+    
+    # External analysis ID for cross-service tracking
+    external_analysis_id = db.Column(db.String(255), nullable=True)
+    
+    # Analysis metadata
     job_description = db.Column(db.Text)
     cv_text = db.Column(db.Text)
+    status = db.Column(db.String(20), default="pending")
     result = db.Column(JSON, default={})
+    overall_score = db.Column(db.Float, nullable=True)
+    component_scores = db.Column(JSON, default={})
+    warnings = db.Column(JSON, default={})
+    extraction_metadata = db.Column(JSON, default={})
+    
+    # Timestamps
+    started_at = db.Column(db.DateTime, nullable=True)
+    finished_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-
-    candidate = db.relationship('Candidate', back_populates='analyses')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship to CV record
+    record = db.relationship('CVRecord', backref='analyses')
 
 
 # ------------------- NOTIFICATION -------------------
@@ -571,7 +822,7 @@ class Notification(db.Model):
             "type": self.type,
             "interview_id": self.interview_id,
             "is_read": self.is_read,
-            "created_at": self.created_at.isoformat()
+            "created_at": self.created_at.isoformat() if self.created_at else datetime.utcnow().isoformat()
         }
 
 # ------------------- VERIFICATION CODE -------------------
@@ -681,7 +932,7 @@ class Meeting(db.Model):
     description = db.Column(db.Text)
     start_time = db.Column(db.DateTime, nullable=False)
     end_time = db.Column(db.DateTime, nullable=False)
-    organizer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    organizer_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     participants = db.Column(JSONB, nullable=False, default=[])  # list of user emails or IDs
     meeting_link = db.Column(db.String(500))
     location = db.Column(db.String(500))
@@ -691,31 +942,51 @@ class Meeting(db.Model):
     cancelled = db.Column(db.Boolean, default=False)
     cancelled_at = db.Column(db.DateTime, nullable=True)
     cancelled_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    
+    # New fields for enhanced collaboration
+    scheduled_at = db.Column(db.DateTime, nullable=False)  # Alias for start_time
+    duration_minutes = db.Column(db.Integer, default=60)
+    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    thread_id = db.Column(db.Integer, db.ForeignKey('chat_threads.id'))
+    reminder_sent = db.Column(db.Boolean, default=False)
 
-    organizer = db.relationship("User", backref=db.backref("organized_meetings", lazy=True), foreign_keys=[organizer_id])
-
+    organizer = db.relationship("User", backref=db.backref("organized_meetings", lazy=True, cascade="all, delete-orphan"), foreign_keys=[organizer_id])
+    creator = db.relationship('User', foreign_keys=[created_by])
+    thread = db.relationship('ChatThread', backref='meetings')
+    
     def to_dict(self):
         return {
-            "id": self.id,
-            "title": self.title,
-            "description": self.description,
+            'id': self.id,
+            'title': self.title,
+            'description': self.description,
+            'scheduled_at': self.scheduled_at.isoformat() if self.scheduled_at else self.start_time.isoformat(),
+            'duration_minutes': self.duration_minutes,
+            'location': self.location,
+            'created_by': self.created_by,
+            'thread_id': self.thread_id,
+            'reminder_sent': self.reminder_sent,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'creator_name': self.creator.full_name if self.creator else None,
+            'participants': self.participants,
+            'meeting_link': self.meeting_link,
+            'meeting_type': self.meeting_type,
+            'cancelled': self.cancelled,
             "start_time": self.start_time.isoformat(),
             "end_time": self.end_time.isoformat(),
             "organizer_id": self.organizer_id,
             "organizer": {
                 "id": self.organizer.id,
+                "full_name": self.organizer.full_name,
                 "email": self.organizer.email,
-                "profile": self.organizer.profile
             } if self.organizer else None,
-            "participants": self.participants if isinstance(self.participants, list) else [],
+            "participants_list": self.participants,
             "meeting_link": self.meeting_link,
             "location": self.location,
             "meeting_type": self.meeting_type,
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "cancelled": self.cancelled,
             "cancelled_at": self.cancelled_at.isoformat() if self.cancelled_at else None,
-            "cancelled_by": self.cancelled_by
+            "cancelled_by": self.cancelled_by,
         }
 
 # ------------------- CHAT FEATURE MODELS -------------------
@@ -862,25 +1133,56 @@ class MessageReadStatus(db.Model):
 class UserPresence(db.Model):
     __tablename__ = 'user_presence'
     
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), primary_key=True)
-    status = db.Column(db.String(20), default='offline')  # 'online', 'away', 'offline'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    status = db.Column(db.String(20), default='offline')
     last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    socket_id = db.Column(db.String(100))
     is_typing = db.Column(db.Boolean, default=False)
-    typing_in_thread = db.Column(db.Integer, nullable=True)
-    socket_id = db.Column(db.String(100), nullable=True)
+    typing_in_thread = db.Column(db.Integer)
     
-    # Relationship
-    user = db.relationship('User', backref=db.backref('user_presence', uselist=False))
+    # Relationships
+    user = db.relationship('User', back_populates='presence')
 
-    
     def to_dict(self):
         return {
             'user_id': self.user_id,
             'status': self.status,
             'last_seen': self.last_seen.isoformat() if self.last_seen else None,
+            'socket_id': self.socket_id,
             'is_typing': self.is_typing,
             'typing_in_thread': self.typing_in_thread
         }
+
+
+class MessageMention(db.Model):
+    __tablename__ = 'message_mentions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    message_id = db.Column(db.Integer, db.ForeignKey('chat_messages.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    message = db.relationship('ChatMessage', backref='mentions')
+    user = db.relationship('User')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'message_id': self.message_id,
+            'user_id': self.user_id,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+# Association table for meeting participants
+meeting_participants = db.Table('meeting_participants',
+    db.Column('meeting_id', db.Integer, db.ForeignKey('meetings.id'), primary_key=True),
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True),
+    db.Column('status', db.String(20), default='pending'),  # accepted, declined, maybe
+    db.Column('notified_at', db.DateTime)
+)
         
 class OfferStatus(enum.Enum):
     DRAFT = "draft"
@@ -1128,3 +1430,108 @@ class InterviewReminder(db.Model):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
+
+
+class RecruiteeSyncHistory(db.Model):
+    """Audit log for all Recruitee sync attempts with retry support"""
+    __tablename__ = 'recruitee_sync_history'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    entity_type = db.Column(db.String(20), nullable=False)  # 'job' or 'candidate'
+    entity_id = db.Column(db.Integer, nullable=False)  # local requisition_id or candidate_id
+    recruitee_id = db.Column(db.String(100), nullable=True)  # Recruitee's ID
+    action = db.Column(db.String(20), nullable=False)  # 'create', 'update', 'delete', 'retry'
+    status = db.Column(db.String(20), nullable=False, default='pending')  # 'success', 'failed', 'pending', 'skipped'
+    error_message = db.Column(db.Text, nullable=True)
+    retry_count = db.Column(db.Integer, default=0)
+    max_retries = db.Column(db.Integer, default=3)
+    next_retry_at = db.Column(db.DateTime, nullable=True)
+    request_data = db.Column(JSONB, default=dict)
+    response_data = db.Column(JSONB, default=dict)
+    synced_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    
+    # Relationships
+    user = db.relationship('User', lazy=True)
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "entity_type": self.entity_type,
+            "entity_id": self.entity_id,
+            "recruitee_id": self.recruitee_id,
+            "action": self.action,
+            "status": self.status,
+            "error_message": self.error_message,
+            "retry_count": self.retry_count,
+            "max_retries": self.max_retries,
+            "next_retry_at": self.next_retry_at.isoformat() if self.next_retry_at else None,
+            "request_data": self.request_data,
+            "response_data": self.response_data,
+            "synced_by": self.synced_by,
+            "synced_by_user": {
+                "id": self.user.id,
+                "name": self.user.full_name,
+                "email": self.user.email
+            } if self.user else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None
+        }
+    
+    def should_retry(self):
+        """Check if this sync attempt should be retried"""
+        if self.status == 'success' or self.status == 'skipped':
+            return False
+        if self.retry_count >= self.max_retries:
+            return False
+        if self.next_retry_at and datetime.utcnow() < self.next_retry_at:
+            return False
+        return True
+    
+    def schedule_retry(self, minutes=None):
+        """Schedule next retry with exponential backoff"""
+        from datetime import timedelta
+        if minutes is None:
+            # Exponential backoff: 5min, 15min, 45min
+            minutes = 5 * (3 ** self.retry_count)
+        self.next_retry_at = datetime.utcnow() + timedelta(minutes=minutes)
+        self.retry_count += 1
+        self.status = 'pending'
+
+
+class RecruiteeWebhookLog(db.Model):
+    """Track all incoming Recruitee webhooks for debugging and idempotency"""
+    __tablename__ = 'recruitee_webhook_logs'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    event_id = db.Column(db.String(100), unique=True, nullable=False, index=True)  # Recruitee event ID
+    event_type = db.Column(db.String(50), nullable=False, index=True)
+    raw_payload = db.Column(JSONB, default=dict)
+    processed = db.Column(db.Boolean, default=False, nullable=False)
+    processing_status = db.Column(db.String(20), default='pending')  # pending, success, failed
+    error_message = db.Column(db.Text)
+    processed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "event_id": self.event_id,
+            "event_type": self.event_type,
+            "raw_payload": self.raw_payload,
+            "processed": self.processed,
+            "processing_status": self.processing_status,
+            "error_message": self.error_message,
+            "processed_at": self.processed_at.isoformat() if self.processed_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None
+        }
+    
+    def mark_processed(self, status='success', error=None):
+        """Mark webhook as processed with status"""
+        self.processed = True
+        self.processing_status = status
+        self.processed_at = datetime.utcnow()
+        if error:
+            self.error_message = error
+        db.session.commit()

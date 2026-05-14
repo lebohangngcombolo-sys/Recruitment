@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class CustomCard extends StatefulWidget {
   final String title;
@@ -29,8 +30,8 @@ class _CustomCardState extends State<CustomCard> {
   @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onEnter: (_) => setState(() => isHovered = true),
-      onExit: (_) => setState(() => isHovered = false),
+      onEnter: kIsWeb ? (_) => setState(() => isHovered = true) : null,
+      onExit: kIsWeb ? (_) => setState(() => isHovered = false) : null,
       child: GestureDetector(
         onTap: widget.onTap,
         child: AnimatedContainer(
@@ -44,22 +45,23 @@ class _CustomCardState extends State<CustomCard> {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      Colors.white.withOpacity(isHovered ? 0.1 : 0.05),
-                      Colors.white.withOpacity(isHovered ? 0.15 : 0.08)
+                      Colors.white.withValues(alpha: isHovered ? 0.1 : 0.05),
+                      Colors.white.withValues(alpha: isHovered ? 0.15 : 0.08)
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                    color: Colors.white.withOpacity(isHovered ? 0.25 : 0.15),
+                    color:
+                        Colors.white.withValues(alpha: isHovered ? 0.25 : 0.15),
                     width: 1.5,
                   ),
                   boxShadow: [
                     if (widget.shadow)
                       BoxShadow(
-                        color:
-                            Colors.black.withOpacity(isHovered ? 0.25 : 0.15),
+                        color: Colors.black
+                            .withValues(alpha: isHovered ? 0.25 : 0.15),
                         blurRadius: isHovered ? 15 : 8,
                         offset: const Offset(0, 8),
                       ),

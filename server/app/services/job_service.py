@@ -8,9 +8,11 @@ from sqlalchemy import or_, and_, desc, asc
 from sqlalchemy.orm import Query
 
 from app.extensions import db
-from app.models import Requisition, User, Application, JobActivityLog
+from app.models import Requisition, User, Application, JobActivityLog, Candidate
+from app.services.email_service import EmailService
+from app.services.notification_service import notify_admins
 from app.schemas.job_schemas import (
-    job_create_schema, job_update_schema, job_filter_schema
+    job_create_schema, job_update_schema, job_filter_schema, job_activity_filter_schema
 )
 
 
@@ -18,30 +20,35 @@ class JobService:
     """Service for job/requisition operations"""
     
     @staticmethod
-    def create_job(data: Dict, user_id: int) -> Tuple[Optional[Requisition], Optional[Dict]]:
+    def create_job(data: Dict, user_id: int, role: Optional[str] = None) -> Tuple[Optional[Requisition], Optional[Dict]]:
         """
-        Create a new job posting
-        
+        Create a new job posting. Non-admin users get approval_status='pending'; admin gets 'approved'.
+
         Args:
             data: Job data
             user_id: ID of user creating the job
-            
+            role: Caller role ('admin', 'hiring_manager', etc.). If None, looked up from user_id.
+
         Returns:
             Tuple of (job object, error dict)
         """
         try:
+            if role is None:
+                user = User.query.get(user_id)
+                role = user.role if user else None
+
             # Validate input data
             validated_data = job_create_schema.load(data)
-            
+
             # Check for duplicate active job titles
             existing_job = Requisition.query.filter(
                 Requisition.title == validated_data["title"],
                 Requisition.is_active == True
             ).first()
-            
+
             if existing_job:
                 return None, {"error": "Job title already exists for an active position"}
-            
+
             # Create job
             job = Requisition(
                 **validated_data,
@@ -49,21 +56,70 @@ class JobService:
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()
             )
-            
+            if role == "admin":
+                job.approval_status = "approved"
+                job.approved_at = datetime.utcnow()
+                job.approved_by = user_id
+            else:
+                job.approval_status = "pending"
+
             db.session.add(job)
-            
-            # Log activity
+            # Ensure job.id is assigned before logging activity
+            db.session.flush()
+
+            # Log activity (job.id is now set)
             JobService._log_activity(
                 action="CREATE",
                 job_id=job.id,
                 user_id=user_id,
                 details={"title": job.title, "category": job.category}
             )
-            
+
             db.session.commit()
-            
+
+            # Notify admins when a hiring manager submits a job for approval
+            try:
+                if job.approval_status == "pending":
+                    admins = User.query.filter(User.role == "admin", User.is_active == True).all()
+                    recipients = [a.email for a in admins if getattr(a, "email", None)]
+                    creator = User.query.get(user_id)
+                    try:
+                        domains = []
+                        for r in recipients:
+                            if isinstance(r, str) and "@" in r:
+                                domains.append(r.split("@")[-1].lower())
+                        current_app.logger.info(
+                            "Pending-approval email: job_id=%s recipients=%s domains=%s",
+                            job.id,
+                            len(recipients),
+                            sorted(list(set(domains)))[:10],
+                        )
+                    except Exception:
+                        pass
+
+                    try:
+                        notify_admins(
+                            f"New job pending approval: {job.title or 'New job'}"
+                        )
+                    except Exception:
+                        current_app.logger.warning(
+                            "Failed to create in-app pending-approval notifications",
+                            exc_info=True,
+                        )
+
+                    EmailService.send_job_pending_approval_to_admins(
+                        job_title=job.title,
+                        company=getattr(job, "company", "") or "",
+                        created_by_name=getattr(creator, "full_name", "") if creator else "",
+                        created_by_email=getattr(creator, "email", "") if creator else "",
+                        created_at=job.created_at.isoformat() if getattr(job, "created_at", None) else "",
+                        recipients=recipients,
+                    )
+            except Exception:
+                current_app.logger.warning("Failed to send pending-approval email", exc_info=True)
+
             return job, None
-            
+
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Create job error: {str(e)}", exc_info=True)
@@ -236,7 +292,232 @@ class JobService:
             db.session.rollback()
             current_app.logger.error(f"Restore job error for job {job_id}: {str(e)}", exc_info=True)
             return None, {"error": "Internal server error", "message": str(e)}
-    
+
+    @staticmethod
+    def approve_job(job_id: int, user_id: int, note: Optional[str] = None) -> Tuple[Optional[Requisition], Optional[Dict]]:
+        """Approve a pending job. Only jobs with approval_status='pending' can be approved."""
+        try:
+            job = Requisition.query.get(job_id)
+            if not job:
+                return None, {"error": "Job not found"}
+            if getattr(job, "approval_status", None) != "pending":
+                return None, {"error": "Job is not pending approval", "status_code": 400}
+            job.approval_status = "approved"
+            job.approved_at = datetime.utcnow()
+            job.approved_by = user_id
+            job.rejection_reason = None
+            job.updated_at = datetime.utcnow()
+            details = {"title": job.title}
+            if note and str(note).strip():
+                details["note"] = str(note).strip()
+            JobService._log_activity(action="APPROVE", job_id=job.id, user_id=user_id, details=details)
+            db.session.commit()
+
+            # Notify hiring manager
+            try:
+                hm = User.query.get(job.created_by) if getattr(job, "created_by", None) else None
+                approver = User.query.get(user_id)
+                if hm and getattr(hm, "email", None):
+                    EmailService.send_job_approved_to_hiring_manager(
+                        job_title=job.title,
+                        company=getattr(job, "company", "") or "",
+                        approved_by_name=getattr(approver, "full_name", "") if approver else "",
+                        approved_by_email=getattr(approver, "email", "") if approver else "",
+                        approved_at=job.approved_at.isoformat() if getattr(job, "approved_at", None) else "",
+                        recipient=hm.email,
+                        note=(str(note).strip() if note and str(note).strip() else None),
+                    )
+            except Exception:
+                current_app.logger.warning("Failed to send job-approved email", exc_info=True)
+            return job, None
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Approve job error for job {job_id}: {str(e)}", exc_info=True)
+            return None, {"error": "Internal server error", "message": str(e)}
+
+    @staticmethod
+    def reject_job(job_id: int, user_id: int, reason: str, note: Optional[str] = None) -> Tuple[Optional[Requisition], Optional[Dict]]:
+        """Reject a pending job. Only jobs with approval_status='pending' can be rejected."""
+        try:
+            job = Requisition.query.get(job_id)
+            if not job:
+                return None, {"error": "Job not found"}
+            if getattr(job, "approval_status", None) != "pending":
+                return None, {"error": "Job is not pending approval", "status_code": 400}
+            job.approval_status = "rejected"
+            job.rejection_reason = reason or None
+            job.updated_at = datetime.utcnow()
+            details = {"title": job.title, "reason": reason}
+            if note and str(note).strip():
+                details["note"] = str(note).strip()
+            JobService._log_activity(action="REJECT", job_id=job.id, user_id=user_id, details=details)
+            db.session.commit()
+
+            # Notify hiring manager
+            try:
+                hm = User.query.get(job.created_by) if getattr(job, "created_by", None) else None
+                rejector = User.query.get(user_id)
+                if hm and getattr(hm, "email", None):
+                    EmailService.send_job_rejected_to_hiring_manager(
+                        job_title=job.title,
+                        company=getattr(job, "company", "") or "",
+                        rejected_by_name=getattr(rejector, "full_name", "") if rejector else "",
+                        rejected_by_email=getattr(rejector, "email", "") if rejector else "",
+                        reason=reason or "Not provided",
+                        recipient=hm.email,
+                        note=(str(note).strip() if note and str(note).strip() else None),
+                    )
+            except Exception:
+                current_app.logger.warning("Failed to send job-rejected email", exc_info=True)
+            return job, None
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Reject job error for job {job_id}: {str(e)}", exc_info=True)
+            return None, {"error": "Internal server error", "message": str(e)}
+
+    @staticmethod
+    def bulk_approve_jobs(job_ids: List[int], user_id: int, note: Optional[str] = None) -> Tuple[Optional[Dict], Optional[Dict]]:
+        """Bulk approve pending jobs (partial success)."""
+        try:
+            results: List[Dict] = []
+            notify: List[Dict] = []
+            approver = User.query.get(user_id)
+
+            for jid in job_ids or []:
+                job = Requisition.query.get(jid)
+                if not job:
+                    results.append({"job_id": jid, "status": "skipped", "reason": "Job not found"})
+                    continue
+                if getattr(job, "approval_status", None) != "pending":
+                    results.append({"job_id": jid, "status": "skipped", "reason": "Not pending"})
+                    continue
+
+                job.approval_status = "approved"
+                job.approved_at = datetime.utcnow()
+                job.approved_by = user_id
+                job.rejection_reason = None
+                job.updated_at = datetime.utcnow()
+                details = {"title": job.title, "bulk": True}
+                if note and str(note).strip():
+                    details["note"] = str(note).strip()
+                JobService._log_activity(action="APPROVE", job_id=job.id, user_id=user_id, details=details)
+
+                results.append({"job_id": jid, "status": "approved"})
+                notify.append({
+                    "hm_id": getattr(job, "created_by", None),
+                    "job_title": job.title,
+                    "company": getattr(job, "company", "") or "",
+                    "approved_at": job.approved_at.isoformat() if getattr(job, "approved_at", None) else "",
+                })
+
+            db.session.commit()
+
+            # Notifications (best effort)
+            for item in notify:
+                try:
+                    hm = User.query.get(item.get("hm_id")) if item.get("hm_id") else None
+                    if hm and getattr(hm, "email", None):
+                        EmailService.send_job_approved_to_hiring_manager(
+                            job_title=item.get("job_title") or "",
+                            company=item.get("company") or "",
+                            approved_by_name=getattr(approver, "full_name", "") if approver else "",
+                            approved_by_email=getattr(approver, "email", "") if approver else "",
+                            approved_at=item.get("approved_at") or "",
+                            recipient=hm.email,
+                            note=(str(note).strip() if note and str(note).strip() else None),
+                        )
+                except Exception:
+                    current_app.logger.warning("Bulk approve notification failed", exc_info=True)
+
+            return {"results": results}, None
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Bulk approve jobs error: {str(e)}", exc_info=True)
+            return None, {"error": "Internal server error", "message": str(e)}
+
+    @staticmethod
+    def bulk_reject_jobs(job_ids: List[int], user_id: int, reason: str, note: Optional[str] = None) -> Tuple[Optional[Dict], Optional[Dict]]:
+        """Bulk reject pending jobs (partial success)."""
+        try:
+            results: List[Dict] = []
+            notify: List[Dict] = []
+            rejector = User.query.get(user_id)
+
+            for jid in job_ids or []:
+                job = Requisition.query.get(jid)
+                if not job:
+                    results.append({"job_id": jid, "status": "skipped", "reason": "Job not found"})
+                    continue
+                if getattr(job, "approval_status", None) != "pending":
+                    results.append({"job_id": jid, "status": "skipped", "reason": "Not pending"})
+                    continue
+
+                job.approval_status = "rejected"
+                job.rejection_reason = reason or None
+                job.updated_at = datetime.utcnow()
+                details = {"title": job.title, "reason": reason, "bulk": True}
+                if note and str(note).strip():
+                    details["note"] = str(note).strip()
+                JobService._log_activity(action="REJECT", job_id=job.id, user_id=user_id, details=details)
+
+                results.append({"job_id": jid, "status": "rejected"})
+                notify.append({
+                    "hm_id": getattr(job, "created_by", None),
+                    "job_title": job.title,
+                    "company": getattr(job, "company", "") or "",
+                })
+
+            db.session.commit()
+
+            for item in notify:
+                try:
+                    hm = User.query.get(item.get("hm_id")) if item.get("hm_id") else None
+                    if hm and getattr(hm, "email", None):
+                        EmailService.send_job_rejected_to_hiring_manager(
+                            job_title=item.get("job_title") or "",
+                            company=item.get("company") or "",
+                            rejected_by_name=getattr(rejector, "full_name", "") if rejector else "",
+                            rejected_by_email=getattr(rejector, "email", "") if rejector else "",
+                            reason=reason or "Not provided",
+                            recipient=hm.email,
+                            note=(str(note).strip() if note and str(note).strip() else None),
+                        )
+                except Exception:
+                    current_app.logger.warning("Bulk reject notification failed", exc_info=True)
+
+            return {"results": results}, None
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Bulk reject jobs error: {str(e)}", exc_info=True)
+            return None, {"error": "Internal server error", "message": str(e)}
+
+    @staticmethod
+    def resubmit_job(job_id: int, user_id: int) -> Tuple[Optional[Requisition], Optional[Dict]]:
+        """Set a rejected job back to pending (for HM resubmission). Caller must be job creator or admin."""
+        try:
+            job = Requisition.query.get(job_id)
+            if not job:
+                return None, {"error": "Job not found"}
+            if getattr(job, "approval_status", None) != "rejected":
+                return None, {"error": "Only rejected jobs can be resubmitted", "status_code": 400}
+            user = User.query.get(user_id)
+            if not user:
+                return None, {"error": "User not found"}
+            if user.role != "admin" and job.created_by != user_id:
+                return None, {"error": "Only the job creator or an admin can resubmit", "status_code": 403}
+            job.approval_status = "pending"
+            job.rejection_reason = None
+            job.approved_at = None
+            job.approved_by = None
+            job.updated_at = datetime.utcnow()
+            JobService._log_activity(action="RESUBMIT", job_id=job.id, user_id=user_id, details={"title": job.title})
+            db.session.commit()
+            return job, None
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Resubmit job error for job {job_id}: {str(e)}", exc_info=True)
+            return None, {"error": "Internal server error", "message": str(e)}
+
     @staticmethod
     def get_job_with_stats(job_id: int, user_id: int) -> Tuple[Optional[Dict], Optional[Dict]]:
         """
@@ -346,11 +627,16 @@ class JobService:
                 query = query.filter_by(is_active=False)
             # 'all' includes both active and inactive
             
+            # Apply approval_status filter
+            approval_status = validated_filters.get('approval_status', 'all')
+            if approval_status and approval_status != 'all':
+                query = query.filter(Requisition.approval_status == approval_status)
+
             # Apply category filter
             category = validated_filters.get('category')
             if category:
                 query = query.filter_by(category=category)
-            
+
             # Apply search filter
             search = validated_filters.get('search')
             if search:
@@ -406,14 +692,15 @@ class JobService:
                 "filters": {
                     "category": category,
                     "status": status,
+                    "approval_status": approval_status,
                     "search": search,
                     "sort_by": sort_by,
                     "sort_order": sort_order
                 }
             }
-            
+
             return response, None
-            
+
         except Exception as e:
             current_app.logger.error(f"List jobs error: {str(e)}", exc_info=True)
             return None, {"error": "Internal server error", "message": str(e)}
@@ -514,3 +801,139 @@ class JobService:
             # Note: We don't commit here - it will be committed with the main transaction
         except Exception as e:
             current_app.logger.error(f"Failed to log activity: {e}")
+
+    @staticmethod
+    def build_job_spec_for_cv(requisition: Requisition) -> str:
+        """
+        Build a single job spec string from all relevant job fields for CV comparison.
+        Used by CV analyser so manual and AI-generated job details are assessed consistently.
+        """
+        if not requisition:
+            return ""
+        parts = []
+        if requisition.title:
+            parts.append(f"Role: {requisition.title}")
+        if requisition.description:
+            parts.append(f"Description: {requisition.description}")
+        if requisition.responsibilities:
+            r = requisition.responsibilities
+            items = r if isinstance(r, list) else []
+            if items:
+                parts.append("Responsibilities: " + " | ".join(str(x) for x in items))
+        if requisition.qualifications:
+            q = requisition.qualifications
+            items = q if isinstance(q, list) else []
+            if items:
+                parts.append("Qualifications: " + " | ".join(str(x) for x in items))
+        if requisition.required_skills:
+            s = requisition.required_skills
+            items = s if isinstance(s, list) else []
+            if items:
+                parts.append("Required skills: " + ", ".join(str(x) for x in items))
+        min_exp = requisition.min_experience
+        if min_exp is not None and (isinstance(min_exp, (int, float)) and float(min_exp) > 0):
+            parts.append(f"Minimum experience: {float(min_exp)} years")
+        if requisition.category:
+            parts.append(f"Category: {requisition.category}")
+        if requisition.job_summary:
+            parts.append(f"Summary: {requisition.job_summary}")
+        if requisition.company_details:
+            parts.append(f"Company: {requisition.company_details}")
+        if parts:
+            return "\n\n".join(parts)
+        # Ensure non-empty so offline CV analyser has text to match
+        return requisition.description or (requisition.title or "Job application")
+
+    @staticmethod
+    def evaluate_knockout_rules(job: Requisition, candidate: Candidate) -> List[Dict]:
+        """Evaluate knockout rules against candidate data."""
+        violations = []
+        rules = job.knockout_rules or []
+
+        candidate_skills = [str(s).lower() for s in (candidate.skills or [])]
+        candidate_certs = [str(c).lower() for c in (candidate.certifications or [])]
+        candidate_education = [
+            (e.get("degree", "") if isinstance(e, dict) else str(e)).lower()
+            for e in (candidate.education or [])
+        ]
+        candidate_location = (candidate.location or "").lower()
+
+        profile = candidate.profile or {}
+        years_experience = (
+            profile.get("years_experience")
+            or profile.get("experience_years")
+            or profile.get("years_of_experience")
+            or 0
+        )
+        try:
+            years_experience = float(years_experience)
+        except (TypeError, ValueError):
+            years_experience = 0
+
+        expected_salary = profile.get("expected_salary") or profile.get("salary_expectation") or 0
+        try:
+            expected_salary = float(expected_salary)
+        except (TypeError, ValueError):
+            expected_salary = 0
+
+        def _compare(left, operator, right):
+            try:
+                if operator == ">=":
+                    return left >= right
+                if operator == ">":
+                    return left > right
+                if operator == "==":
+                    return left == right
+                if operator == "!=":
+                    return left != right
+                if operator == "<":
+                    return left < right
+                if operator == "<=":
+                    return left <= right
+            except Exception:
+                return False
+            return False
+
+        for rule in rules:
+            rule_type = rule.get("type")
+            operator = rule.get("operator")
+            value = rule.get("value")
+
+            if operator is None:
+                violations.append({**rule, "reason": "Missing operator"})
+                continue
+
+            if rule_type == "certification":
+                target = str(value).lower()
+                has_cert = target in candidate_certs
+                passed = _compare(has_cert, operator, True)
+            elif rule_type == "skills":
+                target = str(value).lower()
+                has_skill = target in candidate_skills
+                passed = _compare(has_skill, operator, True)
+            elif rule_type == "education":
+                target = str(value).lower()
+                has_edu = any(target in item for item in candidate_education)
+                passed = _compare(has_edu, operator, True)
+            elif rule_type == "location":
+                target = str(value).lower()
+                passed = _compare(candidate_location, operator, target)
+            elif rule_type == "salary":
+                try:
+                    target = float(value)
+                except (TypeError, ValueError):
+                    target = 0
+                passed = _compare(expected_salary, operator, target)
+            elif rule_type == "experience":
+                try:
+                    target = float(value)
+                except (TypeError, ValueError):
+                    target = 0
+                passed = _compare(years_experience, operator, target)
+            else:
+                passed = True
+
+            if not passed:
+                violations.append(rule)
+
+        return violations

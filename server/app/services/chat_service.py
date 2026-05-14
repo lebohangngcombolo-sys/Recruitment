@@ -1,8 +1,10 @@
 # services/chat_service.py
 from datetime import datetime
-from app.models import db, ChatThread, ChatMessage, MessageReadStatus, UserPresence, User
+from app.models import db, ChatThread, ChatMessage, MessageReadStatus, UserPresence, User, MessageMention
 from app.extensions import socketio
+from app.services.notification_service import create_notification
 from typing import List, Optional
+import re
 
 class ChatService:
     
@@ -139,23 +141,84 @@ class ChatService:
     
     @staticmethod
     def send_message(thread_id: int, sender_id: int, content: str, 
-                    message_type: str = 'text', metadata: dict = None):
-        """Send a new message"""
+                    message_type: str = 'text', metadata: dict = None,
+                    parent_message_id: Optional[int] = None):
+        """Send a new message with @mention support"""
+        try:
+            sender_id = int(sender_id)
+        except (ValueError, TypeError):
+            raise ValueError("Invalid sender ID")
+
         thread = ChatThread.query.get_or_404(thread_id)
         
         # Verify sender is a participant
         if not any(p.id == sender_id for p in thread.participants):
             raise ValueError("User is not a participant in this thread")
         
+        if parent_message_id is not None:
+            parent_message = ChatMessage.query.get(parent_message_id)
+            if not parent_message or parent_message.thread_id != thread_id:
+                raise ValueError("Invalid parent message")
+
         message = ChatMessage(
             thread_id=thread_id,
             sender_id=sender_id,
             content=content,
             message_type=message_type,
-            metadata=metadata or {}
+            metadata=metadata or {},
+            parent_message_id=parent_message_id
         )
         
         db.session.add(message)
+        db.session.flush()  # Get message.id
+        
+        # Detect mentions: @username
+        pattern = r'@(\w+)'
+        matches = re.findall(pattern, content)
+        
+        mentioned_users = []
+        if matches:
+            # Find user IDs from usernames (fallback to name matching if username not set)
+            for match in matches:
+                # First try exact username match
+                user = User.query.filter(
+                    (User.username == match) & 
+                    (User.is_active == True) &
+                    (User.role.in_(['admin', 'hiring_manager']))
+                ).first()
+                
+                # If no username match, try name matching
+                if not user:
+                    user = User.query.filter(
+                        (User.full_name.ilike(f'%{match}%')) &
+                        (User.is_active == True) &
+                        (User.role.in_(['admin', 'hiring_manager']))
+                    ).first()
+                
+                if user and user.id != sender_id and user.id not in [u.id for u in mentioned_users]:
+                    mentioned_users.append(user)
+        
+        # Create mention records and notifications
+        for user in mentioned_users:
+            mention = MessageMention(message_id=message.id, user_id=user.id)
+            db.session.add(mention)
+            
+            # Create notification for mentioned user
+            create_notification(
+                user_id=user.id,
+                message=f'{thread.title or "Team Chat"}: {sender.full_name or sender.email} mentioned you'
+            )
+            
+            # Send real-time mention notification via WebSocket
+            socketio.emit('mention', {
+                'type': 'mention',
+                'thread_id': thread_id,
+                'message_id': message.id,
+                'sender_name': sender.full_name or sender.email,
+                'sender_id': sender_id,
+                'content': content,
+                'thread_title': thread.title or 'Team Chat'
+            }, room=f'user_{user.id}')
         
         # Update thread's last message timestamp
         thread.last_message_at = datetime.utcnow()
@@ -174,6 +237,7 @@ class ChatService:
         # Get complete message with sender info
         message_data = message.to_dict()
         message_data['thread_id'] = thread_id
+        message_data['mentions'] = [mention.to_dict() for mention in message.mentions]
         
         # Emit to all thread participants via WebSocket
         for participant in thread.participants:
@@ -181,6 +245,34 @@ class ChatService:
                 socketio.emit('new_message', message_data, room=f'user_{participant.id}')
         
         return message
+
+    @staticmethod
+    def get_thread_details(thread_id: int, user_id: int) -> Optional[dict]:
+        """Get thread details if user has access."""
+        thread = ChatThread.query.get(thread_id)
+        if not thread:
+            return None
+        if not any(p.id == user_id for p in thread.participants):
+            return None
+        return thread.to_dict_detailed()
+
+    @staticmethod
+    def set_typing_status(user_id: int, thread_id: int, is_typing: bool) -> bool:
+        """Update typing status for a user in a thread."""
+        thread = ChatThread.query.get(thread_id)
+        if not thread or not any(p.id == user_id for p in thread.participants):
+            return False
+
+        presence = UserPresence.query.get(user_id)
+        if not presence:
+            presence = UserPresence(user_id=user_id)
+            db.session.add(presence)
+
+        presence.is_typing = bool(is_typing)
+        presence.typing_in_thread = thread_id if is_typing else None
+        presence.last_seen = datetime.utcnow()
+        db.session.commit()
+        return True
     
     @staticmethod
     def update_presence(user_id: int, status: str, socket_id: str = None):

@@ -1,31 +1,37 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:syncfusion_flutter_charts/charts.dart';
+import 'package:syncfusion_flutter_calendar/calendar.dart';
 import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
 import 'candidate_management_screen.dart';
 import 'cv_reviews_screen.dart';
-import 'notifications_screen.dart';
+import '../notifications/notifications_screen.dart';
 import 'job_management.dart';
-import 'interviews_list_screen.dart';
+import '../admin/interviews_list_screen.dart';
 import 'offer_list_screen.dart';
+import 'review_queue_screen.dart';
 import 'hm_analytics_page.dart';
 import 'hm_team_collaboration_page.dart';
+import 'hiring_manager_profile_screen.dart';
+import 'hiring_manager_settings_screen.dart';
+import 'pipeline_page.dart';
+import 'meeting_screen.dart';
 import 'package:http/http.dart' as http;
-
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kIsWeb;
-
-import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
-import '../auth/login_screen.dart';
-import 'pipeline_page.dart';
+import '../../utils/api_endpoints.dart';
+import '../../utils/app_config.dart';
+import '../../services/notification_service.dart';
+// ignore: unused_import - json.decode used in fetchAudits, fetchPipelineActivity, fetchChartData
+import 'dart:convert';
+
+class _DashboardCalendarDataSource extends CalendarDataSource {
+  _DashboardCalendarDataSource(List<Appointment> source) {
+    appointments = source;
+  }
+}
 
 class HMMainDashboard extends StatefulWidget {
   final String token;
@@ -37,6 +43,27 @@ class HMMainDashboard extends StatefulWidget {
 
 class _HMMainDashboardState extends State<HMMainDashboard>
     with SingleTickerProviderStateMixin {
+  static const Color _palettePrimary = Color(0xFFCF2030);
+  static const Color _paletteWhite = Color(0xFFFFFFFF);
+  static const Color _paletteInk = Color(0xFF090812);
+  static const Color _paletteCharcoal = Color(0xFF3D3F40);
+  static const Color _paletteSteel = Color(0xFF727576);
+  static const Color _paletteSilver = Color(0xFFB0B6BB);
+  static const Color _paletteCanvas = Color(0xFFF8F6F3);
+  static const Color _palettePeriwinkle = Color(0xFF81829B);
+  static const Color _palettePurple = Color(0xFF5C389D);
+  static const Color _paletteBlue = Color(0xFF6095CC);
+  static const Color _paletteOrange = Color(0xFFEA990C);
+  static const Color _paletteYellow = Color(0xFFE7BE2D);
+  static const Color _paletteGreen = Color(0xFF6CA510);
+  static const List<Color> _paletteAccents = [
+    _palettePeriwinkle,
+    _palettePurple,
+    _paletteBlue,
+    _paletteOrange,
+    _paletteYellow,
+    _paletteGreen,
+  ];
   String currentScreen = "dashboard";
   bool loadingStats = true;
 
@@ -45,6 +72,43 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   int interviewsCount = 0;
   int cvReviewsCount = 0;
   int auditsCount = 0;
+
+  // Enhanced metrics
+  int activeJobs = 0;
+  int candidatesWithCV = 0;
+  int candidatesWithAssessments = 0;
+  int completedInterviews = 0;
+  int scheduledInterviews = 0;
+  int upcomingInterviews = 0;
+  int newApplicationsWeek = 0;
+  int newInterviewsWeek = 0;
+
+  // Candidate-related variables
+  bool loadingCandidates = true;
+  int candidatePage = 1;
+  int candidatePerPage = 20;
+  List<Map<String, dynamic>> candidates = [];
+  String? candidateSearchQuery;
+  String? candidateStatusFilter;
+
+  // Chart data variables
+  bool loadingChartData = true;
+  List<_ChartData> candidatePipelineData = [];
+  List<_ChartData> timeToFillData = [];
+  List<_ChartData> genderData = [];
+  List<_ChartData> ethnicityData = [];
+  List<_ChartData> sourcePerformanceData = [];
+  List<_ChartData> skillsData = [];
+  List<_ChartData> experienceData = [];
+  List<_ChartData> cvScreeningData = [];
+  List<_ChartData> assessmentData = [];
+  List<_ChartData> auditTrendData = [];
+
+  // Additional data
+  Map<String, dynamic> candidateDemographics = {};
+  List<Map<String, dynamic>> recentCandidates = [];
+
+  Map<String, dynamic> applicationStatusBreakdown = {};
 
   int? selectedJobId;
 
@@ -56,7 +120,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
 
   List<String> recentActivities = [];
 
+  // Display name for the logged-in user (shared with Team Collaboration semantics)
+  String userName = "Hiring Manager";
+
+  /// Use role-based name when stored name is null, empty, or a placeholder (e.g. "Deployed Hiring Manager").
+  String _effectiveWelcomeName(String? name) {
+    if (name == null || name.trim().isEmpty) return 'Hiring Manager';
+    if (name.toLowerCase().contains('deployed')) return 'Hiring Manager';
+    return name.trim();
+  }
+
   bool sidebarCollapsed = false;
+  bool candidateMenuExpanded = false;
   late final AnimationController _sidebarAnimController;
   late final Animation<double> _sidebarWidthAnimation;
 
@@ -68,14 +143,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     "Lisa: Updated job descriptions.",
   ];
 
-  // Power BI status
-  bool powerBIConnected = false;
-  bool checkingPowerBI = true;
-  Timer? _statusTimer;
-
   // --- Audits ---
   List<Map<String, dynamic>> audits = [];
-  List<_ChartData> auditTrendData = [];
   int auditPage = 1;
   int auditPerPage = 20;
   String? auditActionFilter;
@@ -97,24 +166,34 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     "delete"
   ];
 
-  // ---------- Profile image state ----------
-  XFile? _profileImage;
-  Uint8List? _profileImageBytes;
-  String _profileImageUrl = "";
-  final ImagePicker _picker = ImagePicker();
-  final String apiBase = "http://127.0.0.1:5000/api/candidate";
+  // Pipeline activity (who advanced/declined and when) - for HM and admin
+  List<Map<String, dynamic>> pipelineActivity = [];
+  bool loadingPipelineActivity = false;
+
+  // Notifications for dashboard widget (status changes + upcoming interviews)
+  List<Map<String, dynamic>> dashboardNotifications = [];
+  bool loadingNotifications = false;
+  int unreadNotificationCount = 0;
+
+  String get apiBase => AppConfig.apiBase + "/api/candidate";
+
+  // Calendar appointments (interviews + meetings)
+  List<Appointment> _calendarAppointments = [];
+  bool _calendarLoading = false;
 
   @override
   void initState() {
     super.initState();
+    userName = AuthService.getCachedDisplayName() ?? "Hiring Manager";
     fetchStats();
-    fetchPowerBIStatus();
+    fetchCandidates();
+    fetchChartData();
     fetchAudits(page: 1);
-    fetchProfileImage();
-
-    _statusTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      fetchPowerBIStatus();
-    });
+    fetchPipelineActivity();
+    fetchDashboardNotifications();
+    _fetchUnreadNotificationCount();
+    _loadUserName();
+    _loadCalendarData();
 
     _sidebarAnimController = AnimationController(
       vsync: this,
@@ -125,154 +204,497 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     );
   }
 
+  // --- Candidate Data Fetching ---
+  Future<void> fetchCandidates({bool refresh = false}) async {
+    if (refresh) {
+      setState(() {
+        loadingCandidates = true;
+        candidatePage = 1;
+        candidates.clear();
+      });
+    }
+
+    try {
+      final candidatesData = await admin.getCandidatesWithDetails(
+        page: candidatePage,
+        perPage: candidatePerPage,
+        search: candidateSearchQuery,
+      );
+      if (refresh || candidatePage == 1) {
+        candidates = candidatesData;
+      } else {
+        candidates.addAll(candidatesData);
+      }
+      setState(() {
+        loadingCandidates = false;
+      });
+    } catch (e) {
+      setState(() {
+        loadingCandidates = false;
+      });
+      _showErrorSnackBar('Failed to fetch candidates: $e');
+    }
+  }
+
   @override
   void dispose() {
     _sidebarAnimController.dispose();
-    _statusTimer?.cancel();
     auditSearchController.dispose();
     super.dispose();
   }
 
-  // ---------- Profile Image Methods ----------
-  Future<void> fetchProfileImage() async {
+  Future<void> _loadUserName() async {
     try {
-      final profileRes = await http.get(
-        Uri.parse("$apiBase/profile"),
-        headers: {
-          'Authorization': 'Bearer ${widget.token}',
-          'Content-Type': 'application/json'
-        },
-      );
+      final info = await AuthService.getUserInfo();
+      if (info == null) return;
 
-      if (profileRes.statusCode == 200) {
-        final data = json.decode(profileRes.body)['data'];
-        final candidate = data['candidate'] ?? {};
+      // Try a few common keys defensively
+      final profile = info['profile'] ?? {};
+      final candidate = info['candidate'] ?? {};
+
+      final name = info['full_name'] ??
+          info['name'] ??
+          profile['full_name'] ??
+          profile['name'] ??
+          candidate['full_name'] ??
+          candidate['name'];
+
+      if (name is String && name.trim().isNotEmpty) {
         setState(() {
-          _profileImageUrl = candidate['profile_picture'] ?? "";
+          userName = name.trim();
         });
       }
     } catch (e) {
-      debugPrint("Error fetching profile image: $e");
+      debugPrint('Failed to load user name: $e');
     }
   }
 
-  Future<void> _pickProfileImage() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      if (kIsWeb) _profileImageBytes = await pickedFile.readAsBytes();
-      setState(() => _profileImage = pickedFile);
-      await uploadProfileImage();
-    }
-  }
-
-  Future<void> uploadProfileImage() async {
-    if (_profileImage == null) return;
+  Future<void> _loadCalendarData() async {
+    if (_calendarLoading) return;
+    setState(() => _calendarLoading = true);
+    final start = DateTime(focusedDay.year, focusedDay.month, 1);
+    final end = DateTime(focusedDay.year, focusedDay.month + 1, 0);
+    final startStr =
+        "${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}";
+    final endStr =
+        "${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}";
     try {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse("$apiBase/upload_profile_picture"),
+      final meetingsRes = await admin.getUpcomingMeetings(
+        limit: 100,
+        startDate: startStr,
+        endDate: endStr,
       );
-      request.headers['Authorization'] = 'Bearer ${widget.token}';
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          'image',
-          kIsWeb
-              ? _profileImageBytes!
-              : File(_profileImage!.path).readAsBytesSync(),
-          filename: _profileImage!.name,
+      final meetings = meetingsRes['meetings'] as List<dynamic>? ?? [];
+      List<Map<String, dynamic>> interviews = [];
+      try {
+        interviews = await admin.getInterviewsForCalendar(
+            startDate: startStr, endDate: endStr);
+      } catch (_) {}
+      final List<Appointment> appointments = [];
+      for (final m in meetings) {
+        final map = m as Map<String, dynamic>;
+        final startTimeStr = map['start_time'] as String?;
+        final endTimeStr = map['end_time'] as String?;
+        if (startTimeStr == null) continue;
+        DateTime startTime;
+        DateTime endTime;
+        try {
+          startTime = DateTime.parse(startTimeStr);
+          endTime = endTimeStr != null
+              ? DateTime.parse(endTimeStr)
+              : startTime.add(const Duration(hours: 1));
+          if (!endTime.isAfter(startTime)) {
+            endTime = startTime.add(const Duration(minutes: 15));
+          }
+        } catch (_) {
+          continue;
+        }
+        appointments.add(Appointment(
+          startTime: startTime,
+          endTime: endTime,
+          subject: map['title'] as String? ?? 'Meeting',
+          color: Colors.blue,
+        ));
+      }
+      for (final i in interviews) {
+        final scheduledStr = i['scheduled_time'] as String?;
+        if (scheduledStr == null) continue;
+        DateTime startTime;
+        try {
+          startTime = DateTime.parse(scheduledStr);
+        } catch (_) {
+          continue;
+        }
+        DateTime endTime = startTime.add(const Duration(hours: 1));
+        if (!endTime.isAfter(startTime)) {
+          endTime = startTime.add(const Duration(minutes: 15));
+        }
+        final jobTitle = i['job_title'] as String? ?? 'Interview';
+        final candidateName = i['candidate_name'] as String? ?? '';
+        appointments.add(Appointment(
+          startTime: startTime,
+          endTime: endTime,
+          subject:
+              'Interview: $jobTitle${candidateName.isNotEmpty ? ' – $candidateName' : ''}',
+          color: Colors.deepOrange,
+        ));
+      }
+      if (!mounted) return;
+      setState(() {
+        _calendarAppointments = appointments;
+        _calendarLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Calendar load error: $e');
+      if (!mounted) return;
+      setState(() => _calendarLoading = false);
+    }
+  }
+
+  // ---------- Error Handling ----------
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+        duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'Dismiss',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
         ),
-      );
-
-      var response = await request.send();
-      final respStr = await response.stream.bytesToString();
-      final respJson = json.decode(respStr);
-
-      if (response.statusCode == 200 && respJson['success'] == true) {
-        setState(() {
-          _profileImageUrl = respJson['data']['profile_picture'];
-          _profileImage = null;
-          _profileImageBytes = null;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Profile picture updated")));
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Upload failed: ${response.statusCode}")));
-      }
-    } catch (e) {
-      debugPrint("Profile image upload error: $e");
-    }
+      ),
+    );
   }
 
-  ImageProvider<Object> _getProfileImageProvider() {
-    if (_profileImage != null) {
-      if (kIsWeb) return MemoryImage(_profileImageBytes!);
-      return FileImage(File(_profileImage!.path));
-    }
-    if (_profileImageUrl.isNotEmpty) return NetworkImage(_profileImageUrl);
-    return const AssetImage("assets/images/profile_placeholder.png");
-  }
-
-  // ---------- Dashboard Stats & PowerBI ----------
+  // ---------- Dashboard Stats ----------
   Future<void> fetchStats() async {
     setState(() => loadingStats = true);
     try {
-      final counts = await admin.getDashboardCounts();
-      final token = await AuthService.getAccessToken();
-
-      final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/recent-activities"),
-        headers: {"Authorization": "Bearer $token"},
-      );
+      final data = await admin.getDashboardCounts();
+      final role = await AuthService.getRole();
 
       List<String> activities = [];
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        activities = List<String>.from(data["recent_activities"] ?? []);
+      if (role == "admin") {
+        final token = await AuthService.getAccessToken();
+        final res = await http.get(
+          Uri.parse(AppConfig.apiBase + "/api/admin/audits/recent"),
+          headers: {"Authorization": "Bearer $token"},
+        );
+        if (res.statusCode == 200) {
+          final audits = json.decode(res.body) as List;
+          activities =
+              audits.map((a) => a['action']?.toString() ?? '').take(5).toList();
+        }
       }
 
       setState(() {
-        jobsCount = counts["jobs"] ?? 0;
-        candidatesCount = counts["candidates"] ?? 0;
-        interviewsCount = counts["interviews"] ?? 0;
-        cvReviewsCount = counts["cv_reviews"] ?? 0;
-        auditsCount = counts["audits"] ?? 0;
+        jobsCount = data['jobs'] ?? 0;
+        candidatesCount = data['candidates'] ?? 0;
+        interviewsCount = data['interviews'] ?? 0;
+        cvReviewsCount = data['cv_reviews'] ?? 0;
+        auditsCount = data['audits'] ?? 0;
+
+        // Enhanced metrics
+        activeJobs = data['active_jobs'] ?? 0;
+        candidatesWithCV = data['candidates_with_cv'] ?? 0;
+        candidatesWithAssessments = data['candidates_with_assessments'] ?? 0;
+        completedInterviews = data['completed_interviews'] ?? 0;
+        scheduledInterviews = data['scheduled_interviews'] ?? 0;
+        upcomingInterviews = data['upcoming_interviews'] ?? 0;
+        newApplicationsWeek = data['recent_activity']['new_applications'] ?? 0;
+        newInterviewsWeek = data['recent_activity']['new_interviews'] ?? 0;
+
+        applicationStatusBreakdown = data['application_status_breakdown'] ?? {};
+
+        // Enhanced candidate demographics
+        candidateDemographics = data['candidate_demographics'] ?? {};
+        recentCandidates =
+            List<Map<String, dynamic>>.from(data['recent_candidates'] ?? []);
+
         recentActivities = activities;
         loadingStats = false;
       });
     } catch (e) {
-      setState(() => loadingStats = false);
-      debugPrint("Error fetching dashboard stats: $e");
+      setState(() {
+        loadingStats = false;
+      });
+      _showErrorSnackBar('Failed to fetch dashboard stats: $e');
     }
   }
 
-  Future<void> fetchPowerBIStatus() async {
-    setState(() => checkingPowerBI = true);
+  Future<void> fetchChartData() async {
+    setState(() => loadingChartData = true);
     try {
       final token = await AuthService.getAccessToken();
-      final res = await http.get(
-        Uri.parse("http://127.0.0.1:5000/api/admin/powerbi/status"),
-        headers: {"Authorization": "Bearer $token"},
-      );
+      final headers = {"Authorization": "Bearer $token"};
 
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        setState(() {
-          powerBIConnected = data["connected"] ?? false;
-        });
-      } else {
-        setState(() => powerBIConnected = false);
+      // Fetch candidate pipeline data (applications per requisition)
+      final pipelineRes = await http.get(
+        Uri.parse(ApiEndpoints.getApplicationsPerRequisition),
+        headers: headers,
+      );
+      if (pipelineRes.statusCode == 200) {
+        final data = json.decode(pipelineRes.body) as List;
+        candidatePipelineData = data
+            .map((item) => _ChartData(
+                  item['title'] ?? 'Unknown',
+                  item['applications'] ?? 0,
+                ))
+            .toList();
+      }
+
+      // Fetch time to fill data (time per stage)
+      final timeRes = await http.get(
+        Uri.parse(ApiEndpoints.getTimePerStage),
+        headers: headers,
+      );
+      if (timeRes.statusCode == 200) {
+        final data = json.decode(timeRes.body) as List;
+        // Calculate average time to interview
+        final validTimes = data
+            .where((item) => item['time_to_interview_days'] != null)
+            .toList();
+        if (validTimes.isNotEmpty) {
+          final avgTime = validTimes
+                  .map((item) => item['time_to_interview_days'] as int)
+                  .reduce((a, b) => a + b) /
+              validTimes.length;
+          timeToFillData = [
+            _ChartData("Avg Time to Interview", avgTime.round())
+          ];
+        }
+      }
+
+      // Fetch gender diversity data if available
+      try {
+        final genderRes = await http.get(
+          Uri.parse(ApiEndpoints.getGenderDistribution),
+          headers: headers,
+        );
+        if (genderRes.statusCode == 200) {
+          final data = json.decode(genderRes.body) as List;
+          genderData = data
+              .map((item) => _ChartData(
+                    item['gender'] ?? 'Unknown',
+                    item['count'] ?? 0,
+                  ))
+              .toList();
+        } else {
+          // Fallback to conversion rate if gender endpoint not available
+          final conversionRes = await http.get(
+            Uri.parse(ApiEndpoints.getApplicationToInterviewConversion),
+            headers: headers,
+          );
+          if (conversionRes.statusCode == 200) {
+            final data = json.decode(conversionRes.body);
+            genderData = [
+              _ChartData("Interview Rate",
+                  (data['conversion_rate_percent'] ?? 0).toInt()),
+            ];
+          }
+        }
+      } catch (e) {
+        // Use fallback data
+        final conversionRes = await http.get(
+          Uri.parse(ApiEndpoints.getApplicationToInterviewConversion),
+          headers: headers,
+        );
+        if (conversionRes.statusCode == 200) {
+          final data = json.decode(conversionRes.body);
+          genderData = [
+            _ChartData("Interview Rate",
+                (data['conversion_rate_percent'] ?? 0).toInt()),
+          ];
+        }
+      }
+
+      // Fetch ethnicity diversity data if available
+      try {
+        final ethnicityRes = await http.get(
+          Uri.parse(ApiEndpoints.getEthnicityDistribution),
+          headers: headers,
+        );
+        if (ethnicityRes.statusCode == 200) {
+          final data = json.decode(ethnicityRes.body) as List;
+          ethnicityData = data
+              .map((item) => _ChartData(
+                    item['ethnicity'] ?? 'Unknown',
+                    item['count'] ?? 0,
+                  ))
+              .toList();
+        } else {
+          // Fallback to dropoff data
+          final dropoffRes = await http.get(
+            Uri.parse(ApiEndpoints.getStageDropoff),
+            headers: headers,
+          );
+          if (dropoffRes.statusCode == 200) {
+            final data = json.decode(dropoffRes.body);
+            ethnicityData = [
+              _ChartData("Total Applications", data['total_applications'] ?? 0),
+              _ChartData("Interviewed", data['interviewed'] ?? 0),
+              _ChartData("Offered", data['offered'] ?? 0),
+            ];
+          }
+        }
+      } catch (e) {
+        // Use fallback data
+        final dropoffRes = await http.get(
+          Uri.parse(ApiEndpoints.getStageDropoff),
+          headers: headers,
+        );
+        if (dropoffRes.statusCode == 200) {
+          final data = json.decode(dropoffRes.body);
+          ethnicityData = [
+            _ChartData("Total Applications", data['total_applications'] ?? 0),
+            _ChartData("Interviewed", data['interviewed'] ?? 0),
+            _ChartData("Offered", data['offered'] ?? 0),
+          ];
+        }
+      }
+
+      // Fetch source performance data (applications per month)
+      final monthlyRes = await http.get(
+        Uri.parse(ApiEndpoints.getMonthlyApplications),
+        headers: headers,
+      );
+      if (monthlyRes.statusCode == 200) {
+        final data = json.decode(monthlyRes.body) as List;
+        sourcePerformanceData = data
+            .take(6)
+            .map((item) => _ChartData(
+                  item['month'] ?? 'Unknown',
+                  item['applications'] ?? 0,
+                ))
+            .toList();
+      }
+
+      // Fetch additional analytics data for comprehensive dashboard
+      try {
+        // Skills frequency data (API returns Map<String, int>: skill name -> count)
+        final skillsRes = await http.get(
+          Uri.parse(ApiEndpoints.getSkillsFrequency),
+          headers: headers,
+        );
+        if (skillsRes.statusCode == 200) {
+          final raw = json.decode(skillsRes.body);
+          if (raw is Map<String, dynamic>) {
+            skillsData = raw.entries
+                .take(10)
+                .map((e) => _ChartData(
+                      e.key,
+                      (e.value is num) ? (e.value as num).toInt() : 0,
+                    ))
+                .toList();
+          } else if (raw is List) {
+            skillsData = raw
+                .take(10)
+                .map((item) => _ChartData(
+                      item['skill']?.toString() ?? 'Unknown',
+                      (item['frequency'] is num)
+                          ? (item['frequency'] as num).toInt()
+                          : 0,
+                    ))
+                .toList();
+          }
+        }
+      } catch (e) {
+        debugPrint("Error fetching skills data: $e");
+      }
+
+      try {
+        // Experience distribution (API returns Map: years/key -> count)
+        final experienceRes = await http.get(
+          Uri.parse(ApiEndpoints.getExperienceDistribution),
+          headers: headers,
+        );
+        if (experienceRes.statusCode == 200) {
+          final raw = json.decode(experienceRes.body);
+          if (raw is Map<String, dynamic>) {
+            experienceData = raw.entries
+                .map((e) => _ChartData(
+                      '${e.key} yrs',
+                      (e.value is num) ? (e.value as num).toInt() : 0,
+                    ))
+                .toList();
+          } else if (raw is Map) {
+            experienceData = raw.entries
+                .map((e) => _ChartData(
+                      '${e.key} yrs',
+                      (e.value is num) ? (e.value as num).toInt() : 0,
+                    ))
+                .toList();
+          } else if (raw is List) {
+            experienceData = raw
+                .map((item) => _ChartData(
+                      item['experience_level']?.toString() ?? 'Unknown',
+                      (item['count'] is num)
+                          ? (item['count'] as num).toInt()
+                          : 0,
+                    ))
+                .toList();
+          }
+        }
+      } catch (e) {
+        debugPrint("Error fetching experience data: $e");
+      }
+
+      try {
+        // CV screening drop trends
+        final cvDropRes = await http.get(
+          Uri.parse(ApiEndpoints.getCVScreeningDrop),
+          headers: headers,
+        );
+        if (cvDropRes.statusCode == 200) {
+          final data = json.decode(cvDropRes.body) as List;
+          cvScreeningData = data
+              .map((item) => _ChartData(
+                    item['date'] ?? 'Unknown',
+                    item['drop_count'] ?? 0,
+                  ))
+              .toList();
+        }
+      } catch (e) {
+        debugPrint("Error fetching CV screening data: $e");
+      }
+
+      try {
+        // Assessment pass rates
+        final assessmentRes = await http.get(
+          Uri.parse(ApiEndpoints.getAssessmentPassRate),
+          headers: headers,
+        );
+        if (assessmentRes.statusCode == 200) {
+          final data = json.decode(assessmentRes.body) as List;
+          assessmentData = data
+              .map((item) => _ChartData(
+                    item['date'] ?? 'Unknown',
+                    item['pass_rate'] ?? 0,
+                  ))
+              .toList();
+        }
+      } catch (e) {
+        debugPrint("Error fetching assessment data: $e");
       }
     } catch (e) {
-      setState(() => powerBIConnected = false);
+      debugPrint("Error fetching chart data: $e");
     } finally {
-      setState(() => checkingPowerBI = false);
+      setState(() => loadingChartData = false);
     }
   }
 
   Future<void> fetchAudits({int page = 1}) async {
     setState(() => loadingAudits = true);
     try {
+      final role = await AuthService.getRole();
+      if (role != "admin") {
+        setState(() => loadingAudits = false);
+        return;
+      }
+
       final token = await AuthService.getAccessToken();
       final queryParams = {
         "page": page.toString(),
@@ -286,7 +708,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               "${auditEndDate!.year}-${auditEndDate!.month.toString().padLeft(2, '0')}-${auditEndDate!.day.toString().padLeft(2, '0')}",
         if (auditSearchQuery != null) "q": auditSearchQuery!,
       };
-      final uri = Uri.http("127.0.0.1:5000", "/api/admin/audits", queryParams);
+      final uri = Uri.parse(AppConfig.apiBase + "/api/admin/audits")
+          .replace(queryParameters: queryParams);
       final res =
           await http.get(uri, headers: {"Authorization": "Bearer $token"});
 
@@ -317,24 +740,85 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     }
   }
 
+  Future<void> fetchPipelineActivity() async {
+    setState(() => loadingPipelineActivity = true);
+    try {
+      final token = await AuthService.getAccessToken();
+      final uri = Uri.parse(ApiEndpoints.pipelineActivity);
+      final res =
+          await http.get(uri, headers: {"Authorization": "Bearer $token"});
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body) as Map<String, dynamic>;
+        final results = data["results"];
+        setState(() {
+          pipelineActivity = results is List
+              ? List<Map<String, dynamic>>.from(
+                  results.map((e) => Map<String, dynamic>.from(e as Map)))
+              : [];
+          loadingPipelineActivity = false;
+        });
+      } else {
+        setState(() => loadingPipelineActivity = false);
+      }
+    } catch (e) {
+      setState(() => loadingPipelineActivity = false);
+    }
+  }
+
+  Future<void> fetchDashboardNotifications() async {
+    setState(() => loadingNotifications = true);
+    try {
+      final response = await NotificationService.getNotifications();
+      if (!mounted) return;
+      setState(() {
+        dashboardNotifications = response.notifications;
+        loadingNotifications = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => loadingNotifications = false);
+    }
+  }
+
+  void _handleNotificationTap(Map<String, dynamic> notification) {
+    final type = (notification['type']?.toString() ?? '').toLowerCase();
+    setState(() {
+      if (type == 'new_application' || type == 'new_candidate') {
+        currentScreen = 'candidates';
+      } else if (type == 'interview' ||
+          type == 'feedback_reminder' ||
+          type == 'feedback_received' ||
+          type == 'reminder' ||
+          type == 'reminder_urgent' ||
+          type == 'warning') {
+        currentScreen = 'interviews';
+      } else if (type == 'status_update') {
+        currentScreen = 'pipeline';
+      } else {
+        currentScreen = 'notifications';
+      }
+    });
+  }
+
   void _showLogoutConfirmation(BuildContext context) {
+    final navigatorContext = context;
     showDialog(
       context: context,
-      builder: (BuildContext context) {
+      builder: (BuildContext dialogContext) {
         return AlertDialog(
           title: const Text("Logout", style: TextStyle(fontFamily: 'Poppins')),
           content: const Text("Are you sure you want to logout?",
               style: TextStyle(fontFamily: 'Poppins')),
           actions: [
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child:
                   const Text("Cancel", style: TextStyle(fontFamily: 'Poppins')),
             ),
             TextButton(
               onPressed: () {
-                Navigator.of(context).pop();
-                _performLogout(context);
+                Navigator.of(dialogContext).pop();
+                _performLogout(navigatorContext);
               },
               child: const Text("Logout",
                   style: TextStyle(color: Colors.red, fontFamily: 'Poppins')),
@@ -346,26 +830,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   }
 
   void _performLogout(BuildContext context) async {
-    Navigator.of(context).pop();
+    // Do not pop here: confirmation dialog already closed by onPressed. Popping again would remove the last route (dashboard) and break go_router.
     await AuthService.logout();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-          (Route<dynamic> route) => false,
-        );
-      }
-    });
+    if (!mounted) return;
+    context.go('/login');
   }
-
-  bool _isLoggingOut = false;
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return Scaffold(
-      // 🌆 Dynamic background implementation
+      // ≡ƒîå Dynamic background implementation
       body: Container(
         decoration: BoxDecoration(
           image: DecorationImage(
@@ -386,8 +862,8 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                     height: double.infinity,
                     decoration: BoxDecoration(
                       color: themeProvider.isDarkMode
-                          ? const Color.fromARGB(171, 20, 19, 30)
-                          : const Color.fromARGB(156, 255, 255, 255),
+                          ? const Color(0xFF1F2840)
+                          : const Color(0xFFFFFFFF),
                       border: Border(
                         right:
                             BorderSide(color: Colors.grey.shade200, width: 1),
@@ -395,7 +871,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                       boxShadow: [
                         BoxShadow(
                           color: const Color.fromARGB(255, 20, 19, 30)
-                              .withOpacity(0.02),
+                              .withValues(alpha: 0.02),
                           blurRadius: 8,
                           offset: const Offset(2, 0),
                         ),
@@ -443,84 +919,50 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                             ),
                           ),
                         ),
-                        const Divider(height: 1, color: Colors.grey),
                         Expanded(
                           child: ListView(
                             padding: EdgeInsets.zero,
                             children: [
                               _sidebarEntry(
-                                  Icons.home_outlined, 'Home', 'dashboard'),
-                              _sidebarEntry(Icons.work_outline, 'Jobs', 'jobs'),
-                              _sidebarEntry(Icons.people_alt_outlined,
-                                  'Candidates', 'candidates'),
+                                  'assets/images/Home_Remote_Work_Red_Badge_White.png',
+                                  'Home',
+                                  'dashboard'),
                               _sidebarEntry(
-                                  Icons.event_note, 'Interviews', 'interviews'),
-                              _sidebarEntry(Icons.assignment_outlined,
-                                  'CV Reviews', 'cv_reviews'),
-                              _sidebarEntry(Icons.analytics_outlined,
+                                  Icons.person_outline, 'Profile', 'profile'),
+                              _sidebarEntry(
+                                  'assets/images/Approval_Red_Badge_White.png',
+                                  'Jobs',
+                                  'jobs'),
+                              _candidateSidebarGroup(),
+                              _sidebarEntry(
+                                  'assets/images/red_Management_Red_Badge_White.png',
+                                  'Interviews',
+                                  'interviews'),
+                              _sidebarEntry(
+                                  'assets/images/Goal_Target_White_Badge_Red_Badge_White.png',
+                                  'CV Reviews',
+                                  'cv_reviews'),
+                              _sidebarEntry('assets/icons/data-analytics.png',
                                   'Analytics', 'analytics'),
-                              _sidebarEntry(Icons.group_outlined,
+                              _sidebarEntry('assets/icons/teamC.png',
                                   'Team Collaboration', 'team_collaboration'),
-                              _sidebarEntry(Icons.notifications_active_outlined,
-                                  'Notifications', 'notifications'),
+                              _sidebarEntryWithBadge(
+                                  'assets/images/Notification_Red_White.png',
+                                  'Notifications',
+                                  'notifications',
+                                  badgeCount: unreadNotificationCount),
+                              _sidebarEntry(
+                                  'assets/images/innovation_brainstorm_red_badge_white.png',
+                                  'Settings',
+                                  'settings'),
                             ],
                           ),
                         ),
-                        const Divider(height: 1, color: Colors.grey),
                         Padding(
                           padding: const EdgeInsets.symmetric(
                               vertical: 12.0, horizontal: 8),
                           child: Column(
                             children: [
-                              if (!sidebarCollapsed)
-                                Row(
-                                  children: [
-                                    GestureDetector(
-                                      onTap: () {
-                                        context.push(
-                                            '/profile?token=${widget.token}');
-                                      },
-                                      child: CircleAvatar(
-                                        radius: 18,
-                                        backgroundColor: Colors.grey.shade200,
-                                        backgroundImage:
-                                            _getProfileImageProvider(),
-                                        child: null,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Text(
-                                        "Admin User",
-                                        style: TextStyle(
-                                          fontFamily: 'Poppins',
-                                          color: themeProvider.isDarkMode
-                                              ? Colors.white
-                                              : Colors.grey.shade800,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              else
-                                Center(
-                                  child: GestureDetector(
-                                    onTap: () {
-                                      context.push(
-                                          '/profile?token=${widget.token}');
-                                    },
-                                    child: CircleAvatar(
-                                      radius: 18,
-                                      backgroundColor: Colors.grey.shade200,
-                                      backgroundImage:
-                                          _getProfileImageProvider(),
-                                      child: null,
-                                    ),
-                                  ),
-                                ),
-                              const SizedBox(height: 12),
                               if (!sidebarCollapsed)
                                 ElevatedButton.icon(
                                   onPressed: () =>
@@ -555,242 +997,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
               ),
               // ---------- Main content ----------
               Expanded(
-                child: Column(
-                  children: [
-                    Container(
-                      height: 72,
-                      color: themeProvider.isDarkMode
-                          ? const Color(0xFF14131E).withOpacity(0.8)
-                          : Colors.white.withOpacity(0.8),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Row(
-                          children: [
-                            // Search Bar - Replaced the welcome text
-                            Expanded(
-                              child: Container(
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: (themeProvider.isDarkMode
-                                      ? const Color(0xFF14131E)
-                                      : Colors.white.withOpacity(0.8)),
-                                  borderRadius: BorderRadius.circular(40),
-                                  border: Border.all(
-                                    color: themeProvider.isDarkMode
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.black.withOpacity(0.05),
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.black.withOpacity(0.3)
-                                          : Colors.grey.withOpacity(0.2),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                                child: TextField(
-                                  decoration: InputDecoration(
-                                    hintText: "Search across platform...",
-                                    hintStyle: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.grey.shade400
-                                          : Colors.grey.shade700,
-                                      fontSize: 14,
-                                    ),
-                                    prefixIcon: Padding(
-                                      padding: const EdgeInsets.all(10.0),
-                                      child: Image.asset(
-                                        'assets/images/SearchRed.png',
-                                        width: 30,
-                                        height: 30,
-                                      ),
-                                    ),
-                                    filled: false,
-                                    border: OutlineInputBorder(
-                                      borderSide: BorderSide.none,
-                                      borderRadius: BorderRadius.circular(40),
-                                    ),
-                                    contentPadding: const EdgeInsets.symmetric(
-                                        vertical: 14, horizontal: 10),
-                                  ),
-                                  cursorColor: Colors.redAccent,
-                                  style: TextStyle(
-                                    fontFamily: 'Poppins',
-                                    color: themeProvider.isDarkMode
-                                        ? Colors.white
-                                        : Colors.black.withOpacity(0.8),
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-
-                            Row(
-                              children: [
-                                // ---------- Theme Toggle Switch ----------
-                                Row(
-                                  children: [
-                                    Icon(
-                                      themeProvider.isDarkMode
-                                          ? Icons.dark_mode
-                                          : Icons.light_mode,
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.amber
-                                          : Colors.grey.shade700,
-                                      size: 20,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Switch(
-                                      value: themeProvider.isDarkMode,
-                                      onChanged: (value) {
-                                        themeProvider.toggleTheme();
-                                      },
-                                      activeThumbColor: Colors.redAccent,
-                                      inactiveTrackColor: Colors.grey.shade400,
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(width: 12),
-
-                                // ---------- Analytics Icon ----------
-                                IconButton(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) =>
-                                              RecruitmentPipelinePage(
-                                                  token: widget.token)),
-                                    );
-                                  },
-                                  icon: Image.asset(
-                                    // Changed from Icon to Image.asset
-                                    'assets/icons/data-analytics.png',
-                                    width: 24,
-                                    height: 24,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                  tooltip: "Analytics Dashboard",
-                                ),
-                                const SizedBox(width: 8),
-
-                                // ---------- Power BI Status Icon ----------
-                                Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: powerBIConnected
-                                        ? Colors.green
-                                        : Colors.red,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: powerBIConnected
-                                            ? Colors.green.withOpacity(0.6)
-                                            : Colors.red.withOpacity(0.6),
-                                        blurRadius: 12,
-                                        spreadRadius: 2,
-                                      ),
-                                    ],
-                                  ),
-                                  child: Center(
-                                    child: checkingPowerBI
-                                        ? const SizedBox(
-                                            width: 16,
-                                            height: 16,
-                                            child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Icon(Icons.bar_chart,
-                                            color: Colors.white, size: 20),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-
-                                // ---------- Team Collaboration Icon ----------
-                                IconButton(
-                                  onPressed: () => setState(() =>
-                                      currentScreen = "team_collaboration"),
-                                  icon: Image.asset(
-                                    // Changed from Icon to Image.asset
-                                    'assets/icons/teamC.png',
-                                    width: 34,
-                                    height: 34,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                  tooltip: "Team Collaboration",
-                                ),
-                                const SizedBox(width: 8),
-
-                                TextButton.icon(
-                                  onPressed: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) =>
-                                              AdminOfferListScreen()),
-                                    );
-                                  },
-                                  icon: Image.asset(
-                                    'assets/icons/add.png',
-                                    width: 30,
-                                    height: 30,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                  label: Text(
-                                    "Create",
-                                    style: TextStyle(
-                                      fontFamily: 'Poppins',
-                                      color: themeProvider.isDarkMode
-                                          ? Colors.white
-                                          : Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                IconButton(
-                                  onPressed: () => setState(
-                                      () => currentScreen = "notifications"),
-                                  icon: Image.asset(
-                                    // Changed from Icon to Image.asset
-                                    'assets/icons/notification.png',
-                                    width: 45,
-                                    height: 45,
-                                    color:
-                                        const Color.fromARGB(255, 193, 13, 0),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                GestureDetector(
-                                  onTap: () {
-                                    context
-                                        .push('/profile?token=${widget.token}');
-                                  },
-                                  child: CircleAvatar(
-                                    radius: 18,
-                                    backgroundColor: Colors.grey.shade200,
-                                    backgroundImage: _getProfileImageProvider(),
-                                    child: null,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    Expanded(child: getCurrentScreen()),
-                  ],
-                ),
+                child: getCurrentScreen(),
               ),
             ],
           ),
@@ -798,9 +1005,14 @@ class _HMMainDashboardState extends State<HMMainDashboard>
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: Colors.redAccent,
-        child: const Icon(Icons.refresh),
-        onPressed: fetchStats,
-        tooltip: "Refresh stats",
+        onPressed: themeProvider.toggleTheme,
+        tooltip: themeProvider.isDarkMode
+            ? "Switch to light mode"
+            : "Switch to dark mode",
+        child: Icon(
+          themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
+          color: Colors.white,
+        ),
       ),
     );
   }
@@ -816,24 +1028,195 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     });
   }
 
-  Widget _sidebarEntry(IconData icon, String label, String screenKey) {
+  bool _isCandidateMenuScreen(String screenKey) {
+    return screenKey == 'candidates' ||
+        screenKey == 'pipeline' ||
+        screenKey == 'offers' ||
+        screenKey == 'review_queue' ||
+        screenKey == 'meetings';
+  }
+
+  Widget _buildSidebarIcon(
+    dynamic icon,
+    bool selected,
+    Color iconColor,
+    ThemeProvider themeProvider,
+  ) {
+    if (icon is IconData) {
+      return Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: selected
+              ? Colors.white
+              : themeProvider.isDarkMode
+                  ? Colors.grey.shade700
+                  : Colors.grey.shade600,
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+          color: selected ? const Color(0xFFC10D00) : Colors.white,
+        ),
+      );
+    }
+
+    return Image.asset(
+      icon as String,
+      width: 32,
+      height: 32,
+      errorBuilder: (context, error, stackTrace) {
+        return Icon(Icons.error, color: iconColor, size: 32);
+      },
+    );
+  }
+
+  Widget _candidateSidebarGroup() {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final selected = _isCandidateMenuScreen(currentScreen);
+    final iconColor = selected
+        ? const Color.fromRGBO(151, 18, 8, 1)
+        : themeProvider.isDarkMode
+            ? Colors.grey.shade400
+            : Colors.grey.shade800;
+
+    return Column(
+      children: [
+        Container(
+          color: selected ? const Color(0xFFC10D00) : Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () => setState(() => currentScreen = 'candidates'),
+                  child: Row(
+                    children: [
+                      _buildSidebarIcon(
+                        'assets/images/candidates.png',
+                        selected,
+                        iconColor,
+                        themeProvider,
+                      ),
+                      const SizedBox(width: 12),
+                      if (!sidebarCollapsed)
+                        Expanded(
+                          child: Text(
+                            'Candidates',
+                            style: TextStyle(
+                              fontFamily: 'Poppins',
+                              color: selected
+                                  ? Colors.white
+                                  : themeProvider.isDarkMode
+                                      ? Colors.grey.shade400
+                                      : Colors.grey.shade800,
+                              fontWeight: selected
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              if (!sidebarCollapsed)
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      candidateMenuExpanded = !candidateMenuExpanded;
+                    });
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Icon(
+                      candidateMenuExpanded
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      color: selected ? Colors.white : iconColor,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (!sidebarCollapsed && candidateMenuExpanded) ...[
+          _sidebarChildEntry(Icons.account_tree, 'Pipeline', 'pipeline'),
+          _sidebarChildEntry(Icons.request_quote, 'Offers', 'offers'),
+          _sidebarChildEntry(
+            Icons.pending_actions,
+            'Review queue',
+            'review_queue',
+          ),
+          _sidebarChildEntry(Icons.video_call, 'Meetings', 'meetings'),
+        ],
+      ],
+    );
+  }
+
+  Widget _sidebarChildEntry(dynamic icon, String label, String screenKey) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final selected = currentScreen == screenKey;
+    final iconColor = selected
+        ? const Color.fromRGBO(151, 18, 8, 1)
+        : themeProvider.isDarkMode
+            ? Colors.grey.shade400
+            : Colors.grey.shade800;
+
     return InkWell(
-      onTap: () => setState(() => currentScreen = screenKey),
+      onTap: () {
+        setState(() {
+          candidateMenuExpanded = true;
+          currentScreen = screenKey;
+        });
+      },
       child: Container(
         color: selected
-            ? const Color.fromRGBO(151, 18, 8, 1).withOpacity(0.06)
+            ? const Color(0xFFC10D00).withValues(alpha: 0.12)
             : Colors.transparent,
+        padding: const EdgeInsets.fromLTRB(28, 10, 12, 10),
+        child: Row(
+          children: [
+            Icon(icon as IconData, size: 18, color: iconColor),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Poppins',
+                  color: selected
+                      ? const Color(0xFFC10D00)
+                      : themeProvider.isDarkMode
+                          ? Colors.grey.shade400
+                          : Colors.grey.shade800,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sidebarEntry(dynamic icon, String label, String screenKey,
+      {VoidCallback? onTapOverride}) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final selected = currentScreen == screenKey;
+    final iconColor = selected
+        ? const Color.fromRGBO(151, 18, 8, 1)
+        : themeProvider.isDarkMode
+            ? Colors.grey.shade400
+            : Colors.grey.shade800;
+    return InkWell(
+      onTap: onTapOverride ?? () => setState(() => currentScreen = screenKey),
+      child: Container(
+        color: selected ? const Color(0xFFC10D00) : Colors.transparent,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
           children: [
-            Icon(icon,
-                color: selected
-                    ? const Color.fromRGBO(151, 18, 8, 1)
-                    : themeProvider.isDarkMode
-                        ? Colors.grey.shade400
-                        : Colors.grey.shade800),
+            _buildSidebarIcon(icon, selected, iconColor, themeProvider),
             const SizedBox(width: 12),
             if (!sidebarCollapsed)
               Expanded(
@@ -842,7 +1225,7 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   style: TextStyle(
                     fontFamily: 'Poppins',
                     color: selected
-                        ? Colors.redAccent
+                        ? Colors.white
                         : themeProvider.isDarkMode
                             ? Colors.grey.shade400
                             : Colors.grey.shade800,
@@ -854,6 +1237,100 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         ),
       ),
     );
+  }
+
+  Widget _sidebarEntryWithBadge(dynamic icon, String label, String screenKey,
+      {int badgeCount = 0, VoidCallback? onTapOverride}) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final selected = currentScreen == screenKey;
+    final iconColor = selected
+        ? const Color.fromRGBO(151, 18, 8, 1)
+        : themeProvider.isDarkMode
+            ? Colors.grey.shade400
+            : Colors.grey.shade800;
+    return InkWell(
+      onTap: onTapOverride ??
+          () => setState(() {
+                currentScreen = screenKey;
+                // Clear badge when navigating to notifications
+                if (screenKey == 'notifications') {
+                  setState(() => unreadNotificationCount = 0);
+                }
+              }),
+      child: Container(
+        color: selected ? const Color(0xFFC10D00) : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Stack(
+          children: [
+            Row(
+              children: [
+                _buildSidebarIcon(icon, selected, iconColor, themeProvider),
+                const SizedBox(width: 12),
+                if (!sidebarCollapsed)
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontFamily: 'Poppins',
+                        color: selected
+                            ? Colors.white
+                            : themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade800,
+                        fontWeight:
+                            selected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                if (!sidebarCollapsed && badgeCount > 0)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      badgeCount > 99 ? '99+' : '$badgeCount',
+                      style: const TextStyle(
+                        fontFamily: 'Poppins',
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            if (sidebarCollapsed && badgeCount > 0)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _fetchUnreadNotificationCount() async {
+    try {
+      final response = await NotificationService.getNotifications();
+      if (!mounted) return;
+      setState(() {
+        unreadNotificationCount = response.unreadCount;
+      });
+    } catch (e) {
+      debugPrint('Failed to fetch unread notification count: $e');
+    }
   }
 
   Widget getCurrentScreen() {
@@ -873,12 +1350,30 @@ class _HMMainDashboardState extends State<HMMainDashboard>
         return const InterviewListScreen();
       case "cv_reviews":
         return CVReviewsScreen();
+      case "pipeline":
+        return RecruitmentPipelinePage(token: widget.token);
+      case "offers":
+        return AdminOfferListScreen(token: widget.token);
+      case "review_queue":
+        return const HiringManagerReviewQueueScreen();
       case "analytics":
         return HMAnalyticsPage();
       case "team_collaboration":
         return HMTeamCollaborationPage();
+      case "meetings":
+        return const HMMeetingsPage();
       case "notifications":
-        return NotificationsScreen();
+        return NotificationsScreen(onNotificationTap: _handleNotificationTap);
+      case "settings":
+        return HiringManagerSettingsScreen(
+          token: widget.token,
+          onBack: () => setState(() => currentScreen = 'dashboard'),
+        );
+      case "profile":
+        return HiringManagerProfileScreen(
+          token: widget.token,
+          onBack: () => setState(() => currentScreen = 'dashboard'),
+        );
       default:
         return dashboardOverview();
     }
@@ -887,784 +1382,697 @@ class _HMMainDashboardState extends State<HMMainDashboard>
   // ---------------- Dashboard widgets ----------------
   Widget dashboardOverview() {
     final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDark = themeProvider.isDarkMode;
 
     if (loadingStats) {
       return const Center(
           child: CircularProgressIndicator(color: Colors.redAccent));
     }
 
-    final stats = [
+    final kpis = [
       {
-        "title": "Jobs",
+        "title": "Total Jobs",
         "count": jobsCount,
-        "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/jobs.png" // or .svg if using SVG
+        "subtitle":
+            "additional job description information can be included if required.",
+        "color": _palettePrimary,
+        "icon": Icons.work_outline,
       },
       {
         "title": "Candidates",
         "count": candidatesCount,
-        "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/candidates.png"
+        "subtitle":
+            "additional candidate information can be included if required.",
+        "color": _palettePrimary,
+        "icon": Icons.groups_2_outlined,
       },
       {
         "title": "Interviews",
         "count": interviewsCount,
-        "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/interview.png"
+        "subtitle":
+            "additional interview information can be included if required.",
+        "color": _palettePrimary,
+        "icon": Icons.record_voice_over_outlined,
       },
       {
-        "title": "CV Reviews",
+        "title": "Applications",
         "count": cvReviewsCount,
-        "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/review.png"
+        "subtitle":
+            "additional application information can be included if required.",
+        "color": _palettePrimary,
+        "icon": Icons.find_in_page_outlined,
       },
       {
-        "title": "Audits",
-        "count": auditsCount,
-        "color": const Color.fromARGB(255, 193, 13, 0),
-        "icon": "assets/icons/audit.png"
+        "title": "Offers",
+        "count": 0,
+        "subtitle":
+            "additional offer description information can be included if required.",
+        "color": _palettePrimary,
+        "icon": Icons.send_outlined,
+      },
+      {
+        "title": "Assessments",
+        "count": candidatesWithAssessments,
+        "subtitle":
+            "additional assessment information can be included if required.",
+        "color": _palettePrimary,
+        "icon": Icons.assignment_turned_in_outlined,
       },
     ];
 
-    final candidatePipeline = [
-      _ChartData("Applied", 48),
-      _ChartData("Screened", 34),
-      _ChartData("Interviewed", 22),
-      _ChartData("Offers", 9),
-      _ChartData("Hires", 5),
-    ];
-
-    final timeToFill = [
-      _ChartData("Jan", 35),
-      _ChartData("Feb", 32),
-      _ChartData("Mar", 30),
-      _ChartData("Apr", 28),
-      _ChartData("May", 27),
-      _ChartData("Jun", 25),
-    ];
-
-    final genderData = [
-      _ChartData("Female", 52),
-      _ChartData("Male", 45),
-      _ChartData("Non-binary", 3),
-    ];
-
-    final ethnicityData = [
-      _ChartData("Black", 38),
-      _ChartData("White", 32),
-      _ChartData("Indian", 15),
-      _ChartData("Coloured", 10),
-      _ChartData("Other", 5),
-    ];
-
-    final sourcePerformance = [
-      _ChartData("LinkedIn", 40),
-      _ChartData("Referral", 25),
-      _ChartData("Job Boards", 20),
-      _ChartData("Career Site", 15),
-    ];
+    final topCandidates = candidates.take(8).toList();
+    final activities = pipelineActivity.take(6).toList();
+    final sourceData = sourcePerformanceData.isNotEmpty
+        ? sourcePerformanceData
+        : <_ChartData>[
+            _ChartData("LinkedIn", 40),
+            _ChartData("Referral", 25),
+            _ChartData("Job Boards", 20),
+            _ChartData("Career Site", 10),
+          ];
 
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        padding: const EdgeInsets.fromLTRB(14, 10, 14, 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 8),
-            Text("Welcome Back, Admin",
-                style: TextStyle(
-                    fontFamily: 'Poppins',
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: themeProvider.isDarkMode
-                        ? Colors.white
-                        : const Color.fromARGB(225, 20, 19, 30))),
-            const SizedBox(height: 12),
-
-            // KPI Cards
-            // Instead of SizedBox with fixed height, use:
-            ConstrainedBox(
-              constraints: const BoxConstraints(
-                minHeight: 160,
-                maxHeight: 180,
-              ),
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: stats.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 16),
-                itemBuilder: (_, index) {
-                  final item = stats[index];
-                  return Container(
-                    decoration: BoxDecoration(
-                      color: (themeProvider.isDarkMode
-                              ? const Color(0xFF14131E)
-                              : Colors.white)
-                          .withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (item["color"] as Color).withOpacity(0.1),
-                          blurRadius: 15,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: kpiCard(
-                        item["title"].toString(),
-                        item["count"] as int,
-                        item["color"] as Color,
-                        item["icon"] as String),
-                  );
-                },
+            Text(
+              'Hiring Manager Dashboard',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: isDark ? _paletteWhite : _paletteInk,
               ),
             ),
-            const SizedBox(height: 24),
-            LayoutBuilder(builder: (context, constraints) {
-              int crossAxisCount = constraints.maxWidth > 900 ? 2 : 1;
-              double aspectRatio = constraints.maxWidth > 900 ? 2.7 : 2.2;
-              return GridView.count(
-                crossAxisCount: crossAxisCount,
-                shrinkWrap: true,
-                childAspectRatio: aspectRatio,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                physics: const NeverScrollableScrollPhysics(),
-                children: [
-                  stylishBarChartCard("Candidate Pipeline", candidatePipeline,
-                      const Color.fromARGB(255, 193, 13, 0)),
-                  stylishLineChartCard("Time to Fill Trend", timeToFill,
-                      const Color.fromARGB(255, 193, 13, 0)),
-                  stylishDualDonutCard(
-                      "Diversity Metrics", genderData, ethnicityData),
-                  stylishBarChartCard("Source Performance", sourcePerformance,
-                      const Color.fromARGB(255, 193, 13, 0)),
-                  stylishTeamCollaborationCard(
-                      "Team Collaboration", teamMessages),
-                  modernCalendarCard(),
-                  stylishActivitiesCard(recentActivities),
-                ],
-              );
-            }),
-            const SizedBox(height: 50),
+            Text(
+              'Hello, ${_effectiveWelcomeName(userName)}',
+              style: TextStyle(
+                fontFamily: 'Poppins',
+                fontSize: 11,
+                color: isDark ? _paletteSilver : _paletteCharcoal,
+              ),
+            ),
+            const SizedBox(height: 10),
+            _buildScreenshotKpiGrid(kpis, isDark),
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildCandidateOverviewCard(topCandidates, isDark),
+                      const SizedBox(height: 10),
+                      _buildCandidatePipelineCard(isDark),
+                      const SizedBox(height: 10),
+                      _buildDiversityMetricsCard(isDark),
+                      const SizedBox(height: 10),
+                      _buildTeamCollaborationCard(isDark),
+                      const SizedBox(height: 10),
+                      _buildRecentActivitiesCard(activities, isDark),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _buildDemographicsInsightsCard(isDark),
+                      const SizedBox(height: 10),
+                      _buildTimeToFillCard(isDark),
+                      const SizedBox(height: 10),
+                      _buildSourcePerformanceCard(sourceData, isDark),
+                      const SizedBox(height: 10),
+                      _buildCalendarPanelCard(isDark),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget teamCollaborationWidget() {
-    return stylishTeamCollaborationCard("Team Collaboration", teamMessages);
+  Widget _buildScreenshotKpiGrid(
+      List<Map<String, dynamic>> items, bool isDark) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        childAspectRatio: 2.8,
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
+      ),
+      itemCount: items.length,
+      itemBuilder: (_, i) => _buildScreenshotKpiTile(items[i], isDark),
+    );
   }
 
-  // ---------------- Stylish Chart Cards ----------------
-  Widget stylishBarChartCard(String title, List<_ChartData> data, Color color) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
+  Widget _buildScreenshotKpiTile(Map<String, dynamic> item, bool isDark) {
+    final Color accent = item['color'] as Color;
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color:
-            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-        gradient: themeProvider.isDarkMode
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.red.shade900.withOpacity(0.2),
-                  Colors.red.shade800.withOpacity(0.1),
-                ],
-              )
-            : LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.red.shade50,
-                  Colors.red.shade100.withOpacity(0.3),
-                ],
-              ),
+        color: isDark
+            ? _paletteInk.withValues(alpha: 0.92)
+            : _paletteCanvas.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(10),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(title,
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.black87)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text("${data.length} stages",
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(item['title'] as String,
                     style: TextStyle(
                         fontFamily: 'Poppins',
-                        color: color,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: SfCartesianChart(
-              margin: EdgeInsets.zero,
-              plotAreaBorderWidth: 0,
-              primaryXAxis: CategoryAxis(
-                majorGridLines: const MajorGridLines(width: 0),
-                axisLine: const AxisLine(width: 0),
-                labelStyle: TextStyle(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade700,
-                  fontFamily: 'Poppins',
-                ),
-              ),
-              primaryYAxis: NumericAxis(
-                majorGridLines: const MajorGridLines(width: 0),
-                axisLine: const AxisLine(width: 0),
-                labelStyle: TextStyle(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade700,
-                  fontFamily: 'Poppins',
-                ),
-              ),
-              series: <ColumnSeries<_ChartData, String>>[
-                ColumnSeries<_ChartData, String>(
-                  dataSource: data,
-                  xValueMapper: (d, _) => d.label,
-                  yValueMapper: (d, _) => d.value,
-                  color: color,
-                  width: 0.6,
-                  borderRadius: BorderRadius.circular(4),
-                  dataLabelSettings: DataLabelSettings(
-                    isVisible: true,
-                    textStyle: TextStyle(
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.black87,
-                      fontFamily: 'Poppins',
-                      fontSize: 10,
-                    ),
-                  ),
-                )
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget stylishLineChartCard(
-      String title, List<_ChartData> data, Color color) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color:
-            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-        gradient: themeProvider.isDarkMode
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.blue.shade900.withOpacity(0.2),
-                  Colors.purple.shade800.withOpacity(0.1),
-                ],
-              )
-            : LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.blue.shade50,
-                  Colors.purple.shade50,
-                ],
-              ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(title,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                        color: isDark ? _paletteWhite : _paletteInk)),
+                Text(
+                  item['subtitle'] as String,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                       fontFamily: 'Poppins',
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.black87)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
+                      fontSize: 8,
+                      color: isDark ? _paletteSilver : _paletteSteel),
                 ),
-                child: Row(
-                  children: [
-                    Icon(Icons.trending_down, color: color, size: 12),
-                    const SizedBox(width: 4),
-                    Text("Improving",
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: color,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: SfCartesianChart(
-              margin: EdgeInsets.zero,
-              plotAreaBorderWidth: 0,
-              primaryXAxis: CategoryAxis(
-                majorGridLines: const MajorGridLines(width: 0),
-                axisLine: const AxisLine(width: 0),
-                labelStyle: TextStyle(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade700,
-                  fontFamily: 'Poppins',
-                ),
-              ),
-              primaryYAxis: NumericAxis(
-                majorGridLines: const MajorGridLines(width: 0),
-                axisLine: const AxisLine(width: 0),
-                labelStyle: TextStyle(
-                  color: themeProvider.isDarkMode
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade700,
-                  fontFamily: 'Poppins',
-                ),
-              ),
-              series: <SplineSeries<_ChartData, String>>[
-                SplineSeries<_ChartData, String>(
-                  dataSource: data,
-                  xValueMapper: (d, _) => d.label,
-                  yValueMapper: (d, _) => d.value,
-                  color: color,
-                  width: 3,
-                  markerSettings: const MarkerSettings(isVisible: true),
-                  dataLabelSettings: DataLabelSettings(
-                    isVisible: true,
-                    textStyle: TextStyle(
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.black87,
-                      fontFamily: 'Poppins',
-                      fontSize: 10,
-                    ),
-                  ),
-                )
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget stylishDualDonutCard(
-      String title, List<_ChartData> data1, List<_ChartData> data2) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color:
-            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.purple.withOpacity(0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-        gradient: themeProvider.isDarkMode
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.purple.shade900.withOpacity(0.2),
-                  Colors.indigo.shade800.withOpacity(0.1),
-                ],
-              )
-            : LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.purple.shade50,
-                  Colors.indigo.shade50,
-                ],
-              ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title,
-              style: TextStyle(
-                  fontFamily: 'Poppins',
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: themeProvider.isDarkMode
-                      ? Colors.white
-                      : Colors.black87)),
-          const SizedBox(height: 16),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: SfCircularChart(
-                    margin: EdgeInsets.zero,
-                    title: ChartTitle(
-                        text: "Gender",
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 12)),
-                    legend: Legend(
-                        isVisible: true,
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 10)),
-                    series: <DoughnutSeries<_ChartData, String>>[
-                      DoughnutSeries<_ChartData, String>(
-                        dataSource: data1,
-                        xValueMapper: (d, _) => d.label,
-                        yValueMapper: (d, _) => d.value,
-                        innerRadius: '70%',
-                        dataLabelSettings: DataLabelSettings(
-                          isVisible: true,
-                          textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 10,
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                          ),
-                        ),
-                      )
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: SfCircularChart(
-                    margin: EdgeInsets.zero,
-                    title: ChartTitle(
-                        text: "Ethnicity",
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 12)),
-                    legend: Legend(
-                        isVisible: true,
-                        textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                            fontSize: 10)),
-                    series: <DoughnutSeries<_ChartData, String>>[
-                      DoughnutSeries<_ChartData, String>(
-                        dataSource: data2,
-                        xValueMapper: (d, _) => d.label,
-                        yValueMapper: (d, _) => d.value,
-                        innerRadius: '70%',
-                        dataLabelSettings: DataLabelSettings(
-                          isVisible: true,
-                          textStyle: TextStyle(
-                            fontFamily: 'Poppins',
-                            fontSize: 10,
-                            color: themeProvider.isDarkMode
-                                ? Colors.white
-                                : Colors.black87,
-                          ),
-                        ),
-                      )
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget stylishTeamCollaborationCard(String title, List<String> messages) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color:
-            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.green.withOpacity(0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-        gradient: themeProvider.isDarkMode
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.green.shade900.withOpacity(0.2),
-                  Colors.teal.shade800.withOpacity(0.1),
-                ],
-              )
-            : LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.green.shade50,
-                  Colors.teal.shade50,
-                ],
-              ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(title,
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: themeProvider.isDarkMode
-                          ? Colors.white
-                          : Colors.black87)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text("${messages.length} updates",
-                    style: const TextStyle(
+                const SizedBox(height: 3),
+                Text('${item['count']}',
+                    style: TextStyle(
                         fontFamily: 'Poppins',
-                        color: Colors.green,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold)),
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? _paletteWhite : _paletteInk)),
+              ],
+            ),
+          ),
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+            child:
+                Icon(item['icon'] as IconData, color: _paletteWhite, size: 18),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDashboardCard(String title, bool isDark,
+      {Widget? trailing, required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: isDark
+            ? _paletteInk.withValues(alpha: 0.92)
+            : _paletteCanvas.withValues(alpha: 0.95),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(title,
+                    style: TextStyle(
+                        fontFamily: 'Poppins',
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12,
+                        color: isDark ? _paletteWhite : _paletteInk)),
               ),
+              if (trailing != null) trailing,
             ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: ListView.builder(
-              itemCount: messages.length,
-              itemBuilder: (context, index) {
+          const SizedBox(height: 8),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCandidateOverviewCard(
+      List<Map<String, dynamic>> candidatesData, bool isDark) {
+    return _buildDashboardCard(
+      'Candidate Overview',
+      isDark,
+      trailing: TextButton(
+        onPressed: () => setState(() => currentScreen = "candidates"),
+        child: const Text('VIEW', style: TextStyle(fontSize: 10)),
+      ),
+      child: Column(
+        children: candidatesData.isEmpty
+            ? [
+                Text('No candidate data available',
+                    style: TextStyle(
+                        color: isDark ? _paletteSilver : _paletteSteel)),
+              ]
+            : candidatesData.map((c) {
+                final name =
+                    (c['full_name'] ?? c['name'] ?? 'Unnamed').toString();
+                final role = (c['requisition_title'] ?? c['job_title'] ?? 'N/A')
+                    .toString();
                 return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                   decoration: BoxDecoration(
-                    color: themeProvider.isDarkMode
-                        ? Colors.black.withOpacity(0.3)
-                        : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.green.withOpacity(0.2),
-                    ),
+                    color: isDark ? _paletteCharcoal : _paletteCanvas,
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        margin: const EdgeInsets.only(top: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          borderRadius: BorderRadius.circular(4),
+                      const CircleAvatar(
+                        radius: 10,
+                        backgroundColor: _palettePrimary,
+                        child:
+                            Icon(Icons.person, size: 12, color: _paletteWhite),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 10,
+                                    color:
+                                        isDark ? _paletteWhite : _paletteInk)),
+                            Text(role,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 8,
+                                    color: isDark
+                                        ? _paletteSilver
+                                        : _paletteSteel)),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          messages[index],
-                          style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.grey.shade300
-                                : Colors.grey.shade800,
-                            fontSize: 12,
-                          ),
-                        ),
+                      TextButton(
+                        onPressed: () =>
+                            setState(() => currentScreen = "pipeline"),
+                        child: const Text('VIA', style: TextStyle(fontSize: 9)),
                       ),
                     ],
                   ),
                 );
-              },
-            ),
-          ),
+              }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildDemographicsInsightsCard(bool isDark) {
+    final gender = _mapEntries(candidateDemographics['gender_distribution']);
+    final locations = _mapEntries(candidateDemographics['top_locations']);
+    final education = _mapEntries(candidateDemographics['education_levels']);
+    final List<_ChartData> skills =
+        skillsData.isNotEmpty ? List<_ChartData>.from(skillsData.take(3)) : [];
+    return _buildDashboardCard(
+      'Candidate Demographics & Insights',
+      isDark,
+      child: Column(
+        children: [
+          _smallPairList('Gender Distribution:', gender, isDark),
+          const SizedBox(height: 6),
+          _smallChartDataList('Top Skills:', skills, isDark),
+          const SizedBox(height: 6),
+          _smallPairList('Top Locations:', locations, isDark),
+          const SizedBox(height: 6),
+          _smallPairList('Education Levels:', education, isDark),
         ],
       ),
     );
   }
 
-  Widget stylishActivitiesCard(List<String> activities) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
+  List<MapEntry<String, int>> _mapEntries(dynamic raw) {
+    if (raw is! Map) return [const MapEntry('N/A', 0)];
+    return raw.entries
+        .map((e) => MapEntry(e.key.toString(), (e.value as num?)?.toInt() ?? 0))
+        .toList();
+  }
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color:
-            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.orange.withOpacity(0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
-          ),
-        ],
-        gradient: themeProvider.isDarkMode
-            ? LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.orange.shade900.withOpacity(0.2),
-                  Colors.amber.shade800.withOpacity(0.1),
-                ],
-              )
-            : LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.orange.shade50,
-                  Colors.amber.shade50,
+  Widget _smallPairList(
+      String title, List<MapEntry<String, int>> data, bool isDark) {
+    final rows =
+        data.isEmpty ? [const MapEntry('N/A', 0)] : data.take(3).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: isDark ? _paletteWhite : _paletteInk)),
+        const SizedBox(height: 3),
+        ...rows.map((e) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(e.key,
+                        style: TextStyle(
+                            fontSize: 9,
+                            color: isDark ? _paletteSilver : _paletteSteel)),
+                  ),
+                  Text('${e.value}',
+                      style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? _paletteWhite : _paletteInk)),
                 ],
               ),
+            )),
+      ],
+    );
+  }
+
+  Widget _smallChartDataList(String title, List<_ChartData> data, bool isDark) {
+    final rows = data.isEmpty ? [_ChartData('N/A', 0)] : data;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: isDark ? _paletteWhite : _paletteInk)),
+        const SizedBox(height: 3),
+        ...rows.map((e) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 1),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(e.label,
+                        style: TextStyle(
+                            fontSize: 9,
+                            color: isDark ? _paletteSilver : _paletteSteel)),
+                  ),
+                  Text('${e.value}',
+                      style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          color: isDark ? _paletteWhite : _paletteInk)),
+                ],
+              ),
+            )),
+      ],
+    );
+  }
+
+  Widget _buildCandidatePipelineCard(bool isDark) {
+    final data = candidatePipelineData.isEmpty
+        ? [
+            _ChartData('Applied', 0),
+            _ChartData('Screened', 0),
+            _ChartData('Interviewed', 0),
+            _ChartData('Offers', 0),
+            _ChartData('Hired', 0),
+          ]
+        : candidatePipelineData;
+    final maxVal =
+        data.map((e) => e.value).fold<int>(1, (a, b) => a > b ? a : b);
+    return _buildDashboardCard(
+      'Candidate Pipeline',
+      isDark,
+      child: SizedBox(
+        height: 150,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: data.map((e) {
+            final h = ((e.value / maxVal) * 95).clamp(8, 95).toDouble();
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text('${e.value}',
+                        style: TextStyle(
+                            fontSize: 8,
+                            color: isDark ? _paletteSilver : _paletteSteel)),
+                    const SizedBox(height: 3),
+                    Container(
+                        height: h,
+                        decoration: BoxDecoration(
+                            color: _palettePrimary,
+                            borderRadius: BorderRadius.circular(4))),
+                    const SizedBox(height: 4),
+                    Text(e.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 8,
+                            color: isDark ? _paletteSilver : _paletteSteel)),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTimeToFillCard(bool isDark) {
+    final data = timeToFillData.isEmpty
+        ? [
+            _ChartData('Oct 25', 30),
+            _ChartData('Nov 25', 28),
+            _ChartData('Dec 25', 35),
+            _ChartData('Jan 26', 31),
+            _ChartData('Feb 26', 27),
+            _ChartData('Mar 26', 23),
+          ]
+        : timeToFillData;
+    final maxVal =
+        data.map((e) => e.value).fold<int>(1, (a, b) => a > b ? a : b);
+    return _buildDashboardCard(
+      'Time-to-Fill Trend',
+      isDark,
+      child: SizedBox(
+        height: 150,
+        child: CustomPaint(
+          painter: _LineChartPainter(data, maxVal, isDark),
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiversityMetricsCard(bool isDark) {
+    return _buildDashboardCard(
+      'Diversity Metrics',
+      isDark,
+      child: Row(
+        children: [
+          Expanded(child: _simpleDonutLegend('Gender:', genderData, isDark)),
+          const SizedBox(width: 8),
+          Expanded(
+              child: _simpleDonutLegend('Ethnicity:', ethnicityData, isDark)),
+        ],
+      ),
+    );
+  }
+
+  Widget _simpleDonutLegend(String title, List<_ChartData> data, bool isDark) {
+    final values =
+        data.isEmpty ? [_ChartData('Unknown', 100)] : data.take(4).toList();
+    final total = values.fold<int>(0, (p, e) => p + e.value).clamp(1, 999999);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: isDark ? _paletteWhite : _paletteInk)),
+        const SizedBox(height: 6),
+        ...values.asMap().entries.map((entry) {
+          final idx = entry.key;
+          final e = entry.value;
+          final pct = ((e.value / total) * 100).round();
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 1),
+            child: Row(
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: _paletteAccents[idx % _paletteAccents.length]
+                        .withValues(
+                            alpha: (0.55 + (pct / 100)).clamp(0.55, 1.0)),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(e.label,
+                      style: TextStyle(
+                          fontSize: 8,
+                          color: isDark ? _paletteSilver : _paletteSteel)),
+                ),
+                Text('$pct%',
+                    style: TextStyle(
+                        fontSize: 8,
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? _paletteWhite : _paletteInk)),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildSourcePerformanceCard(List<_ChartData> data, bool isDark) {
+    final maxVal =
+        data.map((e) => e.value).fold<int>(1, (a, b) => a > b ? a : b);
+    return _buildDashboardCard(
+      'Source Performance',
+      isDark,
+      child: SizedBox(
+        height: 150,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: data.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final e = entry.value;
+            final h = ((e.value / maxVal) * 95).clamp(10, 95).toDouble();
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text('${e.value}',
+                        style: TextStyle(
+                            fontSize: 8,
+                            color: isDark ? _paletteSilver : _paletteSteel)),
+                    const SizedBox(height: 3),
+                    Container(
+                      height: h,
+                      decoration: BoxDecoration(
+                        color: _paletteAccents[idx % _paletteAccents.length],
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(e.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 8,
+                            color: isDark ? _paletteSilver : _paletteSteel)),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTeamCollaborationCard(bool isDark) {
+    return _buildDashboardCard(
+      'Team Collaboration',
+      isDark,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.account_circle_outlined, size: 14),
+          const SizedBox(width: 4),
+          Text('${teamMessages.length}',
+              style:
+                  const TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
+        ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text("Recent Activities",
-                  style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text("${activities.length} items",
-                    style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        color: Colors.orange,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: activities.isEmpty
-                ? Center(
-                    child: Text("No recent activities",
-                        style: TextStyle(
-                            fontFamily: 'Poppins',
-                            color: themeProvider.isDarkMode
-                                ? Colors.grey.shade400
-                                : Colors.grey.shade600)),
-                  )
-                : ListView.builder(
-                    itemCount: activities.length,
-                    itemBuilder: (context, index) {
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: themeProvider.isDarkMode
-                              ? Colors.black.withOpacity(0.3)
-                              : Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 4,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: Colors.orange,
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                activities[index],
-                                style: TextStyle(
-                                  fontFamily: 'Poppins',
-                                  color: themeProvider.isDarkMode
-                                      ? Colors.grey.shade300
-                                      : Colors.grey.shade800,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+        children: teamMessages.take(5).map((m) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 5),
+            child: Row(
+              children: [
+                const Icon(Icons.flag, size: 10, color: _palettePrimary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    m,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 9,
+                        color: isDark ? _paletteSilver : _paletteSteel),
                   ),
-          ),
-        ],
+                ),
+              ],
+            ),
+          );
+        }).toList(),
       ),
+    );
+  }
+
+  Widget _buildRecentActivitiesCard(
+      List<Map<String, dynamic>> items, bool isDark) {
+    final list = items.isEmpty
+        ? [
+            {"action": "No recent activities", "details": ""}
+          ]
+        : items;
+    return _buildDashboardCard(
+      'Recent Activities',
+      isDark,
+      child: Column(
+        children: list.map((a) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 5),
+            child: Row(
+              children: [
+                const Icon(Icons.notifications_active,
+                    size: 10, color: _palettePrimary),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '${a['action'] ?? 'Update'} ${a['details'] ?? ''}'.trim(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                        fontSize: 9,
+                        color: isDark ? _paletteSilver : _paletteSteel),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  Widget _buildCalendarPanelCard(bool isDark) {
+    return _buildDashboardCard(
+      'Calendar',
+      isDark,
+      trailing: TextButton(
+        onPressed: () => setState(() => currentScreen = "meetings"),
+        child: const Text('VIEW', style: TextStyle(fontSize: 10)),
+      ),
+      child: SizedBox(height: 380, child: modernCalendarCard()),
     );
   }
 
@@ -1674,13 +2082,12 @@ class _HMMainDashboardState extends State<HMMainDashboard>
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color:
-            (themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white)
-                .withOpacity(0.9),
+        color: (themeProvider.isDarkMode ? _paletteInk : _paletteCanvas)
+            .withValues(alpha: 0.95),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.blueGrey.withOpacity(0.1),
+            color: _paletteCharcoal.withValues(alpha: 0.12),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -1690,16 +2097,18 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.blue.shade900.withOpacity(0.3),
-                  Colors.purple.shade900.withOpacity(0.3),
+                  _paletteInk.withValues(alpha: 0.96),
+                  _paletteCharcoal.withValues(alpha: 0.94),
+                  _paletteSteel.withValues(alpha: 0.88),
                 ],
               )
             : LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  Colors.blue.shade50,
-                  Colors.purple.shade50,
+                  _paletteCanvas,
+                  _paletteWhite,
+                  _paletteCanvas.withValues(alpha: 0.98),
                 ],
               ),
       ),
@@ -1714,209 +2123,347 @@ class _HMMainDashboardState extends State<HMMainDashboard>
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: const Color.fromARGB(255, 153, 26, 26)
-                          .withOpacity(0.1),
+                      color: _palettePrimary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(Icons.calendar_month,
-                        color: Color.fromARGB(255, 250, 250, 250), size: 22),
+                        color: _paletteWhite, size: 22),
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    "Today's Date",
+                    "Calendar",
                     style: TextStyle(
                       fontFamily: 'Poppins',
                       fontWeight: FontWeight.w700,
                       fontSize: 16,
-                      color: Colors.blueAccent,
+                      color: _palettePrimary,
                     ),
                   ),
                 ],
               ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.blueAccent.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: StreamBuilder(
-                  stream: Stream.periodic(const Duration(seconds: 1)),
-                  builder: (context, snapshot) {
-                    return Text(
-                      DateFormat('hh:mm a').format(DateTime.now()),
-                      style: const TextStyle(
-                        fontFamily: 'Poppins',
-                        fontWeight: FontWeight.w600,
-                        color: Colors.blueAccent,
-                        fontSize: 12,
-                      ),
-                    );
-                  },
-                ),
+              Row(
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _palettePeriwinkle.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: StreamBuilder(
+                      stream: Stream.periodic(const Duration(seconds: 1)),
+                      builder: (context, snapshot) {
+                        return Text(
+                          DateFormat('hh:mm a').format(DateTime.now()),
+                          style: const TextStyle(
+                            fontFamily: 'Poppins',
+                            fontWeight: FontWeight.w600,
+                            color: _palettePrimary,
+                            fontSize: 12,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    icon: const Icon(Icons.analytics_outlined,
+                        color: _palettePrimary),
+                    onPressed: () => _showCalendarAnalytics(),
+                    tooltip: "View calendar analytics",
+                  ),
+                ],
               ),
             ],
           ),
           const SizedBox(height: 16),
-          Container(
-            height: 140,
-            decoration: BoxDecoration(
-              color: (themeProvider.isDarkMode
-                      ? const Color(0xFF14131E)
-                      : Colors.white)
-                  .withOpacity(0.9),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    DateTime.now().day.toString(),
-                    style: const TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 48,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.blueAccent,
-                      height: 1.0,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    DateFormat('MMMM yyyy').format(DateTime.now()),
-                    style: TextStyle(
-                      fontFamily: 'Poppins',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: themeProvider.isDarkMode
-                          ? Colors.grey.shade300
-                          : Colors.grey.shade700,
-                    ),
+          SizedBox(
+            height: 400,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _paletteWhite.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: _paletteCharcoal.withValues(alpha: 0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
+              clipBehavior: Clip.antiAlias,
+              child: _calendarLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : SfCalendar(
+                      view: CalendarView.month,
+                      dataSource:
+                          _DashboardCalendarDataSource(_calendarAppointments),
+                      onViewChanged: (ViewChangedDetails details) {
+                        final visibleDates = details.visibleDates;
+                        if (visibleDates.isNotEmpty &&
+                            (focusedDay.year != visibleDates.first.year ||
+                                focusedDay.month != visibleDates.first.month)) {
+                          setState(() {
+                            focusedDay = visibleDates.first;
+                          });
+                          _loadCalendarData();
+                        }
+                      },
+                      onTap: (CalendarTapDetails details) {
+                        if (details.targetElement ==
+                            CalendarElement.calendarCell) {
+                          _showDayEventsDialog(details.date!);
+                        }
+                      },
+                      onLongPress: (CalendarLongPressDetails details) {
+                        if (details.targetElement ==
+                            CalendarElement.calendarCell) {
+                          _showQuickEventCreationMenu(details.date!);
+                        }
+                      },
+                      monthViewSettings: MonthViewSettings(
+                        appointmentDisplayMode:
+                            MonthAppointmentDisplayMode.appointment,
+                        showAgenda: false,
+                        monthCellStyle: MonthCellStyle(
+                          textStyle: TextStyle(
+                            fontFamily: 'Poppins',
+                            fontSize: 14,
+                            color: themeProvider.isDarkMode
+                                ? _paletteSilver
+                                : _paletteCharcoal,
+                          ),
+                        ),
+                      ),
+                      todayHighlightColor: _palettePrimary,
+                      selectionDecoration: BoxDecoration(
+                        color: _palettePeriwinkle.withValues(alpha: 0.25),
+                        border: Border.all(color: _palettePrimary, width: 2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
             ),
           ),
+          _buildDailyEventSummary(themeProvider),
         ],
       ),
     );
   }
 
-  Widget kpiCard(String title, int count, Color color, String iconPath) {
-    final themeProvider = Provider.of<ThemeProvider>(context);
+  // New method for showing day events in a dialog
+  void _showDayEventsDialog(DateTime selectedDate) {
+    final dayEvents = _calendarAppointments.where((appointment) {
+      return appointment.startTime.year == selectedDate.year &&
+          appointment.startTime.month == selectedDate.month &&
+          appointment.startTime.day == selectedDate.day;
+    }).toList();
 
-    return Container(
-      width: 200,
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(
+            DateFormat('EEEE, MMMM d, y').format(selectedDate),
+            style: const TextStyle(
+                fontFamily: 'Poppins', fontWeight: FontWeight.bold),
+          ),
+          content: SizedBox(
+            width: MediaQuery.of(context).size.width *
+                0.4, // Constrain width to 40% of screen width
+            child: dayEvents.isEmpty
+                ? const Text("No events scheduled for this day.",
+                    style: TextStyle(fontFamily: 'Poppins'))
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: dayEvents.length,
+                    itemBuilder: (context, index) {
+                      final event = dayEvents[index];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        child: ListTile(
+                          leading: Icon(
+                            event.color == Colors.deepOrange
+                                ? Icons.video_call
+                                : Icons.event,
+                            color: event.color,
+                          ),
+                          title: Text(event.subject,
+                              style: const TextStyle(fontFamily: 'Poppins')),
+                          subtitle: Text(
+                            '${DateFormat.jm().format(event.startTime)} - ${DateFormat.jm().format(event.endTime)}',
+                            style: const TextStyle(
+                                fontFamily: 'Poppins', fontSize: 12),
+                          ),
+                          trailing: PopupMenuButton<String>(
+                            onSelected: (value) {
+                              if (value == 'reschedule') {
+                                // Implement reschedule logic
+                              } else if (value == 'cancel') {
+                                // Implement cancel logic
+                              }
+                            },
+                            itemBuilder: (BuildContext context) => [
+                              const PopupMenuItem<String>(
+                                value: 'reschedule',
+                                child: Text('Reschedule'),
+                              ),
+                              const PopupMenuItem<String>(
+                                value: 'cancel',
+                                child: Text('Cancel'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Close"),
+            ),
+            ElevatedButton(
+              onPressed: () => _showQuickEventCreationMenu(selectedDate),
+              child: const Text("Add Event"),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // New method for quick event creation menu
+  void _showQuickEventCreationMenu(DateTime selectedDate) {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: Colors.grey.shade200,
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.08),
-                      blurRadius: 6,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Image.asset(
-                  iconPath,
-                  width: 30,
-                  height: 30,
-                  color: color,
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  "+${((count / 10) * 100).round()}%",
-                  style: TextStyle(
+              Text(
+                "Create Event on ${DateFormat('MMM d, y').format(selectedDate)}",
+                style: const TextStyle(
                     fontFamily: 'Poppins',
-                    color: color,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _eventTypeButton("Interview", Icons.video_call,
+                      Colors.deepOrange, selectedDate),
+                  _eventTypeButton(
+                      "Meeting", Icons.event, _paletteBlue, selectedDate),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            count.toString(),
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: TextStyle(
-              fontFamily: 'Poppins',
-              color: themeProvider.isDarkMode
-                  ? Colors.grey.shade400
-                  : Colors.grey.shade600,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
+        );
+      },
+    );
+  }
+
+  Widget _eventTypeButton(
+      String type, IconData icon, Color color, DateTime date) {
+    return ElevatedButton.icon(
+      onPressed: () {
+        Navigator.of(context).pop();
+        if (type == "Interview") {
+          // Navigate to interview creation screen
+          setState(() => currentScreen = "interviews");
+        } else if (type == "Meeting") {
+          // Navigate to meeting creation screen
+          setState(() => currentScreen = "meetings");
+        }
+      },
+      icon: Icon(icon, color: Colors.white),
+      label: Text(type, style: const TextStyle(fontFamily: 'Poppins')),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
     );
   }
-}
 
-// Data classes for charts
-class _DepartmentData {
-  final String department;
-  final int count;
-  final Color color;
-  _DepartmentData(this.department, this.count, this.color);
-}
+  // New method for daily event summary
+  Widget _buildDailyEventSummary(ThemeProvider themeProvider) {
+    final todayEvents = _calendarAppointments.where((appointment) {
+      final now = DateTime.now();
+      return appointment.startTime.year == now.year &&
+          appointment.startTime.month == now.month &&
+          appointment.startTime.day == now.day;
+    }).toList();
 
-class _HistogramData {
-  final String jobRole;
-  final int candidateCount;
-  _HistogramData(this.jobRole, this.candidateCount);
-}
+    return ExpansionTile(
+      title: Text(
+        "Today's Events (${todayEvents.length})",
+        style:
+            const TextStyle(fontFamily: 'Poppins', fontWeight: FontWeight.w600),
+      ),
+      children: todayEvents.isEmpty
+          ? [
+              const ListTile(
+                  title: Text("No events today",
+                      style: TextStyle(fontFamily: 'Poppins')))
+            ]
+          : todayEvents
+              .map((event) => ListTile(
+                    leading: Icon(
+                      event.color == Colors.deepOrange
+                          ? Icons.video_call
+                          : Icons.event,
+                      color: event.color,
+                    ),
+                    title: Text(event.subject,
+                        style: const TextStyle(fontFamily: 'Poppins')),
+                    subtitle: Text(
+                      DateFormat.jm().format(event.startTime),
+                      style:
+                          const TextStyle(fontFamily: 'Poppins', fontSize: 12),
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.more_vert),
+                      onPressed: () => _showEventActions(event),
+                    ),
+                  ))
+              .toList(),
+    );
+  }
 
-class _InterviewData {
-  final String status;
-  final int count;
-  _InterviewData(this.status, this.count);
-}
+  // New method for calendar analytics
+  void _showCalendarAnalytics() {
+    // Implement analytics dialog showing metrics
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text("Calendar Analytics",
+              style: TextStyle(fontFamily: 'Poppins')),
+          content: const SizedBox(
+            width: double.maxFinite,
+            child: Text(
+                "Analytics implementation pending - integrate with server API for metrics."),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Close"),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
-class _CvReviewData {
-  final String week;
-  final int reviewsCompleted;
-  final int reviewsPending;
-  _CvReviewData(this.week, this.reviewsCompleted, this.reviewsPending);
+  // New method for event actions
+  void _showEventActions(Appointment event) {
+    // Implement quick actions menu
+  }
 }
 
 class StackedLineData {
@@ -1930,14 +2477,59 @@ class StackedLineData {
       this.delete);
 }
 
+class _LineChartPainter extends CustomPainter {
+  final List<_ChartData> points;
+  final int maxValue;
+  final bool isDark;
+
+  _LineChartPainter(this.points, this.maxValue, this.isDark);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (points.isEmpty) return;
+    final linePaint = Paint()
+      ..color = const Color(0xFFCF2030)
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+    final dotPaint = Paint()
+      ..color = const Color(0xFFCF2030)
+      ..style = PaintingStyle.fill;
+    final gridPaint = Paint()
+      ..color = (isDark ? const Color(0xFFB0B6BB) : const Color(0xFF727576))
+          .withValues(alpha: 0.35)
+      ..strokeWidth = 1;
+
+    for (int i = 1; i <= 4; i++) {
+      final y = size.height * (i / 4);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final path = Path();
+    for (int i = 0; i < points.length; i++) {
+      final x =
+          (points.length == 1) ? 0.0 : (i / (points.length - 1)) * size.width;
+      final y =
+          size.height - ((points[i].value / maxValue) * (size.height - 8));
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+      canvas.drawCircle(Offset(x, y), 3, dotPaint);
+    }
+    canvas.drawPath(path, linePaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LineChartPainter oldDelegate) {
+    return oldDelegate.points != points ||
+        oldDelegate.maxValue != maxValue ||
+        oldDelegate.isDark != isDark;
+  }
+}
+
 class _ChartData {
   final String label;
   final int value;
   _ChartData(this.label, this.value);
-}
-
-class _MeetingDataSource extends CalendarDataSource {
-  _MeetingDataSource(List<Appointment> source) {
-    appointments = source;
-  }
 }

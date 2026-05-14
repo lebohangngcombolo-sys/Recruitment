@@ -8,7 +8,7 @@ from flask_jwt_extended import (
     get_jwt_identity
 )
 from app.extensions import db, oauth, limiter, validator
-from app.models import User, VerificationCode, OAuthConnection, Candidate
+from app.models import User, VerificationCode, OAuthConnection, Candidate, Notification
 from app.services.auth_service import AuthService
 from app.services.email_service import EmailService
 from app.services.audit2 import AuditService
@@ -16,7 +16,7 @@ from app.services.file_text_extractor import extract_text_from_file
 from app.utils.decorators import role_required
 from datetime import datetime, timedelta
 import secrets
-import jwt  # ← ADD THIS IMPORT
+import jwt  # ΓåÉ ADD THIS IMPORT
 from app.utils.enrollment_schema import EnrollmentSchema
 from app.services.enrollment_service import EnrollmentService
 from app.services.ai_parser_service import analyse_resume_gemini
@@ -24,6 +24,9 @@ from app.services.ai_cv_parser import AIParser
 from marshmallow import ValidationError
 from werkzeug.utils import secure_filename
 import os
+import re
+import cloudinary.uploader
+from urllib.parse import quote
 
 
 
@@ -38,7 +41,7 @@ ROLE_DASHBOARD_MAP = {
     "admin": "/api/dashboard/admin",
     "hiring_manager": "/api/dashboard/hiring-manager",
     "candidate": "/dashboard/candidate",
-    "hr": "/api/dashboard/hr"   # ← ADDED
+    "hr": "/api/dashboard/hr"   # ΓåÉ ADDED
 }
 
 # OAuth providers config
@@ -65,6 +68,42 @@ OAUTH_PROVIDERS = {
 def init_auth_routes(app):
 
     enrollment_schema = EnrollmentSchema()
+
+    def _frontend_login_error_redirect(message: str, status_code: int = 302):
+        """Send OAuth setup/runtime errors back to frontend login instead of raw JSON pages."""
+        frontend_url = (current_app.config.get("FRONTEND_URL") or "").rstrip("/")
+        if frontend_url:
+            return redirect(f"{frontend_url}/login?error={quote(message)}"), status_code
+        return jsonify({"error": message}), 500
+
+    def _notify_all_hiring_managers_new_candidate(user, fallback_email=None):
+        """Best-effort in-app alert for all hiring managers when a candidate user is created."""
+        try:
+            if not user or getattr(user, "role", None) != "candidate":
+                return
+            display_name = (
+                (getattr(user, "profile", None) or {}).get("full_name")
+                or getattr(user, "email", None)
+                or fallback_email
+                or "A new candidate"
+            )
+            hiring_managers = User.query.filter_by(role="hiring_manager").all()
+            if not hiring_managers:
+                return
+            for hiring_manager in hiring_managers:
+                db.session.add(Notification(
+                    user_id=hiring_manager.id,
+                    message=f"A new candidate account was created: {display_name}.",
+                    type="new_candidate",
+                ))
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.warning(
+                "Failed to notify hiring managers about new candidate %s: %s",
+                getattr(user, "id", None),
+                e,
+            )
     # ------------------- Initialize OAuth -------------------
     if not hasattr(app, "oauth_initialized"):
         oauth.init_app(app)
@@ -127,6 +166,7 @@ def init_auth_routes(app):
             user = User.query.filter(db.func.lower(User.email) == email.lower()).first()
         
             # If user doesn't exist, create them automatically
+            created_new_candidate = False
             if not user:
                 random_password = secrets.token_urlsafe(16)
                 user = AuthService.create_user(
@@ -138,13 +178,23 @@ def init_auth_routes(app):
                 )
                 user.is_verified = True
                 db.session.commit()
+                created_new_candidate = role == "candidate"
                 current_app.logger.info(f"Auto-created user via SSO: {email}")
+                if created_new_candidate:
+                    _notify_all_hiring_managers_new_candidate(user, fallback_email=email)
         
+            try:
+                user.last_login_at = datetime.utcnow()
+                db.session.commit()
+            except Exception as e:
+                current_app.logger.warning("SSO: failed to set last_login_at: %s", e)
+                db.session.rollback()
+
             # Create JWT tokens for our app
             additional_claims = {"role": user.role}
             access_token = create_access_token(identity=str(user.id), additional_claims=additional_claims)
             refresh_token = create_refresh_token(identity=str(user.id), additional_claims=additional_claims)
-        
+
             # Determine dashboard URL
             dashboard_path = (
                 "/enrollment"
@@ -158,11 +208,11 @@ def init_auth_routes(app):
         
             # Redirect to frontend with tokens
             frontend_redirect = (
-                f"{current_app.config['FRONTEND_URL']}/oauth-callback"  # ← CHANGED THIS LINE
+                f"{current_app.config['FRONTEND_URL']}/oauth-callback"  # ΓåÉ CHANGED THIS LINE
                 f"?access_token={access_token}&refresh_token={refresh_token}&role={user.role}"
             )
         
-            current_app.logger.info(f"SSO Login: {user.email} ({user.role}) → {frontend_redirect}")
+            current_app.logger.info(f"SSO Login: {user.email} ({user.role}) ΓåÆ {frontend_redirect}")
             return redirect(frontend_redirect)
         
         except jwt.ExpiredSignatureError:
@@ -176,42 +226,46 @@ def init_auth_routes(app):
 
     # ------------------- LOGOUT -------------------
     @app.route("/api/auth/logout", methods=["POST"])
-    @jwt_required()
-    @limiter.limit("20 per minute")  # Add this line
+    @limiter.limit("20 per minute")
     def logout():
+        # Always return 200 so client can clear local state even when token is missing/expired (avoids 422 on second logout or stale token).
+        response = jsonify({"message": "Successfully logged out"})
         try:
-            response = jsonify({"message": "Successfully logged out"})
+            verify_jwt_in_request(optional=True)
             unset_jwt_cookies(response)
-            return response, 200
-        except Exception as e:
-            current_app.logger.error(f"Logout error: {str(e)}", exc_info=True)
-            return jsonify({"error": "Internal server error"}), 500
+        except Exception:
+            pass  # No valid token; still return success so client clears state
+        return response, 200
 
     # ------------------- GOOGLE LOGIN -------------------
     @app.route("/api/auth/google")
     @limiter.limit("10 per minute")
     def google_login():
         try:
+            if not current_app.config.get("GOOGLE_CLIENT_ID") or not current_app.config.get("GOOGLE_CLIENT_SECRET"):
+                return _frontend_login_error_redirect("Google OAuth is not configured.")
             redirect_uri = url_for("google_callback", _external=True)
             # For Flutter Web, navigate in same tab
             return oauth.google.authorize_redirect(redirect_uri)
         except Exception as e:
             current_app.logger.error(f"Google login initiation error: {str(e)}", exc_info=True)
-            return jsonify({"error": "OAuth configuration error"}), 500
+            return _frontend_login_error_redirect("Google login is unavailable right now.")
 
     @app.route("/api/auth/google/callback")
     @limiter.limit("10 per minute")
     def google_callback():
         try:
+            if not current_app.config.get("GOOGLE_CLIENT_ID") or not current_app.config.get("GOOGLE_CLIENT_SECRET"):
+                return _frontend_login_error_redirect("Google OAuth is not configured.")
             oauth.google.authorize_access_token()
             user_info = oauth.google.get(OAUTH_PROVIDERS["google"]["userinfo"]["url"]).json()
         
-            # ⚡ handle_oauth_callback() already returns redirect()
+            # ΓÜí handle_oauth_callback() already returns redirect()
             return handle_oauth_callback("google", user_info)
 
         except Exception as e:
             current_app.logger.error(f"Google OAuth callback error: {str(e)}", exc_info=True)
-            return jsonify({"error": "Authentication failed"}), 400
+            return _frontend_login_error_redirect("Google authentication failed.")
 
 
     # ------------------- GITHUB LOGIN -------------------
@@ -219,16 +273,20 @@ def init_auth_routes(app):
     @limiter.limit("10 per minute")
     def github_login():
         try:
+            if not current_app.config.get("GITHUB_CLIENT_ID") or not current_app.config.get("GITHUB_CLIENT_SECRET"):
+                return _frontend_login_error_redirect("GitHub OAuth is not configured.")
             redirect_uri = url_for("github_callback", _external=True)
             return oauth.github.authorize_redirect(redirect_uri)
         except Exception as e:
             current_app.logger.error(f"GitHub login initiation error: {str(e)}", exc_info=True)
-            return jsonify({"error": "OAuth configuration error"}), 500
+            return _frontend_login_error_redirect("GitHub login is unavailable right now.")
 
     @app.route("/api/auth/github/callback")
     @limiter.limit("10 per minute")
     def github_callback():
         try:
+            if not current_app.config.get("GITHUB_CLIENT_ID") or not current_app.config.get("GITHUB_CLIENT_SECRET"):
+                return _frontend_login_error_redirect("GitHub OAuth is not configured.")
             oauth.github.authorize_access_token()
             user_info = oauth.github.get(OAUTH_PROVIDERS["github"]["userinfo"]["url"]).json()
             if not user_info.get("email"):
@@ -239,7 +297,7 @@ def init_auth_routes(app):
             return handle_oauth_callback("github", user_info)
         except Exception as e:
             current_app.logger.error(f"GitHub OAuth callback error: {str(e)}", exc_info=True)
-            return jsonify({"error": "Authentication failed"}), 400
+            return _frontend_login_error_redirect("GitHub authentication failed.")
 
     # ------------------- OAUTH CALLBACK HANDLER -------------------
     def handle_oauth_callback(provider: str, user_info: dict):
@@ -254,6 +312,7 @@ def init_auth_routes(app):
             last_name = provider_config["userinfo"]["last_name"](user_info)
 
             # User lookup / creation
+            created_new_candidate = False
             user = User.query.filter(db.func.lower(User.email) == email).first()
             if not user:
                 random_password = secrets.token_urlsafe(16)
@@ -265,6 +324,7 @@ def init_auth_routes(app):
                     role="candidate"
                 )
                 user.is_verified = True
+                created_new_candidate = True
 
             # OAuth connection
             oauth_conn = OAuthConnection.query.filter_by(user_id=user.id, provider=provider).first()
@@ -276,31 +336,34 @@ def init_auth_routes(app):
                     access_token=secrets.token_urlsafe(32)
                 )
                 db.session.add(oauth_conn)
+            user.last_login_at = datetime.utcnow()
             db.session.commit()
+            if created_new_candidate:
+                _notify_all_hiring_managers_new_candidate(user, fallback_email=email)
 
             # Tokens
             additional_claims = {"role": user.role}
             access_token = create_access_token(identity=str(user.id), additional_claims=additional_claims)
             refresh_token = create_refresh_token(identity=str(user.id), additional_claims=additional_claims)
 
-            # ✅ Determine dashboard route safely (fixed)
+            # Γ£à Determine dashboard route safely (fixed)
             dashboard_path = (
                 "/enrollment"
                 if user.role == "candidate" and not getattr(user, "enrollment_completed", False)
                 else ROLE_DASHBOARD_MAP.get(user.role, "/dashboard")
             )
 
-            # ✅ Ensure no accidental /api/ prefix (this is your issue)
+            # Γ£à Ensure no accidental /api/ prefix (this is your issue)
             if dashboard_path.startswith("/api/"):
                 dashboard_path = dashboard_path.replace("/api", "", 1)
 
-            # ✅ Redirect to frontend cleanly
+            # Γ£à Redirect to frontend cleanly
             frontend_redirect = (
                 f"{current_app.config['FRONTEND_URL']}/oauth-callback"
                 f"?access_token={access_token}&refresh_token={refresh_token}&role={user.role}"
             )
 
-            current_app.logger.info(f"Redirecting {user.email} ({user.role}) → {frontend_redirect}")
+            current_app.logger.info(f"Redirecting {user.email} ({user.role}) ΓåÆ {frontend_redirect}")
             return redirect(frontend_redirect)
 
 
@@ -358,12 +421,20 @@ def init_auth_routes(app):
             db.session.add(verification_code)
             db.session.commit()
 
-            EmailService.send_verification_email(email, code)
+            email_sent = EmailService.send_verification_email_sync(email, code)
             AuditService.log(user_id=user.id, action="register")
+            _notify_all_hiring_managers_new_candidate(user, fallback_email=email)
 
-            return jsonify({
+            payload = {
                 'message': 'User registered successfully. Please check your email for verification code.'
-            }), 201
+            }
+            if not email_sent:
+                payload['message'] = (
+                    'User registered successfully. Email could not be sent (e.g. timeout). '
+                    'Use the code below to verify your email.'
+                )
+                payload['verification_code'] = code
+            return jsonify(payload), 201
 
         except Exception as e:
             db.session.rollback()
@@ -419,25 +490,79 @@ def init_auth_routes(app):
             current_app.logger.error(f'Verification error: {str(e)}', exc_info=True)
             return jsonify({'error': 'Internal server error'}), 500
 
+    # ------------------- RESEND VERIFICATION CODE -------------------
+    @app.route('/api/auth/resend-verification', methods=['POST'])
+    @limiter.limit("5 per minute")
+    def resend_verification():
+        try:
+            data = request.get_json(silent=True) or {}
+            email = (data.get('email') or '').strip().lower()
+            if not email:
+                return jsonify({'error': 'Email is required'}), 400
+            user = User.query.filter(db.func.lower(User.email) == email).first()
+            if not user:
+                return jsonify({'error': 'No account found for this email'}), 404
+            if user.is_verified:
+                return jsonify({'message': 'Email already verified'}), 200
+            VerificationCode.query.filter_by(email=email, is_used=False).delete()
+            code = f"{secrets.randbelow(1_000_000):06d}"
+            expires_at = datetime.utcnow() + timedelta(minutes=30)
+            verification_code = VerificationCode(
+                email=email,
+                code=code,
+                expires_at=expires_at
+            )
+            db.session.add(verification_code)
+            db.session.commit()
+            EmailService.send_verification_email(email, code)
+            return jsonify({'message': 'Verification code sent'}), 200
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f'Resend verification error: {str(e)}', exc_info=True)
+            return jsonify({'error': 'Internal server error'}), 500
+
     # ------------------- LOGIN -------------------
     @app.route('/api/auth/login', methods=['POST'])
     @limiter.limit("10 per minute")  # Add this line
     def login():
         try:
-            data = request.get_json()
+            # Accept JSON (Postman: set Body = raw, JSON and Header Content-Type: application/json)
+            # or form data if JSON is not sent
+            data = request.get_json(silent=True)
+            if data is None:
+                data = request.form.to_dict() or {}
             email = data.get('email')
             password = data.get('password')
 
             # ---- Basic validation ----
             if not all([email, password]):
-                return jsonify({'error': 'Email and password are required'}), 400
+                return jsonify({
+                    'error': 'Email and password are required.',
+                    'hint': 'In Postman: Body ΓåÆ raw ΓåÆ JSON, and add Header: Content-Type = application/json'
+                }), 400
 
             email = email.strip().lower()
             user = User.query.filter(db.func.lower(User.email) == email).first()
 
             # ---- Invalid credentials ----
-            if not user or not AuthService.verify_password(password, user.password):
+            if not user:
+                if current_app.config.get('DEBUG'):
+                    current_app.logger.info('Login 401: no user for email (lowered)=%s', email)
                 return jsonify({'error': 'Invalid credentials'}), 401
+            if not user.password:
+                return jsonify({'error': 'Account has no password set (e.g. SSO-only). Use the correct sign-in method.'}), 401
+            try:
+                if not AuthService.verify_password(password, user.password):
+                    if current_app.config.get('DEBUG'):
+                        current_app.logger.info('Login 401: password mismatch for user id=%s email=%s', user.id, user.email)
+                    return jsonify({'error': 'Invalid credentials'}), 401
+            except Exception as pw_err:
+                current_app.logger.warning(f'Password verification failed: {pw_err}')
+                return jsonify({'error': 'Invalid credentials'}), 401
+
+            # ---- Handle inactive account ----
+            if not getattr(user, 'is_active', True):
+                return jsonify({'error': 'Account is deactivated. Contact support.'}), 403
 
             # ---- Handle unverified user ----
             if not user.is_verified:
@@ -448,7 +573,7 @@ def init_auth_routes(app):
                     'verified': False
                 }), 403
 
-            # 🆕 MFA CHECK - If MFA enabled, return MFA session token instead of final tokens
+            # ≡ƒåò MFA CHECK - If MFA enabled, return MFA session token instead of final tokens
             if user.mfa_enabled:
                 # Create temporary MFA session token (5 minutes)
                 mfa_session_token = create_access_token(
@@ -477,19 +602,39 @@ def init_auth_routes(app):
 
             # ---- Log successful login ----
             AuditService.log(user_id=user.id, action="login_success")
+            try:
+                user.last_login_at = datetime.utcnow()
+                db.session.commit()
+            except Exception as e:
+                current_app.logger.warning("Failed to set last_login_at: %s", e)
+                db.session.rollback()
 
             # ---- Return successful response ----
+            try:
+                user_dict = user.to_dict()
+            except Exception as dict_err:
+                current_app.logger.error(f'user.to_dict() failed: {dict_err}', exc_info=True)
+                user_dict = {
+                    'id': user.id,
+                    'email': user.email,
+                    'role': user.role,
+                    'is_verified': user.is_verified,
+                    'enrollment_completed': getattr(user, 'enrollment_completed', False),
+                }
             return jsonify({
                 'access_token': access_token,
                 'refresh_token': refresh_token,
-                'user': user.to_dict(),
+                'user': user_dict,
                 'verified': True,
                 'dashboard': dashboard_url
             }), 200
 
         except Exception as e:
             current_app.logger.error(f'Login error: {str(e)}', exc_info=True)
-            return jsonify({'error': 'Internal server error'}), 500  # 🆕 Changed from 200 to 500
+            err_body = {'error': 'Internal server error'}
+            if current_app.config.get('DEBUG'):
+                err_body['detail'] = str(e)
+            return jsonify(err_body), 500
 
     # ------------------- REFRESH TOKEN -------------------
     @app.route('/api/auth/refresh', methods=['POST'])
@@ -584,9 +729,24 @@ def init_auth_routes(app):
                 return jsonify({"error": "User not found"}), 404
 
             # Get candidate profile if user is a candidate
-            candidate_profile = Candidate.query.filter_by(user_id=user.id).first()
-            if candidate_profile:
-                candidate_profile = candidate_profile.to_dict()
+            candidate_obj = Candidate.query.filter_by(user_id=user.id).first()
+            candidate_profile = candidate_obj.to_dict() if candidate_obj else None
+
+            # Backfill: if User.profile has no full_name but Candidate has full_name, sync to DB
+            # (fixes existing users who enrolled before we synced enrollment to User.profile)
+            if candidate_obj and getattr(candidate_obj, "full_name", None):
+                name_str = (candidate_obj.full_name or "").strip()
+                if name_str:
+                    existing = user.profile or {}
+                    if not (existing.get("full_name") or existing.get("first_name")):
+                        parts = name_str.split(None, 1)
+                        user.profile = {
+                            **existing,
+                            "full_name": name_str,
+                            "first_name": parts[0] if parts else "",
+                            "last_name": parts[1] if len(parts) > 1 else "",
+                        }
+                        db.session.commit()
 
             dashboard_url = "/enrollment" if user.role == "candidate" and not user.enrollment_completed \
                 else ROLE_DASHBOARD_MAP.get(user.role, "/dashboard")
@@ -601,14 +761,13 @@ def init_auth_routes(app):
                     "role": user.role,
                     "enrollment_completed": user.enrollment_completed,
                     "created_at": user.created_at.isoformat() if user.created_at else None,
-                    # 🆕 ADD THIS - Include the JSON profile column
-                    "profile": user.profile or {}
+                    "profile": user.profile or {},
+                    "settings": user.settings if getattr(user, "settings", None) is not None else {}
                 },
                 "role": user.role,
                 "dashboard": dashboard_url
             }
-    
-            # Add full candidate profile data if available
+
             if candidate_profile:
                 response_data["candidate_profile"] = candidate_profile
 
@@ -617,6 +776,108 @@ def init_auth_routes(app):
         except Exception as e:
             current_app.logger.error(f"Get current user error: {str(e)}", exc_info=True)
             return jsonify({"error": "Internal server error"}), 500
+
+    @app.route("/api/auth/profile", methods=["PUT"])
+    @jwt_required()
+    def update_auth_profile():
+        """Update current user's profile (for admin/HM; candidates use candidate profile)."""
+        try:
+            user_id = int(get_jwt_identity())
+            user = User.query.get(user_id)
+            if not user:
+                return jsonify({"error": "User not found"}), 404
+            data = request.get_json()
+            if not data or not isinstance(data.get("profile"), dict):
+                return jsonify({"error": "Body must include 'profile' object"}), 400
+            new_profile = data["profile"]
+
+            # Optional: update email in users.email (source of truth for login)
+            # If provided, validate and ensure uniqueness.
+            if "email" in new_profile:
+                email_raw = (new_profile.get("email") or "").strip().lower()
+                if not email_raw:
+                    return jsonify({"error": "Email cannot be empty"}), 400
+                if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email_raw):
+                    return jsonify({"error": "Invalid email format"}), 400
+                if email_raw != (user.email or "").strip().lower():
+                    existing_user = User.query.filter(
+                        db.func.lower(User.email) == email_raw,
+                        User.id != user.id,
+                    ).first()
+                    if existing_user:
+                        return jsonify({"error": "Email is already in use"}), 409
+                    user.email = email_raw
+
+            existing = dict(user.profile or {})
+            allowed = {
+                "full_name", "first_name", "last_name", "phone", "profile_picture",
+                "department", "designation", "preferred_name", "managed_by", "preferences"
+            }
+            for key in allowed:
+                if key in new_profile:
+                    existing[key] = new_profile[key]
+            user.profile = existing
+            db.session.commit()
+            return jsonify({
+                "message": "Profile updated",
+                "user": user.to_dict(),
+                "profile": user.profile,
+            }), 200
+        except Exception as e:
+            current_app.logger.error(f"Update profile error: {str(e)}", exc_info=True)
+            return jsonify({"error": "Internal server error"}), 500
+
+    @app.route("/api/auth/upload_profile_picture", methods=["OPTIONS"])
+    def upload_profile_picture_options():
+        """CORS preflight for profile picture upload."""
+        return "", 204
+
+    @app.route("/api/auth/upload_profile_picture", methods=["POST"])
+    @jwt_required()
+    def upload_auth_profile_picture():
+        """Upload profile picture to Cloudinary and save URL to User.profile (for admin/HM)."""
+        try:
+            user_id = int(get_jwt_identity())
+            user = User.query.get(user_id)
+            if not user:
+                return jsonify({"success": False, "message": "User not found"}), 404
+            if "image" not in request.files:
+                return jsonify({"success": False, "message": "No image uploaded"}), 400
+            file = request.files["image"]
+            filename = secure_filename(file.filename or "")
+            if not filename:
+                return jsonify({"success": False, "message": "Invalid filename"}), 400
+            allowed = {"png", "jpg", "jpeg", "webp"}
+            ext = filename.rsplit(".", 1)[-1].lower()
+            if ext not in allowed:
+                return jsonify({"success": False, "message": "Invalid image type"}), 400
+
+            result = cloudinary.uploader.upload(
+                file,
+                folder="profile_pics/",
+                format="jpg",
+                resource_type="image",
+                public_id=f"user_{user_id}",
+            )
+            url = result.get("secure_url")
+            if not url:
+                return jsonify({"success": False, "message": "Cloudinary upload failed"}), 500
+
+            existing = dict(user.profile or {})
+            existing["profile_picture"] = url
+            user.profile = existing
+            db.session.commit()
+
+            return jsonify({
+                "success": True,
+                "message": "Profile picture updated",
+                "data": {"profile_picture": url},
+            }), 200
+        except Exception as e:
+            current_app.logger.error(f"Upload profile picture error: {str(e)}", exc_info=True)
+            db.session.rollback()
+            return jsonify({"success": False, "message": "Internal server error"}), 500
+
     # ------------------- DASHBOARDS -------------------
     @app.route("/api/dashboard/admin", methods=["GET"])
     @role_required("admin")
@@ -664,26 +925,49 @@ def init_auth_routes(app):
             if not user:
                 return jsonify({"error": "User not found"}), 404
 
-            # Accept multipart form
-            json_data = request.form.to_dict()  # manual fields from form
+            # Accept JSON body (Postman) or multipart form (Flutter app)
+            if request.is_json:
+                json_data = request.get_json() or {}
+            else:
+                json_data = request.form.to_dict()
+                # Form sends list/dict as JSON strings; service will parse them
+            current_app.logger.info("Enrollment payload keys: %s", list(json_data.keys()))
 
             cv_file = request.files.get("cv")  # uploaded CV
             if cv_file:
-                # Optionally save CV to server or cloud
                 filename = secure_filename(cv_file.filename)
-                save_path = os.path.join(current_app.config.get("UPLOAD_FOLDER", "/tmp"), filename)
+                save_path = os.path.join(current_app.config.get("CV_UPLOAD_FOLDER", current_app.config.get("UPLOAD_FOLDER", "/tmp")), filename)
+                try:
+                    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                except Exception:
+                    save_path = os.path.join("/tmp", filename)
                 cv_file.save(save_path)
 
-                # Pass file path to service
+                # Pass file path to service for parsing
                 response, status = EnrollmentService.save_candidate_enrollment(
                     user_id, json_data, cv_file=save_path
                 )
+                # Upload to Cloudinary and save URL for easy retrieval
+                if status < 400:
+                    from app.services.cv_parser_service import HybridResumeAnalyzer
+                    resume_url = HybridResumeAnalyzer.upload_cv(save_path, filename=filename)
+                    if resume_url:
+                        candidate = Candidate.query.filter_by(user_id=user_id).first()
+                        if candidate:
+                            candidate.cv_url = resume_url
+                            db.session.commit()
+                try:
+                    if os.path.isfile(save_path):
+                        os.remove(save_path)
+                except Exception:
+                    pass
             else:
-                # No CV uploaded
                 response, status = EnrollmentService.save_candidate_enrollment(
                     user_id, json_data
                 )
 
+            if status >= 400:
+                current_app.logger.warning("Enrollment validation failed: %s", response.get("error"))
             return jsonify(response), status
 
         except Exception as e:
@@ -798,6 +1082,7 @@ def init_auth_routes(app):
 
             user.password = AuthService.hash_password(new_password)
             user.first_login = False
+            user.last_login_at = datetime.utcnow()
             db.session.commit()
 
             return jsonify({"message": "Password changed successfully", "role": user.role}), 200
@@ -828,8 +1113,175 @@ def init_auth_routes(app):
 
             cv_file = request.files["cv"]
 
-            # Use hybrid parser (Gemini + offline fallback)
+            # Option A: Single source of truth (Hugging Face)
+            from app.services.analysis_service_client import AnalysisServiceClient
+            from app.services.enrollment_service import EnrollmentService
+            from app.services.ai_cv_parser import AIParser
+            
+            if hasattr(cv_file, "seek"):
+                cv_file.seek(0)
+            file_content = cv_file.read()
+            filename = cv_file.filename
+            
+            job_description = request.form.get("job_description", "General candidate profile analysis for enrollment autofill")
+            
+            try:
+                # 1. Submit file to HF
+                submit_resp = AnalysisServiceClient.submit_cv_file(
+                    file_content=file_content,
+                    filename=filename,
+                    job_description=job_description
+                )
+                analysis_id = (submit_resp or {}).get("analysis_id")
+                if not analysis_id:
+                    raise Exception("No analysis_id returned from HF")
+                
+                # 2. Poll for completion
+                result = AnalysisServiceClient.wait_for_result(analysis_id)
+                if not result:
+                    raise Exception("HF Analysis timeout or failed")
+                
+                # 3. Map to flat fields for registration/enrollment UI
+                mapped_data = EnrollmentService.map_cv_analysis_to_form_fields(result)
+                
+                # Ensure cv_text and debug info are passed back
+                if "cv_text" not in mapped_data and result.get("cv_text"):
+                    mapped_data["cv_text"] = result["cv_text"]
+                if "extraction_debug" in result:
+                    mapped_data["extraction_metadata"] = result["extraction_debug"]
+                
+                return jsonify(mapped_data), 200
+                
+            except Exception as e:
+                current_app.logger.warning(f"HF unified extraction failed, falling back to local: {e}")
+                if hasattr(cv_file, "seek"):
+                    cv_file.seek(0)
+                return jsonify(AIParser.extract_cv_data(cv_file)), 200
+
+            # If enhanced parsing succeeded, still try to get AI analysis for additional insights
+            if extracted_data and not extracted_data.get("error"):
+                try:
+                    from app.services.analysis_service_client import AnalysisServiceClient
+                    
+                    # Ensure we have the raw file content for Hugging Face OCR
+                    if hasattr(cv_file, "seek"):
+                        cv_file.seek(0)
+                        file_content = cv_file.read()
+                        filename = getattr(cv_file, "filename", "cv.pdf")
+                        
+                        # Use file-based submission so Hugging Face can perform its own OCR
+                        submit = AnalysisServiceClient.submit_cv_file(
+                            file_content=file_content,
+                            filename=filename,
+                            job_description=job_description
+                        )
+                    else:
+                        # Fallback to text submission if file stream is unavailable
+                        submit = AnalysisServiceClient.submit_cv_text(cv_text=extracted_data.get("cv_text") or "")
+                        
+                    external_id = submit.get("analysis_id")
+                    if external_id:
+                        import time
+                        max_attempts = int(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_ATTEMPTS", "6") or "6")
+                        sleep_seconds = float(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_SLEEP", "0.8") or "0.8")
+                        for _ in range(max_attempts):
+                            status = AnalysisServiceClient.get_analysis_status(external_id)
+                            if (status or {}).get("status") == "completed":
+                                result = AnalysisServiceClient.get_analysis_result(external_id) or {}
+                                structured = result.get("structured_data") if isinstance(result, dict) else None
+
+                                # Merge AI insights with enhanced extraction
+                                if isinstance(structured, dict):
+                                    personal = structured.get("personal_details") or {}
+                                    education = structured.get("education_details") or {}
+                                    professional = structured.get("professional_details") or {}
+
+                                    # Only override if enhanced extraction didn't find the field
+                                    if not extracted_data.get("full_name") and personal.get("full_name"):
+                                        extracted_data["full_name"] = personal.get("full_name")
+                                    if not extracted_data.get("email") and personal.get("email"):
+                                        extracted_data["email"] = personal.get("email")
+                                    if not extracted_data.get("phone") and personal.get("phone"):
+                                        extracted_data["phone"] = personal.get("phone")
+                                    # Add any additional fields from AI that weren't in enhanced extraction
+                                    extracted_data["ai_insights"] = {
+                                        "match_score": structured.get("match_score"),
+                                        "missing_skills": structured.get("missing_skills"),
+                                        "suggestions": structured.get("suggestions")
+                                    }
+                                break
+                            if (status or {}).get("status") == "failed":
+                                break
+                            time.sleep(sleep_seconds)
+                except Exception as e:
+                    current_app.logger.warning(f"AI analysis integration failed: {e}")
+                    # Continue with enhanced extraction results
+
+            # If enhanced parsing failed, try original AI analysis as fallback
+            if extracted_data.get("error") or not extracted_data.get("full_name"):
+                try:
+                    from app.services.analysis_service_client import AnalysisServiceClient
+                    submit = AnalysisServiceClient.submit_cv_text(cv_text=cv_text)
+                    external_id = submit.get("analysis_id")
+                    if external_id:
+                        import time
+                        max_attempts = int(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_ATTEMPTS", "6") or "6")
+                        sleep_seconds = float(os.getenv("ENROLLMENT_CV_ANALYSER_POLL_SLEEP", "0.8") or "0.8")
+                        for _ in range(max_attempts):
+                            status = AnalysisServiceClient.get_analysis_status(external_id)
+                            if (status or {}).get("status") == "completed":
+                                result = AnalysisServiceClient.get_analysis_result(external_id) or {}
+                                structured = result.get("structured_data") if isinstance(result, dict) else None
+
+                                # Map analyser structured_data -> enrollment autofill keys
+                                if isinstance(structured, dict):
+                                    personal = structured.get("personal_details") or {}
+                                    education = structured.get("education_details") or {}
+                                    professional = structured.get("professional_details") or {}
+
+                                    extracted_data = {
+                                        "full_name": personal.get("full_name") or "",
+                                        "email": personal.get("email") or "",
+                                        "phone": personal.get("phone") or "",
+                                        "address": personal.get("address") or "",
+                                        "dob": personal.get("dob") or "",
+                                        "linkedin": personal.get("linkedin") or "",
+                                        "github": personal.get("github") or "",
+                                        "portfolio": personal.get("portfolio") or "",
+                                        "education": education.get("education") or [],
+                                        "skills": professional.get("skills") or [],
+                                        "certifications": education.get("certifications") or [],
+                                        "languages": education.get("languages") or [],
+                                        "experience": professional.get("experience") or "",
+                                        "position": professional.get("position") or "",
+                                        "previous_companies": professional.get("previous_companies") or [],
+                                        "bio": professional.get("bio") or "",
+                                        "cv_text": cv_text,
+                                    }
+
+                                    return jsonify(extracted_data), 200
+
+                                break
+
+                            if (status or {}).get("status") == "failed":
+                                break
+                            time.sleep(sleep_seconds)
+                except Exception:
+                    # Analyzer integration is best-effort for autofill; fall back below.
+                    pass
+
+            # Return enhanced parsing results if successful
+            if extracted_data and not extracted_data.get("error"):
+                return jsonify(extracted_data), 200
+
+            # Fallback: Use local hybrid parser (LLM + offline regex) for autofill.
+            if hasattr(cv_file, "seek"): cv_file.seek(0)
             extracted_data = AIParser.extract_cv_data(cv_file)
+            try:
+                if isinstance(extracted_data, dict) and cv_text and not extracted_data.get("cv_text"):
+                    extracted_data["cv_text"] = cv_text
+            except Exception:
+                pass
 
             return jsonify(extracted_data), 200
 

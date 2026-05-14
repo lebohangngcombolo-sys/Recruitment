@@ -205,7 +205,9 @@ class CandidateData {
   final double matchScore;
   final String status;
   final DateTime appliedDate;
-  final String requisition; // ✅ Add this
+  final String requisition;
+  /// When set, the profile dialog can fetch CV breakdown, assessment, reviewer notes.
+  final int? applicationId;
 
   CandidateData({
     required this.id,
@@ -216,7 +218,8 @@ class CandidateData {
     required this.matchScore,
     required this.status,
     required this.appliedDate,
-    required this.requisition, // ✅ Add this
+    required this.requisition,
+    this.applicationId,
   });
 
   factory CandidateData.fromJson(Map<String, dynamic> json) {
@@ -228,8 +231,9 @@ class CandidateData {
       skills: List<String>.from(json['skills'] ?? []),
       matchScore: (json['match_score'] ?? 0).toDouble(),
       status: json['status'] ?? '',
-      appliedDate: DateTime.parse(json['applied_date']),
-      requisition: json['requisition'] ?? '', // ✅ Parse from backend
+      appliedDate: DateTime.tryParse(json['applied_date']?.toString() ?? '') ?? DateTime.now(),
+      requisition: json['requisition'] ?? '',
+      applicationId: json['application_id'] != null ? (json['application_id'] is int ? json['application_id'] as int : (json['application_id'] is num ? (json['application_id'] as num).toInt() : null)) : null,
     );
   }
 }

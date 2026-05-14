@@ -9,8 +9,15 @@ import '../hiring_manager/draft_offer_screen.dart';
 
 class AdminOfferListScreen extends StatefulWidget {
   final String? initialStatus;
+  final String? token;
+  final int? initialApplicationId;
 
-  const AdminOfferListScreen({super.key, this.initialStatus});
+  const AdminOfferListScreen({
+    super.key,
+    this.initialStatus,
+    this.token,
+    this.initialApplicationId,
+  });
 
   @override
   _AdminOfferListScreenState createState() => _AdminOfferListScreenState();
@@ -51,6 +58,11 @@ class _AdminOfferListScreenState extends State<AdminOfferListScreen> {
       } else {
         fetchedOffers = await _offerService.getOffersByStatus(_selectedStatus!);
       }
+      if (widget.initialApplicationId != null) {
+        fetchedOffers = fetchedOffers
+            .where((o) => o.applicationId == widget.initialApplicationId)
+            .toList();
+      }
 
       setState(() {
         offers = fetchedOffers;
@@ -72,15 +84,6 @@ class _AdminOfferListScreenState extends State<AdminOfferListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Manage Offers'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadOffers,
-          ),
-        ],
-      ),
       body: Column(
         children: [
           _buildFilterSection(),
@@ -248,9 +251,6 @@ class _OfferDetailScreenState extends State<OfferDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Offer #${widget.offer.id}'),
-      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
