@@ -1,0 +1,24 @@
+﻿≡ƒº¬ Testing Remote Extraction for: Bob Mabena CV.pdf
+============================================================
+
+1. Uploading file to Hugging Face...
+Γ£à Upload Success! Analysis ID: afadb0c4-8bca-45cc-84d7-5b9b41d75517
+
+2. Polling for results...
+   [1] Status: completed (0%)
+Γ£à Analysis Completed!
+
+3. Retrieving final results...
+
+--- EXTRACTION VALIDATION ---
+Γ£à Found 5 experience entries.
+   ≡ƒôì Job: years of experience at Amazon
+   ≡ƒôì Job: Data Analyst Jan at Scrum PROFESSIONAL EXPERIENCE Amazon Web Services (AWS)
+   Γ£à SUCCESS: Job title correctly isolated.
+   ≡ƒôì Job: Data Analyst Jan at Cape Town
+   ≡ƒôì Job: Specialty at AWS Certified Data Analytics
+   ≡ƒôì Job: Associate at AWS Certified Solutions Architect
+
+--- METADATA ---
+   Method: pymupdf
+   Quality: 0.9716129032258065

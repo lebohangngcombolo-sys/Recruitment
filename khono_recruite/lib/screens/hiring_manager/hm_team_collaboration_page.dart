@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../constants/app_colors.dart';
-import '../../../providers/theme_provider.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:khono_recruite/constants/app_colors.dart';
+import 'package:khono_recruite/providers/theme_provider.dart';
 import '../../services/admin_service.dart';
-import 'meeting_screen.dart'; // ADD THIS IMPORT
+import '../../models/team_member.dart';
+import 'meeting_screen.dart';
 
 class HMTeamCollaborationPage extends StatefulWidget {
   const HMTeamCollaborationPage({super.key});
@@ -17,6 +18,8 @@ class HMTeamCollaborationPage extends StatefulWidget {
 
 class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
   final TextEditingController _messageController = TextEditingController();
+  final TextEditingController _timelineCommentController =
+      TextEditingController();
   final List<CollaborationMessage> _messages = [];
   final List<TeamMember> _teamMembers = [];
   final List<SharedNote> _sharedNotes = [];
@@ -26,8 +29,23 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
   String _selectedEntity = 'general';
   String _currentUser = 'Hiring Manager';
 
-  final AdminService _apiService = AdminService(); // ADD API SERVICE
+  int? _currentThreadId;
+
+  final AdminService _apiService = AdminService();
   bool _isLoading = true;
+
+  /// Entity options for chat: General + applications (Candidate - Job).
+  List<Map<String, String>> _entityOptions = [
+    {'value': 'general', 'label': 'General Chat'}
+  ];
+  List<Map<String, dynamic>> _applicationsList = [];
+
+  /// Candidate audit timeline (per-application: who moved stage when + comments).
+  int? _selectedTimelineApplicationId;
+  List<Map<String, dynamic>> _timelineEntries = [];
+  bool _timelineLoading = false;
+  bool _timelineSending = false;
+  int _rightPanelTab = 0; // 0 = Team Chat, 1 = Candidate timeline
 
   @override
   void initState() {
@@ -40,52 +58,269 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
     _isConnected = false; // Disabled temporarily
   }
 
+  String _extractAuthorName(Map<String, dynamic> note) {
+    final dynamic author = note['author'];
+    if (author is Map<String, dynamic>) {
+      final dynamic profile = author['profile'];
+      if (profile is Map<String, dynamic>) {
+        final dynamic fullName = profile['full_name'] ?? profile['name'];
+        if (fullName is String && fullName.trim().isNotEmpty) {
+          return fullName.trim();
+        }
+      }
+      final dynamic email = author['email'];
+      if (email is String && email.trim().isNotEmpty) {
+        return email.trim();
+      }
+    }
+    return 'Unknown';
+  }
+
+  DateTime _parseNoteTimestamp(Map<String, dynamic> note) {
+    final updatedRaw = note['updated_at']?.toString();
+    final createdRaw = note['created_at']?.toString();
+    final candidate = updatedRaw?.isNotEmpty == true ? updatedRaw : createdRaw;
+    if (candidate != null && candidate.isNotEmpty) {
+      final parsed = DateTime.tryParse(candidate);
+      if (parsed != null) return parsed;
+    }
+    return DateTime.now();
+  }
+
+  Map<String, String?> _mapSelectedEntity() {
+    if (_selectedEntity == 'general') {
+      return {'entityType': 'general', 'entityId': null};
+    }
+    if (_selectedEntity.startsWith('application:')) {
+      return {
+        'entityType': 'application',
+        'entityId': _selectedEntity.split(':').last,
+      };
+    }
+    if (_selectedEntity.startsWith('candidate:')) {
+      return {
+        'entityType': 'candidate',
+        'entityId': _selectedEntity.split(':').last,
+      };
+    }
+    if (_selectedEntity.startsWith('requisition:')) {
+      return {
+        'entityType': 'requisition',
+        'entityId': _selectedEntity.split(':').last,
+      };
+    }
+    return {'entityType': 'general', 'entityId': null};
+  }
+
+  Future<void> _loadTeamMembers() async {
+    try {
+      final response = await _apiService.getTeamCollaborationUsers();
+      if (response['success'] == true) {
+        final team = response['team'];
+        final List<TeamMember> members = [];
+
+        // Only include admins and hiring managers
+        if (team['admins'] != null) {
+          members.addAll(
+              (team['admins'] as List).map((m) => TeamMember.fromAdminData(
+                    name: m['name'] ?? m['email'] ?? 'Unknown User',
+                    role: m['role'] ?? 'admin',
+                    isOnline: m['isOnline'] ?? false,
+                    lastSeen: m['lastSeen'] != null
+                        ? DateTime.tryParse(m['lastSeen'])
+                        : null,
+                    userId: m['id'] ?? 0,
+                  )));
+        }
+
+        if (team['hiring_managers'] != null) {
+          members.addAll((team['hiring_managers'] as List)
+              .map((m) => TeamMember.fromAdminData(
+                    name: m['name'] ?? m['email'] ?? 'Unknown User',
+                    role: m['role'] ?? 'hiring_manager',
+                    isOnline: m['isOnline'] ?? false,
+                    lastSeen: m['lastSeen'] != null
+                        ? DateTime.tryParse(m['lastSeen'])
+                        : null,
+                    userId: m['id'] ?? 0,
+                  )));
+        }
+
+        if (mounted) {
+          setState(() {
+            _teamMembers
+              ..clear()
+              ..addAll(members);
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to load team members: $e');
+    }
+  }
+
+  Future<void> _ensureThreadForSelectedEntity() async {
+    final mapping = _mapSelectedEntity();
+    final entityType = mapping['entityType'];
+    final entityId = mapping['entityId'];
+
+    try {
+      final threads = await _apiService.getChatThreads(
+        entityType: entityType == 'general' ? null : entityType,
+        entityId: entityId,
+      );
+
+      if (threads.isNotEmpty) {
+        final first = threads.first;
+        final id = first['id'];
+        if (id is int) {
+          _currentThreadId = id;
+          return;
+        }
+      }
+
+      // No existing thread found, create one (participants handled server-side)
+      final created = await _apiService.createChatThread(
+        title: entityType == 'general'
+            ? 'Team Collaboration'
+            : '$entityType:$entityId',
+        participantIds: const [],
+        entityType: entityType ?? 'general',
+        entityId: entityId,
+      );
+      final newId = created['id'] ?? created['thread']?['id'];
+      if (newId is int) {
+        _currentThreadId = newId;
+      }
+    } catch (e) {
+      // If chat thread setup fails, keep the UI usable but local-only
+      debugPrint('Failed to ensure chat thread: $e');
+    }
+  }
+
+  Future<void> _loadMessages() async {
+    if (_currentThreadId == null) return;
+    try {
+      final rawMessages =
+          await _apiService.getChatMessages(threadId: _currentThreadId!);
+      final loaded = rawMessages.whereType<Map<String, dynamic>>().map((m) {
+        final authorInfo = m['sender'] ?? m['author'];
+        String authorName = 'User';
+        if (authorInfo is Map<String, dynamic>) {
+          final profile = authorInfo['profile'];
+          if (profile is Map<String, dynamic>) {
+            final fullName =
+                (profile['full_name'] ?? profile['name'])?.toString();
+            if (fullName != null && fullName.trim().isNotEmpty) {
+              authorName = fullName.trim();
+            } else {
+              authorName = (authorInfo['email'] ?? 'User').toString();
+            }
+          } else {
+            authorName = (authorInfo['email'] ?? 'User').toString();
+          }
+        } else if (m['sender_name'] is String) {
+          authorName = (m['sender_name'] as String).trim();
+        }
+
+        final createdAtRaw = m['created_at']?.toString();
+        final createdAt =
+            createdAtRaw != null ? DateTime.tryParse(createdAtRaw) : null;
+
+        return CollaborationMessage(
+          author: authorName,
+          content: (m['content'] ?? '').toString(),
+          timestamp: createdAt ?? DateTime.now(),
+          entity: _selectedEntity,
+        );
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _messages
+            ..clear()
+            ..addAll(loaded.reversed);
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to load chat messages: $e');
+    }
+  }
+
   Future<void> _loadTeamData() async {
-    setState(() {
-      _isLoading = true;
-    });
+    if (mounted) setState(() => _isLoading = true);
 
     try {
       // Load shared notes from API
       final notesResponse = await _apiService.getNotes(page: 1, perPage: 10);
-      final notesData = notesResponse['notes'] as List<dynamic>;
+      final notesData = (notesResponse['notes'] as List<dynamic>? ?? []);
 
-      setState(() {
-        _sharedNotes.clear();
-        _sharedNotes.addAll(notesData
-            .map((note) => SharedNote(
-                  id: note['id'] ?? 0,
-                  title: note['title'] ?? 'Untitled',
-                  content: note['content'] ?? '',
-                  author: note['author_name'] ?? 'Unknown',
-                  lastModified:
-                      DateTime.parse(note['updated_at'] ?? note['created_at']),
-                ))
-            .toList());
-      });
+      if (mounted) {
+        setState(() {
+          _sharedNotes.clear();
+          _sharedNotes.addAll(notesData
+              .whereType<Map<String, dynamic>>()
+              .map((note) => SharedNote(
+                    id: note['id'] is int ? note['id'] as int : 0,
+                    title: (note['title'] ?? 'Untitled').toString(),
+                    content: (note['content'] ?? '').toString(),
+                    author: _extractAuthorName(note),
+                    lastModified: _parseNoteTimestamp(note),
+                  ))
+              .toList());
+        });
+      }
 
-      // Load team members (you might need to create a separate API for this)
-      // For now, keeping the mock data but you can replace with API call
-      _teamMembers.addAll([
-        TeamMember(
-            name: 'John Smith', role: 'Senior Recruiter', isOnline: true),
-        TeamMember(name: 'Sarah Johnson', role: 'HR Manager', isOnline: true),
-        TeamMember(name: 'Mike Davis', role: 'Technical Lead', isOnline: false),
-        TeamMember(name: 'Lisa Chen', role: 'Recruiter', isOnline: true),
-      ]);
+      // Load applications for my jobs (for entity selector and timeline dropdown)
+      try {
+        final appsData = await _apiService.getApplicationsForMyJobsPage(
+            page: 1, perPage: 100);
+        final apps = (appsData['applications'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .toList();
+        if (mounted) {
+          setState(() {
+            _applicationsList = apps;
+            _entityOptions = [
+              {'value': 'general', 'label': 'General Chat'},
+              ...apps.take(50).map((a) {
+                final id = a['id'] ?? a['application_id'];
+                final cand = a['candidate'] is Map
+                    ? a['candidate'] as Map<String, dynamic>
+                    : null;
+                final name =
+                    cand?['full_name']?.toString().trim() ?? 'Candidate';
+                final job = a['job_title']?.toString().trim() ?? 'Job';
+                return {'value': 'application:$id', 'label': '$name – $job'};
+              }),
+            ];
+          });
+        }
+      } catch (_) {
+        debugPrint('Failed to load applications for entity list');
+      }
+
+      // Load team members from API
+      await _loadTeamMembers();
+
+      // Ensure there is a chat thread for the selected entity and load messages
+      await _ensureThreadForSelectedEntity();
+      await _loadMessages();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Failed to load data: $e', style: GoogleFonts.inter()),
-          backgroundColor: AppColors.primaryRed,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Failed to load data: $e', style: GoogleFonts.inter()),
+            backgroundColor: AppColors.primaryRed,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -118,14 +353,382 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                         ),
                       ),
                       const SizedBox(width: 20),
-                      // Right Panel
+                      // Right Panel: Team Chat or Candidate timeline
                       Expanded(
                         flex: 2,
-                        child: _buildChatPanel(themeProvider),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                _buildTabChip(themeProvider, 0, 'Team Chat'),
+                                const SizedBox(width: 8),
+                                _buildTabChip(
+                                    themeProvider, 1, 'Candidate timeline'),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Expanded(
+                              child: _rightPanelTab == 0
+                                  ? _buildChatPanel(themeProvider)
+                                  : _buildCandidateTimelinePanel(themeProvider),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabChip(ThemeProvider themeProvider, int index, String label) {
+    final selected = _rightPanelTab == index;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          setState(() => _rightPanelTab = index);
+          if (index == 1 && _selectedTimelineApplicationId != null) {
+            _loadTimeline();
+          }
+        },
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: selected
+                ? AppColors.primaryRed
+                : (themeProvider.isDarkMode
+                    ? Colors.grey.shade800
+                    : Colors.grey.shade200),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            label,
+            style: GoogleFonts.inter(
+              fontWeight: FontWeight.w600,
+              color: selected
+                  ? Colors.white
+                  : (themeProvider.isDarkMode
+                      ? Colors.white70
+                      : Colors.black87),
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadTimeline() async {
+    if (_selectedTimelineApplicationId == null) return;
+    if (mounted) setState(() => _timelineLoading = true);
+    try {
+      final list = await _apiService
+          .getApplicationTimeline(_selectedTimelineApplicationId!);
+      if (mounted)
+        setState(() {
+          _timelineEntries = list;
+          _timelineLoading = false;
+        });
+    } catch (e) {
+      if (mounted)
+        setState(() {
+          _timelineEntries = [];
+          _timelineLoading = false;
+        });
+    }
+  }
+
+  Future<void> _addTimelineComment() async {
+    final comment = _timelineCommentController.text.trim();
+    if (comment.isEmpty || _selectedTimelineApplicationId == null) return;
+    if (mounted) setState(() => _timelineSending = true);
+    try {
+      await _apiService.addApplicationTimelineNote(
+          _selectedTimelineApplicationId!, comment);
+      _timelineCommentController.clear();
+      await _loadTimeline();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Comment added to timeline', style: GoogleFonts.inter()),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Failed to add comment: $e', style: GoogleFonts.inter()),
+            backgroundColor: AppColors.primaryRed,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+    if (mounted) setState(() => _timelineSending = false);
+  }
+
+  Widget _buildCandidateTimelinePanel(ThemeProvider themeProvider) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color:
+            themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.history, color: AppColors.primaryRed, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Candidate audit timeline',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: themeProvider.isDarkMode
+                      ? Colors.white
+                      : AppColors.textDark,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Who moved stage when + comments for an application',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: themeProvider.isDarkMode
+                  ? Colors.grey.shade400
+                  : AppColors.textGrey,
+            ),
+          ),
+          const SizedBox(height: 16),
+          DropdownButtonFormField<int>(
+            value: _selectedTimelineApplicationId,
+            decoration: InputDecoration(
+              labelText: 'Select application',
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
+            items: _applicationsList
+                .take(80)
+                .map((a) {
+                  final id = a['id'] ?? a['application_id'];
+                  final cand = a['candidate'] is Map
+                      ? a['candidate'] as Map<String, dynamic>
+                      : null;
+                  final name =
+                      cand?['full_name']?.toString().trim() ?? 'Candidate';
+                  final job = a['job_title']?.toString().trim() ?? 'Job';
+                  final appId = id is int ? id : int.tryParse(id.toString());
+                  if (appId == null) return null;
+                  return DropdownMenuItem<int>(
+                    value: appId,
+                    child: Text('$name – $job',
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(fontSize: 13)),
+                  );
+                })
+                .whereType<DropdownMenuItem<int>>()
+                .toList(),
+            onChanged: (v) {
+              setState(() => _selectedTimelineApplicationId = v);
+              if (v != null) _loadTimeline();
+            },
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: _timelineLoading
+                ? const Center(
+                    child:
+                        CircularProgressIndicator(color: AppColors.primaryRed))
+                : _selectedTimelineApplicationId == null
+                    ? Center(
+                        child: Text(
+                          'Select an application to view timeline',
+                          style: GoogleFonts.inter(
+                            color: themeProvider.isDarkMode
+                                ? Colors.grey.shade400
+                                : AppColors.textGrey,
+                            fontSize: 14,
+                          ),
+                        ),
+                      )
+                    : _timelineEntries.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No timeline entries yet. Add a comment below.',
+                              style: GoogleFonts.inter(
+                                color: themeProvider.isDarkMode
+                                    ? Colors.grey.shade400
+                                    : AppColors.textGrey,
+                                fontSize: 14,
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            itemCount: _timelineEntries.length,
+                            itemBuilder: (context, i) {
+                              final e = _timelineEntries[i];
+                              final isNote = e['is_note'] == true;
+                              final ts = e['timestamp']?.toString();
+                              final time =
+                                  ts != null ? DateTime.tryParse(ts) : null;
+                              final actor =
+                                  e['actor_name']?.toString() ?? 'System';
+                              final details = e['details']?.toString() ?? '';
+                              final oldStatus = e['old_status']?.toString();
+                              final newStatus = e['new_status']?.toString();
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: isNote
+                                      ? (themeProvider.isDarkMode
+                                          ? Colors.grey.shade900
+                                          : Colors.blue.shade50)
+                                      : (themeProvider.isDarkMode
+                                          ? const Color(0xFF2D2D2D)
+                                          : Colors.grey.shade50),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: isNote
+                                        ? Colors.blue.shade200
+                                        : Colors.transparent,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          isNote ? Icons.comment : Icons.update,
+                                          size: 16,
+                                          color: isNote
+                                              ? Colors.blue
+                                              : AppColors.primaryRed,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          actor,
+                                          style: GoogleFonts.inter(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 12,
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.white
+                                                : AppColors.textDark,
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        if (time != null)
+                                          Text(
+                                            _formatTimeAgo(time),
+                                            style: GoogleFonts.inter(
+                                                fontSize: 11,
+                                                color: Colors.grey.shade600),
+                                          ),
+                                      ],
+                                    ),
+                                    if (isNote) ...[
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        details,
+                                        style: GoogleFonts.inter(
+                                          fontSize: 13,
+                                          color: themeProvider.isDarkMode
+                                              ? Colors.white70
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                    ] else ...[
+                                      if (oldStatus != null ||
+                                          newStatus != null)
+                                        Text(
+                                          '${oldStatus ?? '?'} → ${newStatus ?? '?'}',
+                                          style: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            color: themeProvider.isDarkMode
+                                                ? Colors.grey.shade400
+                                                : AppColors.textGrey,
+                                          ),
+                                        ),
+                                      if (details.isNotEmpty)
+                                        Text(
+                                          details,
+                                          style: GoogleFonts.inter(
+                                              fontSize: 12,
+                                              color: Colors.grey.shade600),
+                                        ),
+                                    ],
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+          ),
+          if (_selectedTimelineApplicationId != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _timelineCommentController,
+                    decoration: InputDecoration(
+                      hintText: 'Add a comment to the timeline...',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                    ),
+                    maxLines: 1,
+                    style: GoogleFonts.inter(fontSize: 14),
+                    onSubmitted: (_) => _addTimelineComment(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: _timelineSending ? null : _addTimelineComment,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryRed,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                  ),
+                  child: _timelineSending
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Text('Add comment'),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -160,7 +763,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -174,7 +777,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryRed.withOpacity(0.1),
+                  color: AppColors.primaryRed.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Image.asset(
@@ -224,7 +827,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     BoxShadow(
                       color:
                           (_isConnected ? Colors.green : AppColors.primaryRed)
-                              .withOpacity(0.3),
+                              .withValues(alpha: 0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -282,7 +885,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.2),
+            color: color.withValues(alpha: 0.2),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -315,7 +918,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -344,7 +947,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryRed.withOpacity(0.1),
+                    color: AppColors.primaryRed.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -388,7 +991,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                 : Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -402,7 +1005,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: AppColors.primaryRed.withOpacity(0.1),
+                  color: AppColors.primaryRed.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Center(
@@ -478,7 +1081,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 20,
               offset: const Offset(0, 8),
             ),
@@ -508,7 +1111,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: AppColors.primaryRed.withOpacity(0.2),
+                        color: AppColors.primaryRed.withValues(alpha: 0.2),
                         blurRadius: 8,
                         offset: const Offset(0, 4),
                       ),
@@ -545,38 +1148,42 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
   Widget _buildEmptyNotesState(ThemeProvider themeProvider) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.note_add_outlined,
-            size: 64,
-            color: themeProvider.isDarkMode
-                ? Colors.grey.shade600
-                : Colors.grey.shade300,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No shared notes yet',
-            style: GoogleFonts.inter(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.note_add_outlined,
+              size: 64,
               color: themeProvider.isDarkMode
-                  ? Colors.grey.shade400
-                  : Colors.grey.shade500,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
+                  ? Colors.grey.shade600
+                  : Colors.grey.shade300,
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Create your first shared note to collaborate',
-            style: GoogleFonts.inter(
-              color: themeProvider.isDarkMode
-                  ? Colors.grey.shade500
-                  : Colors.grey.shade400,
-              fontSize: 12,
+            const SizedBox(height: 16),
+            Text(
+              'No shared notes yet',
+              style: GoogleFonts.inter(
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade400
+                    : Colors.grey.shade500,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Text(
+              'Create your first shared note to collaborate',
+              style: GoogleFonts.inter(
+                color: themeProvider.isDarkMode
+                    ? Colors.grey.shade500
+                    : Colors.grey.shade400,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -594,7 +1201,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                 : Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -629,7 +1236,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: AppColors.primaryRed.withOpacity(0.1),
+                        color: AppColors.primaryRed.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -662,7 +1269,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                       width: 24,
                       height: 24,
                       decoration: BoxDecoration(
-                        color: AppColors.primaryRed.withOpacity(0.1),
+                        color: AppColors.primaryRed.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
                       child: Center(
@@ -705,7 +1312,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -740,19 +1347,30 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: DropdownButton<String>(
-                  value: _selectedEntity,
-                  items: const [
-                    DropdownMenuItem(
-                        value: 'general', child: Text('General Chat')),
-                    DropdownMenuItem(
-                        value: 'candidate:123',
-                        child: Text('Candidate Discussion')),
-                    DropdownMenuItem(
-                        value: 'requisition:456',
-                        child: Text('Job Requisition')),
-                  ],
-                  onChanged: (value) =>
-                      setState(() => _selectedEntity = value!),
+                  value:
+                      _entityOptions.any((e) => e['value'] == _selectedEntity)
+                          ? _selectedEntity
+                          : 'general',
+                  items: _entityOptions.map((e) {
+                    final v = e['value']!;
+                    final label = e['label']!;
+                    return DropdownMenuItem<String>(
+                      value: v,
+                      child: Text(
+                        label,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(fontSize: 12),
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) async {
+                    if (value == null) return;
+                    setState(() {
+                      _selectedEntity = value;
+                    });
+                    await _ensureThreadForSelectedEntity();
+                    await _loadMessages();
+                  },
                   underline: const SizedBox(),
                   icon: const Icon(Icons.arrow_drop_down, size: 16),
                   style: GoogleFonts.inter(
@@ -833,7 +1451,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: AppColors.primaryRed.withOpacity(0.1),
+                color: AppColors.primaryRed.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: Center(
@@ -855,20 +1473,19 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
-                if (!isCurrentUser)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      message.author,
-                      style: GoogleFonts.inter(
-                        fontWeight: FontWeight.w600,
-                        color: themeProvider.isDarkMode
-                            ? Colors.white
-                            : AppColors.textDark,
-                        fontSize: 12,
-                      ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    message.author,
+                    style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w600,
+                      color: themeProvider.isDarkMode
+                          ? Colors.white
+                          : AppColors.textDark,
+                      fontSize: 12,
                     ),
                   ),
+                ),
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -880,7 +1497,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8,
                         offset: const Offset(0, 2),
                       ),
@@ -978,7 +1595,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -1008,25 +1625,53 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
       entity: _selectedEntity,
     );
 
-    if (_channel != null && _isConnected) {
-      _channel!.sink.add(message.toJson());
-    }
+    Future<void>.microtask(() async {
+      // Optimistic update
+      if (mounted) {
+        setState(() {
+          _messages.insert(0, message);
+        });
+      }
+      _messageController.clear();
 
-    setState(() {
-      _messages.insert(0, message);
+      try {
+        if (_currentThreadId == null) {
+          await _ensureThreadForSelectedEntity();
+        }
+        if (_currentThreadId != null) {
+          await _apiService.sendMessage(
+            threadId: _currentThreadId!,
+            content: message.content,
+          );
+          await _loadMessages();
+        }
+      } catch (e) {
+        debugPrint('Failed to send chat message: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text('Failed to send message', style: GoogleFonts.inter()),
+              backgroundColor: AppColors.primaryRed,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+            ),
+          );
+        }
+      }
     });
-
-    _messageController.clear();
   }
 
   void _createSharedNote() {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final titleController = TextEditingController();
     final contentController = TextEditingController();
+    final parentContext = context;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor:
             themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
         title: Text('Create Shared Note',
@@ -1075,7 +1720,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text('Cancel',
                 style: GoogleFonts.inter(
                     color: themeProvider.isDarkMode
@@ -1087,7 +1732,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -1097,7 +1742,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               onPressed: () async {
                 if (titleController.text.trim().isEmpty ||
                     contentController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: Text('Please fill in both title and content',
                           style: GoogleFonts.inter()),
@@ -1116,10 +1761,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     'content': contentController.text.trim(),
                   });
 
-                  Navigator.pop(context);
+                  Navigator.pop(dialogContext);
                   await _loadTeamData(); // Refresh the notes list
 
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(parentContext).showSnackBar(
                     SnackBar(
                       content: Text('Shared note created successfully',
                           style: GoogleFonts.inter()),
@@ -1130,7 +1776,8 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     ),
                   );
                 } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: Text('Failed to create note: $e',
                           style: GoogleFonts.inter()),
@@ -1237,10 +1884,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
     final titleController = TextEditingController(text: note.title);
     final contentController = TextEditingController(text: note.content);
+    final parentContext = context;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor:
             themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
         title: Text('Edit Shared Note',
@@ -1289,7 +1937,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text('Cancel',
                 style: GoogleFonts.inter(
                     color: themeProvider.isDarkMode
@@ -1301,7 +1949,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -1311,7 +1959,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               onPressed: () async {
                 if (titleController.text.trim().isEmpty ||
                     contentController.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: Text('Please fill in both title and content',
                           style: GoogleFonts.inter()),
@@ -1330,10 +1978,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     'content': contentController.text.trim(),
                   });
 
-                  Navigator.pop(context);
+                  Navigator.pop(dialogContext);
                   await _loadTeamData(); // Refresh the notes list
 
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(parentContext).showSnackBar(
                     SnackBar(
                       content: Text('Shared note updated successfully',
                           style: GoogleFonts.inter()),
@@ -1344,7 +1993,8 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     ),
                   );
                 } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
                     SnackBar(
                       content: Text('Failed to update note: $e',
                           style: GoogleFonts.inter()),
@@ -1373,10 +2023,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
 
   void _deleteSharedNote(SharedNote note) {
     final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+    final parentContext = context;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor:
             themeProvider.isDarkMode ? const Color(0xFF14131E) : Colors.white,
         title: Text('Delete Note',
@@ -1390,7 +2041,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
             )),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text('Cancel',
                 style: GoogleFonts.inter(
                     color: themeProvider.isDarkMode
@@ -1402,7 +2053,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primaryRed.withOpacity(0.3),
+                  color: AppColors.primaryRed.withValues(alpha: 0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 ),
@@ -1412,10 +2063,11 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
               onPressed: () async {
                 try {
                   await _apiService.deleteNote(note.id);
-                  Navigator.pop(context);
+                  Navigator.pop(dialogContext);
                   await _loadTeamData(); // Refresh the notes list
 
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(parentContext).showSnackBar(
                     SnackBar(
                       content: Text('Note deleted successfully',
                           style: GoogleFonts.inter()),
@@ -1426,8 +2078,9 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
                     ),
                   );
                 } catch (e) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  Navigator.pop(dialogContext);
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(parentContext).showSnackBar(
                     SnackBar(
                       content: Text('Failed to delete note: $e',
                           style: GoogleFonts.inter()),
@@ -1475,6 +2128,7 @@ class _HMTeamCollaborationPageState extends State<HMTeamCollaborationPage> {
   @override
   void dispose() {
     _messageController.dispose();
+    _timelineCommentController.dispose();
     _channel?.sink.close();
     super.dispose();
   }
@@ -1502,18 +2156,6 @@ class CollaborationMessage {
       );
 
   String toJson() => content;
-}
-
-class TeamMember {
-  final String name;
-  final String role;
-  final bool isOnline;
-
-  TeamMember({
-    required this.name,
-    required this.role,
-    required this.isOnline,
-  });
 }
 
 class SharedNote {

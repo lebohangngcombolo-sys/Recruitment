@@ -1046,7 +1046,7 @@ class __AddItemDialogState extends State<_AddItemDialog> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: widget.iconColor.withOpacity(0.1),
+                    color: widget.iconColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(widget.icon, color: widget.iconColor),

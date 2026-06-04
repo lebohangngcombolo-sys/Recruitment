@@ -1,12 +1,12 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../../services/admin_service.dart';
 import '../../services/auth_service.dart';
-import '../../utils/api_endpoints.dart';
 import '../../providers/theme_provider.dart';
-import '../../services/admin_service.dart'; // Add this import
+import '../../utils/api_endpoints.dart';
+import '../../widgets/filter_chip.dart' as custom_filter;
 
 class InterviewListScreen extends StatefulWidget {
   const InterviewListScreen({super.key});
@@ -34,6 +34,10 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
   List<dynamic> get filteredInterviews {
     final now = DateTime.now();
     switch (_selectedFilter) {
+      case 'pending_approval':
+        return interviews
+            .where((i) => (i['approval_status'] ?? '').toString() == 'pending')
+            .toList();
       case 'today':
         return interviews.where((i) {
           if (i['scheduled_time'] == null) return false;
@@ -67,6 +71,76 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
     }
   }
 
+  int get _pendingApprovalCount => interviews
+      .where((i) => (i['approval_status'] ?? '').toString() == 'pending')
+      .length;
+
+  Future<void> _approveInterview(int id) async {
+    try {
+      await _adminService.approveInterview(id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Interview approved')),
+        );
+      }
+      fetchInterviews();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to approve interview: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _rejectInterview(int id) async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reject interview'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Rejection reason (required)',
+          ),
+          autofocus: true,
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(null),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final r = controller.text.trim();
+              if (r.isEmpty) return;
+              Navigator.of(ctx).pop(r);
+            },
+            child: const Text('Reject'),
+          ),
+        ],
+      ),
+    );
+    if (reason == null || reason.trim().isEmpty) return;
+    try {
+      await _adminService.rejectInterview(id, reason.trim());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Interview rejected')),
+        );
+      }
+      fetchInterviews();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to reject interview: $e')),
+        );
+      }
+    }
+  }
+
   Future<void> fetchCandidates() async {
     try {
       final response = await AuthService.authorizedGet(
@@ -80,31 +154,39 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error loading candidates: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error loading candidates: $e')));
       }
     }
   }
 
   Future<void> fetchInterviews() async {
+    if (!mounted) return;
     setState(() => loading = true);
     try {
       final response = await AuthService.authorizedGet(
         "${ApiEndpoints.adminBase}/interviews/all",
       );
+      if (!mounted) return;
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
-        setState(() {
-          interviews = decoded['interviews'] ?? [];
-          loading = false;
-        });
+        if (mounted) {
+          setState(() {
+            interviews = decoded['interviews'] ?? [];
+            loading = false;
+          });
+        }
       } else {
-        setState(() => loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to load interviews')),
-        );
+        if (mounted) {
+          setState(() => loading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Failed to load interviews')),
+          );
+        }
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => loading = false);
       ScaffoldMessenger.of(
         context,
@@ -134,16 +216,17 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-                content: Text(err['error'] ?? 'Failed to cancel interview')),
+              content: Text(err['error'] ?? 'Failed to cancel interview'),
+            ),
           );
         }
       }
     } catch (e) {
       // Network or unexpected errors
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -171,15 +254,19 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
 
   // New method: Update interview status
-  Future<void> updateInterviewStatus(int id, String status,
-      {String? notes}) async {
+  Future<void> updateInterviewStatus(
+    int id,
+    String status, {
+    String? notes,
+  }) async {
     try {
       await _adminService.updateInterviewStatus(
         interviewId: id,
@@ -190,17 +277,17 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text("Interview marked as ${status.replaceAll('_', ' ')}")),
+            content: Text("Interview marked as ${status.replaceAll('_', ' ')}"),
+          ),
         );
       }
 
       fetchInterviews();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update status: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to update status: $e')));
       }
     }
   }
@@ -230,9 +317,9 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load feedback: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to load feedback: $e')));
       }
     }
   }
@@ -329,21 +416,19 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
           appBar: AppBar(
             title: Text(
               "Interview Schedule",
-              style: GoogleFonts.poppins(
-                fontWeight: FontWeight.w600,
-              ),
+              style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
             ),
             centerTitle: true,
             backgroundColor: (themeProvider.isDarkMode
                     ? const Color(0xFF14131E)
                     : Colors.white)
-                .withOpacity(0.9),
+                .withValues(alpha: 0.9),
             elevation: 0,
             foregroundColor:
                 themeProvider.isDarkMode ? Colors.white : Colors.black87,
             iconTheme: IconThemeData(
-                color:
-                    themeProvider.isDarkMode ? Colors.white : Colors.black87),
+              color: themeProvider.isDarkMode ? Colors.white : Colors.black87,
+            ),
           ),
           body: loading
               ? Center(
@@ -351,8 +436,9 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const CircularProgressIndicator(
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.redAccent),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Colors.redAccent,
+                        ),
                       ),
                       const SizedBox(height: 16),
                       Text(
@@ -423,6 +509,9 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                 const SizedBox(width: 8),
                                 _buildFilterChip('Past', 'past', themeProvider),
                                 const SizedBox(width: 8),
+                                _buildFilterChip('Pending Approval',
+                                    'pending_approval', themeProvider),
+                                const SizedBox(width: 8),
                                 _buildFilterChip('Action Required',
                                     'action_required', themeProvider),
                               ],
@@ -438,11 +527,11 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                             color: (themeProvider.isDarkMode
                                     ? const Color(0xFF14131E)
                                     : Colors.white)
-                                .withOpacity(0.9),
+                                .withValues(alpha: 0.9),
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
+                                color: Colors.black.withValues(alpha: 0.05),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
@@ -453,7 +542,7 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: redColor.withOpacity(0.1),
+                                  color: redColor.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Icon(
@@ -495,7 +584,9 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                   _buildStatusBadge(
                                       'Scheduled', Colors.blue, themeProvider),
                                   _buildStatusBadge(
-                                      'Pending', Colors.amber, themeProvider),
+                                      'Pending Approval ($_pendingApprovalCount)',
+                                      Colors.amber,
+                                      themeProvider),
                                   _buildStatusBadge(
                                       'Completed', Colors.green, themeProvider),
                                 ],
@@ -519,6 +610,12 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                 final status = i['status'] ?? 'Scheduled';
                                 final statusColor = getStatusColor(status);
                                 final statusIcon = getStatusIcon(status);
+                                final approvalStatus =
+                                    (i['approval_status'] ?? '')
+                                        .toString()
+                                        .toLowerCase();
+                                final isPendingApproval =
+                                    approvalStatus == 'pending';
 
                                 return Container(
                                   width: width < 600 ? double.infinity : 400,
@@ -526,11 +623,12 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                     color: (themeProvider.isDarkMode
                                             ? const Color(0xFF14131E)
                                             : Colors.white)
-                                        .withOpacity(0.9),
+                                        .withValues(alpha: 0.9),
                                     borderRadius: BorderRadius.circular(20),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.08),
+                                        color: Colors.black
+                                            .withValues(alpha: 0.08),
                                         blurRadius: 15,
                                         offset: const Offset(0, 6),
                                       ),
@@ -538,7 +636,7 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                     border: Border.all(
                                       color: themeProvider.isDarkMode
                                           ? Colors.grey.shade800
-                                          : Colors.grey.withOpacity(0.1),
+                                          : Colors.grey.withValues(alpha: 0.1),
                                     ),
                                   ),
                                   child: Column(
@@ -549,7 +647,8 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                       Container(
                                         padding: const EdgeInsets.all(20),
                                         decoration: BoxDecoration(
-                                          color: statusColor.withOpacity(0.1),
+                                          color: statusColor.withValues(
+                                              alpha: 0.1),
                                           borderRadius: const BorderRadius.only(
                                             topLeft: Radius.circular(20),
                                             topRight: Radius.circular(20),
@@ -563,8 +662,8 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                                       horizontal: 12,
                                                       vertical: 6),
                                               decoration: BoxDecoration(
-                                                color: statusColor
-                                                    .withOpacity(0.2),
+                                                color: statusColor.withValues(
+                                                    alpha: 0.2),
                                                 borderRadius:
                                                     BorderRadius.circular(12),
                                               ),
@@ -588,6 +687,34 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                                 ],
                                               ),
                                             ),
+                                            if (isPendingApproval) ...[
+                                              const SizedBox(width: 10),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 6),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.amber
+                                                      .withValues(alpha: 0.18),
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                  border: Border.all(
+                                                      color: Colors.amber
+                                                          .withValues(
+                                                              alpha: 0.35)),
+                                                ),
+                                                child: Text(
+                                                  'PENDING APPROVAL',
+                                                  style: GoogleFonts.inter(
+                                                    color:
+                                                        Colors.amber.shade800,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                             const Spacer(),
                                             Icon(
                                               Icons.calendar_today,
@@ -622,12 +749,13 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                                   width: 60,
                                                   height: 60,
                                                   decoration: BoxDecoration(
-                                                    color: redColor
-                                                        .withOpacity(0.1),
+                                                    color: redColor.withValues(
+                                                        alpha: 0.1),
                                                     shape: BoxShape.circle,
                                                     border: Border.all(
-                                                      color: redColor
-                                                          .withOpacity(0.2),
+                                                      color:
+                                                          redColor.withValues(
+                                                              alpha: 0.2),
                                                       width: 2,
                                                     ),
                                                   ),
@@ -648,8 +776,9 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                                               Icons.person,
                                                               size: 30,
                                                               color: redColor
-                                                                  .withOpacity(
-                                                                      0.6),
+                                                                  .withValues(
+                                                                      alpha:
+                                                                          0.6),
                                                             ),
                                                 ),
                                                 Positioned(
@@ -728,6 +857,43 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                                   // Action Buttons
                                                   Column(
                                                     children: [
+                                                      if (isPendingApproval) ...[
+                                                        Row(
+                                                          children: [
+                                                            Expanded(
+                                                              child:
+                                                                  _buildActionButton(
+                                                                icon: Icons
+                                                                    .check_circle_outline,
+                                                                label:
+                                                                    "Approve",
+                                                                color: Colors
+                                                                    .green,
+                                                                onPressed: () =>
+                                                                    _approveInterview(
+                                                                        i['id']),
+                                                              ),
+                                                            ),
+                                                            const SizedBox(
+                                                                width: 8),
+                                                            Expanded(
+                                                              child:
+                                                                  _buildActionButton(
+                                                                icon: Icons
+                                                                    .cancel_outlined,
+                                                                label: "Reject",
+                                                                color:
+                                                                    Colors.red,
+                                                                onPressed: () =>
+                                                                    _rejectInterview(
+                                                                        i['id']),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                        const SizedBox(
+                                                            height: 12),
+                                                      ],
                                                       // NEW: Status-specific buttons
                                                       if (status ==
                                                           'scheduled') ...[
@@ -869,8 +1035,9 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                                               BoxShadow(
                                                                 color: Colors
                                                                     .amber
-                                                                    .withOpacity(
-                                                                        0.3),
+                                                                    .withValues(
+                                                                        alpha:
+                                                                            0.3),
                                                                 blurRadius: 8,
                                                                 offset:
                                                                     const Offset(
@@ -895,8 +1062,9 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                                             ),
                                                             onPressed: () =>
                                                                 submitFeedback(
-                                                                    context,
-                                                                    i['id']),
+                                                              context,
+                                                              i['id'],
+                                                            ),
                                                             style:
                                                                 ElevatedButton
                                                                     .styleFrom(
@@ -908,22 +1076,22 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
                                                               padding:
                                                                   const EdgeInsets
                                                                       .symmetric(
-                                                                      vertical:
-                                                                          14,
-                                                                      horizontal:
-                                                                          20),
+                                                                vertical: 14,
+                                                                horizontal: 20,
+                                                              ),
                                                               shape:
                                                                   RoundedRectangleBorder(
                                                                 borderRadius:
                                                                     BorderRadius
                                                                         .circular(
-                                                                            12),
+                                                                  12,
+                                                                ),
                                                               ),
                                                               minimumSize:
                                                                   const Size(
-                                                                      double
-                                                                          .infinity,
-                                                                      48),
+                                                                double.infinity,
+                                                                48,
+                                                              ),
                                                             ),
                                                           ),
                                                         ),
@@ -950,10 +1118,11 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
     );
   }
 
-  Widget _buildDetailRow(
-      {required IconData icon,
-      required String text,
-      required ThemeProvider themeProvider}) {
+  Widget _buildDetailRow({
+    required IconData icon,
+    required String text,
+    required ThemeProvider themeProvider,
+  }) {
     return Row(
       children: [
         Icon(
@@ -983,64 +1152,42 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
 
   // NEW: Filter chip widget
   Widget _buildFilterChip(
-      String label, String value, ThemeProvider themeProvider) {
+    String label,
+    String value,
+    ThemeProvider themeProvider,
+  ) {
     final isSelected = _selectedFilter == value;
-    return FilterChip(
-      label: Text(
-        label,
-        style: GoogleFonts.inter(
-          color: isSelected
-              ? Colors.white
-              : themeProvider.isDarkMode
-                  ? Colors.grey.shade400
-                  : Colors.grey.shade600,
-          fontSize: 12,
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-        ),
-      ),
+    return custom_filter.FilterChip(
+      label: label,
       selected: isSelected,
-      backgroundColor: themeProvider.isDarkMode
-          ? Colors.grey.shade800.withOpacity(0.5)
-          : Colors.grey.shade200,
-      selectedColor: const Color.fromRGBO(151, 18, 8, 1),
-      checkmarkColor: Colors.white,
       onSelected: (selected) {
         setState(() {
           _selectedFilter = value;
         });
+        fetchInterviews();
       },
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(
-          color: isSelected
-              ? const Color.fromRGBO(151, 18, 8, 1)
-              : themeProvider.isDarkMode
-                  ? Colors.grey.shade700
-                  : Colors.grey.shade300,
-        ),
-      ),
     );
   }
 
   // NEW: Status badge widget
   Widget _buildStatusBadge(
-      String label, Color color, ThemeProvider themeProvider) {
+    String label,
+    Color color,
+    ThemeProvider themeProvider,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Row(
         children: [
           Container(
             width: 8,
             height: 8,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
           Text(
@@ -1070,7 +1217,7 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.3),
+            color: color.withValues(alpha: 0.3),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -1080,10 +1227,7 @@ class _InterviewListScreenState extends State<InterviewListScreen> {
         icon: Icon(icon, size: 16),
         label: Text(
           label,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
+          style: GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w600),
         ),
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
@@ -1113,9 +1257,7 @@ class FeedbackSummaryDialog extends StatelessWidget {
     return AlertDialog(
       title: Text(
         "Interview Feedback Summary",
-        style: GoogleFonts.poppins(
-          fontWeight: FontWeight.w600,
-        ),
+        style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
       ),
       content: SizedBox(
         width: double.maxFinite,
@@ -1153,7 +1295,7 @@ class FeedbackSummaryDialog extends StatelessWidget {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: themeProvider.isDarkMode
-                          ? Colors.grey.shade800.withOpacity(0.5)
+                          ? Colors.grey.shade800.withValues(alpha: 0.5)
                           : Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -1165,7 +1307,9 @@ class FeedbackSummaryDialog extends StatelessWidget {
                           children: [
                             CircleAvatar(
                               radius: 16,
-                              backgroundColor: Colors.blue.withOpacity(0.1),
+                              backgroundColor: Colors.blue.withValues(
+                                alpha: 0.1,
+                              ),
                               child: Icon(
                                 Icons.person,
                                 size: 16,
@@ -1188,8 +1332,10 @@ class FeedbackSummaryDialog extends StatelessWidget {
                                   ),
                                   Text(
                                     DateFormat('MMM dd, yyyy').format(
-                                      DateTime.parse(item['submitted_at'] ??
-                                          DateTime.now().toIso8601String()),
+                                      DateTime.parse(
+                                        item['submitted_at'] ??
+                                            DateTime.now().toIso8601String(),
+                                      ),
                                     ),
                                     style: GoogleFonts.inter(
                                       fontSize: 12,
@@ -1213,17 +1359,23 @@ class FeedbackSummaryDialog extends StatelessWidget {
                             _buildRatingItem("Overall", item['overall_rating']),
                             if (item['technical_skills'] != null)
                               _buildRatingItem(
-                                  "Tech", item['technical_skills']),
+                                "Tech",
+                                item['technical_skills'],
+                              ),
                             if (item['communication'] != null)
                               _buildRatingItem("Comm", item['communication']),
                             if (item['culture_fit'] != null)
                               _buildRatingItem("Culture", item['culture_fit']),
                             if (item['problem_solving'] != null)
                               _buildRatingItem(
-                                  "Problem", item['problem_solving']),
+                                "Problem",
+                                item['problem_solving'],
+                              ),
                             if (item['experience_relevance'] != null)
                               _buildRatingItem(
-                                  "Exp", item['experience_relevance']),
+                                "Exp",
+                                item['experience_relevance'],
+                              ),
                             if (item['average_rating'] != null)
                               _buildRatingItem("Avg", item['average_rating']),
                           ],
@@ -1234,16 +1386,18 @@ class FeedbackSummaryDialog extends StatelessWidget {
                           const SizedBox(height: 12),
                           Container(
                             padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
                             decoration: BoxDecoration(
                               color: _getRecommendationColor(
-                                      item['recommendation'])
-                                  .withOpacity(0.1),
+                                item['recommendation'],
+                              ).withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
                                 color: _getRecommendationColor(
-                                        item['recommendation'])
-                                    .withOpacity(0.3),
+                                  item['recommendation'],
+                                ).withValues(alpha: 0.3),
                               ),
                             ),
                             child: Row(
@@ -1251,17 +1405,20 @@ class FeedbackSummaryDialog extends StatelessWidget {
                               children: [
                                 Icon(
                                   _getRecommendationIcon(
-                                      item['recommendation']),
+                                    item['recommendation'],
+                                  ),
                                   size: 14,
                                   color: _getRecommendationColor(
-                                      item['recommendation']),
+                                    item['recommendation'],
+                                  ),
                                 ),
                                 const SizedBox(width: 6),
                                 Text(
                                   _formatRecommendation(item['recommendation']),
                                   style: GoogleFonts.inter(
                                     color: _getRecommendationColor(
-                                        item['recommendation']),
+                                      item['recommendation'],
+                                    ),
                                     fontWeight: FontWeight.w600,
                                     fontSize: 12,
                                   ),
@@ -1350,7 +1507,9 @@ class FeedbackSummaryDialog extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: Colors.grey.shade100.withOpacity(0.5),
+                              color: Colors.grey.shade100.withValues(
+                                alpha: 0.5,
+                              ),
                               borderRadius: BorderRadius.circular(6),
                               border: Border.all(color: Colors.grey.shade300),
                             ),
@@ -1537,9 +1696,7 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
     return AlertDialog(
       title: Text(
         "Submit Interview Feedback",
-        style: GoogleFonts.poppins(
-          fontWeight: FontWeight.w600,
-        ),
+        style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
       ),
       content: SingleChildScrollView(
         child: Form(
@@ -1580,8 +1737,10 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                 ),
                 items: [
                   DropdownMenuItem(
@@ -1970,10 +2129,7 @@ class _FeedbackDialogState extends State<FeedbackDialog> {
         const SizedBox(height: 8),
         Text(
           label,
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
+          style: GoogleFonts.inter(fontSize: 12, color: Colors.grey.shade600),
         ),
         Row(
           children: List.generate(5, (index) {

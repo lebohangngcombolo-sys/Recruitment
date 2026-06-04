@@ -1,18 +1,21 @@
-import 'dart:html' as html; // For web download
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:web/web.dart' as web; // For web download
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter/material.dart';
-import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import '../../services/admin_service.dart';
+import '../../services/cv_analyser_service.dart';
+import '../../screens/admin/analysis_screen.dart';
 import '../../widgets/custom_button.dart';
 import 'interview_schedule_page.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../utils/api_endpoints.dart';
+import 'package:file_picker/file_picker.dart';
 
 class CandidateDetailScreen extends StatefulWidget {
   final int candidateId;
@@ -30,12 +33,17 @@ class CandidateDetailScreen extends StatefulWidget {
 
 class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
   final AdminService admin = AdminService();
+  final CVAnalyserService cvAnalyser = CVAnalyserService();
   final storage = const FlutterSecureStorage();
 
   Map<String, dynamic>? candidateData;
   List<Map<String, dynamic>> interviews = [];
+  List<Map<String, dynamic>> candidateApplications = [];
   bool loading = true;
   String? errorMessage;
+
+  bool _analysisInProgress = false;
+  String? _analysisStatusText;
 
   @override
   void initState() {
@@ -86,8 +94,15 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
       final interviewData =
           await admin.getCandidateInterviews(widget.candidateId);
       interviews = List<Map<String, dynamic>>.from(interviewData);
+
+      try {
+        final apps = await admin.getCandidateApplications(widget.candidateId);
+        candidateApplications = apps;
+      } catch (_) {
+        candidateApplications = [];
+      }
     } catch (e) {
-      debugPrint("Error fetching candidate details: $e");
+      if (kDebugMode) debugPrint("Error fetching candidate details: $e");
       errorMessage = "Failed to load data: $e";
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("Error: $e")));
@@ -165,7 +180,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
 
       final response = await http.get(
         Uri.parse(
-            'http://127.0.0.1:5000/api/admin/applications/$applicationId/download-cv'),
+            '${ApiEndpoints.adminBase}/applications/$applicationId/download-cv'),
         headers: {
           'Authorization': 'Bearer $jwtToken',
           'Content-Type': 'application/json',
@@ -173,7 +188,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
       );
 
       if (response.statusCode != 200) {
-        print("Backend error: ${response.statusCode} ${response.body}");
+        if (kDebugMode)
+          debugPrint("Backend error: ${response.statusCode} ${response.body}");
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Failed to get CV URL from backend")),
         );
@@ -192,9 +208,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
       }
 
       if (kIsWeb) {
-        final anchor = html.AnchorElement(href: cvUrl)
-          ..setAttribute("download", "cv_$fullName.pdf")
-          ..click();
+        web.window.open(cvUrl, '_blank');
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Download started")),
@@ -239,10 +253,10 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
             color: isDark ? Colors.white : Colors.black87,
           ),
         ),
-        backgroundColor:
-            (isDark ? const Color(0xFF14131E) : Colors.white).withOpacity(0.95),
+        backgroundColor: (isDark ? const Color(0xFF14131E) : Colors.white)
+            .withValues(alpha: 0.95),
         elevation: 2,
-        shadowColor: Colors.black.withOpacity(0.1),
+        shadowColor: Colors.black.withValues(alpha: 0.1),
         actions: [
           IconButton(
             onPressed: fetchAllData,
@@ -280,8 +294,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
               strokeWidth: 3,
               valueColor: AlwaysStoppedAnimation<Color>(
                   isDark ? Colors.white : Colors.black87),
-              backgroundColor:
-                  (isDark ? Colors.white : Colors.black87).withOpacity(0.2),
+              backgroundColor: (isDark ? Colors.white : Colors.black87)
+                  .withValues(alpha: 0.2),
             ),
           ),
           const SizedBox(height: 20),
@@ -303,7 +317,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
       child: Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: Colors.red.shade50.withOpacity(0.9),
+          color: Colors.red.shade50.withValues(alpha: 0.9),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.red.shade200),
         ),
@@ -374,6 +388,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
                   _buildCVCard(isDark),
                   _buildEducationCard(isDark),
                   _buildAssessmentCard(isDark),
+                  _buildJobsAppliedCard(isDark),
                   _buildInterviewsCard(isDark),
                 ],
               );
@@ -393,26 +408,26 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
           end: Alignment.bottomRight,
           colors: isDark
               ? [
-                  Color(0xFF1E1B2E).withOpacity(0.9),
-                  Color(0xFF14131E).withOpacity(0.9),
+                  Color(0xFF1E1B2E).withValues(alpha: 0.9),
+                  Color(0xFF14131E).withValues(alpha: 0.9),
                 ]
               : [
-                  Colors.white.withOpacity(0.95),
-                  Colors.grey.shade50.withOpacity(0.95),
+                  Colors.white.withValues(alpha: 0.95),
+                  Colors.grey.shade50.withValues(alpha: 0.95),
                 ],
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 25,
             offset: const Offset(0, 10),
           ),
         ],
         border: Border.all(
           color: isDark
-              ? Colors.white.withOpacity(0.1)
-              : Colors.black.withOpacity(0.05),
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.black.withValues(alpha: 0.05),
         ),
       ),
       child: Row(
@@ -424,8 +439,8 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Colors.blueAccent.withOpacity(0.2),
-                  Colors.purpleAccent.withOpacity(0.3),
+                  Colors.blueAccent.withValues(alpha: 0.2),
+                  Colors.purpleAccent.withValues(alpha: 0.3),
                 ],
               ),
               shape: BoxShape.circle,
@@ -498,11 +513,12 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: _getStatusColor(candidateData!['status']).withOpacity(0.1),
+              color: _getStatusColor(candidateData!['status'])
+                  .withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color:
-                    _getStatusColor(candidateData!['status']).withOpacity(0.3),
+                color: _getStatusColor(candidateData!['status'])
+                    .withValues(alpha: 0.3),
               ),
             ),
             child: Row(
@@ -562,6 +578,45 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
         _buildScoreRow(
             "CV Score", candidateData!['cv_score'].toDouble(), isDark),
         const SizedBox(height: 12),
+        if (_analysisInProgress || _analysisStatusText != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                if (_analysisInProgress)
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                if (_analysisInProgress) const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _analysisStatusText ?? 'Analysing…',
+                    style: TextStyle(
+                      color:
+                          isDark ? Colors.grey.shade300 : Colors.grey.shade700,
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _analysisInProgress ? null : _runCvAnalysis,
+                icon: const Icon(Icons.auto_awesome, size: 16),
+                label: const Text('Analyse CV'),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
         Text(
           "Click the download icon to get the candidate's CV",
           style: TextStyle(
@@ -572,6 +627,97 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
         ),
       ],
     );
+  }
+
+  Future<void> _runCvAnalysis() async {
+    if (_analysisInProgress) return;
+    try {
+      final picked = await FilePicker.platform.pickFiles(
+        allowMultiple: false,
+        withData: true,
+        type: FileType.custom,
+        allowedExtensions: const [
+          'pdf',
+          'doc',
+          'docx',
+          'txt',
+          'png',
+          'jpg',
+          'jpeg',
+        ],
+      );
+      if (picked == null || picked.files.isEmpty) return;
+
+      final file = picked.files.first;
+      final bytes = file.bytes;
+      if (bytes == null || bytes.isEmpty) {
+        throw Exception('Could not read file bytes');
+      }
+
+      const maxBytes = 15 * 1024 * 1024;
+      if (bytes.length > maxBytes) {
+        throw Exception('File too large. Max size is 15MB');
+      }
+
+      final filename = file.name;
+      final ext = (file.extension ?? '').toLowerCase();
+      final contentType = _inferContentType(ext);
+
+      setState(() {
+        _analysisInProgress = true;
+        _analysisStatusText = 'Uploading…';
+      });
+
+      final result = await cvAnalyser.uploadAndPoll(
+        bytes: bytes,
+        filename: filename,
+        contentType: contentType,
+        onStatus: (status) {
+          if (!mounted) return;
+          setState(() {
+            _analysisStatusText = 'Status: ${status.status}';
+          });
+        },
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _analysisInProgress = false;
+        _analysisStatusText = null;
+      });
+
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => AnalysisScreen(result: result)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _analysisInProgress = false;
+        _analysisStatusText = null;
+      });
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('CV analysis failed: $e')));
+    }
+  }
+
+  String _inferContentType(String ext) {
+    switch (ext) {
+      case 'pdf':
+        return 'application/pdf';
+      case 'doc':
+        return 'application/msword';
+      case 'docx':
+        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      case 'txt':
+        return 'text/plain';
+      case 'png':
+        return 'image/png';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      default:
+        return 'application/octet-stream';
+    }
   }
 
   Widget _buildEducationCard(bool isDark) {
@@ -607,6 +753,121 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
         const SizedBox(height: 12),
         _buildInfoRow("Recommendation",
             candidateData!['assessment_recommendation'], isDark),
+      ],
+    );
+  }
+
+  Widget _buildJobsAppliedCard(bool isDark) {
+    return _buildInfoCard(
+      isDark: isDark,
+      icon: Icons.work_outline_rounded,
+      title: "Jobs Applied",
+      children: [
+        if (candidateApplications.isEmpty)
+          Center(
+            child: Text(
+              "No applications yet",
+              style: TextStyle(
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                fontSize: 14,
+              ),
+            ),
+          )
+        else
+          ...candidateApplications.map((item) {
+            final app = item['application'] as Map<String, dynamic>? ?? {};
+            final job = item['job'] as Map<String, dynamic>? ?? {};
+            final title = job['title'] ?? 'Unknown role';
+            final company = job['company'] ?? '';
+            final empType =
+                (job['employment_type'] ?? '').toString().replaceAll('_', ' ');
+            final status = app['status'] ?? '';
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.05)
+                      : Colors.black.withValues(alpha: 0.04),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : Colors.black.withValues(alpha: 0.06),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    if (company.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          company,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDark
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        if (empType.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.redAccent.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              empType,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.redAccent,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        if (empType.isNotEmpty && status.isNotEmpty)
+                          const SizedBox(width: 8),
+                        if (status.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _getStatusColor(status)
+                                  .withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              status,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: _getStatusColor(status),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
       ],
     );
   }
@@ -671,26 +932,26 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
           end: Alignment.bottomRight,
           colors: isDark
               ? [
-                  Color(0xFF1E1B2E).withOpacity(0.8),
-                  Color(0xFF14131E).withOpacity(0.9),
+                  Color(0xFF1E1B2E).withValues(alpha: 0.8),
+                  Color(0xFF14131E).withValues(alpha: 0.9),
                 ]
               : [
-                  Colors.white.withOpacity(0.95),
-                  Colors.grey.shade50.withOpacity(0.95),
+                  Colors.white.withValues(alpha: 0.95),
+                  Colors.grey.shade50.withValues(alpha: 0.95),
                 ],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 15,
             offset: const Offset(0, 6),
           ),
         ],
         border: Border.all(
           color: isDark
-              ? Colors.white.withOpacity(0.1)
-              : Colors.black.withOpacity(0.05),
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.black.withValues(alpha: 0.05),
         ),
       ),
       child: Stack(
@@ -705,7 +966,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.blueAccent.withOpacity(0.1),
+                        color: Colors.blueAccent.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Icon(icon, size: 20, color: Colors.blueAccent),
@@ -735,7 +996,7 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
                 icon: Icon(actionIcon,
                     size: 20, color: isDark ? Colors.white : Colors.black87),
                 style: IconButton.styleFrom(
-                  backgroundColor: Colors.blueAccent.withOpacity(0.1),
+                  backgroundColor: Colors.blueAccent.withValues(alpha: 0.1),
                   padding: const EdgeInsets.all(6),
                 ),
               ),
@@ -799,9 +1060,9 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: color.withOpacity(0.3)),
+              border: Border.all(color: color.withValues(alpha: 0.3)),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -828,10 +1089,13 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade50,
+        color:
+            isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade50,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade200,
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.1)
+              : Colors.grey.shade200,
         ),
       ),
       child: Row(

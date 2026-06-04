@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import '../utils/api_endpoints.dart';
+import 'auth_service.dart';
 
 /// WebSocket service for real-time chat functionality
 class WebSocketService {
@@ -15,12 +16,13 @@ class WebSocketService {
   // Socket connection
   io.Socket? _socket;
   String? _userId;
+  int? _cachedUserId;
   bool _isConnected = false;
   String _serverUrl = ApiEndpoints.webSocketUrl;
 
   // Reconnection settings
   final int _maxReconnectAttempts = 5;
-  final int _reconnectDelay = 1000;
+  final int _reconnectDelay = 5000;
   int _reconnectAttempts = 0;
   Timer? _reconnectTimer;
 
@@ -29,8 +31,11 @@ class WebSocketService {
   VoidCallback? onDisconnected;
   Function(String error)? onError;
   Function(Map<String, dynamic> data)? onNewMessage;
-  Function(Map<String, dynamic> data)? onUserTyping;
+  Function(Map<String, dynamic> data)? onMention;
+  Function(Map<String, dynamic> data)? onMeetingInvite;
+  Function(Map<String, dynamic> data)? onMeetingResponse;
   Function(Map<String, dynamic> data)? onPresenceUpdate;
+  Function(Map<String, dynamic> data)? onUserTyping;
   Function(Map<String, dynamic> data)? onNewThread;
   Function(Map<String, dynamic> data)? onMessageSent;
   Function(Map<String, dynamic> data)? onMessagesRead;
@@ -40,36 +45,77 @@ class WebSocketService {
   Function(Map<String, dynamic> data)? onParticipantAdded;
   Function(Map<String, dynamic> data)? onThreadsData;
 
+  // Dashboard-specific event callbacks (real-time updates)
+  Function(Map<String, dynamic> data)? onInterviewCreated;
+  Function(Map<String, dynamic> data)? onInterviewUpdated;
+  Function(Map<String, dynamic> data)? onInterviewDeleted;
+  Function(Map<String, dynamic> data)? onMeetingCreated;
+  Function(Map<String, dynamic> data)? onMeetingUpdated;
+  Function(Map<String, dynamic> data)? onJobStatusChanged;
+  Function(Map<String, dynamic> data)? onCvReviewCompleted;
+  Function(Map<String, dynamic> data)? onCandidateApplied;
+  Function(Map<String, dynamic> data)? onAuditCreated;
+
   /// Initialize WebSocket connection
   Future<void> initialize() async {
     try {
       debugPrint('🔌 Initializing WebSocket connection to $_serverUrl...');
 
-      // Get authentication data
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('access_token') ?? prefs.getString('token');
-      final userId = prefs.getString('user_id');
+      // Get authentication data from AuthService (single source of truth)
+      final token = await AuthService.getAccessToken();
+      final userInfo = await AuthService.getUserInfo();
+      String? userId = userInfo?['id']?.toString();
 
-      if (token == null || token.isEmpty) {
-        throw Exception('Authentication token not found. Please log in.');
+      // Fallback to SharedPreferences for migration safety
+      String? finalToken = token;
+      String? finalUserId = userId;
+
+      if (finalToken == null ||
+          finalToken.isEmpty ||
+          finalUserId == null ||
+          finalUserId.isEmpty) {
+        debugPrint(
+            '⚠️ AuthService missing data, trying SharedPreferences fallback...');
+        final prefs = await SharedPreferences.getInstance();
+        finalToken ??=
+            prefs.getString('access_token') ?? prefs.getString('token');
+        finalUserId ??= prefs.getString('user_id');
+
+        // Try to parse user from SharedPreferences JSON
+        if (finalUserId == null) {
+          final userStr = prefs.getString('user');
+          if (userStr != null) {
+            try {
+              final userMap = jsonDecode(userStr) as Map<String, dynamic>;
+              finalUserId = userMap['id']?.toString();
+            } catch (e) {
+              debugPrint('Error parsing user JSON: $e');
+            }
+          }
+        }
       }
 
-      if (userId == null || userId.isEmpty) {
+      // Validate authentication data
+      if (finalToken == null || finalToken.isEmpty) {
+        throw Exception('Authentication token not found. Please log in.');
+      }
+      if (finalUserId == null || finalUserId.isEmpty) {
         throw Exception('User ID not found. Please log in.');
       }
 
-      // Parse user ID to integer
-      try {
-        _userId = userId;
-        debugPrint('✅ User ID parsed: $_userId (type: ${_userId.runtimeType})');
-      } catch (e) {
-        throw Exception('Invalid user ID format: $userId');
+      // Cache the user ID for synchronous access (handles "42.0" from double)
+      _userId = finalUserId;
+      final parsed = _safeParseUserId(finalUserId);
+      if (parsed == null) {
+        throw Exception('Invalid user ID format: $finalUserId');
       }
+      _cachedUserId = parsed;
+      debugPrint('✅ User ID parsed: $_userId (cached: $_cachedUserId)');
 
       // Clean token
-      String cleanToken = token;
-      if (token.startsWith('Bearer ')) {
-        cleanToken = token.substring(7);
+      String cleanToken = finalToken;
+      if (finalToken.startsWith('Bearer ')) {
+        cleanToken = finalToken.substring(7);
       }
 
       debugPrint(
@@ -85,7 +131,7 @@ class WebSocketService {
           .setReconnectionAttempts(_maxReconnectAttempts)
           .setExtraHeaders({'Authorization': 'Bearer $cleanToken'})
           .setQuery({'token': cleanToken})
-          .setTimeout(10)
+          .setTimeout(20000)
           .build();
 
       // Create socket instance
@@ -97,7 +143,8 @@ class WebSocketService {
       // Connect manually
       _socket!.connect();
 
-      debugPrint('✅ WebSocket initialization complete');
+      debugPrint(
+          '✅ WebSocket initialization complete for user ID: $_cachedUserId');
     } catch (e, stackTrace) {
       debugPrint('❌ WebSocket initialization failed: $e');
       debugPrint('Stack trace: $stackTrace');
@@ -203,6 +250,55 @@ class WebSocketService {
 
     _socket!.on('threads_data', (data) {
       _handleEvent('threads_data', data, onThreadsData);
+    });
+
+    _socket!.on('mention', (data) {
+      _handleEvent('mention', data, onMention);
+    });
+
+    _socket!.on('meeting_invite', (data) {
+      _handleEvent('meeting_invite', data, onMeetingInvite);
+    });
+
+    _socket!.on('meeting_response', (data) {
+      _handleEvent('meeting_response', data, onMeetingResponse);
+    });
+
+    // Dashboard real-time events
+    _socket!.on('interview_created', (data) {
+      _handleEvent('interview_created', data, onInterviewCreated);
+    });
+
+    _socket!.on('interview_updated', (data) {
+      _handleEvent('interview_updated', data, onInterviewUpdated);
+    });
+
+    _socket!.on('interview_deleted', (data) {
+      _handleEvent('interview_deleted', data, onInterviewDeleted);
+    });
+
+    _socket!.on('meeting_created', (data) {
+      _handleEvent('meeting_created', data, onMeetingCreated);
+    });
+
+    _socket!.on('meeting_updated', (data) {
+      _handleEvent('meeting_updated', data, onMeetingUpdated);
+    });
+
+    _socket!.on('job_status_changed', (data) {
+      _handleEvent('job_status_changed', data, onJobStatusChanged);
+    });
+
+    _socket!.on('cv_review_completed', (data) {
+      _handleEvent('cv_review_completed', data, onCvReviewCompleted);
+    });
+
+    _socket!.on('candidate_applied', (data) {
+      _handleEvent('candidate_applied', data, onCandidateApplied);
+    });
+
+    _socket!.on('audit_created', (data) {
+      _handleEvent('audit_created', data, onAuditCreated);
     });
 
     _socket!.on('error', (data) {
@@ -334,8 +430,39 @@ class WebSocketService {
       return;
     }
 
-    debugPrint('📨 Joining thread $threadId');
-    _socket!.emit('join_thread', {'thread_id': threadId});
+    try {
+      debugPrint('📨 Joining thread $threadId');
+      _socket!.emit('join_thread', {'thread_id': threadId});
+    } catch (e) {
+      debugPrint('❌ Error joining thread: $e');
+      onError?.call('Failed to join thread: $e');
+    }
+  }
+
+  /// Subscribe to dashboard events for real-time updates
+  void subscribeToDashboard(String userId, {String role = 'admin'}) {
+    if (!_isConnected || _socket == null) {
+      debugPrint('⚠️ Cannot subscribe to dashboard - socket not connected');
+      return;
+    }
+
+    try {
+      debugPrint('📊 Subscribing to dashboard events for user $userId');
+      _socket!.emit('subscribe_dashboard', {
+        'user_id': userId,
+        'role': role,
+      });
+    } catch (e) {
+      debugPrint('❌ Error subscribing to dashboard: $e');
+    }
+  }
+
+  /// Unsubscribe from dashboard events
+  void unsubscribeFromDashboard(String userId) {
+    if (_isConnected && _socket != null) {
+      debugPrint('📊 Unsubscribing from dashboard events for user $userId');
+      _socket!.emit('unsubscribe_dashboard', {'user_id': userId});
+    }
   }
 
   /// Leave a chat thread
@@ -470,10 +597,19 @@ class WebSocketService {
   bool get isConnected => _isConnected;
 
   /// Get user ID
-  int? get userId => _userId != null ? int.tryParse(_userId!.toString()) : null;
+  int? get userId => _cachedUserId ?? _safeParseUserId(_userId);
 
   /// Get socket ID
   String? get socketId => _socket?.id;
+
+  /// Parses user ID from string, handling "42.0" from JSON double values
+  static int? _safeParseUserId(String? s) {
+    if (s == null || s.isEmpty) return null;
+    final i = int.tryParse(s);
+    if (i != null) return i;
+    final d = double.tryParse(s);
+    return d?.toInt();
+  }
 
   /// Helper for min function
   int min(int a, int b) => a < b ? a : b;
